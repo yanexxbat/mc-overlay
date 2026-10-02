@@ -21,6 +21,7 @@
 #include "../common/flat_style.hpp"
 #include "../common/log.hpp"
 #include "render_math.hpp"
+#include "aura_projection.hpp"
 
 namespace style = mcov::style;
 
@@ -189,6 +190,11 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         dxgiDevice->Release();
     }
 
+    if (!auraBlend_.Initialize(device_)) {
+        if (error) *error = "could not create the Aura blend state";
+        CleanupDeviceD3D();
+        return false;
+    }
     CreateRenderTarget();
     return true;
 }
@@ -206,6 +212,9 @@ void Overlay::CleanupRenderTarget() {
 }
 
 void Overlay::CleanupDeviceD3D() {
+    auraBlend_.Shutdown();
+    auraRenderer_.Reset();
+    auraPrepared_ = false;
     CleanupRenderTarget();
     if (swapChain_) { swapChain_->Release(); swapChain_ = nullptr; }
     if (context_)   { context_->Release();   context_   = nullptr; }
@@ -492,7 +501,8 @@ bool Overlay::RunFrame() {
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
                                  visuals_.nameTags || visuals_.healthBars || visuals_.distanceText;
-    if (!entitiesEnabled && !blocks_.enabled) return;
+    if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
+        !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) return;
 
     const float width  = static_cast<float>(windowW_);
     const float height = static_cast<float>(windowH_);
@@ -500,6 +510,8 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
 
     const CameraProjection projection(snapshot, width, height, settings_.fovTrim);
 
+    // Die Aura liegt unter ESP und HUD. Sie teilt deren kohärenten Snapshot.
+    DrawAura(snapshot, projection, width, height);
     DrawBlockEsp(snapshot, projection, width, height);
     if (!entitiesEnabled) return;
 
@@ -1184,7 +1196,7 @@ void Overlay::DrawMenu() {
 void Overlay::ResetMenuPage(panel::Page page) {
     switch (page) {
         case panel::Page::Combat: combat_=CombatSettings{}; nextClickTick_=0; clickCount_=0; break;
-        case panel::Page::Visuals: visuals_=VisualSettings{}; break;
+        case panel::Page::Visuals: visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; auraRenderer_.Reset(); break;
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; break;
         case panel::Page::Hud: hud_=HudSettings{}; break;
         case panel::Page::Stats: break;
@@ -1211,6 +1223,27 @@ void Overlay::DrawVisualsTab() {
                 panel::CheckRow("Distance labels",&visuals_.distanceText);
                 ImGui::EndTable();
             }
+            MenuHeading("Target aura");
+            if (panel::BeginRows("aura_controls")) {
+                panel::CheckRow("Enable aura",&auraConfig_.enabled);
+                ImGui::BeginDisabled(!auraConfig_.enabled);
+                panel::SliderIntRow("Rays",&auraConfig_.rayCount,3,AuraRenderer::kMaxRays,"%d");
+                panel::SliderRow("Ray length",&auraConfig_.rayLength,.5f,3,"%.2f x");
+                panel::SliderRow("Ray width",&auraConfig_.rayWidth,.01f,.5f,"%.2f x");
+                panel::SliderRow("Intensity",&auraConfig_.opacity,0,1,"%.2f");
+                panel::CheckRow("Animation",&auraConfig_.animate);
+                ImGui::BeginDisabled(!auraConfig_.animate);
+                panel::SliderRow("Rotation",&auraConfig_.rotationDegreesPerSecond,-90,90,"%.0f deg/s");
+                panel::SliderRow("Pulse amplitude",&auraConfig_.pulseAmplitude,0,.3f,"%.2f");
+                panel::SliderRow("Pulse frequency",&auraConfig_.pulseHz,0,3,"%.2f Hz");
+                ImGui::EndDisabled();
+                panel::SliderRow("Target fade",&auraConfig_.fadeSeconds,0,.5f,"%.2f s");
+                panel::ColorRow("Inner colour",&auraConfig_.startColor.x);
+                panel::ColorRow("Outer colour",&auraConfig_.endColor.x);
+                ImGui::EndDisabled();
+                ImGui::EndTable();
+            }
+            ImGui::TextWrapped("Highlights Minecraft's current crosshair target. Length and width scale with the entity.");
         } else {
             if (panel::BeginRows("visual_filters")) {
                 panel::CheckRow("Players",&visuals_.showPlayers);

@@ -264,6 +264,7 @@ template<class T> bool Slider(const char* label,T* value,T low,T high,const char
 } // namespace
 
 float Scale() { return gScale; }
+bool MotionAllowed(const State& state) { return !state.reduceMotion && WindowsMotionAllowed(); }
 const char* ThemeName(int index) { return kThemes[std::clamp(index,0,3)]; }
 void Section(const char* label) {
     ImGui::Dummy(ImVec2(0,7*gScale));
@@ -278,7 +279,7 @@ Actions Render(State& state,const Status& status,void* owner,Content content) {
     const auto* viewport=ImGui::GetMainViewport(); const auto work=viewport->WorkSize;
     const bool narrow=work.x<640;
     const float scale=narrow ? 1.f : std::min({1.25f,work.x/840.f,work.y/490.f});
-    MenuStyle theme(state.theme,std::max(.5f,scale),!state.reduceMotion && WindowsMotionAllowed());
+    MenuStyle theme(state.theme,std::max(.5f,scale),MotionAllowed(state));
     Actions actions;
     const float navWidth=(state.navCollapsed ? 48.f : 80.f)*gScale, gap=18*gScale;
     const float width=std::floor(std::min(work.x,narrow ? std::max(180.f,work.x-24.f) : (590*gScale+gap+navWidth)));

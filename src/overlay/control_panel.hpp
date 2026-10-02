@@ -34,6 +34,7 @@ using Content = void (*)(void*, Page);
 Actions Render(State& state, const Status& status, void* owner, Content content);
 const char* ThemeName(int index);
 float Scale();
+bool MotionAllowed(const State& state);
 void Section(const char* label);
 
 // Labels and controls occupy separate columns with stable per-row IDs.

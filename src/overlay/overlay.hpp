@@ -27,6 +27,8 @@
 #include "process.hpp"
 #include "esp_geometry.hpp"
 #include "control_panel.hpp"
+#include "aura_renderer.hpp"
+#include "aura_blend_dx11.hpp"
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -163,6 +165,7 @@ private:
     void DrawMenu();
     void ResetMenuPage(control_panel::Page page);
     void DrawEsp(const WorldSnapshot& snapshot);
+    void DrawAura(const WorldSnapshot& snapshot, const CameraProjection& projection, float width, float height);
     void DrawWatermark(const WorldSnapshot& snapshot);
 
     // HUD widgets. Each returns the height it consumed so they can stack.
@@ -202,6 +205,10 @@ private:
     bool                    quitRequested_ = false;
 
     VisualSettings  visuals_{};
+    AuraConfig auraConfig_{};
+    AuraRenderer auraRenderer_{};
+    AuraBlendDX11 auraBlend_{};
+    bool auraPrepared_ = false;
     control_panel::State menu_{};
     OverlaySettings settings_{};
     HudSettings     hud_{};

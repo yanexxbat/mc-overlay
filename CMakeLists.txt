@@ -146,6 +146,8 @@ add_executable(mcov_overlay
     src/common/flat_style.cpp
     src/overlay/overlay.cpp
     src/overlay/control_panel.cpp
+    src/overlay/aura_renderer.cpp
+    src/overlay/aura_blend_dx11.cpp
     src/overlay/process.cpp
     src/common/ipc.cpp
     src/common/log.cpp)
@@ -298,6 +300,7 @@ if(MCOV_BUILD_UI_CHECKS)
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/control_panel_smoke.cpp
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp
+        src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
