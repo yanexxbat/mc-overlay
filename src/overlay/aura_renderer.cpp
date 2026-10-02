@@ -60,6 +60,10 @@ AuraRenderer::AuraRenderer() noexcept {
         const double angle = kTau * i / kCircleSegments;
         circle_[i] = {float(std::cos(angle)), float(std::sin(angle))};
     }
+    for (int i = 0; i <= kRayBands; ++i) {
+        const float t = float(i) / kRayBands;
+        rayProfile_[i] = {t, std::max(0.f,std::sin(float(std::numbers::pi) * t))};
+    }
     CacheRays(24);
 }
 void AuraRenderer::Prepare(ImDrawList& draw) {
@@ -131,6 +135,7 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
     const ImVec4 start = SafeColor(config.startColor), end = SafeColor(config.endColor);
     const auto clip = draw.GetClipRectMin(), clipMax = draw.GetClipRectMax();
     const float extent = reach * 1.12f + halfWidth * 2;
+    if (!std::isfinite(extent)) return;
     if (screen.center.x + extent < clip.x || screen.center.x - extent > clipMax.x ||
         screen.center.y + extent < clip.y || screen.center.y - extent > clipMax.y) return;
     DrawScope scope(draw, blend);
@@ -157,10 +162,10 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
         const ImVec2 d{rays_[i].x * cs - rays_[i].y * sn, rays_[i].x * sn + rays_[i].y * cs};
         const ImVec2 n{-d.y, d.x};
         for (int band = 0; band < kRayBands; ++band) {
-            const float a = float(band) / kRayBands, b = float(band + 1) / kRayBands;
+            const float a = rayProfile_[band].x, b = rayProfile_[band + 1].x;
             // Der Strahl beginnt im Kern und endet in einer schmalen Spitze.
-            const float wa = halfWidth * widths[layer] * std::max(0.f,std::sin(float(std::numbers::pi) * a));
-            const float wb = halfWidth * widths[layer] * std::max(0.f,std::sin(float(std::numbers::pi) * b));
+            const float wa = halfWidth * widths[layer] * rayProfile_[band].y;
+            const float wb = halfWidth * widths[layer] * rayProfile_[band + 1].y;
             const auto pa = At(screen.center, d, reach * a), pb = At(screen.center, d, reach * b);
             const ImVec2 points[] = {{pa.x + n.x * wa, pa.y + n.y * wa},
                 {pa.x - n.x * wa, pa.y - n.y * wa},

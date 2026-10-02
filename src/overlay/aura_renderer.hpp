@@ -71,6 +71,7 @@ private:
     void CacheRays(int count) noexcept;
     std::array<ImVec2, kCircleSegments + 1> circle_{};
     std::array<ImVec2, kMaxRays> rays_{};
+    std::array<ImVec2, kRayBands + 1> rayProfile_{}; // Normierte Längen und Breiten.
     std::array<Target, 2> targets_{};           // 0: ausblendend, 1: aktuelles Ziel.
     int cachedRayCount_{};
     double rotation_{}, pulsePhase_{};

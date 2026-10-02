@@ -34,12 +34,12 @@ void ProjectionChecks() {
     entity.entityId=42; entity.width=.6f; entity.height=1.8f; entity.z=10;
     AuraAnchor anchor;
     Require(MakeAuraAnchor(entity,anchor),"Valid world anchor rejected");
-    AuraScreen normal,far,large,edge;
+    AuraScreen normal,farther,large,edge;
     Require(ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,normal),"Visible aura rejected");
     Require(Close(normal.center.x,640)&&Close(normal.center.y,360)&&Close(normal.radius,32.4f),
             "Aura is not centered/scaled on the real entity");
     anchor.z=20;
-    Require(ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,far)&&Close(far.radius,normal.radius*.5f),
+    Require(ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,farther)&&Close(farther.radius,normal.radius*.5f),
             "Aura does not shrink with distance");
     anchor.z=10;
     Require(ProjectAura(CameraProjection(s,2560,1440),anchor,2560,1440,large)&&
@@ -49,12 +49,12 @@ void ProjectionChecks() {
             Close(edge.radius,normal.radius)&&!Close(edge.center.x,normal.center.x),"Clipping changed the anchor or radius");
     s.camX=29999990.125; s.camZ=-29999990.75;
     anchor.x=s.camX; anchor.z=s.camZ+10;
-    Require(ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,far)&&Close(far.center.x,normal.center.x)&&
-            Close(far.radius,normal.radius),"World-border precision lost");
+    Require(ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,farther)&&Close(farther.center.x,normal.center.x)&&
+            Close(farther.radius,normal.radius),"World-border precision lost");
     anchor.z=s.camZ-10;
-    Require(!ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,far),"Aura behind the camera was accepted");
+    Require(!ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,farther),"Aura behind the camera was accepted");
     anchor.z=s.camZ+.01;
-    Require(!ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,far),"Aura behind near plane was accepted");
+    Require(!ProjectAura(CameraProjection(s,1280,720),anchor,1280,720,farther),"Aura behind near plane was accepted");
     entity.width=std::numeric_limits<float>::quiet_NaN();
     Require(!MakeAuraAnchor(entity,anchor),"Invalid bounds were accepted");
 }
