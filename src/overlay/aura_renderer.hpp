@@ -8,16 +8,17 @@ namespace mcov {
 struct AuraConfig {
     bool enabled = false;
     bool animate = true;                    // Aus: nur weiche Deckkraftwechsel.
-    int rayCount = 24;                       // Gleichmäßig verteilte Strahlen, maximal 64.
-    float rayLength = 1.35f;                 // Vielfaches des projizierten Entitätsradius.
-    float rayWidth = .11f;                   // Maximale Breite, ebenfalls relativ zum Radius.
-    float rotationDegreesPerSecond = 12.f;
-    float pulseAmplitude = .06f;             // Relativer Größenhub: 0 = kein Pulsieren.
-    float pulseHz = .6f;
-    float opacity = .65f;
+    int orbCount = 4;                        // Wenige große, weiche Orbs statt radialer Strahlen.
+    float orbitRadius = .88f;                // Umlaufbahn relativ zur halben Entitätshöhe.
+    float orbSize = .20f;                    // Orb-Radius relativ zur Entitätsgröße.
+    float trailDegrees = 100.f;              // Länge des gebogenen Schweifs auf der Umlaufbahn.
+    float rotationDegreesPerSecond = 75.f;
+    float pulseAmplitude = .035f;
+    float pulseHz = .4f;
+    float opacity = .9f;
     float fadeSeconds = .18f;                // 0 = sofortiger Zielwechsel.
-    ImVec4 startColor{.78f, .91f, 1.f, 1.f};
-    ImVec4 endColor{.18f, .40f, 1.f, 0.f};
+    ImVec4 startColor{.66f, .42f, 1.f, 1.f};    // Violetter Halo um den weißen Kern.
+    ImVec4 endColor{.05f, 1.f, .88f, .85f};    // Türkiser, weich auslaufender Schweif.
 };
 
 // Weltanker bleiben in double. Erst die Kamera zieht ihren Ursprung ab.
@@ -34,18 +35,33 @@ struct AuraBlend {
     ImDrawCallback begin{};
     void* data{};                            // Muss bis RenderDrawData() gültig bleiben.
 };
+inline constexpr int kAuraMaxOrbs = 8;
+inline constexpr int kAuraTrailSamples = 32;
+struct AuraWorldSample {
+    double x{}, y{}, z{};
+    float radius{};
+};
+struct AuraWorldFog {
+    std::array<std::array<AuraWorldSample, kAuraTrailSamples>, kAuraMaxOrbs> trails{};
+    int orbCount{};
+};
+struct AuraScreenSample {
+    ImVec2 center{};
+    float radius{};
+    bool visible{};
+};
+struct AuraScreenFog {
+    std::array<std::array<AuraScreenSample, kAuraTrailSamples>, kAuraMaxOrbs> trails{};
+    int orbCount{};
+};
 
 // Rein visuell: kein JNI, keine Zielauswahl und keine Kameraabfrage.
 class AuraRenderer final {
 public:
-    static constexpr int kMaxRays = 64;
-    static constexpr int kCircleSegments = 64;
-    static constexpr int kRayBands = 8;
-    static constexpr int kRingBands = 8;
-    static constexpr int kCoreBands = 4;
-    // Zwei Auren für den Zielwechsel, jeweils Ring + drei Strahlenlagen + Kern.
-    static constexpr int kMaxVertices = 2 * (kCircleSegments * (kRingBands + kCoreBands) * 4
-                                           + kMaxRays * kRayBands * 3 * 4);
+    static constexpr int kMaxOrbs = kAuraMaxOrbs;
+    static constexpr int kTrailSamples = kAuraTrailSamples;
+    // Zwei Ziele, zwei weiche Lagen pro Trailpunkt und drei Lagen pro Orb-Kern.
+    static constexpr int kMaxVertices = 2 * kMaxOrbs * (kTrailSamples * 2 + 3) * 4;
     static constexpr int kMaxIndices = kMaxVertices / 4 * 6;
     struct Target {
         AuraAnchor anchor{};
@@ -64,16 +80,15 @@ public:
     // Auch das ausblendende Ziel folgt seiner aktuellen Weltposition.
     void RefreshAnchor(const AuraAnchor& anchor) noexcept;
     const std::array<Target, 2>& Targets() const noexcept { return targets_; }
-    void Draw(ImDrawList& draw, const AuraScreen& screen, float targetAlpha,
-              const AuraConfig& config, AuraBlend blend);
+    void BuildWorldFog(const AuraAnchor& anchor, const AuraConfig& config, AuraWorldFog& out) noexcept;
+    void Draw(ImDrawList& draw, const AuraScreenFog& screen, float targetAlpha,
+              const AuraConfig& config, AuraBlend blend, ImTextureID glowTexture);
 
 private:
-    void CacheRays(int count) noexcept;
-    std::array<ImVec2, kCircleSegments + 1> circle_{};
-    std::array<ImVec2, kMaxRays> rays_{};
-    std::array<ImVec2, kRayBands + 1> rayProfile_{}; // Normierte Längen und Breiten.
+    void CacheTrail(float degrees) noexcept;
+    std::array<ImVec2, kTrailSamples> trailAngles_{};
     std::array<Target, 2> targets_{};           // 0: ausblendend, 1: aktuelles Ziel.
-    int cachedRayCount_{};
+    float cachedTrailDegrees_ = -1;
     double rotation_{}, pulsePhase_{};
 };
 } // namespace mcov

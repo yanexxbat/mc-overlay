@@ -17,37 +17,30 @@ bool Valid(const AuraAnchor& a) noexcept {
     return std::isfinite(a.x) && std::isfinite(a.y) && std::isfinite(a.z) &&
            std::isfinite(a.worldRadius) && a.worldRadius > 0;
 }
-ImVec2 At(ImVec2 center, ImVec2 direction, float distance) noexcept {
-    return {center.x + direction.x * distance, center.y + direction.y * distance};
+ImVec4 Mix(ImVec4 a, ImVec4 b, float t) noexcept {
+    return {a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t, a.z+(b.z-a.z)*t, a.w+(b.w-a.w)*t};
 }
-ImU32 Gradient(ImVec4 start, ImVec4 end, float t, float alpha) noexcept {
-    return ImGui::ColorConvertFloat4ToU32({start.x + (end.x - start.x) * t,
-        start.y + (end.y - start.y) * t, start.z + (end.z - start.z) * t,
-        std::clamp((start.w + (end.w - start.w) * t) * alpha, 0.f, 1.f)});
-}
-// AddConvexPolyFilled schreibt ohne AA genau vier Vertices. Die individuelle
-// Vertexfarbe ergibt einen echten, vom Rasterizer interpolierten Verlauf.
-void Quad(ImDrawList& draw, const ImVec2 (&points)[4], ImU32 inner, ImU32 outer) {
-    const int first = draw.VtxBuffer.Size;
-    draw.AddConvexPolyFilled(points, 4, IM_COL32_WHITE);
-    draw.VtxBuffer[first].col = inner;
-    draw.VtxBuffer[first + 1].col = inner;
-    draw.VtxBuffer[first + 2].col = outer;
-    draw.VtxBuffer[first + 3].col = outer;
+void Sprite(ImDrawList& draw, ImTextureID texture, const AuraScreenSample& point,
+            float size, ImVec4 color, float alpha) {
+    if (!point.visible || alpha <= 0) return;
+    const float radius = point.radius * size;
+    const auto lo=draw.GetClipRectMin(), hi=draw.GetClipRectMax();
+    if (!std::isfinite(radius) || radius <= 0 || point.center.x+radius<lo.x || point.center.x-radius>hi.x ||
+        point.center.y+radius<lo.y || point.center.y-radius>hi.y) return;
+    color.w = std::clamp(color.w * alpha, 0.f, 1.f);
+    draw.AddImage(texture, {point.center.x-radius,point.center.y-radius},
+                  {point.center.x+radius,point.center.y+radius}, {0,0}, {1,1}, ImGui::ColorConvertFloat4ToU32(color));
 }
 class DrawScope final {
     ImDrawList& draw_;
-    ImDrawListFlags saved_;
 public:
-    DrawScope(ImDrawList& draw, AuraBlend blend) : draw_(draw), saved_(draw.Flags) {
+    DrawScope(ImDrawList& draw, AuraBlend blend, ImTextureID texture) : draw_(draw) {
         if (blend.begin) draw_.AddCallback(blend.begin, blend.data);
-        // Die weichen Ränder entstehen durch die Geometrie und Alpha-Verläufe.
-        // So benötigt AddConvexPolyFilled keinen temporären AA-Puffer.
-        draw_.Flags &= ~ImDrawListFlags_AntiAliasedFill;
+        // Ein Texturwechsel für den ganzen Effekt: alle Sprites werden gebatcht.
+        draw_.PushTextureID(texture);
     }
     ~DrawScope() {
-        draw_.Flags = saved_;
-        // Der Backend-Callback setzt auch Shader, Textur und Blendzustand zurück.
+        draw_.PopTextureID();
         draw_.AddCallback(ImDrawCallback_ResetRenderState, nullptr);
     }
     DrawScope(const DrawScope&) = delete;
@@ -55,32 +48,20 @@ public:
 };
 } // namespace
 
-AuraRenderer::AuraRenderer() noexcept {
-    for (int i = 0; i <= kCircleSegments; ++i) {
-        const double angle = kTau * i / kCircleSegments;
-        circle_[i] = {float(std::cos(angle)), float(std::sin(angle))};
-    }
-    for (int i = 0; i <= kRayBands; ++i) {
-        const float t = float(i) / kRayBands;
-        rayProfile_[i] = {t, std::max(0.f,std::sin(float(std::numbers::pi) * t))};
-    }
-    CacheRays(24);
-}
+AuraRenderer::AuraRenderer() noexcept { CacheTrail(100.f); }
 void AuraRenderer::Prepare(ImDrawList& draw) {
     draw.VtxBuffer.reserve(draw.VtxBuffer.Size + kMaxVertices);
     draw.IdxBuffer.reserve(draw.IdxBuffer.Size + kMaxIndices);
-    draw.CmdBuffer.reserve(draw.CmdBuffer.Size + 8);
+    draw.CmdBuffer.reserve(draw.CmdBuffer.Size + 12);
+    draw._TextureIdStack.reserve(draw._TextureIdStack.Size + 2);
 }
-void AuraRenderer::Reset() noexcept {
-    targets_ = {};
-    rotation_ = pulsePhase_ = 0;
-}
-void AuraRenderer::CacheRays(int count) noexcept {
-    if (count == cachedRayCount_) return;
-    cachedRayCount_ = count;
-    for (int i = 0; i < count; ++i) {
-        const double angle = kTau * i / count;
-        rays_[i] = {float(std::cos(angle)), float(std::sin(angle))};
+void AuraRenderer::Reset() noexcept { targets_ = {}; rotation_ = pulsePhase_ = 0; }
+void AuraRenderer::CacheTrail(float degrees) noexcept {
+    if (degrees == cachedTrailDegrees_) return;
+    cachedTrailDegrees_ = degrees;
+    for (int i=0;i<kTrailSamples;++i) {
+        const double angle = degrees * std::numbers::pi / 180. * i / (kTrailSamples-1);
+        trailAngles_[i] = {float(std::cos(angle)), float(std::sin(angle))};
     }
 }
 void AuraRenderer::RefreshAnchor(const AuraAnchor& anchor) noexcept {
@@ -91,23 +72,17 @@ void AuraRenderer::RefreshAnchor(const AuraAnchor& anchor) noexcept {
 void AuraRenderer::UpdateTarget(const AuraAnchor* selected, float deltaSeconds, const AuraConfig& config) noexcept {
     const float dt = Safe(deltaSeconds, 0, 0, .25f);
     if (!config.enabled || (selected && !Valid(*selected))) selected = nullptr;
-    auto& old = targets_[0];
-    auto& current = targets_[1];
+    auto& old = targets_[0]; auto& current = targets_[1];
     if (selected) {
-        if (current.valid && current.anchor.entityId == selected->entityId) {
-            current.anchor = *selected;
-        } else if (old.valid && old.anchor.entityId == selected->entityId) {
-            // Eine schnelle Rückkehr tauscht die Ziele, statt den Fade neu zu starten.
-            std::swap(old, current);
-            current.anchor = *selected;
+        if (current.valid && current.anchor.entityId == selected->entityId) current.anchor = *selected;
+        else if (old.valid && old.anchor.entityId == selected->entityId) {
+            // Beim Rückwechsel die bestehende Deckkraft weiterverwenden.
+            std::swap(old, current); current.anchor = *selected;
         } else {
             if (current.valid) old = current;
             current = {*selected, 0.f, true};
         }
-    } else if (current.valid) {
-        old = current;
-        current = {};
-    }
+    } else if (current.valid) { old = current; current = {}; }
     const float fade = Safe(config.fadeSeconds, .18f, 0, 2);
     const float step = fade > 0 ? dt / fade : 1.f;
     if (current.valid) current.alpha = std::min(1.f, current.alpha + step);
@@ -116,76 +91,62 @@ void AuraRenderer::UpdateTarget(const AuraAnchor* selected, float deltaSeconds, 
         if (old.alpha == 0) old = {};
     }
     if (config.animate) {
-        rotation_ = std::remainder(rotation_ + Safe(config.rotationDegreesPerSecond, 12, -180, 180)
+        rotation_ = std::remainder(rotation_ + Safe(config.rotationDegreesPerSecond,75,-180,180)
                                    * std::numbers::pi / 180. * dt, kTau);
-        pulsePhase_ = std::remainder(pulsePhase_ + kTau * Safe(config.pulseHz, .6f, 0, 5) * dt, kTau);
+        pulsePhase_ = std::remainder(pulsePhase_ + kTau * Safe(config.pulseHz,.4f,0,5) * dt, kTau);
     }
 }
-void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float targetAlpha,
-                        const AuraConfig& config, AuraBlend blend) {
-    if (!std::isfinite(screen.center.x) || !std::isfinite(screen.center.y) ||
-        !std::isfinite(screen.radius) || screen.radius <= 0) return;
-    const float opacity = Safe(config.opacity, .65f, 0, 1) * Safe(targetAlpha, 0, 0, 1);
-    if (opacity <= 0) return;
-    CacheRays(std::clamp(config.rayCount, 3, kMaxRays));
-    const float pulse = 1.f + Safe(config.pulseAmplitude, .06f, 0, .3f) * float(std::sin(pulsePhase_));
-    const float radius = screen.radius * pulse;
-    const float reach = radius * Safe(config.rayLength, 1.35f, .5f, 3);
-    const float halfWidth = radius * Safe(config.rayWidth, .11f, .01f, .5f) * .5f;
-    const ImVec4 start = SafeColor(config.startColor), end = SafeColor(config.endColor);
-    const auto clip = draw.GetClipRectMin(), clipMax = draw.GetClipRectMax();
-    const float extent = reach * 1.12f + halfWidth * 2;
-    if (!std::isfinite(extent)) return;
-    if (screen.center.x + extent < clip.x || screen.center.x - extent > clipMax.x ||
-        screen.center.y + extent < clip.y || screen.center.y - extent > clipMax.y) return;
-    DrawScope scope(draw, blend);
-
-    // 1. Weicher Ring: Innen- und Außenkante laufen auf Alpha null aus.
-    for (int band = 0; band < kRingBands; ++band) {
-        const float a = float(band) / kRingBands, b = float(band + 1) / kRingBands;
-        const float innerRadius = reach * (.48f + a * .64f), outerRadius = reach * (.48f + b * .64f);
-        const ImU32 ca = Gradient(start, end, .4f + .5f * a, opacity * .18f * std::sin(float(std::numbers::pi) * a));
-        const ImU32 cb = Gradient(start, end, .4f + .5f * b, opacity * .18f * std::sin(float(std::numbers::pi) * b));
-        for (int i = 0; i < kCircleSegments; ++i) {
-            const ImVec2 points[] = {At(screen.center, circle_[i + 1], innerRadius),
-                At(screen.center, circle_[i], innerRadius),
-                At(screen.center, circle_[i], outerRadius), At(screen.center, circle_[i + 1], outerRadius)};
-            Quad(draw, points, ca, cb);
+void AuraRenderer::BuildWorldFog(const AuraAnchor& anchor, const AuraConfig& config, AuraWorldFog& out) noexcept {
+    out.orbCount = 0;
+    if (!Valid(anchor)) return;
+    CacheTrail(Safe(config.trailDegrees,100,10,220));
+    const float pulse = 1.f + Safe(config.pulseAmplitude,.035f,0,.3f) * float(std::sin(pulsePhase_));
+    const double orbit = anchor.worldRadius * Safe(config.orbitRadius,.88f,.3f,2) * pulse;
+    const float size = anchor.worldRadius * Safe(config.orbSize,.20f,.05f,.5f) * pulse;
+    const float direction = config.rotationDegreesPerSecond < 0 ? -1.f : 1.f;
+    out.orbCount = std::clamp(config.orbCount,1,kMaxOrbs);
+    for (int i=0;i<out.orbCount;++i) {
+        const double phase = rotation_ + kTau * i / out.orbCount;
+        const double cs=std::cos(phase), sn=std::sin(phase);
+        // Gegeneinander geneigte 3D-Bahnen, damit die Orbs den ganzen Körper umspielen.
+        const double yaw = i * 1.13;
+        const double cy=std::cos(yaw), sy=std::sin(yaw);
+        const double tilt = (i%2 ? -1 : 1) * std::numbers::pi / 3.;
+        const double ct=std::cos(tilt), st=std::sin(tilt);
+        for (int j=0;j<kTrailSamples;++j) {
+            const auto cached=trailAngles_[j];
+            const double c=cs*cached.x + sn*cached.y*direction;
+            const double s=sn*cached.x - cs*cached.y*direction;
+            const double x=orbit*c, y=orbit*s*st, z=orbit*s*ct;
+            const float age=float(j)/(kTrailSamples-1);
+            // Keine Positionshistorie: der ganze Schweif bleibt am aktuellen Weltanker.
+            out.trails[i][j] = {anchor.x+x*cy-z*sy, anchor.y+y, anchor.z+x*sy+z*cy,
+                                size*(1.f-.72f*age)};
         }
     }
-    // 2. Strahlen: drei Breitenlagen erzeugen einen weichen seitlichen Saum.
-    const float angle = float(rotation_);
-    const float cs = std::cos(angle), sn = std::sin(angle);
-    constexpr float widths[] = {2.8f, 1.7f, 1.f};
-    constexpr float strengths[] = {.11f, .21f, .48f};
-    for (int layer = 0; layer < 3; ++layer) for (int i = 0; i < cachedRayCount_; ++i) {
-        const ImVec2 d{rays_[i].x * cs - rays_[i].y * sn, rays_[i].x * sn + rays_[i].y * cs};
-        const ImVec2 n{-d.y, d.x};
-        for (int band = 0; band < kRayBands; ++band) {
-            const float a = rayProfile_[band].x, b = rayProfile_[band + 1].x;
-            // Der Strahl beginnt im Kern und endet in einer schmalen Spitze.
-            const float wa = halfWidth * widths[layer] * rayProfile_[band].y;
-            const float wb = halfWidth * widths[layer] * rayProfile_[band + 1].y;
-            const auto pa = At(screen.center, d, reach * a), pb = At(screen.center, d, reach * b);
-            const ImVec2 points[] = {{pa.x + n.x * wa, pa.y + n.y * wa},
-                {pa.x - n.x * wa, pa.y - n.y * wa},
-                {pb.x - n.x * wb, pb.y - n.y * wb}, {pb.x + n.x * wb, pb.y + n.y * wb}};
-            Quad(draw, points, Gradient(start, end, a, opacity * strengths[layer] * (1-a)),
-                 Gradient(start, end, b, opacity * strengths[layer] * (1-b)));
+}
+void AuraRenderer::Draw(ImDrawList& draw, const AuraScreenFog& screen, float targetAlpha,
+                        const AuraConfig& config, AuraBlend blend, ImTextureID glowTexture) {
+    const float opacity = Safe(config.opacity,.9f,0,1) * Safe(targetAlpha,0,0,1);
+    if (!glowTexture || opacity <= 0 || screen.orbCount <= 0) return;
+    DrawScope scope(draw,blend,glowTexture);
+    const ImVec4 head=SafeColor(config.startColor), tail=SafeColor(config.endColor);
+    for (int i=0;i<std::min(screen.orbCount,kMaxOrbs);++i) {
+        // Überlappende Gauß-Sprites ergeben einen weichen, gebogenen Nebelschweif.
+        // Kopf bei Index 0; zuerst das fast transparente Schweifende zeichnen.
+        for (int j=kTrailSamples-1;j>=0;--j) {
+            const float age=float(j)/(kTrailSamples-1);
+            const float fade=(1-age)*(1-age);
+            const ImVec4 color=Mix(head,tail,std::min(1.f,age*1.8f));
+            const auto& point=screen.trails[i][j];
+            Sprite(draw,glowTexture,point,3.1f,color,opacity*fade*.085f);
+            Sprite(draw,glowTexture,point,1.05f,color,opacity*fade*.27f);
         }
-    }
-    // 3. Heller Kern mit radialem Verlauf; kein hartes, deckendes Rechteck.
-    const float coreRadius = radius * .19f;
-    for (int band = 0; band < kCoreBands; ++band) {
-        const float a = float(band) / kCoreBands, b = float(band + 1) / kCoreBands;
-        const ImU32 ca = Gradient(start, end, a * .4f, opacity * .8f * (1-a) * (1-a));
-        const ImU32 cb = Gradient(start, end, b * .4f, opacity * .8f * (1-b) * (1-b));
-        for (int i = 0; i < kCircleSegments; ++i) {
-            const ImVec2 points[] = {At(screen.center, circle_[i + 1], coreRadius * a),
-                At(screen.center, circle_[i], coreRadius * a),
-                At(screen.center, circle_[i], coreRadius * b), At(screen.center, circle_[i + 1], coreRadius * b)};
-            Quad(draw, points, ca, cb);
-        }
+        const auto& point=screen.trails[i][0];
+        Sprite(draw,glowTexture,point,3.0f,head,opacity*.45f);
+        const ImVec4 white=Mix(head,ImVec4(1,1,1,1),.88f);
+        Sprite(draw,glowTexture,point,1.0f,white,opacity*.92f);
+        Sprite(draw,glowTexture,point,.60f,ImVec4(1,1,1,1),opacity*.70f);
     }
 }
 } // namespace mcov
