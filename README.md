@@ -217,6 +217,14 @@ retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
 
 ## Mappings: read this before trusting any field
 
+The optional target aura is configured under Visuals → Target aura. It uses the
+existing crosshair target and coherent entity/camera snapshot, with no added JNI
+calls. The renderer owns fixed geometry templates; its D3D11 adapter scopes
+additive RGB blending and preserves coverage alpha. Full C++ implementation,
+render-loop example, OpenGL callback and caveats: [Aura guide](docs/aura.md).
+`MCOV_BUILD_UI_CHECKS` also enables `aura_rendering` for real WARP pixels and
+allocation/projection checks.
+
 `generated_profiles.hpp` contains 11 audited profiles for the four requested
 releases: Mojmap, older vanilla obfuscated names, Fabric intermediary and Forge
 1.20.1 SRG. Minecraft 26.2 ships unobfuscated names. Forge 1.20.1 keeps Mojang
