@@ -2,6 +2,7 @@
 // window, Minecraft process, attach helper, input injection or JNI is used.
 #include "overlay/overlay.hpp"
 #include "common/flat_style.hpp"
+#include "overlay/menu_motion.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
 #include <windows.h>
@@ -38,6 +39,8 @@ struct OverlayUiCheck {
     static bool Box(const Overlay& o) { return o.visuals_.boxEsp; }
     static const control_panel::State& Menu(const Overlay& o) { return o.menu_; }
     static void Collapse(Overlay& o,bool value) { o.menu_.navCollapsed=value; }
+    static void ReduceMotion(Overlay& o,bool value) { o.menu_.reduceMotion=value; }
+    static void Center(Overlay& o) { o.menu_.positioned=false; }
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
     static void ResetVisuals(Overlay& o) { o.ResetMenuPage(Page::Visuals); }
     static void AllowCombat(Overlay& o) { o.combat_.aimLock=o.combat_.triggerbot=true; }
@@ -87,11 +90,11 @@ void Draw(mcov::Overlay& overlay,Page page,int theme,ImVec2 size,bool preserveSt
     auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
     ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
     auto& ctx=*ImGui::GetCurrentContext();
-    const auto colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size;
+    const auto colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size,fonts=ctx.FontStack.Size;
     const auto before=ImGui::GetStyle();
     mcov::OverlayUiCheck::Draw(overlay,page,theme,preserveState);
-    Require(ctx.ColorStack.Size==colors && ctx.StyleVarStack.Size==vars && ctx.CurrentWindowStack.Size==windows,
-            "Menu leaked styles, child windows or tables");
+    Require(ctx.ColorStack.Size==colors && ctx.StyleVarStack.Size==vars && ctx.CurrentWindowStack.Size==windows && ctx.FontStack.Size==fonts,
+            "Menu leaked styles, fonts, child windows or tables");
     const auto& after=ImGui::GetStyle();
     for (int i=0;i<ImGuiCol_COUNT;++i)
         Require(std::memcmp(&before.Colors[i],&after.Colors[i],sizeof(ImVec4))==0,"Menu theme changed the HUD/global palette");
@@ -125,6 +128,8 @@ int main(int argc,char** argv) {
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.ConfigFlags|=ImGuiConfigFlags_NavEnableKeyboard;
         Require(mcov::style::LoadFonts(),"Embedded fonts failed");
+        Require(mcov::control_panel::motion::EaseOut(0)==0 && mcov::control_panel::motion::EaseOut(1)==1 &&
+                mcov::control_panel::motion::EaseOut(.2f)>.5f,"Feedback curve does not respond promptly");
         mcov::style::ApplyFlatTheme(ImGui::GetStyle());
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"Off-screen ImGui renderer failed");
         mcov::Overlay overlay; mcov::OverlayUiCheck::Seed(overlay);
@@ -133,12 +138,21 @@ int main(int argc,char** argv) {
             for (Page page:pages) {
                 Draw(overlay,page,theme,ImVec2(1280,800));
                 Draw(overlay,page,theme,ImVec2(1280,800));
-                if (page==Page::Visuals) SaveFrame(device.Get(),context.Get(),output/("theme-"+std::to_string(theme)+".png"));
+                if (page==Page::Visuals) {
+                    for (int i=0;i<12;++i) Draw(overlay,page,theme,ImVec2(1280,800));
+                    SaveFrame(device.Get(),context.Get(),output/("theme-"+std::to_string(theme)+".png"));
+                }
             }
         }
         Require(mcov::style::MenuIconFont()->FindGlyphNoFallback(0xf54c),"Embedded skull icon is missing");
+        Require(mcov::style::MenuFont()->FontSize==14 && io.FontDefault->FontSize==17,
+                "Larger menu font changed the HUD font");
         mcov::OverlayUiCheck::AllowCombat(overlay);
+        mcov::OverlayUiCheck::Center(overlay);
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        auto* panel=ImGui::FindWindowByName("mcov control panel");
+        Require(panel->Size.x<=900 && panel->Size.y<=510,"Menu footprint was not reduced");
+        for (int i=0;i<12;++i) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         SaveFrame(device.Get(),context.Get(),output/"combat.png");
         Draw(overlay,Page::Combat,0,ImVec2(752,427));
         Draw(overlay,Page::Combat,0,ImVec2(752,427));
@@ -176,7 +190,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::Collapse(overlay,true);
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         nav=Child("/navigation_");
-        Require(nav->Size.x==40,"Collapsed navigation did not resize");
+        Require(nav->Size.x==35,"Collapsed navigation did not resize");
         SaveFrame(device.Get(),context.Get(),output/"collapsed.png");
         mcov::OverlayUiCheck::Collapse(overlay,false);
         // Drag the custom thin slider. Its numeric state is the combat module's
@@ -190,11 +204,45 @@ int main(int argc,char** argv) {
         io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         Require(mcov::OverlayUiCheck::AimFov(overlay)>60 && mcov::OverlayUiCheck::AimFov(overlay)<=90,
                 "Thin slider did not update the real aim lock cone");
+        // Drag the empty top strip; both floating panels move as a single menu.
+        panel=ImGui::FindWindowByName("mcov control panel");
+        const ImVec2 original=panel->Pos;
+        const ImVec2 grip(original.x+panel->Size.x*.4f,original.y+10);
+        io.AddMousePosEvent(grip.x,grip.y); io.AddMouseButtonEvent(0,true);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        Require(mcov::OverlayUiCheck::Menu(overlay).dragging,"Drag strip did not capture the mouse");
+        io.AddMousePosEvent(grip.x+64,grip.y+45);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        io.AddMouseButtonEvent(0,false);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        panel=ImGui::FindWindowByName("mcov control panel");
+        const ImVec2 moved=panel->Pos;
+        Require(moved.x==original.x+64 && moved.y==original.y+45 && !mcov::OverlayUiCheck::Menu(overlay).dragging,
+                "Menu drag lagged, changed its offset or failed to release");
+        for (int i=0;i<12;++i) Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        Require(panel->Pos.x==moved.x && panel->Pos.y==moved.y,"Menu position snapped back after dragging");
+        SaveFrame(device.Get(),context.Get(),output/"dragged.png");
+        const ImVec2 edgeGrip(moved.x+panel->Size.x*.4f,moved.y+10);
+        io.AddMousePosEvent(edgeGrip.x,edgeGrip.y); io.AddMouseButtonEvent(0,true);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        io.AddMousePosEvent(-200,-200);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        io.AddMouseButtonEvent(0,false);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        Require(panel->Pos.x==0 && panel->Pos.y==0,"Drag escaped the viewport");
+        mcov::OverlayUiCheck::Center(overlay);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
+        mcov::OverlayUiCheck::ReduceMotion(overlay,true);
+        nav=Child("/navigation_");
+        clickMenu(ImVec2(nav->DC.CursorStartPos.x+nav->WorkRect.GetWidth()*.5f,nav->DC.CursorStartPos.y+126));
+        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Visuals &&
+                mcov::OverlayUiCheck::Menu(overlay).pageAlpha==1,"Reduced motion delayed navigation");
+        mcov::OverlayUiCheck::ReduceMotion(overlay,false);
         for (auto size:{ImVec2(720,560),ImVec2(480,360)})
             for (Page page:pages) Draw(overlay,page,2,size);
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: reference geometry, embedded icons, 6 real pages, 4 themes, settings binding, reset, navigation input, small viewports and style isolation\n";
+        std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced motion, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
