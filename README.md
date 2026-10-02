@@ -227,6 +227,8 @@ Full C++ implementation, render-loop example and caveats: [Aura guide](docs/aura
 allocation/projection checks.
 
 The current binaries live only in `build/bin`; previews are in `build/ui-preview`.
+The original liquidDX11 reference sources are under `third_party/reference`,
+alongside the retained font assets under `third_party/glass`.
 `scripts/build.ps1` always uses `build`, with `-Checks` for the regression suite
 and `-Clean` to remove old outputs while retaining dependency/mapping caches.
 
