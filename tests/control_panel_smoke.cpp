@@ -9,6 +9,7 @@
 #include <d3d11.h>
 #include <wincodec.h>
 #include <wrl/client.h>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <stdexcept>
@@ -44,6 +45,14 @@ struct OverlayUiCheck {
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
     static void ResetVisuals(Overlay& o) { o.ResetMenuPage(Page::Visuals); }
     static void AllowCombat(Overlay& o) { o.combat_.aimLock=o.combat_.triggerbot=true; }
+    static AuraConfig& AuraSettings(Overlay& o) { return o.auraConfig_; }
+    static AuraWorldSample AuraHead(Overlay& o) {
+        const auto& target=o.auraRenderer_.Targets()[1];
+        if (!target.valid) throw std::runtime_error("Production aura has no current target");
+        AuraWorldFog world;
+        o.auraRenderer_.BuildWorldFog(target.anchor,o.auraConfig_,world);
+        return world.trails[0][0];
+    }
     static void DrawAura(Overlay& o,ID3D11Device* device) {
         if (!o.auraBlend_.Callbacks().begin && !o.auraBlend_.Initialize(device))
             throw std::runtime_error("Aura blend preview initialization failed");
@@ -261,14 +270,37 @@ int main(int argc,char** argv) {
         for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
         io.AddMousePosEvent(-100,-100);
-        for (int i=0;i<16;++i) {
+        auto auraFrame=[&] {
             io.DisplaySize={1280,800}; io.DeltaTime=1.f/60;
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
-        }
+        };
+        auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
+        aura.pulseAmplitude=0;
+        mcov::OverlayUiCheck::ReduceMotion(overlay,true);
+        for (int i=0;i<16;++i) auraFrame();
+        const auto initialHead=mcov::OverlayUiCheck::AuraHead(overlay);
+        for (int i=0;i<30;++i) auraFrame();
+        const auto rotatedHead=mcov::OverlayUiCheck::AuraHead(overlay);
+        const auto distance=[](const auto& a,const auto& b) {
+            const double dx=a.x-b.x,dy=a.y-b.y,dz=a.z-b.z;
+            return std::sqrt(dx*dx+dy*dy+dz*dz);
+        };
+        Require(distance(initialHead,rotatedHead)>.3,"Menu/Windows motion settings blocked enabled aura rotation");
+        aura.animate=false;
+        for (int i=0;i<30;++i) auraFrame();
+        const auto pausedHead=mcov::OverlayUiCheck::AuraHead(overlay);
+        Require(distance(rotatedHead,pausedHead)<.00001,"Production aura ignored its animation toggle");
+        aura.animate=true;
+        for (int i=0;i<30;++i) auraFrame();
+        Require(distance(pausedHead,mcov::OverlayUiCheck::AuraHead(overlay))>.3,
+                "Production aura did not resume after enabling animation");
+        mcov::OverlayUiCheck::ReduceMotion(overlay,false);
+        aura.pulseAmplitude=.035f;
+        for (int i=0;i<16;++i) auraFrame();
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced motion, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
+        std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced menu motion, independent aura rotation/pause/resume, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

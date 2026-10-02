@@ -116,6 +116,36 @@ void OrbitChecks() {
             Close(expected.x,screen.trails[0][0].center.x)&&Close(radius,screen.trails[0][0].radius),
             "Fog did not follow the current camera projection");
 }
+void RotationChecks() {
+    AuraRenderer renderer;
+    AuraConfig config; config.enabled=true; config.pulseAmplitude=0;
+    config.rotationDegreesPerSecond=90;
+    const AuraAnchor anchor{42,0,.9,5,.9f};
+    AuraWorldFog start,rotated,paused,resumed;
+    renderer.BuildWorldFog(anchor,config,start);
+    for (int i=0;i<60;++i) renderer.UpdateTarget(&anchor,1.f/60,config);
+    renderer.BuildWorldFog(anchor,config,rotated);
+    const double orbit=anchor.worldRadius*config.orbitRadius;
+    const auto& head=rotated.trails[0][0];
+    Require(std::abs(head.x-anchor.x)<.00001 && head.y>anchor.y+.5*orbit && head.z>anchor.z,
+            "Positive rotation did not complete a quarter orbit in one second");
+    config.animate=false;
+    for (int i=0;i<60;++i) renderer.UpdateTarget(&anchor,1.f/60,config);
+    renderer.BuildWorldFog(anchor,config,paused);
+    Require(head.x==paused.trails[0][0].x && head.y==paused.trails[0][0].y && head.z==paused.trails[0][0].z,
+            "Disabling aura animation did not freeze the orbit");
+    config.animate=true; config.rotationDegreesPerSecond=-90;
+    for (int i=0;i<60;++i) renderer.UpdateTarget(&anchor,1.f/60,config);
+    renderer.BuildWorldFog(anchor,config,resumed);
+    const auto& origin=start.trails[0][0]; const auto& back=resumed.trails[0][0];
+    Require(std::abs(back.x-origin.x)<.00001 && std::abs(back.y-origin.y)<.00001 &&
+            std::abs(back.z-origin.z)<.00001,"Reverse rotation did not resume from the paused phase");
+    config.rotationDegreesPerSecond=0;
+    for (int i=0;i<60;++i) renderer.UpdateTarget(&anchor,1.f/60,config);
+    renderer.BuildWorldFog(anchor,config,paused);
+    Require(back.x==paused.trails[0][0].x && back.y==paused.trails[0][0].y && back.z==paused.trails[0][0].z,
+            "Zero rotation speed moved the orbit");
+}
 struct Pixels {
     std::array<unsigned char,128*128*4> data{};
     const unsigned char* At(int x,int y) const { return data.data()+(y*128+x)*4; }
@@ -204,7 +234,7 @@ int main() {
     _CrtSetReportMode(_CRT_ASSERT,_CRTDBG_MODE_FILE); _CrtSetReportFile(_CRT_ASSERT,_CRTDBG_FILE_STDERR);
 #endif
     try {
-        ProjectionChecks(); FadeChecks(); OrbitChecks();
+        ProjectionChecks(); FadeChecks(); OrbitChecks(); RotationChecks();
         ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context;
         Hr(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context));
         ImGui::SetAllocatorFunctions(Alloc,Free); ImGui::CreateContext(); ImGui::GetIO().IniFilename=nullptr;
@@ -212,7 +242,7 @@ int main() {
         AuraBlendDX11 blend; Require(blend.Initialize(device.Get()),"Aura blend initialization failed");
         DrawingChecks(device.Get(),context.Get(),blend);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext();
-        std::cout<<"PASS aura fog: world-space orbits, curved trails, entity/camera movement, frame-rate independence, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
+        std::cout<<"PASS aura fog: world-space orbits, rotation direction/speed/pause/resume, curved trails, entity/camera movement, frame-rate independence, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
