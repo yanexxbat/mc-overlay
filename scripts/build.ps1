@@ -20,7 +20,10 @@ param(
 
     [string] $Generator = '',
 
-    [switch] $Clean
+    [switch] $Clean,
+    [switch] $Checks,
+    [switch] $Offline,
+    [string] $PythonExecutable = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -179,7 +182,22 @@ if (Test-Path $agentDll) {
 # --- configure ---------------------------------------------------------------
 if ($Clean -and (Test-Path $BuildDir)) {
     Write-Host "  cleaning $BuildDir" -ForegroundColor Yellow
-    Remove-Item -Recurse -Force $BuildDir
+    $verifiedBuild = (Get-Item -LiteralPath $BuildDir).FullName
+    $expectedBuild = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'build'))
+    if ($verifiedBuild -ne $expectedBuild -or
+        ((Get-Item -LiteralPath $BuildDir).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw 'Refusing to clean an unexpected build path or a directory link.'
+    }
+    # Quell- und Mapping-Caches erhalten; alte Binaries, Backups und Diagnosen entfernen.
+    foreach ($entry in Get-ChildItem -LiteralPath $verifiedBuild -Force) {
+        if ($entry.Name -in @('_deps', 'compat-cache')) { continue }
+        $target = [System.IO.Path]::GetFullPath($entry.FullName)
+        if (-not $target.StartsWith($verifiedBuild + [System.IO.Path]::DirectorySeparatorChar,
+                                   [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to clean a path outside build: $target"
+        }
+        Remove-Item -LiteralPath $target -Recurse -Force
+    }
 }
 
 $configureArgs = @(
@@ -188,6 +206,16 @@ $configureArgs = @(
     "-DMCOV_JAVA_HOME=$JavaHome"
     "-DCMAKE_BUILD_TYPE=$Config"
 )
+if ($Offline) {
+    if (-not (Test-Path -LiteralPath (Join-Path $BuildDir '_deps\imgui-src\imgui.h'))) {
+        throw 'Offline build requires the existing ImGui source cache in build/_deps.'
+    }
+    $configureArgs += '-DFETCHCONTENT_FULLY_DISCONNECTED=ON'
+}
+if ($Checks) {
+    $configureArgs += @('-DMCOV_BUILD_UI_CHECKS=ON', '-DMCOV_BUILD_COMPAT_CHECKS=ON', '-DMCOV_BUILD_ESP_CHECKS=ON')
+}
+if ($PythonExecutable) { $configureArgs += "-DPython3_EXECUTABLE=$PythonExecutable" }
 
 if ($Generator) {
     $configureArgs += @('-G', $Generator)
@@ -211,6 +239,12 @@ if (-not $VcVars -or $Generator) { $buildArgs += @('--config', $Config) }
 
 Write-Host "`n> cmake $($buildArgs -join ' ')" -ForegroundColor DarkGray
 if ((Invoke-CMake $buildArgs) -ne 0) { throw "build failed" }
+if ($Checks) {
+    $CTestExe = Join-Path (Split-Path $CMakeExe) 'ctest.exe'
+    if (-not (Test-Path -LiteralPath $CTestExe)) { $CTestExe = (Get-Command ctest -ErrorAction Stop).Source }
+    & $CTestExe --test-dir $BuildDir --output-on-failure --timeout 45
+    if ($LASTEXITCODE -ne 0) { throw 'checks failed' }
+}
 
 # --- report ------------------------------------------------------------------
 $binDir = Join-Path $BuildDir 'bin'
