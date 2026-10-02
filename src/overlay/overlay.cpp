@@ -1435,7 +1435,7 @@ void Overlay::DrawSettingsTab() {
                 ImGui::EndTable();
             }
             MenuHeading("Focus & keys");
-            static const char* focusLabels[]={"Never take focus","Simple activation","Unlock foreground","Legacy attach input"};
+            static const char* focusLabels[]={"No focus","Activate","Unlock","Legacy"};
             if (panel::BeginRows("focus_settings")) {
                 int focus=int(settings_.focusMode);
                 if (panel::ComboRow("Focus mode",&focus,focusLabels,IM_ARRAYSIZE(focusLabels))) settings_.focusMode=FocusMode(focus);

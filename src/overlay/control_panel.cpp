@@ -140,7 +140,7 @@ void NavButton(State& state,const char* glyph,const char* label,Page page,float 
     const float hover=Animate("hover",PointerHover() ? 1.f : 0.f);
     const float active=Animate("selected",selected ? 1.f : 0.f,motion::kPageSeconds,
                                !clicked || ImGui::IsMouseReleased(ImGuiMouseButton_Left));
-    const float press=Animate("press",ImGui::IsItemActive() ? 1.f : 0.f,motion::kFeedbackSeconds);
+    const float press=Animate("press",ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1.f : 0.f,motion::kFeedbackSeconds);
     const float shrink=gMotion ? 1-.03f*press : 1.f;
     const ImVec2 a(p.x+extent.x*(1-shrink)*.5f,p.y+extent.y*(1-shrink)*.5f);
     const ImVec2 b(p.x+extent.x*(1+shrink)*.5f,p.y+extent.y*(1+shrink)*.5f);
@@ -174,7 +174,7 @@ bool ToolButton(const char* id,const char* glyph,const char* tooltip,bool select
     ImGui::PushID(id);
     const float hover=Animate("hover",PointerHover() ? 1.f : 0.f);
     const float active=Animate("selected",selected ? 1.f : 0.f);
-    const float press=Animate("press",ImGui::IsItemActive() ? 1.f : 0.f,motion::kFeedbackSeconds);
+    const float press=Animate("press",ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1.f : 0.f,motion::kFeedbackSeconds);
     const float shrink=gMotion ? 1-.03f*press : 1.f;
     const ImVec2 a(p.x+extent.x*(1-shrink)*.5f,p.y+extent.y*(1-shrink)*.5f);
     const ImVec2 b(p.x+extent.x*(1+shrink)*.5f,p.y+extent.y*(1+shrink)*.5f);
@@ -403,17 +403,13 @@ bool CheckRow(const char* label,bool* value) {
     const auto cell=ImGui::GetCursorScreenPos();
     const float side=16*gScale;
     const ImVec2 box(cell.x+std::max(0.f,ImGui::GetContentRegionAvail().x-side),cell.y+(ControlHeight()-side)*.5f);
-    if (label[0]=='P' && label[1]=='l' && ImGui::GetFrameCount()==3) {
-        const auto clip=draw.GetClipRectMax();
-        std::fprintf(stderr,"Players checkbox: cell %.1f %.1f box %.1f %.1f clip %.1f %.1f avail %.1f value %d\n",cell.x,cell.y,box.x,box.y,clip.x,clip.y,ImGui::GetContentRegionAvail().x,int(*value));
-    }
     ImGui::SetCursorScreenPos(ImVec2(box.x-4*gScale,cell.y));
     const bool pressed=ImGui::InvisibleButton("##value",ImVec2(24*gScale,ControlHeight()),ImGuiButtonFlags_EnableNav);
     if (pressed) *value=!*value;
     const float hover=Animate("hover",PointerHover() || labelHover ? 1.f : 0.f);
     const float selection=Animate("selection",*value ? 1.f : 0.f,motion::kFeedbackSeconds,
         !(pressed || labelPressed) || ImGui::IsMouseReleased(ImGuiMouseButton_Left));
-    const float press=Animate("press",ImGui::IsItemActive() || labelActive ? 1.f : 0.f,motion::kFeedbackSeconds);
+    const float press=Animate("press",(ImGui::IsItemActive() || labelActive) && ImGui::IsMouseDown(ImGuiMouseButton_Left) ? 1.f : 0.f,motion::kFeedbackSeconds);
     const auto accent=ImGui::GetStyleColorVec4(ImGuiCol_CheckMark);
     const auto off=Mix(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg),accent,.12f+.12f*hover);
     const float inset=gMotion ? side*.02f*press : 0.f;

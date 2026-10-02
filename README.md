@@ -180,29 +180,40 @@ The overlay menu reproduces the user's screenshot, saved in
 [design/reference-ui.png](design/reference-ui.png). Its native implementation
 lives in `src/overlay/control_panel.hpp/.cpp`: separate dark main panel and
 right navigation, two compact setting columns, square gold checkboxes, thin
-gold sliders, small dropdowns and clipped circular linework. The reference's
-681 x 382 menu footprint scales to the game viewport, up to 1.5 times its
-reference size. Narrow viewports stack settings with scrolling.
+gold sliders, small dropdowns and subtle clipped circular linework. The polished
+menu measures 860 x 477 at normal desktop sizes, about 16% smaller than the
+original implementation. Inter is 14 px, with larger checkboxes and slider
+knobs. Narrow viewports stack settings with scrolling and retain readable text.
+
+Drag the small grip along the top edge to move both panels together. Position
+lasts for the session, including when closing and reopening the menu. Dragging
+tracks the pointer directly and clamps the menu inside the game viewport.
+Appearance -> Center menu restores central placement.
 
 AIMBOT opens the existing combat modules, VISUALS entity rendering, LOOT block
 ESP, and HUD equipment and overlays. The three small icons open player stats,
 appearance/menu actions, and overlay/agent settings. Appearance includes the
-four existing palettes, compact navigation, page reset, connection status and
-menu closing. Font Awesome icons are embedded as an executable resource.
+four existing palettes, compact navigation, reduced motion, recentering, page
+reset, connection status and menu closing. Font Awesome icons are embedded as
+an executable resource.
 Aim/trigger activation keys and target filtering are bound to CombatSettings;
 the reference's unrelated game features are not added. All six original pages
 remain accessible. The injector retains its existing flat interface.
 
 The menu uses the existing Win32/D3D11 backend and pinned ImGui version.
-Its palette and smaller fonts are scoped to the menu, leaving the HUD intact.
+Its palette and menu fonts are scoped to the menu, leaving the HUD intact.
+Hover, press and toggle feedback use shared, interruptible 120-160 ms ease-out
+transitions. Mouse-selected pages fade gently into place; shortcut opening and
+keyboard page changes are immediate. Native Windows animation preferences and
+the Reduced motion option suppress motion.
 
 Optional -DMCOV_BUILD_UI_CHECKS=ON enables headless `flat_ui` and `control_panel`
 checks for style ownership, real settings binding, navigation input and small
 viewports. The latter renders the actual menu with D3D11 WARP to PNG files in
 `build/ui-preview` without opening a window or connecting to Minecraft.
 `reference-size.png` uses the supplied image's 752 x 427 viewport; `combat.png`
-shows the desktop version. The check also drags the real aim-cone slider and
-verifies that the embedded icon glyphs are available.
+shows the desktop version. The check also exercises menu dragging, position
+retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
 
 ## Mappings: read this before trusting any field
 

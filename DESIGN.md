@@ -3,17 +3,30 @@
 Mode: Operate. Visual authority: the user's `design/reference-ui.png`.
 The user chose to retain Minecraft modules in the screenshot's layout.
 
-At the 752 x 427 reference viewport, the main panel starts at (26, 17) and
-measures 590 x 382. The separate rail starts at (634, 17) and measures 73 x 382.
-The gap is 18 px. The main inset frame is 14 px; the internal icon strip is
-29 px wide with 31 px buttons. Navigation tiles are 53 x 51 with 8 px gaps.
-All these dimensions share a scale, capped at 1.5. Small viewports use a
-scrolling single column rather than clipping settings or losing controls.
+The follow-up brief requests a cleaner, smaller, draggable menu with larger
+text/controls and purposeful animations. Desktop footprint: 860 x 477 px,
+approximately 16% smaller than the first implementation. Geometry uses a
+shared scale capped at 1.25, while menu text remains 14 px independently of
+that scale. Two setting columns appear above 540 px of content width; smaller
+viewports stack and scroll without shrinking text. Checkboxes are 20 px at
+desktop scale, with larger hit areas and 14 px labels.
+
+The two floating panels and narrow internal tool strip retain the reference's
+topology. A discreet grip in the empty upper edge moves the whole composition;
+controls never initiate dragging. Position survives menu reopening, is clamped
+when the game viewport changes, and can be restored with Center menu.
 
 Reference palette: main #22201E, rows #1C1C19, fields #242420, border #44413A,
-gold #F0D596, text #D6D5CC, muted #77766E. The active navigation tile uses
+gold #F0D596, text #D6D5CC, muted #A5A299. The active navigation tile uses
 #876B57. Rounded outer panels, nearly square controls, quiet inner row rules,
-thin gold tracks and cream knobs reproduce the reference's material.
+thin gold tracks and cream knobs retain the reference's material. Circular
+linework is quieter and inactive labels remain readable.
+
+Motion: shared cubic-bezier(0.23, 1, 0.32, 1), 120 ms press/toggle feedback,
+140 ms hover feedback and 160 ms mouse page transitions. Transitions retarget
+from their current value. Inputs and drag positions update immediately. Native
+Windows animation preferences and the Reduced motion option disable movement;
+keyboard menu opening and page selection have no entry delay.
 
 Embedded Inter Medium/Semibold menu fonts and Font Awesome Solid icons travel
 with the executable. Decorative rings are native clipped vector linework.

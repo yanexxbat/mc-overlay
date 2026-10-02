@@ -240,6 +240,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::ReduceMotion(overlay,false);
         for (auto size:{ImVec2(720,560),ImVec2(480,360)})
             for (Page page:pages) Draw(overlay,page,2,size);
+        for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
         std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced motion, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
