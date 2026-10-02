@@ -217,13 +217,18 @@ retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
 
 ## Target aura
 
-The optional target aura is configured under Visuals → Target aura. It uses the
-existing crosshair target and coherent entity/camera snapshot, with no added JNI
-calls. The renderer owns fixed geometry templates; its D3D11 adapter scopes
-additive RGB blending and preserves coverage alpha. Full C++ implementation,
-render-loop example, OpenGL callback and caveats: [Aura guide](docs/aura.md).
+The optional target aura is configured under Visuals → Target aura. Soft orbs
+with white cores, violet halos and cyan fog trails orbit the current target in
+3D. Every trail point uses the coherent entity/camera snapshot, with no added JNI
+calls. Fixed arrays and one reusable Gaussian texture keep the effect inexpensive;
+its D3D11 adapter scopes additive RGB blending and preserves coverage alpha.
+Full C++ implementation, render-loop example and caveats: [Aura guide](docs/aura.md).
 `MCOV_BUILD_UI_CHECKS` also enables `aura_rendering` for real WARP pixels and
 allocation/projection checks.
+
+The current binaries live only in `build/bin`; previews are in `build/ui-preview`.
+`scripts/build.ps1` always uses `build`, with `-Checks` for the regression suite
+and `-Clean` to remove old outputs while retaining dependency/mapping caches.
 
 ## Mappings: read this before trusting any field
 

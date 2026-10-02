@@ -1,48 +1,62 @@
-# AuraRenderer
+# Orb-/Fog-Aura
 
-Die vollständige Implementierung liegt in [aura_renderer.hpp](../src/overlay/aura_renderer.hpp)
-und [aura_renderer.cpp](../src/overlay/aura_renderer.cpp). Die Klasse ist C++20,
-verwendet ausschließlich ImDrawList und enthält weder JNI noch eine Zielauswahl.
-[aura_projection.hpp](../src/overlay/aura_projection.hpp) trennt Weltanker und
-Bildschirmprojektion. [aura_blend_dx11.hpp](../src/overlay/aura_blend_dx11.hpp) und
-[aura_blend_dx11.cpp](../src/overlay/aura_blend_dx11.cpp) besitzen den einmalig
-erzeugten D3D11-Blendzustand über RAII.
+Die Aura folgt der Screenshot-Referenz: vier leuchtende Orbs mit weißen Kernen,
+violetten Halos und türkisfarbenen, gebogenen Nebelschweifen. Es gibt keinen
+radialen Stern mehr. Alle Orb- und Trailpositionen liegen auf geneigten 3D-Bahnen
+um die tatsächliche AABB-Mitte der ausgewählten Entität.
 
-Im bestehenden Overlay: **Visuals → Target aura → Enable aura**.
-Das aktuelle Minecraft-Fadenkreuzziel wird anhand seiner vorhandenen Entity-ID
-im Snapshot gefunden. Minecraft liefert dieses Ziel nur innerhalb seiner
-Interaktionsreichweite. Die Aura kann über die Klassen-API auch auf jede andere
-ausgewählte Entity gesetzt werden; sie verändert keine Spieleingaben.
+Aktivierung: **Visuals → Target aura → Enable aura**. Das Ziel stammt aus der
+vorhandenen Entity-ID des Minecraft-Fadenkreuzziels. Die Klassen-API kann auch
+eine andere ausgewählte Entity verwenden. Es entstehen keine zusätzlichen
+JNI-Aufrufe und keine Änderungen an Spieleingaben.
+
+## Aufbau
+
+- [aura_renderer.hpp](../src/overlay/aura_renderer.hpp) und
+  [aura_renderer.cpp](../src/overlay/aura_renderer.cpp): Konfiguration, Ziel-Fade,
+  analytische Weltbahnen und gebatchte ImDrawList-Sprites.
+- [aura_projection.hpp](../src/overlay/aura_projection.hpp): separate Projektion
+  jedes einzelnen Orb-/Schweifpunkts mit derselben Kamera wie ESP.
+- [aura_blend_dx11.hpp](../src/overlay/aura_blend_dx11.hpp) und
+  [aura_blend_dx11.cpp](../src/overlay/aura_blend_dx11.cpp): RAII-Besitzer für den
+  Blendzustand und eine einmalig erzeugte 128×128-Gauß-Textur.
+
+Die transparente Textur wird mathematisch berechnet und einmal hochgeladen.
+Der weiche Nebel entsteht durch überlappende `AddImage()`-Quads. Es gibt keine
+Desktop-Capture-, Shader-Blur- oder zusätzlichen RenderTarget-Pässe. Der Kern
+wird mit kleineren, helleren Sprites ergänzt; der Schweif verjüngt sich und
+blendet bis Alpha null aus. Ein gemeinsamer Textur-/Blendzustand batcht den
+Effekt, statt für jeden Orb einen eigenen Renderpass zu öffnen.
 
 ## Konfiguration
 
-| Parameter | Standard | Einheit / Bedeutung |
+| Parameter | Standard | Bedeutung |
 |---|---:|---|
 | enabled | false | Opt-in im Menü |
-| animate | true | Rotation und Größenpuls; aus friert beide Phasen ein |
-| rayCount | 24 | 3–64 gleichmäßig verteilte Strahlen |
-| rayLength | 1.35 | Vielfaches des projizierten Entitätsradius |
-| rayWidth | 0.11 | Maximale volle Strahlenbreite relativ zum Radius |
-| rotationDegreesPerSecond | 12 | Grad/s; negative Werte drehen rückwärts |
-| pulseAmplitude | 0.06 | Relativer Größenhub, maximal 0.3 |
-| pulseHz | 0.6 | Pulse/s; 0 hält die aktuelle Pulsphase |
-| opacity | 0.65 | Gesamtintensität |
-| fadeSeconds | 0.18 | Ziel-Fade; 0 wechselt sofort |
-| startColor | (0.78, 0.91, 1, 1) | RGBA im Kern |
-| endColor | (0.18, 0.40, 1, 0) | RGBA außen |
+| animate | true | Aus friert die Umlauf- und Pulsphasen ein |
+| orbCount | 4 | 1–8 Orbs |
+| orbitRadius | 0.88 | Umlaufradius relativ zum Entitätsradius |
+| orbSize | 0.20 | Orb-Radius relativ zum Entitätsradius |
+| trailDegrees | 100 | Gebogene Schweiflänge auf der Umlaufbahn |
+| rotationDegreesPerSecond | 75 | Grad/s, negative Werte drehen rückwärts |
+| pulseAmplitude | 0.035 | Relativer Größenhub, 0 deaktiviert ihn |
+| pulseHz | 0.4 | Pulse/s |
+| opacity | 0.9 | Gesamtintensität |
+| fadeSeconds | 0.18 | Ziel-Fade, 0 wechselt sofort |
+| startColor | (0.66, 0.42, 1, 1) | Violetter Orb-Halo |
+| endColor | (0.05, 1, 0.88, 0.85) | Türkiser Schweif |
 
-Nicht endliche Konfigurationswerte erhalten sichere Ersatzwerte. Der Alpha-Wert
-am Strahlende wird zusätzlich auf null ausgeblendet, auch bei einer deckenden
-Endfarbe. Das Overlay berücksichtigt den vorhandenen Menüschalter „Reduced
-motion“ und die Windows-Einstellung für Animationen. Deckkraftwechsel bleiben
-erhalten; das Ziel selbst folgt ohne Positions-Lerp seiner aktuellen Projektion.
+„Reduced motion“ im Menü und die Windows-Einstellung für Animationen halten
+Rotation und Pulsieren an; Ziel-Fades bleiben erhalten. Der Schweif wird aus
+den vorherigen Orb-Winkeln um den **aktuellen** Weltanker berechnet. Damit zieht
+eine bewegte oder teleportierende Entität keinen veralteten Pixel-Schweif hinter
+sich her. Auch das ausblendende Ziel wird in Weltkoordinaten nachgeführt.
 
-## Vollständiges Beispiel für den Render-Loop
+## Vollständiger Aufruf im Render-Loop
 
-Dieser Besitzer lebt so lange wie der Renderer. `Initialize()` erfolgt einmal
-nach der D3D11-Geräteinitialisierung. `Frame()` wird zwischen `ImGui::NewFrame()`
-und `ImGui::Render()` aufgerufen, vor ESP, HUD und Menü. Der Snapshot stammt aus
-dem bestehenden IPC-Leser.
+`Initialize()` einmal nach der D3D11-Geräteinitialisierung aufrufen. `Frame()`
+liegt zwischen `ImGui::NewFrame()` und `ImGui::Render()`, vor ESP, HUD und Menü.
+Der Besitzer bleibt bis nach `RenderDrawData()` am Leben.
 
 ```cpp
 #include "overlay/aura_projection.hpp"
@@ -51,14 +65,14 @@ dem bestehenden IPC-Leser.
 
 class AuraExample {
     mcov::AuraRenderer renderer_;
-    mcov::AuraBlendDX11 blend_;
+    mcov::AuraBlendDX11 resources_;
     bool prepared_ = false;
 public:
     mcov::AuraConfig config;
 
     bool Initialize(ID3D11Device* device) {
         config.enabled = true;
-        return blend_.Initialize(device);
+        return resources_.Initialize(device);
     }
 
     void Frame(const mcov::WorldSnapshot& snapshot, float fovTrim = 0.f) {
@@ -84,116 +98,76 @@ public:
             }
         }
         renderer_.UpdateTarget(target, io.DeltaTime, config);
-        const ImVec2 origin = ImGui::GetMainViewport()->Pos;
         for (const auto& item : renderer_.Targets()) {
             if (!item.valid || item.alpha <= 0) continue;
-            mcov::AuraScreen screen;
-            if (!mcov::ProjectAura(camera, item.anchor, io.DisplaySize.x, io.DisplaySize.y, screen)) continue;
-            screen.center.x += origin.x;
-            screen.center.y += origin.y;
-            renderer_.Draw(draw, screen, item.alpha, config, blend_.Callbacks());
+            mcov::AuraWorldFog world;
+            mcov::AuraScreenFog screen;
+            renderer_.BuildWorldFog(item.anchor, config, world);
+            if (!mcov::ProjectAuraFog(camera, world, io.DisplaySize.x, io.DisplaySize.y,
+                                      screen, ImGui::GetMainViewport()->Pos)) continue;
+            renderer_.Draw(draw, screen, item.alpha, config, resources_.Callbacks(), resources_.GlowTexture());
         }
     }
 };
 ```
 
-Bei fehlender Verbindung bzw. Welt muss der Besitzer `renderer_.Reset()`
-aufrufen. Das integrierte `Overlay::DrawAura()` übernimmt dies bereits. Bei
-einem Geräte-/ImGui-Kontext-Neustart ebenfalls den Vorwärmzustand zurücksetzen.
+Bei fehlender Verbindung bzw. Welt `renderer_.Reset()` aufrufen. Das integrierte
+`Overlay::DrawAura()` übernimmt dies. Bei einem Geräte-/ImGui-Neustart zusätzlich
+Ressourcen und Vorwärmzustand neu initialisieren.
 
-## Blending
+## Blending und Lebensdauer
 
-ImGui hat keinen globalen Schalter für additives Blending. `AddCallback()` stellt
-einen GPU-Zustandswechsel in die Draw-Liste; ausgeführt wird er erst innerhalb
-von `ImGui_ImplDX11_RenderDrawData()`. Den Blendzustand vorher am Context zu
-setzen reicht nicht, weil das Backend seine Standardzustände setzt.
+Der Effekt nutzt additives RGB: **Cs × As + Cd**. Alpha berechnet weiterhin die
+Fensterabdeckung als **As + Ad × (1 − As)**. RGB-/Alpha-Faktoren werden separat
+im [D3D11-Blendzustand](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_render_target_blend_desc)
+gesetzt. `AddCallback()` aktiviert den Zustand erst innerhalb des ImGui-
+Renderpasses. Ein RAII-Scope restauriert die Textur und hängt anschließend
+`ImDrawCallback_ResetRenderState` an, damit ESP, HUD und Menü normal rendern.
+Ressourcen und Callback-Daten müssen bis zum tatsächlichen Rendern gültig bleiben.
 
-| Modus | RGB-Formel | Alpha-Formel |
-|---|---|---|
-| Normaler ImGui-Modus | Cs × As + Cd × (1 − As) | As + Ad × (1 − As) |
-| Aura | Cs × As + Cd | As + Ad × (1 − As) |
+Ein externes Fenster addiert seine eigenen Glow-Schichten auf seinem Renderziel;
+Minecrafts Framebuffer ist nicht Teil dieses Blendpasses. Der Desktop-Compositor
+legt das Ergebnis später über das Spiel. Der Effekt hat keinen Zugriff auf
+Minecrafts Tiefenpuffer und kann deshalb hinter der Entität oder Wänden liegende
+Orbs nicht anhand der Spieltiefe verdecken. Die perspektivischen 3D-Positionen
+und Größen bleiben korrekt.
 
-RGB wird addiert, während Alpha die Abdeckung des transparenten Overlay-Fensters
-beibehält. Die getrennten RGB-/Alpha-Faktoren entsprechen dem
-[D3D11-Blendmodell](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/ns-d3d11-d3d11_render_target_blend_desc).
-Nach dem Effekt stellt `ImDrawCallback_ResetRenderState` das normale ImGui-Blending
-wieder her. Die Klasse benutzt dafür einen RAII-Scope und restauriert auch die
-DrawList-Flags. Der Backend-Callback verwendet den in ImGui 1.91.9b exponierten
-[D3D11-RenderState](https://github.com/ocornut/imgui/blob/v1.91.9b/backends/imgui_impl_dx11.h).
+Für OpenGL benötigt derselbe `AuraRenderer` eine einmal hochgeladene weiße RGBA-
+Gauß-Textur und einen Callback mit `glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD)`
+und `glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`.
+Die Textur-ID wird über `ImTextureID` übergeben; das OpenGL3-ImGui-Backend verarbeitet
+anschließend denselben Reset-Callback. Das Projekt selbst verwendet Win32/D3D11.
 
-Für OpenGL 3.3 bleibt `AuraRenderer` unverändert. Mit den über den vorhandenen
-GL-Loader bereitgestellten Funktionen verwendet man folgenden Callback:
+## Performance und Fallstricke
 
-```cpp
-static void BeginAuraOpenGL(const ImDrawList*, const ImDrawCmd*) {
-    glEnable(GL_BLEND);
-    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
-    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-}
-// Am Draw-Aufruf: mcov::AuraBlend{BeginAuraOpenGL, nullptr} übergeben.
-// Das OpenGL3-ImGui-Backend führt anschließend ResetRenderState aus.
-```
+- Feste Arrays für maximal acht Orbs, 32 Schweifpunkte und zwei Ziel-Slots;
+  nach `Prepare()` keine Aura-Heap-Allokationen im Renderpfad. Vorberechnete
+  Winkelvorlagen werden nur bei einer geänderten Schweiflänge neu berechnet.
+- Maximal 4.288 Vertices und 6.432 Indices für beide Auren, etwa 96 KiB bei
+  20-Byte-Vertices/16-Bit-Indices; die GPU-Textur benötigt 64 KiB. ImGui kann seine
+  allgemeinen UI-/GPU-Puffer beim erstmaligen Wachstum weiterhin vergrößern.
+- Kamera, Entity und alle Schweifpunkte aus demselben Snapshot projizieren.
+  Weltkoordinaten bleiben bis zur Subtraktion des Kameraursprungs in double.
+  Jede Kamerabewegung aktualisiert die komplette Projektion, keine alte Pixelspur.
+- Größen sind perspektivisch und relativ zur Entität. Client-/ImGui-Viewportgröße
+  verwenden und `DisplayFramebufferScale` nicht zweimal anwenden.
+- Bestehenden ClipRect respektieren; Punkte hinter der Near Plane verwerfen.
+  Sehr große Orb-Radien direkt an der Kamera werden begrenzt.
+- Aura zuerst in die BackgroundDrawList, dann Boxen/Skelett und HUD; Menüs darüber.
+  Große Draw-Listen benötigen die vorhandene Backend-Unterstützung für VtxOffset.
+- Additive Schichten können saturieren. Bei vielen großen Orbs Intensität senken.
 
-Ein externes Fenster kann nur auf seinem eigenen Renderziel additiv mischen.
-Minecrafts Framebuffer ist nicht der Destinationsbuffer dieser Berechnung; der
-Desktop-Compositor legt das Ergebnis danach über das Spiel. Echtes additives
-Mischen mit der Spielszene erfordert einen gemeinsamen Renderpass im Spiel.
-Der Effekt hier erzeugt den Glow durch das Addieren seiner eigenen Schichten.
+## Build und Prüfung
 
-## Geometrie und Speicher
+Es gibt einen aktuellen Build unter **build/**. Overlay, Injector und Agent
+liegen in **build/bin/**, die gerenderten Vorschauen in **build/ui-preview/**.
+`scripts/build.ps1` verwendet ebenfalls ausschließlich diesen Buildordner.
+Mit `-Clean` werden alte Binärdateien, Backups und Diagnosen entfernt; die
+vorhandenen ImGui-/Mapping-Quellcaches bleiben für Offline-Builds erhalten.
+`-Checks` baut und startet die acht Regressionstests.
 
-Ein weicher Ring, drei Strahlenbreiten und ein heller Kern werden als konvexe
-Polygone mit `AddConvexPolyFilled()` ausgegeben. Danach erhalten deren Vertices
-die inneren und äußeren Farben. Der Rasterizer interpoliert die Farben; acht
-Strahlensegmente glätten das Längsprofil. Die Polygonpunkte laufen im Bildschirm-
-Koordinatensystem im Uhrzeigersinn. AA-Fill ist innerhalb des Effekts deaktiviert,
-damit es keine zusätzlichen AA-Vertices und temporären Puffer gibt.
-
-Kreisrichtungen und normierte Strahlenprofile werden im Konstruktor berechnet;
-Strahlenrichtungen nur bei einer geänderten Anzahl. Zwei feste Ziel-Slots erlauben
-den Fade beim Zielwechsel, ohne Vektor/List-Allokationen. Rückwechsel übernehmen
-die aktuelle Deckkraft. Das ausblendende Ziel wird in Weltkoordinaten nachgeführt
-und jedes Frame erneut projiziert.
-
-`Prepare()` reserviert Platz für beide Auren mit maximaler Strahlenzahl: 18.432
-Vertices und 27.648 Indices, zusammen etwa 414 KiB bei 20-Byte-Vertices und
-16-Bit-Indices. Danach allokiert der Aura-Drawpfad keinen Heap-Speicher.
-ImGui und sein Backend besitzen eigene dynamische Frame-/GPU-Puffer, die beim
-erstmaligen Wachstum oder bei zusätzlicher UI weiterhin wachsen können. Ein
-statischer GPU-VBO lässt sich nicht gleichzeitig über `AddConvexPolyFilled()`
-verwenden; hier werden normierte Vorlagen in ImGuis vorhandenen Stream kopiert.
-
-## Fallstricke
-
-- **Z-Order:** Aura zuerst in die BackgroundDrawList, dann Boxen/Skelett und HUD.
-  Menüs bleiben darüber. Kein Zugriff auf Minecrafts Tiefenpuffer; der Effekt
-  zeichnet wie das bisherige ESP durch Wände.
-- **Clipping:** Den vorhandenen ClipRect respektieren. Hinter der Kamera oder
-  Near Plane wird nichts gezeichnet. Sehr nahe Entitäten erhalten einen begrenzten
-  Bildschirmradius. Außerhalb des Viewports wird nur die Ausgabe abgeschnitten;
-  das Welt-/Bildschirmzentrum wird nicht aus einer abgeschnittenen Box berechnet.
-- **Matrix:** Kamera und Entität aus demselben kohärenten Snapshot verwenden,
-  dieselbe FOV-Korrektur und View-Bob-Matrix wie ESP. Niemals eine alte Pixelposition
-  bei einer neuen Kameramatrix weiterverwenden. Weltkoordinaten vor der float-
-  Matrix in double relativ zum Kameraursprung berechnen.
-- **Auflösung:** `io.DisplaySize` bzw. im Win32-Overlay dessen Clientgröße für die
-  Projektion verwenden. Strahlenabmessungen sind relativ zur perspektivischen
-  Entitätsgröße. `DisplayFramebufferScale` berücksichtigt das passende Backend;
-  nicht ein zweites Mal in die Aura multiplizieren. Menü-Font-/GUI-Skalierung
-  gehört nicht in die Weltprojektion.
-- **Lebensdauer:** Blendzustand und Callback-Daten bis zum tatsächlichen Rendern
-  behalten. Keine kurzlebigen Lambda-Captures oder lokale GPU-Objekte übergeben.
-- **Indexformat:** Bei großen Draw-Listen muss das Backend `VtxOffset` unterstützen.
-  Die nachträgliche Farbzuweisung verwendet globale `VtxBuffer`-Offsets und
-  funktioniert auch beim Überschreiten der 16-Bit-Indexgrenze.
-- **Helligkeit:** Additive Schichten können in einem UNORM-Renderziel sättigen.
-  Intensität reduzieren, bevor Strahlenzahl und Breite stark erhöht werden.
-
-## Prüfung
-
-`aura_rendering` prüft Perspektive, Weltgrenzen, Zielwechsel, echte D3D11-WARP-
-Pixel, Alpha-Abdeckung, Blend-Reset, Clipping, große Vertex-Offsets und null
-Aura-Heap-Allokationen nach dem Vorwärmen. `control_panel` rendert den integrierten
-ESP/Aura-Pfad ohne Minecraft nach `ui-preview/aura.png`. Die Ausgabe liegt unter
-dem jeweils verwendeten Build-Verzeichnis. Eine Live-Spielszene ist damit nicht
-getestet.
+`aura_rendering` prüft echte GPU-Pixel, Alpha-Abdeckung und Blend-Reset sowie
+3D-Umlaufbahnen, gebogene Trails, Entity-/Kamerabewegungen, FPS-Unabhängigkeit,
+Ziel-Fades, Clipping, große Vertex-Offsets und null Aura-Allokationen nach dem
+Vorwärmen. `control_panel` rendert zusätzlich den integrierten ESP/Fog-Pfad
+nach `build/ui-preview/aura.png`. Dies ist eine Vorschau ohne Live-Spielszene.
