@@ -403,6 +403,10 @@ bool CheckRow(const char* label,bool* value) {
     const auto cell=ImGui::GetCursorScreenPos();
     const float side=16*gScale;
     const ImVec2 box(cell.x+std::max(0.f,ImGui::GetContentRegionAvail().x-side),cell.y+(ControlHeight()-side)*.5f);
+    if (label[0]=='P' && label[1]=='l' && ImGui::GetFrameCount()==3) {
+        const auto clip=draw.GetClipRectMax();
+        std::fprintf(stderr,"Players checkbox: cell %.1f %.1f box %.1f %.1f clip %.1f %.1f avail %.1f value %d\n",cell.x,cell.y,box.x,box.y,clip.x,clip.y,ImGui::GetContentRegionAvail().x,int(*value));
+    }
     ImGui::SetCursorScreenPos(ImVec2(box.x-4*gScale,cell.y));
     const bool pressed=ImGui::InvisibleButton("##value",ImVec2(24*gScale,ControlHeight()),ImGuiButtonFlags_EnableNav);
     if (pressed) *value=!*value;
