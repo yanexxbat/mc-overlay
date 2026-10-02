@@ -44,6 +44,24 @@ struct OverlayUiCheck {
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
     static void ResetVisuals(Overlay& o) { o.ResetMenuPage(Page::Visuals); }
     static void AllowCombat(Overlay& o) { o.combat_.aimLock=o.combat_.triggerbot=true; }
+    static void DrawAura(Overlay& o,ID3D11Device* device) {
+        if (!o.auraBlend_.Callbacks().begin && !o.auraBlend_.Initialize(device))
+            throw std::runtime_error("Aura blend preview initialization failed");
+        o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
+        o.agentConnected_=true; o.heartbeatClock_.Observe(++pulse,GetTickCount64());
+        o.auraConfig_.enabled=true;
+        auto& s=o.lastSnapshot_;
+        s.camX=s.camZ=0; s.camY=1.62; s.yawDeg=s.pitchDeg=0;
+        s.fovDeg=70; s.nearPlane=.05f; s.farPlane=1024;
+        s.entityCount=1; s.hasTarget=1; s.targetEntityId=42;
+        auto& e=s.entities[0]; e={};
+        e.entityId=42; e.z=6; e.width=.6f; e.height=e.modelHeight=1.8f;
+        e.distance=6; e.health=e.maxHealth=20;
+        e.flags=kEntityIsPlayer|kEntityIsLiving;
+        CopyField(e.name,"Aura target");
+        if (!o.auraPrepared_) { AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList()); o.auraPrepared_=true; }
+        o.DrawEsp(s);
+    }
     static inline std::uint32_t pulse=0;
 };
 }
@@ -242,6 +260,13 @@ int main(int argc,char** argv) {
             for (Page page:pages) Draw(overlay,page,2,size);
         for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
+        io.AddMousePosEvent(-100,-100);
+        for (int i=0;i<16;++i) {
+            io.DisplaySize={1280,800}; io.DeltaTime=1.f/60;
+            ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
+        }
+        SaveFrame(device.Get(),context.Get(),output/"aura.png");
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
         std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced motion, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
         return 0;
