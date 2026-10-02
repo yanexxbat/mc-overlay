@@ -46,8 +46,11 @@ Effekt, statt für jeden Orb einen eigenen Renderpass zu öffnen.
 | startColor | (0.66, 0.42, 1, 1) | Violetter Orb-Halo |
 | endColor | (0.05, 1, 0.88, 0.85) | Türkiser Schweif |
 
-„Reduced motion“ im Menü und die Windows-Einstellung für Animationen halten
-Rotation und Pulsieren an; Ziel-Fades bleiben erhalten. Der Schweif wird aus
+Der eigene Schalter **Target aura → Animation** steuert Rotation und Pulsieren;
+Ziel-Fades bleiben beim Ausschalten erhalten. „Reduced motion“ und die
+Windows-Einstellung für Animationen gelten für das Menü und halten eine explizit
+aktivierte Aura-Animation nicht an. Bei **Rotation = 0 deg/s** steht die Umlaufbahn;
+positive Werte drehen vorwärts, negative rückwärts. Der Schweif wird aus
 den vorherigen Orb-Winkeln um den **aktuellen** Weltanker berechnet. Damit zieht
 eine bewegte oder teleportierende Entität keinen veralteten Pixel-Schweif hinter
 sich her. Auch das ausblendende Ziel wird in Weltkoordinaten nachgeführt.
@@ -167,7 +170,9 @@ vorhandenen ImGui-/Mapping-Quellcaches bleiben für Offline-Builds erhalten.
 `-Checks` baut und startet die acht Regressionstests.
 
 `aura_rendering` prüft echte GPU-Pixel, Alpha-Abdeckung und Blend-Reset sowie
-3D-Umlaufbahnen, gebogene Trails, Entity-/Kamerabewegungen, FPS-Unabhängigkeit,
+3D-Umlaufbahnen, Rotationsgeschwindigkeit/-richtung, Pause/Fortsetzen,
+gebogene Trails, Entity-/Kamerabewegungen, FPS-Unabhängigkeit,
 Ziel-Fades, Clipping, große Vertex-Offsets und null Aura-Allokationen nach dem
-Vorwärmen. `control_panel` rendert zusätzlich den integrierten ESP/Fog-Pfad
+Vorwärmen. `control_panel` prüft die Rotation im integrierten ESP/Fog-Pfad bei
+reduzierten Menüanimationen sowie den eigenen Animation-Schalter und rendert
 nach `build/ui-preview/aura.png`. Dies ist eine Vorschau ohne Live-Spielszene.

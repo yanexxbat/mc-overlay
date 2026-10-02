@@ -7,7 +7,7 @@ namespace mcov {
 
 struct AuraConfig {
     bool enabled = false;
-    bool animate = true;                    // Aus: nur weiche Deckkraftwechsel.
+    bool animate = true;                    // Eigener Schalter, unabhängig von Menü-/Windows-Animationen.
     int orbCount = 4;                        // Wenige große, weiche Orbs statt radialer Strahlen.
     float orbitRadius = .88f;                // Umlaufbahn relativ zur halben Entitätshöhe.
     float orbSize = .20f;                    // Orb-Radius relativ zur Entitätsgröße.

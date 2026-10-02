@@ -523,8 +523,9 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
             target = &selected;
         }
     }
-    auto config = auraConfig_;
-    config.animate = config.animate && panel::MotionAllowed(menu_);
+    // Der eigene Aura-Schalter steuert die Umlaufbahn. Die Einstellungen für
+    // reduzierte Menü-/Windows-Animationen dürfen diesen Spieleffekt nicht stoppen.
+    const auto& config = auraConfig_;
     auraRenderer_.UpdateTarget(target, ImGui::GetIO().DeltaTime, config);
     auto& draw = *ImGui::GetBackgroundDrawList();
     for (const auto& item : auraRenderer_.Targets()) {
