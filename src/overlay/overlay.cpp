@@ -458,6 +458,11 @@ bool Overlay::RunFrame() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    if (!auraPrepared_) {
+        AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        auraPrepared_ = true;
+    }
+
     if (haveSnapshot_) {
         SampleTelemetry(lastSnapshot_);
         UpdateTriggerbot(lastSnapshot_);
@@ -498,6 +503,41 @@ bool Overlay::RunFrame() {
 // ---------------------------------------------------------------------------
 // ESP
 // ---------------------------------------------------------------------------
+void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& projection, float width, float height) {
+    if (!agentConnected_ || !heartbeatClock_.Alive(::GetTickCount64()) || snapshot.entityCount == 0) {
+        auraRenderer_.Reset();
+        return;
+    }
+    AuraAnchor selected{};
+    const AuraAnchor* target = nullptr;
+    const auto count = std::min(snapshot.entityCount, kMaxEntities);
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const auto& entity = snapshot.entities[i];
+        if (entity.flags & kEntityIsSelf) continue;
+        AuraAnchor anchor;
+        if (!MakeAuraAnchor(entity, anchor)) continue;
+        auraRenderer_.RefreshAnchor(anchor);
+        if (snapshot.hasTarget && entity.entityId == snapshot.targetEntityId &&
+            std::isfinite(entity.distance) && entity.distance <= visuals_.maxDistance) {
+            selected = anchor;
+            target = &selected;
+        }
+    }
+    auto config = auraConfig_;
+    config.animate = config.animate && panel::MotionAllowed(menu_);
+    auraRenderer_.UpdateTarget(target, ImGui::GetIO().DeltaTime, config);
+    auto& draw = *ImGui::GetBackgroundDrawList();
+    for (const auto& item : auraRenderer_.Targets()) {
+        if (!item.valid || item.alpha <= 0) continue;
+        AuraScreen screen;
+        if (!ProjectAura(projection, item.anchor, width, height, screen)) continue;
+        const auto origin = ImGui::GetMainViewport()->Pos;
+        screen.center.x += origin.x;
+        screen.center.y += origin.y;
+        auraRenderer_.Draw(draw, screen, item.alpha, config, auraBlend_.Callbacks());
+    }
+}
+
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
                                  visuals_.nameTags || visuals_.healthBars || visuals_.distanceText;

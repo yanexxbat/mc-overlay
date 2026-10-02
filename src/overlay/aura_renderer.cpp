@@ -124,8 +124,7 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
     const float opacity = Safe(config.opacity, .65f, 0, 1) * Safe(targetAlpha, 0, 0, 1);
     if (opacity <= 0) return;
     CacheRays(std::clamp(config.rayCount, 3, kMaxRays));
-    const float pulse = config.animate ? 1.f + Safe(config.pulseAmplitude, .06f, 0, .3f)
-                                             * float(std::sin(pulsePhase_)) : 1.f;
+    const float pulse = 1.f + Safe(config.pulseAmplitude, .06f, 0, .3f) * float(std::sin(pulsePhase_));
     const float radius = screen.radius * pulse;
     const float reach = radius * Safe(config.rayLength, 1.35f, .5f, 3);
     const float halfWidth = radius * Safe(config.rayWidth, .11f, .01f, .5f) * .5f;
@@ -143,14 +142,14 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
         const ImU32 ca = Gradient(start, end, .4f + .5f * a, opacity * .18f * std::sin(float(std::numbers::pi) * a));
         const ImU32 cb = Gradient(start, end, .4f + .5f * b, opacity * .18f * std::sin(float(std::numbers::pi) * b));
         for (int i = 0; i < kCircleSegments; ++i) {
-            const ImVec2 points[] = {At(screen.center, circle_[i], innerRadius),
-                At(screen.center, circle_[i + 1], innerRadius),
-                At(screen.center, circle_[i + 1], outerRadius), At(screen.center, circle_[i], outerRadius)};
+            const ImVec2 points[] = {At(screen.center, circle_[i + 1], innerRadius),
+                At(screen.center, circle_[i], innerRadius),
+                At(screen.center, circle_[i], outerRadius), At(screen.center, circle_[i + 1], outerRadius)};
             Quad(draw, points, ca, cb);
         }
     }
     // 2. Strahlen: drei Breitenlagen erzeugen einen weichen seitlichen Saum.
-    const float angle = config.animate ? float(rotation_) : 0;
+    const float angle = float(rotation_);
     const float cs = std::cos(angle), sn = std::sin(angle);
     constexpr float widths[] = {2.8f, 1.7f, 1.f};
     constexpr float strengths[] = {.11f, .21f, .48f};
@@ -160,12 +159,12 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
         for (int band = 0; band < kRayBands; ++band) {
             const float a = float(band) / kRayBands, b = float(band + 1) / kRayBands;
             // Der Strahl beginnt im Kern und endet in einer schmalen Spitze.
-            const float wa = halfWidth * widths[layer] * std::sin(float(std::numbers::pi) * a);
-            const float wb = halfWidth * widths[layer] * std::sin(float(std::numbers::pi) * b);
+            const float wa = halfWidth * widths[layer] * std::max(0.f,std::sin(float(std::numbers::pi) * a));
+            const float wb = halfWidth * widths[layer] * std::max(0.f,std::sin(float(std::numbers::pi) * b));
             const auto pa = At(screen.center, d, reach * a), pb = At(screen.center, d, reach * b);
-            const ImVec2 points[] = {{pa.x - n.x * wa, pa.y - n.y * wa},
-                {pa.x + n.x * wa, pa.y + n.y * wa},
-                {pb.x + n.x * wb, pb.y + n.y * wb}, {pb.x - n.x * wb, pb.y - n.y * wb}};
+            const ImVec2 points[] = {{pa.x + n.x * wa, pa.y + n.y * wa},
+                {pa.x - n.x * wa, pa.y - n.y * wa},
+                {pb.x - n.x * wb, pb.y - n.y * wb}, {pb.x + n.x * wb, pb.y + n.y * wb}};
             Quad(draw, points, Gradient(start, end, a, opacity * strengths[layer] * (1-a)),
                  Gradient(start, end, b, opacity * strengths[layer] * (1-b)));
         }
@@ -177,9 +176,9 @@ void AuraRenderer::Draw(ImDrawList& draw, const AuraScreen& screen, float target
         const ImU32 ca = Gradient(start, end, a * .4f, opacity * .8f * (1-a) * (1-a));
         const ImU32 cb = Gradient(start, end, b * .4f, opacity * .8f * (1-b) * (1-b));
         for (int i = 0; i < kCircleSegments; ++i) {
-            const ImVec2 points[] = {At(screen.center, circle_[i], coreRadius * a),
-                At(screen.center, circle_[i + 1], coreRadius * a),
-                At(screen.center, circle_[i + 1], coreRadius * b), At(screen.center, circle_[i], coreRadius * b)};
+            const ImVec2 points[] = {At(screen.center, circle_[i + 1], coreRadius * a),
+                At(screen.center, circle_[i], coreRadius * a),
+                At(screen.center, circle_[i], coreRadius * b), At(screen.center, circle_[i + 1], coreRadius * b)};
             Quad(draw, points, ca, cb);
         }
     }
