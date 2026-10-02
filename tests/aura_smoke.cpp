@@ -82,6 +82,40 @@ void FadeChecks() {
     renderer.UpdateTarget(&a,0,config);
     Require(!renderer.Targets()[0].valid&&!renderer.Targets()[1].valid,"Disabled aura did not clear");
 }
+void OrbitChecks() {
+    AuraRenderer renderer;
+    AuraConfig config; config.enabled=true; config.pulseAmplitude=0;
+    AuraAnchor anchor{42,0,.9,5,.9f};
+    AuraWorldFog initial,moved;
+    renderer.BuildWorldFog(anchor,config,initial);
+    Require(initial.orbCount==4,"Default fog did not produce four orbs");
+    const auto original=anchor;
+    anchor.x+=17.25; anchor.y+=3.5; anchor.z-=2;
+    renderer.BuildWorldFog(anchor,config,moved);
+    for (int i=0;i<initial.orbCount;++i) for (int j=0;j<AuraRenderer::kTrailSamples;++j) {
+        const auto& a=initial.trails[i][j]; const auto& b=moved.trails[i][j];
+        Require(std::abs((b.x-a.x)-17.25)<.00001&&std::abs((b.y-a.y)-3.5)<.00001&&
+                std::abs((b.z-a.z)+2)<.00001,"Fog trail detached from moving entity");
+        Require(std::abs(std::sqrt((a.x-original.x)*(a.x-original.x)+(a.y-original.y)*(a.y-original.y)+
+                (a.z-original.z)*(a.z-original.z))-original.worldRadius*config.orbitRadius)<.00001,
+                "Orb path was not a world-space orbit");
+    }
+    Require(std::abs(initial.trails[0][0].x-initial.trails[0].back().x)>.1,"Trail collapsed into its head");
+    AuraRenderer fast,slow;
+    for (int i=0;i<60;++i) fast.UpdateTarget(&anchor,1.f/60,config);
+    for (int i=0;i<120;++i) slow.UpdateTarget(&anchor,1.f/120,config);
+    fast.BuildWorldFog(anchor,config,initial); slow.BuildWorldFog(anchor,config,moved);
+    Require(std::abs(initial.trails[0][0].x-moved.trails[0][0].x)<.00001,"Orbit depended on frame rate");
+    auto camera=Camera(); camera.yawDeg=35;
+    AuraScreenFog screen;
+    fast.BuildWorldFog(original,config,initial);
+    Require(ProjectAuraFog(CameraProjection(camera,128,128),initial,128,128,screen),"3D orbit projection failed");
+    ScreenPoint expected; float radius;
+    const auto& head=initial.trails[0][0];
+    Require(CameraProjection(camera,128,128).Billboard({head.x,head.y,head.z},head.radius,expected,radius)&&
+            Close(expected.x,screen.trails[0][0].center.x)&&Close(radius,screen.trails[0][0].radius),
+            "Fog did not follow the current camera projection");
+}
 struct Pixels {
     std::array<unsigned char,128*128*4> data{};
     const unsigned char* At(int x,int y) const { return data.data()+(y*128+x)*4; }
@@ -112,13 +146,20 @@ ImDrawList& Frame() {
 }
 void DrawingChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX11& blend) {
     AuraRenderer renderer;
-    AuraConfig config; config.enabled=true; config.animate=false; config.rayCount=AuraRenderer::kMaxRays;
+    AuraConfig config; config.enabled=true; config.animate=false; config.orbCount=AuraRenderer::kMaxOrbs;
+    AuraWorldFog world;
+    AuraScreenFog first,second;
+    AuraAnchor anchor{42,0,.9,5,.9f};
+    const CameraProjection projection(Camera(),128,128);
     auto& initial=Frame(); AuraRenderer::Prepare(initial); ImGui::Render();
     for (int frame=0;frame<40;++frame) {
         auto& draw=Frame(); const auto flags=draw.Flags;
         recording=true;
-        renderer.Draw(draw,{{52,64},20},1,config,blend.Callbacks());
-        renderer.Draw(draw,{{76,64},20},1,config,blend.Callbacks());
+        renderer.BuildWorldFog(anchor,config,world);
+        ProjectAuraFog(projection,world,128,128,first);
+        ProjectAuraFog(projection,world,128,128,second,{10,0});
+        renderer.Draw(draw,first,1,config,blend.Callbacks(),blend.GlowTexture());
+        renderer.Draw(draw,second,1,config,blend.Callbacks(),blend.GlowTexture());
         recording=false;
         Require(draw.Flags==flags,"Aura leaked draw flags");
         Require(draw.VtxBuffer.Size<=AuraRenderer::kMaxVertices&&draw.IdxBuffer.Size<=AuraRenderer::kMaxIndices,
@@ -143,13 +184,15 @@ void DrawingChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX
     // Auch nach dem Überschreiten der 16-Bit-Indexgrenze muss der Verlauf stimmen.
     for (int i=0;i<17000;++i) glow.AddRectFilled({-20,-20},{-10,-10},IM_COL32_WHITE);
     glow.PushClipRect({32,32},{96,96},true);
-    renderer.Draw(glow,{{64,64},30},1,config,blend.Callbacks());
+    AuraScreenFog probe; probe.orbCount=1; probe.trails[0][0]={{32,64},12,true};
+    renderer.Draw(glow,probe,1,config,blend.Callbacks(),blend.GlowTexture());
     glow.PopClipRect(); ImGui::Render();
     const auto glowPixels=Capture(device,context);
-    Require(glowPixels.At(64,64)[3]>0&&glowPixels.At(64,64)[2]>0,"Glow disappeared on a transparent target");
+    Require(glowPixels.At(34,64)[3]>0&&glowPixels.At(34,64)[2]>0,"Glow disappeared on a transparent target");
     Require(glowPixels.At(28,64)[3]==0&&glowPixels.At(0,0)[3]==0,"Aura escaped clipping or darkened empty pixels");
     auto& invalid=Frame(); const int count=invalid.VtxBuffer.Size;
-    renderer.Draw(invalid,{{64,64},std::numeric_limits<float>::quiet_NaN()},1,config,blend.Callbacks());
+    probe.trails[0][0].radius=std::numeric_limits<float>::quiet_NaN();
+    renderer.Draw(invalid,probe,1,config,blend.Callbacks(),blend.GlowTexture());
     Require(invalid.VtxBuffer.Size==count,"Invalid projection produced geometry");
     ImGui::Render();
 }
@@ -161,7 +204,7 @@ int main() {
     _CrtSetReportMode(_CRT_ASSERT,_CRTDBG_MODE_FILE); _CrtSetReportFile(_CRT_ASSERT,_CRTDBG_FILE_STDERR);
 #endif
     try {
-        ProjectionChecks(); FadeChecks();
+        ProjectionChecks(); FadeChecks(); OrbitChecks();
         ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context;
         Hr(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context));
         ImGui::SetAllocatorFunctions(Alloc,Free); ImGui::CreateContext(); ImGui::GetIO().IniFilename=nullptr;
@@ -169,7 +212,7 @@ int main() {
         AuraBlendDX11 blend; Require(blend.Initialize(device.Get()),"Aura blend initialization failed");
         DrawingChecks(device.Get(),context.Get(),blend);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext();
-        std::cout<<"PASS aura: stable projection, distance/resolution scaling, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
+        std::cout<<"PASS aura fog: world-space orbits, curved trails, entity/camera movement, frame-rate independence, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

@@ -55,8 +55,8 @@ struct OverlayUiCheck {
         s.fovDeg=70; s.nearPlane=.05f; s.farPlane=1024;
         s.entityCount=1; s.hasTarget=1; s.targetEntityId=42;
         auto& e=s.entities[0]; e={};
-        e.entityId=42; e.z=6; e.width=.6f; e.height=e.modelHeight=1.8f;
-        e.distance=6; e.health=e.maxHealth=20;
+        e.entityId=42; e.z=3.5; e.width=.6f; e.height=e.modelHeight=1.8f;
+        e.distance=3.5f; e.health=e.maxHealth=20;
         e.flags=kEntityIsPlayer|kEntityIsLiving;
         CopyField(e.name,"Aura target");
         if (!o.auraPrepared_) { AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList()); o.auraPrepared_=true; }
