@@ -215,7 +215,7 @@ viewports. The latter renders the actual menu with D3D11 WARP to PNG files in
 shows the desktop version. The check also exercises menu dragging, position
 retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
 
-## Mappings: read this before trusting any field
+## Target aura
 
 The optional target aura is configured under Visuals → Target aura. It uses the
 existing crosshair target and coherent entity/camera snapshot, with no added JNI
@@ -224,6 +224,8 @@ additive RGB blending and preserves coverage alpha. Full C++ implementation,
 render-loop example, OpenGL callback and caveats: [Aura guide](docs/aura.md).
 `MCOV_BUILD_UI_CHECKS` also enables `aura_rendering` for real WARP pixels and
 allocation/projection checks.
+
+## Mappings: read this before trusting any field
 
 `generated_profiles.hpp` contains 11 audited profiles for the four requested
 releases: Mojmap, older vanilla obfuscated names, Fabric intermediary and Forge
