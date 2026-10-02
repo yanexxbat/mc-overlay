@@ -76,6 +76,17 @@ public:
         if (!valid_||!Finite(c)||c.w<near_) return false;
         out=Pixel(c); return std::isfinite(out.x)&&std::isfinite(out.y);
     }
+    // Kreisförmiges Billboard: Perspektivskalierung am unveränderten Weltanker.
+    // Die Länge der View-Projection-Zeile bleibt auch bei View-Bobbing stabil.
+    bool Billboard(WorldPoint center, float worldRadius, ScreenPoint& out, float& pixelRadius) const {
+        const auto c=Clip(center);
+        if (!valid_ || !Finite(c) || c.w<near_ || !std::isfinite(worldRadius) || worldRadius<=0) return false;
+        out=Pixel(c);
+        const auto& m=matrix_.m;
+        const float scale=std::sqrt(m[1]*m[1]+m[5]*m[5]+m[9]*m[9]);
+        pixelRadius=worldRadius*height_*.5f*scale/c.w;
+        return std::isfinite(out.x)&&std::isfinite(out.y)&&std::isfinite(pixelRadius);
+    }
     bool Segment(WorldPoint start,WorldPoint end,ScreenPoint& a,ScreenPoint& b) const {
         auto ca=Clip(start),cb=Clip(end);
         if (!valid_||!ClipNear(ca,cb)) return false;
