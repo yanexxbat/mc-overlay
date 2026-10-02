@@ -2,6 +2,7 @@
 #include "aura_renderer.hpp"
 struct ID3D11Device;
 struct ID3D11BlendState;
+struct ID3D11ShaderResourceView;
 
 namespace mcov {
 // Besitzt genau einen GPU-Zustand. Kein Query/Allocate im Draw-Callback.
@@ -14,8 +15,10 @@ public:
     bool Initialize(ID3D11Device* device) noexcept;
     void Shutdown() noexcept;
     AuraBlend Callbacks() const noexcept;
+    ImTextureID GlowTexture() const noexcept;
 private:
     static void Apply(const ImDrawList*, const ImDrawCmd* command);
     ID3D11BlendState* state_{};
+    ID3D11ShaderResourceView* glowTexture_{};
 };
 } // namespace mcov

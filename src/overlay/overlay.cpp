@@ -529,12 +529,11 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
     auto& draw = *ImGui::GetBackgroundDrawList();
     for (const auto& item : auraRenderer_.Targets()) {
         if (!item.valid || item.alpha <= 0) continue;
-        AuraScreen screen;
-        if (!ProjectAura(projection, item.anchor, width, height, screen)) continue;
-        const auto origin = ImGui::GetMainViewport()->Pos;
-        screen.center.x += origin.x;
-        screen.center.y += origin.y;
-        auraRenderer_.Draw(draw, screen, item.alpha, config, auraBlend_.Callbacks());
+        AuraWorldFog world;
+        AuraScreenFog screen;
+        auraRenderer_.BuildWorldFog(item.anchor,config,world);
+        if (!ProjectAuraFog(projection,world,width,height,screen,ImGui::GetMainViewport()->Pos)) continue;
+        auraRenderer_.Draw(draw,screen,item.alpha,config,auraBlend_.Callbacks(),auraBlend_.GlowTexture());
     }
 }
 
@@ -1267,9 +1266,10 @@ void Overlay::DrawVisualsTab() {
             if (panel::BeginRows("aura_controls")) {
                 panel::CheckRow("Enable aura",&auraConfig_.enabled);
                 ImGui::BeginDisabled(!auraConfig_.enabled);
-                panel::SliderIntRow("Rays",&auraConfig_.rayCount,3,AuraRenderer::kMaxRays,"%d");
-                panel::SliderRow("Ray length",&auraConfig_.rayLength,.5f,3,"%.2f x");
-                panel::SliderRow("Ray width",&auraConfig_.rayWidth,.01f,.5f,"%.2f x");
+                panel::SliderIntRow("Orbs",&auraConfig_.orbCount,1,AuraRenderer::kMaxOrbs,"%d");
+                panel::SliderRow("Orbit radius",&auraConfig_.orbitRadius,.3f,2,"%.2f x");
+                panel::SliderRow("Orb size",&auraConfig_.orbSize,.05f,.5f,"%.2f x");
+                panel::SliderRow("Trail length",&auraConfig_.trailDegrees,10,220,"%.0f deg");
                 panel::SliderRow("Intensity",&auraConfig_.opacity,0,1,"%.2f");
                 panel::CheckRow("Animation",&auraConfig_.animate);
                 ImGui::BeginDisabled(!auraConfig_.animate);
@@ -1278,12 +1278,12 @@ void Overlay::DrawVisualsTab() {
                 panel::SliderRow("Pulse frequency",&auraConfig_.pulseHz,0,3,"%.2f Hz");
                 ImGui::EndDisabled();
                 panel::SliderRow("Target fade",&auraConfig_.fadeSeconds,0,.5f,"%.2f s");
-                panel::ColorRow("Inner colour",&auraConfig_.startColor.x);
-                panel::ColorRow("Outer colour",&auraConfig_.endColor.x);
+                panel::ColorRow("Orb glow",&auraConfig_.startColor.x);
+                panel::ColorRow("Trail colour",&auraConfig_.endColor.x);
                 ImGui::EndDisabled();
                 ImGui::EndTable();
             }
-            ImGui::TextWrapped("Highlights Minecraft's current crosshair target. Length and width scale with the entity.");
+            ImGui::TextWrapped("Soft glowing orbs orbit the current crosshair target. Their fog trails follow the entity in 3D.");
         } else {
             if (panel::BeginRows("visual_filters")) {
                 panel::CheckRow("Players",&visuals_.showPlayers);

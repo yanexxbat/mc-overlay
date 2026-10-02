@@ -22,7 +22,7 @@ ImVec4 Mix(ImVec4 a, ImVec4 b, float t) noexcept {
 }
 void Sprite(ImDrawList& draw, ImTextureID texture, const AuraScreenSample& point,
             float size, ImVec4 color, float alpha) {
-    if (!point.visible || alpha <= 0) return;
+    if (!point.visible || alpha <= 0 || !std::isfinite(point.center.x) || !std::isfinite(point.center.y)) return;
     const float radius = point.radius * size;
     const auto lo=draw.GetClipRectMin(), hi=draw.GetClipRectMax();
     if (!std::isfinite(radius) || radius <= 0 || point.center.x+radius<lo.x || point.center.x-radius>hi.x ||

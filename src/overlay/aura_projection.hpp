@@ -24,4 +24,26 @@ inline bool ProjectAura(const CameraProjection& projection, const AuraAnchor& an
     out = {{center.x, center.y}, std::min(radius, limit)};
     return true;
 }
+// Jeder Orb und jeder Schweifpunkt erhält die aktuelle Welt-/Kameraprojektion.
+inline bool ProjectAuraFog(const CameraProjection& projection, const AuraWorldFog& world,
+                           float width, float height, AuraScreenFog& out, ImVec2 origin={}) noexcept {
+    out.orbCount=0;
+    if (!std::isfinite(width) || !std::isfinite(height) || width<1 || height<1) return false;
+    out.orbCount=std::clamp(world.orbCount,0,kAuraMaxOrbs);
+    const float limit=std::min(width,height)*.12f;
+    bool any=false;
+    for (int i=0;i<out.orbCount;++i) for (int j=0;j<kAuraTrailSamples;++j) {
+        const auto& sample=world.trails[i][j];
+        auto& screen=out.trails[i][j];
+        ScreenPoint center;
+        float radius=0;
+        screen.visible=projection.Billboard({sample.x,sample.y,sample.z},sample.radius,center,radius) && radius>=.25f;
+        if (screen.visible) {
+            screen.center={center.x+origin.x,center.y+origin.y};
+            screen.radius=std::min(radius,limit);
+            any=true;
+        }
+    }
+    return any;
+}
 } // namespace mcov
