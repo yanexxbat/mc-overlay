@@ -1,0 +1,1661 @@
+// agent_main.cpp - the half of the tool that runs INSIDE javaw.exe.
+//
+// Loaded by the JVM through the standard attach mechanism (see AgentLoader.java),
+// which calls Agent_OnAttach below. From there we:
+//   1. adopt the JavaVM* the JVM handed us (no JNI_GetCreatedJavaVMs needed),
+//   2. install a JVMTI-backed class resolver so Minecraft's classes are findable
+//      from a natively attached thread,
+//   3. start one daemon sampler thread that publishes world state into shared
+//      memory after each coherent camera/entity capture,
+//   4. tear all of that down deterministically on VM death.
+//
+// Everything the external overlay knows comes through the shared block; the
+// overlay never touches JNI.
+#include <jvmti.h>
+
+#include <windows.h>
+
+#include <algorithm>
+#include <atomic>
+#include <cctype>
+#include <chrono>
+#include <cmath>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include "../common/ipc.hpp"
+#include "../common/log.hpp"
+#include "../common/shared_state.hpp"
+#include "jvm_interface.hpp"
+#include "generated_profiles.hpp"
+#include "geometry_bindings.hpp"
+#include "frame_sync.hpp"
+
+using namespace mcov;
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Agent-wide state
+// ---------------------------------------------------------------------------
+jvmtiEnv*         g_jvmti = nullptr;
+SharedChannel     g_channel;
+std::thread       g_sampler;
+std::atomic<bool> g_stop{false};
+std::atomic<bool> g_started{false};
+FrameSync        g_frameSync;
+
+void SetStatus(AgentStatus status) {
+    if (auto* block = g_channel.block()) {
+        block->status.store(static_cast<std::uint32_t>(status), std::memory_order_release);
+    }
+}
+
+std::wstring AgentLogPath() {
+    // Log next to the DLL rather than the CWD - javaw.exe's working directory is
+    // the game directory, which is not always writable and is easy to lose.
+    wchar_t path[MAX_PATH] = {};
+    HMODULE self = nullptr;
+    ::GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         reinterpret_cast<LPCWSTR>(&AgentLogPath), &self);
+    if (self && ::GetModuleFileNameW(self, path, MAX_PATH)) {
+        std::wstring result(path);
+        const std::size_t slash = result.find_last_of(L"\\/");
+        if (slash != std::wstring::npos) result.resize(slash + 1);
+        return result + L"mcov_agent.log";
+    }
+    return L"mcov_agent.log";
+}
+
+// ---------------------------------------------------------------------------
+// JVMTI class resolver
+//
+// This exists because env->FindClass() on a thread we attached ourselves
+// searches only the system class loader. Minecraft's classes are loaded by the
+// launcher's loader (or Fabric's Knot / NeoForge's module layer), so FindClass
+// raises NoClassDefFoundError for every one of them.
+//
+// GetLoadedClasses ignores loader scoping entirely: it returns every class the
+// VM currently has loaded, whoever loaded it. We match on the JVM type
+// descriptor ("Lnet/minecraft/client/Minecraft;").
+//
+// It is a linear scan over ~30-60k classes with an allocation per signature, so
+// it is only acceptable because Runtime::ResolveClass caches the result as a
+// global ref and never asks twice.
+// ---------------------------------------------------------------------------
+jclass ResolveClassViaJvmti(JNIEnv* env, const char* slashedName) {
+    if (!g_jvmti || !env || !slashedName) return nullptr;
+
+    jint    count   = 0;
+    jclass* classes = nullptr;
+    if (g_jvmti->GetLoadedClasses(&count, &classes) != JVMTI_ERROR_NONE || !classes) {
+        return nullptr;
+    }
+
+    const std::string wanted = std::string("L") + slashedName + ";";
+    jclass            found  = nullptr;
+
+    for (jint i = 0; i < count; ++i) {
+        if (!found) {
+            char* signature = nullptr;
+            if (g_jvmti->GetClassSignature(classes[i], &signature, nullptr) == JVMTI_ERROR_NONE && signature) {
+                if (wanted == signature) {
+                    // Take an independent ref: the array's refs are all deleted below.
+                    found = static_cast<jclass>(env->NewLocalRef(classes[i]));
+                }
+                g_jvmti->Deallocate(reinterpret_cast<unsigned char*>(signature));
+            }
+        }
+        // GetLoadedClasses hands back JNI *local* references; leaving 40k of them
+        // alive would overflow the local reference table immediately.
+        env->DeleteLocalRef(classes[i]);
+    }
+
+    g_jvmti->Deallocate(reinterpret_cast<unsigned char*>(classes));
+    return found;
+}
+
+// ---------------------------------------------------------------------------
+// Resolved handles for one mapping set
+// ---------------------------------------------------------------------------
+struct Bindings {
+    GeometryBindings geometry;
+    const mappings::MappingSet* set = nullptr;
+    const mappings::RuntimeProfile* profile = nullptr;
+    bool                        ready = false;
+
+    jvm::demo::MinecraftHandles client;
+
+    jclass clsLevel   = nullptr;
+    jclass clsEntity  = nullptr;
+    jclass clsLiving  = nullptr;
+    jclass clsPlayer  = nullptr;
+    jclass clsEnemy   = nullptr;
+    jclass clsVec3    = nullptr;
+    jclass clsCamera  = nullptr;
+    jclass clsRenderer= nullptr;
+    jclass clsText    = nullptr;
+    jclass clsOptions = nullptr;
+    jclass clsOptVal  = nullptr;
+    jclass clsServer  = nullptr;
+
+    jclass clsItemStack = nullptr;
+    jclass clsEquipSlot = nullptr;
+    jclass clsEffectInst= nullptr;
+
+    // Bootstrap classes - always reachable through plain FindClass.
+    jclass clsIterable = nullptr;
+    jclass clsIterator = nullptr;
+    jclass clsObject   = nullptr;
+    jclass clsNumber   = nullptr;
+    jclass clsBoolean  = nullptr;
+    jclass clsRuntime  = nullptr;
+
+    jfieldID fPlayer = nullptr, fLevel = nullptr, fRenderer = nullptr, fOptions = nullptr;
+    jfieldID fFps = nullptr;                      // static, optional
+    jfieldID fVecX = nullptr, fVecY = nullptr, fVecZ = nullptr;
+    jfieldID fServerAddress = nullptr;
+
+    jmethodID mGetCamera = nullptr, mCamPos = nullptr, mRealFov = nullptr;
+    jfieldID  fBobView = nullptr;
+    jfieldID  fCamPos = nullptr;   // fallback if an accessor cannot be used
+    jmethodID mCamYaw = nullptr, mCamPitch = nullptr;
+    jmethodID mGetX = nullptr, mGetY = nullptr, mGetZ = nullptr;
+    jmethodID mGetId = nullptr, mGetName = nullptr, mEntityYaw = nullptr;
+    jmethodID mBbWidth = nullptr, mBbHeight = nullptr;
+    jmethodID mHealth = nullptr, mMaxHealth = nullptr, mAbsorption = nullptr, mArmor = nullptr;
+    jmethodID mEntities = nullptr, mDimension = nullptr;
+    jmethodID mTextToString = nullptr;
+    jmethodID mFov = nullptr, mOptGet = nullptr;
+    jmethodID mCurrentServer = nullptr;
+    jmethodID mIterator = nullptr, mHasNext = nullptr, mNext = nullptr;
+    jmethodID mObjToString = nullptr, mNumberIntValue = nullptr;
+    jmethodID mBooleanValue = nullptr;
+
+    // Equipment. The slot constants are global refs to the enum singletons.
+    jmethodID mGetEquipped = nullptr;
+    jobject   slotConstants[kSlotCount] = {};
+    jmethodID mItemIsEmpty = nullptr, mItemDamage = nullptr, mItemMaxDamage = nullptr;
+    jmethodID mItemIsDamageable = nullptr, mItemCount = nullptr, mItemName = nullptr;
+
+    // Status effects
+    jmethodID mGetStatusEffects = nullptr;
+    jmethodID mEffAmplifier = nullptr, mEffDuration = nullptr;
+    jmethodID mEffTransKey = nullptr, mEffAmbient = nullptr;
+
+    // Crosshair target
+    jfieldID fTargetedEntity = nullptr;
+
+    // java.lang.Runtime - bootstrap, so heap telemetry needs no mappings at all.
+    jmethodID mGetRuntime = nullptr, mTotalMemory = nullptr, mFreeMemory = nullptr, mMaxMemory = nullptr;
+
+    // Block scanning
+    jclass    clsBlockState = nullptr, clsBlock = nullptr, clsPosMut = nullptr;
+    jmethodID mGetBlockState = nullptr, mIsAir = nullptr, mGetBlock = nullptr;
+    jmethodID mBlockTransKey = nullptr, mMutableSet = nullptr, mMutableCtor = nullptr;
+
+    // Auto totem - the only path that writes to the client.
+    jclass    clsInteractionMgr = nullptr, clsSlotAction = nullptr;
+    jclass    clsPlayerInv = nullptr, clsItem = nullptr;
+    jfieldID  fInteractionMgr = nullptr, fCurrentScreen = nullptr, fGui = nullptr;
+    jfieldID  fScreenHandler = nullptr, fSyncId = nullptr, fInventory = nullptr;
+    jmethodID mInvGetStack = nullptr, mInvSize = nullptr;
+    jmethodID mStackGetItem = nullptr, mItemTransKey = nullptr, mClickSlot = nullptr;
+    jobject   swapAction = nullptr;   // global ref to SlotActionType.SWAP
+};
+
+// Block identity -> kind, resolved once per distinct Block instance.
+//
+// Going through the registry (Registries.BLOCK -> Registry.get(Identifier))
+// would need four more mappings; caching by object identity needs none. A scan
+// volume only contains a few dozen distinct blocks, so the linear IsSameObject
+// search stays trivial - and the expensive getTranslationKey call happens once
+// per block type rather than once per position.
+struct BlockKindCache {
+    struct Entry {
+        jobject     block;   // global ref
+        std::int8_t kind;    // BlockKind, or -1 for "not interesting"
+    };
+    std::vector<Entry> entries;
+
+    std::int8_t Lookup(JNIEnv* env, const Bindings& b, jobject block) {
+        for (const Entry& e : entries) {
+            if (env->IsSameObject(block, e.block)) return e.kind;
+        }
+
+        std::int8_t kind = -1;
+        if (b.mBlockTransKey) {
+            auto key = static_cast<jstring>(env->CallObjectMethod(block, b.mBlockTransKey));
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (key) {
+                const std::string text = jvm::JStringToUtf8(env, key);
+                env->DeleteLocalRef(key);
+                for (std::uint8_t i = 0; i < kBlockKindCount; ++i) {
+                    if (text.find(BlockKindKey(i)) != std::string::npos) {
+                        kind = static_cast<std::int8_t>(i);
+                        break;
+                    }
+                }
+            }
+        }
+        entries.push_back({env->NewGlobalRef(block), kind});
+        return kind;
+    }
+
+    void Release(JNIEnv* env) {
+        for (Entry& e : entries) {
+            if (e.block) env->DeleteGlobalRef(e.block);
+        }
+        entries.clear();
+    }
+};
+
+// Resolve a class through the cache, tolerating a miss.
+jclass SoftClass(JNIEnv* env, const char* key, const char* name) {
+    jvm::Error ignored;
+    return jvm::Runtime::Instance().ResolveClass(env, key, {name}, &ignored);
+}
+
+bool BindBootstrap(JNIEnv* env, Bindings& b) {
+    b.clsIterable = SoftClass(env, "java.lang.Iterable", "java/lang/Iterable");
+    b.clsIterator = SoftClass(env, "java.util.Iterator", "java/util/Iterator");
+    b.clsObject   = SoftClass(env, "java.lang.Object",   "java/lang/Object");
+    b.clsNumber   = SoftClass(env, "java.lang.Number",   "java/lang/Number");
+    b.clsBoolean  = SoftClass(env, "java.lang.Boolean",  "java/lang/Boolean");
+    b.clsRuntime  = SoftClass(env, "java.lang.Runtime",  "java/lang/Runtime");
+    if (!b.clsIterable || !b.clsIterator || !b.clsObject || !b.clsNumber) return false;
+
+    b.mIterator       = jvm::TryMethod(env, b.clsIterable, "iterator", "()Ljava/util/Iterator;", false);
+    b.mHasNext        = jvm::TryMethod(env, b.clsIterator, "hasNext",  "()Z", false);
+    b.mNext           = jvm::TryMethod(env, b.clsIterator, "next",     "()Ljava/lang/Object;", false);
+    b.mObjToString    = jvm::TryMethod(env, b.clsObject,   "toString", "()Ljava/lang/String;", false);
+    b.mNumberIntValue = jvm::TryMethod(env, b.clsNumber,   "intValue", "()I", false);
+    b.mBooleanValue = jvm::TryMethod(env, b.clsBoolean, "booleanValue", "()Z", false);
+
+    if (b.clsRuntime) {
+        b.mGetRuntime  = jvm::TryMethod(env, b.clsRuntime, "getRuntime", "()Ljava/lang/Runtime;", true);
+        b.mTotalMemory = jvm::TryMethod(env, b.clsRuntime, "totalMemory", "()J", false);
+        b.mFreeMemory  = jvm::TryMethod(env, b.clsRuntime, "freeMemory",  "()J", false);
+        b.mMaxMemory   = jvm::TryMethod(env, b.clsRuntime, "maxMemory",   "()J", false);
+    }
+
+    return b.mIterator && b.mHasNext && b.mNext;
+}
+
+// Attempts to bind everything for one mapping set. Returns true only if the
+// essentials (version, client, player/level, camera and entities) are present -
+// individual optional members are allowed to stay null.
+bool BindMappingSet(JNIEnv* env, const mappings::RuntimeProfile& profile, Bindings& out) {
+    const auto& set = *profile.set;
+    Bindings b;
+    b.set = &set;
+    b.profile = &profile;
+
+    jvm::Error error;
+    const std::string prefix = std::string(set.id) + ".";
+
+    b.client.minecraftClass = jvm::Runtime::Instance().ResolveClass(
+        env, (prefix + "client").c_str(), {set.classes.client}, &error);
+    if (!b.client.minecraftClass) {
+        MCOV_LOG_TRACE("[%s] client class miss: %s", set.id, error.what());
+        return false;
+    }
+
+    // The class name alone cannot distinguish Mojmap releases. Read the
+    // game's own version before trying version-specific member descriptors.
+    if (!jvm::Runtime::Instance().SetGameClassLoader(env, b.client.minecraftClass)) return false;
+    {
+        jvm::LocalFrame frame(env, 8);
+        if (!frame.ok()) return false;
+        jclass constants = SoftClass(env, (prefix + "version").c_str(), profile.versionClass);
+        jclass worldVersion = SoftClass(env, (prefix + "worldversion").c_str(), profile.worldVersionClass);
+        jmethodID current = jvm::TryMethod(env, constants, profile.currentVersion.name,
+                                           profile.currentVersion.signature, true);
+        jmethodID id = jvm::TryMethod(env, worldVersion, profile.versionId.name,
+                                      profile.versionId.signature, false);
+        if (!current || !id) return false;
+        jobject version = env->CallStaticObjectMethod(constants, current);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+        if (!version) return false;
+        auto text = static_cast<jstring>(env->CallObjectMethod(version, id));
+        if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+        if (!text || jvm::JStringToUtf8(env, text) != profile.version) return false;
+    }
+    if (!BindBootstrap(env, b)) return false;
+
+    // getInstance is itself a mapped name - it is method_1551 under intermediary,
+    // so it cannot be hardcoded.
+    b.client.getInstance = jvm::TryMethod(env, b.client.minecraftClass,
+                                          set.methodGetInstance.name,
+                                          set.methodGetInstance.signature,
+                                          /*isStatic=*/true);
+    if (!b.client.getInstance) {
+        MCOV_LOG_WARN("[%s] found %s but no static %s%s",
+                      set.id, set.classes.client,
+                      set.methodGetInstance.name, set.methodGetInstance.signature);
+        return false;
+    }
+    b.client.resolved  = true;
+    b.client.mappingId = set.classes.client;
+
+    // Required instance fields on the client singleton.
+    b.fPlayer = jvm::TryField(env, b.client.minecraftClass, set.fieldPlayer.name, set.fieldPlayer.signature, false);
+    b.fLevel  = jvm::TryField(env, b.client.minecraftClass, set.fieldLevel.name,  set.fieldLevel.signature,  false);
+    if (!b.fPlayer || !b.fLevel) {
+        MCOV_LOG_WARN("[%s] client class matched but player/level fields did not - "
+                      "mapping set is probably for a different MC version", set.id);
+        return false;
+    }
+
+    // Optional-but-nice members from here on.
+    b.fRenderer = jvm::TryField(env, b.client.minecraftClass, set.fieldGameRenderer.name, set.fieldGameRenderer.signature, false);
+    b.fOptions  = jvm::TryField(env, b.client.minecraftClass, set.fieldOptions.name, set.fieldOptions.signature, false);
+    b.fFps      = jvm::TryField(env, b.client.minecraftClass, set.fieldFps.name, set.fieldFps.signature, /*isStatic=*/true);
+
+    b.clsLevel    = SoftClass(env, (prefix + "level").c_str(),    set.classes.clientLevel);
+    b.clsEntity   = SoftClass(env, (prefix + "entity").c_str(),   set.classes.entity);
+    b.clsLiving   = SoftClass(env, (prefix + "living").c_str(),   set.classes.livingEntity);
+    b.clsPlayer   = SoftClass(env, (prefix + "player").c_str(),   set.classes.player);
+    b.clsEnemy    = SoftClass(env, (prefix + "enemy").c_str(),    set.classes.enemyMarker);
+    b.clsVec3     = SoftClass(env, (prefix + "vec3").c_str(),     set.classes.vec3);
+    b.clsCamera   = SoftClass(env, (prefix + "camera").c_str(),   set.classes.camera);
+    b.clsRenderer = SoftClass(env, (prefix + "renderer").c_str(), set.classes.gameRenderer);
+    b.clsText     = SoftClass(env, (prefix + "text").c_str(),     set.classes.component);
+    b.clsOptions  = SoftClass(env, (prefix + "options").c_str(),  set.classes.options);
+    b.clsOptVal   = SoftClass(env, (prefix + "optval").c_str(),   set.classes.optionValue);
+    b.clsServer   = SoftClass(env, (prefix + "server").c_str(),   set.classes.serverData);
+
+    if (b.clsEntity) {
+        b.mGetX      = jvm::TryMethod(env, b.clsEntity, set.methodGetX.name, set.methodGetX.signature, false);
+        b.mGetY      = jvm::TryMethod(env, b.clsEntity, set.methodGetY.name, set.methodGetY.signature, false);
+        b.mGetZ      = jvm::TryMethod(env, b.clsEntity, set.methodGetZ.name, set.methodGetZ.signature, false);
+        b.mGetId     = jvm::TryMethod(env, b.clsEntity, set.methodGetId.name, set.methodGetId.signature, false);
+        b.mGetName   = jvm::TryMethod(env, b.clsEntity, set.methodGetName.name, set.methodGetName.signature, false);
+        b.mBbWidth   = jvm::TryMethod(env, b.clsEntity, set.methodGetBbWidth.name, set.methodGetBbWidth.signature, false);
+        b.mBbHeight  = jvm::TryMethod(env, b.clsEntity, set.methodGetBbHeight.name, set.methodGetBbHeight.signature, false);
+        b.mEntityYaw = jvm::TryMethod(env, b.clsEntity, set.methodEntityYaw.name, set.methodEntityYaw.signature, false);
+    }
+    if (b.clsLiving) {
+        b.mHealth     = jvm::TryMethod(env, b.clsLiving, set.methodGetHealth.name, set.methodGetHealth.signature, false);
+        b.mMaxHealth  = jvm::TryMethod(env, b.clsLiving, set.methodGetMaxHealth.name, set.methodGetMaxHealth.signature, false);
+        b.mAbsorption = jvm::TryMethod(env, b.clsLiving, set.methodGetAbsorption.name, set.methodGetAbsorption.signature, false);
+        b.mArmor      = jvm::TryMethod(env, b.clsLiving, set.methodGetArmor.name, set.methodGetArmor.signature, false);
+    }
+    if (b.clsLevel) {
+        b.mEntities  = jvm::TryMethod(env, b.clsLevel, set.methodEntitiesForRendering.name, set.methodEntitiesForRendering.signature, false);
+        b.mDimension = jvm::TryMethod(env, b.clsLevel, set.methodDimension.name, set.methodDimension.signature, false);
+    }
+    if (b.clsRenderer) {
+        b.mGetCamera = jvm::TryMethod(env, b.clsRenderer, set.methodGetCamera.name, set.methodGetCamera.signature, false);
+    }
+    b.mRealFov = jvm::TryMethod(env,
+        profile.fovSource == mappings::FovSource::CameraFloat ? b.clsCamera : b.clsRenderer,
+        set.methodRealFov.name, set.methodRealFov.signature, false);
+    if (b.clsOptions) {
+        b.fBobView = jvm::TryField(env, b.clsOptions, set.fieldBobView.name, set.fieldBobView.signature, false);
+    }
+    if (b.clsCamera) {
+        b.mCamPos   = jvm::TryMethod(env, b.clsCamera, set.methodCameraPosition.name, set.methodCameraPosition.signature, false);
+        b.fCamPos   = jvm::TryField (env, b.clsCamera, set.fieldCameraPosition.name, set.fieldCameraPosition.signature, false);
+        b.mCamYaw   = jvm::TryMethod(env, b.clsCamera, set.methodGetYaw.name, set.methodGetYaw.signature, false);
+        b.mCamPitch = jvm::TryMethod(env, b.clsCamera, set.methodGetPitch.name, set.methodGetPitch.signature, false);
+    }
+    if (b.clsVec3) {
+        // Vec3/Vec3d expose the components as public final doubles. The names are
+        // mapped like anything else - they are field_1352/1351/1350 under
+        // intermediary - so they come from the table, not from literals.
+        b.fVecX = jvm::TryField(env, b.clsVec3, set.fieldVecX.name, set.fieldVecX.signature, false);
+        b.fVecY = jvm::TryField(env, b.clsVec3, set.fieldVecY.name, set.fieldVecY.signature, false);
+        b.fVecZ = jvm::TryField(env, b.clsVec3, set.fieldVecZ.name, set.fieldVecZ.signature, false);
+    }
+    if (!b.fRenderer || !b.mGetCamera || (!b.mCamPos && !b.fCamPos) ||
+        !b.mCamYaw || !b.mCamPitch || !b.fVecX || !b.fVecY || !b.fVecZ ||
+        !b.mRealFov || !b.mGetX || !b.mGetY || !b.mGetZ || !b.mEntities) {
+        MCOV_LOG_WARN("[%s] camera/entity bindings incomplete; refusing this profile", set.id);
+        return false;
+    }
+    if (b.clsText) {
+        b.mTextToString = jvm::TryMethod(env, b.clsText, set.methodComponentToString.name, set.methodComponentToString.signature, false);
+    }
+    if (b.clsOptions) b.mFov    = jvm::TryMethod(env, b.clsOptions, set.methodFov.name, set.methodFov.signature, false);
+    if (b.clsOptVal)  b.mOptGet = jvm::TryMethod(env, b.clsOptVal,  set.methodOptionGet.name, set.methodOptionGet.signature, false);
+    b.mCurrentServer = jvm::TryMethod(env, b.client.minecraftClass, set.methodCurrentServer.name, set.methodCurrentServer.signature, false);
+    if (b.clsServer)  b.fServerAddress = jvm::TryField(env, b.clsServer, set.fieldServerAddress.name, set.fieldServerAddress.signature, false);
+
+    // --- equipment / effects / target ------------------------------------
+    b.clsItemStack  = SoftClass(env, (prefix + "itemstack").c_str(), set.classes.itemStack);
+    b.clsEquipSlot  = SoftClass(env, (prefix + "equipslot").c_str(), set.classes.equipSlot);
+    b.clsEffectInst = SoftClass(env, (prefix + "effectinst").c_str(), set.classes.effectInst);
+
+    if (b.clsLiving) {
+        b.mGetEquipped      = jvm::TryMethod(env, b.clsLiving, set.methodGetEquipped.name, set.methodGetEquipped.signature, false);
+        b.mGetStatusEffects = jvm::TryMethod(env, b.clsLiving, set.methodGetStatusEffects.name, set.methodGetStatusEffects.signature, false);
+    }
+    if (b.clsItemStack) {
+        b.mItemIsEmpty      = jvm::TryMethod(env, b.clsItemStack, set.methodItemIsEmpty.name, set.methodItemIsEmpty.signature, false);
+        b.mItemDamage       = jvm::TryMethod(env, b.clsItemStack, set.methodItemGetDamage.name, set.methodItemGetDamage.signature, false);
+        b.mItemMaxDamage    = jvm::TryMethod(env, b.clsItemStack, set.methodItemGetMaxDamage.name, set.methodItemGetMaxDamage.signature, false);
+        b.mItemIsDamageable = jvm::TryMethod(env, b.clsItemStack, set.methodItemIsDamageable.name, set.methodItemIsDamageable.signature, false);
+        b.mItemCount        = jvm::TryMethod(env, b.clsItemStack, set.methodItemGetCount.name, set.methodItemGetCount.signature, false);
+        b.mItemName         = jvm::TryMethod(env, b.clsItemStack, set.methodItemGetName.name, set.methodItemGetName.signature, false);
+    }
+    if (b.clsEffectInst) {
+        b.mEffAmplifier = jvm::TryMethod(env, b.clsEffectInst, set.methodEffectAmplifier.name, set.methodEffectAmplifier.signature, false);
+        b.mEffDuration  = jvm::TryMethod(env, b.clsEffectInst, set.methodEffectDuration.name, set.methodEffectDuration.signature, false);
+        b.mEffTransKey  = jvm::TryMethod(env, b.clsEffectInst, set.methodEffectTranslationKey.name, set.methodEffectTranslationKey.signature, false);
+        b.mEffAmbient   = jvm::TryMethod(env, b.clsEffectInst, set.methodEffectIsAmbient.name, set.methodEffectIsAmbient.signature, false);
+    }
+    b.fTargetedEntity = jvm::TryField(env, b.client.minecraftClass, set.fieldTargetedEntity.name, set.fieldTargetedEntity.signature, false);
+
+    // --- block scanning ---------------------------------------------------
+    b.clsBlockState = SoftClass(env, (prefix + "blockstate").c_str(), set.classes.blockState);
+    b.clsBlock      = SoftClass(env, (prefix + "block").c_str(),      set.classes.block);
+    b.clsPosMut     = SoftClass(env, (prefix + "posmut").c_str(),     set.classes.blockPosMut);
+
+    if (b.clsLevel) {
+        b.mGetBlockState = jvm::TryMethod(env, b.clsLevel, set.methodGetBlockState.name, set.methodGetBlockState.signature, false);
+    }
+    if (b.clsBlockState) {
+        b.mIsAir    = jvm::TryMethod(env, b.clsBlockState, set.methodStateIsAir.name, set.methodStateIsAir.signature, false);
+        b.mGetBlock = jvm::TryMethod(env, b.clsBlockState, set.methodStateGetBlock.name, set.methodStateGetBlock.signature, false);
+    }
+    if (b.clsBlock) {
+        b.mBlockTransKey = jvm::TryMethod(env, b.clsBlock, set.methodBlockTransKey.name, set.methodBlockTransKey.signature, false);
+    }
+    if (b.clsPosMut) {
+        b.mMutableSet  = jvm::TryMethod(env, b.clsPosMut, set.methodMutableSet.name, set.methodMutableSet.signature, false);
+        b.mMutableCtor = jvm::TryMethod(env, b.clsPosMut, "<init>", "()V", false);
+    }
+
+    // --- auto totem --------------------------------------------------------
+    b.clsInteractionMgr = SoftClass(env, (prefix + "interact").c_str(), set.classes.interactionMgr);
+    b.clsSlotAction     = SoftClass(env, (prefix + "slotaction").c_str(), set.classes.slotAction);
+    b.clsPlayerInv      = SoftClass(env, (prefix + "playerinv").c_str(), set.classes.playerInv);
+    b.clsItem           = SoftClass(env, (prefix + "item").c_str(), set.classes.item);
+
+    b.fInteractionMgr = jvm::TryField(env, b.client.minecraftClass, set.fieldInteractionMgr.name, set.fieldInteractionMgr.signature, false);
+    jclass screenOwner = b.client.minecraftClass;
+    if (*profile.guiClass) {
+        screenOwner = SoftClass(env, (prefix + "gui").c_str(), profile.guiClass);
+        b.fGui = jvm::TryField(env, b.client.minecraftClass, profile.clientGui.name,
+                               profile.clientGui.signature, false);
+    }
+    b.fCurrentScreen = jvm::TryField(env, screenOwner, set.fieldCurrentScreen.name,
+                                    set.fieldCurrentScreen.signature, false);
+
+    if (b.clsPlayer) {
+        b.fScreenHandler = jvm::TryField(env, b.clsPlayer, set.fieldScreenHandler.name, set.fieldScreenHandler.signature, false);
+        b.fInventory     = jvm::TryField(env, b.clsPlayer, set.fieldInventory.name, set.fieldInventory.signature, false);
+    }
+    // Bind on the declared base menu class. A modded handler may hide fields;
+    // caching an ID obtained from its concrete subclass would be unsafe when
+    // another handler becomes active. The descriptor already names the owner.
+    const std::string menuDescriptor = set.fieldScreenHandler.signature;
+    if (menuDescriptor.size() > 2 && menuDescriptor.front() == 'L' && menuDescriptor.back() == ';') {
+        const std::string menuName = menuDescriptor.substr(1, menuDescriptor.size() - 2);
+        jclass menuClass = SoftClass(env, (prefix + "menu").c_str(), menuName.c_str());
+        b.fSyncId = jvm::TryField(env, menuClass, set.fieldSyncId.name, set.fieldSyncId.signature, false);
+    }
+    if (b.clsPlayerInv) {
+        b.mInvGetStack = jvm::TryMethod(env, b.clsPlayerInv, set.methodInvGetStack.name, set.methodInvGetStack.signature, false);
+        b.mInvSize     = jvm::TryMethod(env, b.clsPlayerInv, set.methodInvSize.name, set.methodInvSize.signature, false);
+    }
+    if (b.clsItemStack) {
+        b.mStackGetItem = jvm::TryMethod(env, b.clsItemStack, set.methodStackGetItem.name, set.methodStackGetItem.signature, false);
+    }
+    if (b.clsItem) {
+        b.mItemTransKey = jvm::TryMethod(env, b.clsItem, set.methodItemTransKey.name, set.methodItemTransKey.signature, false);
+    }
+    if (b.clsInteractionMgr) {
+        b.mClickSlot = jvm::TryMethod(env, b.clsInteractionMgr, set.methodClickSlot.name, set.methodClickSlot.signature, false);
+    }
+    if (b.clsSlotAction) {
+        if (jfieldID swap = jvm::TryField(env, b.clsSlotAction, set.fieldSwapAction.name,
+                                          set.fieldSwapAction.signature, /*isStatic=*/true)) {
+            jobject local = env->GetStaticObjectField(b.clsSlotAction, swap);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (local) { b.swapAction = env->NewGlobalRef(local); env->DeleteLocalRef(local); }
+        }
+    }
+    // Auto totem needs every one of these; report exactly which is missing
+    // rather than silently doing nothing at runtime.
+    {
+        const struct { const char* what; bool ok; } required[] = {
+            {"interactionManager field", b.fInteractionMgr != nullptr},
+            {"currentScreen field",      b.fCurrentScreen && (!*profile.guiClass || b.fGui)},
+            {"screenHandler field",      b.fScreenHandler  != nullptr},
+            {"container ID field",       b.fSyncId         != nullptr},
+            {"inventory field",          b.fInventory      != nullptr},
+            {"Inventory.getStack",       b.mInvGetStack    != nullptr},
+            {"Inventory.size",           b.mInvSize        != nullptr},
+            {"ItemStack.getItem",        b.mStackGetItem   != nullptr},
+            {"Item.getTranslationKey",   b.mItemTransKey   != nullptr},
+            {"clickSlot",                b.mClickSlot      != nullptr},
+            {"SlotActionType.SWAP",      b.swapAction      != nullptr},
+        };
+        std::string missing;
+        for (const auto& r : required) {
+            if (!r.ok) { if (!missing.empty()) missing += ", "; missing += r.what; }
+        }
+        if (missing.empty()) {
+            MCOV_LOG_INFO("[%s] auto totem: all members bound", set.id);
+        } else {
+            MCOV_LOG_WARN("[%s] auto totem disabled, unbound: %s", set.id, missing.c_str());
+        }
+    }
+
+    // Pin the EquipmentSlot enum singletons as global refs. They live for the
+    // life of the VM, so this is a one-off cost rather than per-frame work.
+    if (b.clsEquipSlot) {
+        const mappings::Member slots[kSlotCount] = {
+            set.slotHead, set.slotChest, set.slotLegs,
+            set.slotFeet, set.slotMainHand, set.slotOffHand,
+        };
+        for (int i = 0; i < static_cast<int>(kSlotCount); ++i) {
+            jfieldID fid = jvm::TryField(env, b.clsEquipSlot, slots[i].name, slots[i].signature, /*isStatic=*/true);
+            if (!fid) continue;
+            jobject local = env->GetStaticObjectField(b.clsEquipSlot, fid);
+            if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+            if (local) {
+                b.slotConstants[i] = env->NewGlobalRef(local);
+                env->DeleteLocalRef(local);
+            }
+        }
+    }
+
+    b.geometry = BindGeometry(env, profile, b.client.minecraftClass, b.clsEntity, b.clsLiving, b.clsPlayer, b.clsCamera);
+    b.ready = true;
+    out     = b;
+    MCOV_LOG_INFO("bound mapping set '%s' (%s)", set.id, set.classes.client);
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Sampling helpers
+// ---------------------------------------------------------------------------
+float CallFloat(JNIEnv* env, jobject obj, jmethodID method, float fallback = 0.0f) {
+    if (!obj || !method) return fallback;
+    const jfloat value = env->CallFloatMethod(obj, method);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return fallback; }
+    return static_cast<float>(value);
+}
+
+double CallDouble(JNIEnv* env, jobject obj, jmethodID method, double fallback = 0.0) {
+    if (!obj || !method) return fallback;
+    const jdouble value = env->CallDoubleMethod(obj, method);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return fallback; }
+    return static_cast<double>(value);
+}
+
+int CallInt(JNIEnv* env, jobject obj, jmethodID method, int fallback = 0) {
+    if (!obj || !method) return fallback;
+    const jint value = env->CallIntMethod(obj, method);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return fallback; }
+    return static_cast<int>(value);
+}
+
+#include "geometry_sampling.hpp"
+
+// Entity display name -> UTF-8. Component/Text -> getString() -> java.lang.String.
+std::string ReadEntityName(JNIEnv* env, const Bindings& b, jobject entity) {
+    if (!entity || !b.mGetName) return {};
+
+    jvm::LocalFrame frame(env, 8);
+
+    jobject component = env->CallObjectMethod(entity, b.mGetName);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return {}; }
+    if (!component) return {};
+
+    // Prefer Component/Text.getString(). That name is absent from the Fabric
+    // mapping file, so if the "unmapped names survive verbatim" assumption is
+    // wrong for this build we fall back to Object.toString(), which always
+    // exists - uglier output, but a name rather than a blank.
+    jmethodID toText = b.mTextToString ? b.mTextToString : b.mObjToString;
+    if (!toText) return {};
+
+    auto text = static_cast<jstring>(env->CallObjectMethod(component, toText));
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return {}; }
+    if (!text) return {};
+
+    return jvm::JStringToUtf8(env, text);
+}
+
+// Reads a Vec3/Vec3d's three public double fields.
+bool ReadVec3(JNIEnv* env, const Bindings& b, jobject vec, double& x, double& y, double& z) {
+    if (!vec || !b.fVecX || !b.fVecY || !b.fVecZ) return false;
+    x = env->GetDoubleField(vec, b.fVecX);
+    y = env->GetDoubleField(vec, b.fVecY);
+    z = env->GetDoubleField(vec, b.fVecZ);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    return true;
+}
+
+void SampleCamera(JNIEnv* env, const Bindings& b, jobject client, WorldSnapshot& snap) {
+    // Defaults matter: if the camera chain is unavailable the overlay still gets
+    // a usable (if slightly wrong) projection instead of NaNs.
+    snap.fovDeg     = 70.0f;
+    snap.nearPlane  = 0.05f;
+    snap.farPlane   = 1000.0f;
+    snap.partialTick = 1.0f;
+
+    if (!b.fRenderer || !b.mGetCamera) return;
+
+    jvm::LocalFrame frame(env, 12);
+
+    jobject renderer = env->GetObjectField(client, b.fRenderer);
+    if (!renderer) return;
+
+    jobject camera = env->CallObjectMethod(renderer, b.mGetCamera);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!camera) return;
+
+    // Camera position: accessor if this mapping set has one, otherwise the field.
+    // The selected profile supplies the release-specific accessor name.
+    jobject position = nullptr;
+    if (b.mCamPos) {
+        position = env->CallObjectMethod(camera, b.mCamPos);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); position = nullptr; }
+    }
+    if (!position && b.fCamPos) {
+        position = env->GetObjectField(camera, b.fCamPos);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); position = nullptr; }
+    }
+    if (position) ReadVec3(env, b, position, snap.camX, snap.camY, snap.camZ);
+
+    // The camera's rotation, not the player's: they differ in third person and
+    // whenever the player is riding an entity.
+    snap.yawDeg   = CallFloat(env, camera, b.mCamYaw,   snap.yawDeg);
+    snap.pitchDeg = CallFloat(env, camera, b.mCamPitch, snap.pitchDeg);
+    SampleCameraGeometry(env, b, client, camera, snap);
+
+    // Preferred: the renderer's actual FOV for this frame. Options.fov() is only
+    // the base setting and excludes the sprint/speed/bow modifiers, which is why
+    // ESP boxes drift the moment you start sprinting.
+    if (b.mRealFov) {
+        double fov = 0.0;
+        switch (b.profile->fovSource) {
+            case mappings::FovSource::CameraFloat:
+                fov = env->CallFloatMethod(camera, b.mRealFov);
+                break;
+            case mappings::FovSource::RendererDouble:
+                fov = env->CallDoubleMethod(renderer, b.mRealFov, camera, snap.partialTick, JNI_TRUE);
+                break;
+            case mappings::FovSource::RendererFloat:
+                fov = env->CallFloatMethod(renderer, b.mRealFov, camera, snap.partialTick, JNI_TRUE);
+                break;
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        else if (fov > 1.0f && fov < 179.0f) {
+            snap.fovDeg = static_cast<float>(fov);
+
+            return;   // real FOV obtained; skip the options fallback below
+        }
+    }
+
+    // Fallback chain: Minecraft.options -> Options.fov() -> OptionInstance.get()
+    if (b.fOptions && b.mFov && b.mOptGet && b.mNumberIntValue) {
+        jobject options = env->GetObjectField(client, b.fOptions);
+        if (options) {
+            jobject option = env->CallObjectMethod(options, b.mFov);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (option) {
+                jobject boxed = env->CallObjectMethod(option, b.mOptGet);
+                if (env->ExceptionCheck()) env->ExceptionClear();
+                else if (boxed) {
+                    const int fov = CallInt(env, boxed, b.mNumberIntValue, 70);
+                    if (fov > 1 && fov < 180) snap.fovDeg = static_cast<float>(fov);
+                }
+            }
+        }
+    }
+}
+
+void SampleLocalPlayer(JNIEnv* env, const Bindings& b, jobject player, WorldSnapshot& snap) {
+    snap.posX = static_cast<float>(CallDouble(env, player, b.mGetX));
+    snap.posY = static_cast<float>(CallDouble(env, player, b.mGetY));
+    snap.posZ = static_cast<float>(CallDouble(env, player, b.mGetZ));
+
+    snap.health     = CallFloat(env, player, b.mHealth,     -1.0f);
+    snap.maxHealth  = CallFloat(env, player, b.mMaxHealth,  20.0f);
+    snap.absorption = CallFloat(env, player, b.mAbsorption,  0.0f);
+    snap.armorValue = CallInt  (env, player, b.mArmor,       0);
+
+    const std::string name = ReadEntityName(env, b, player);
+    CopyField(snap.username, name.c_str());
+
+    // Food/saturation live on Player.getFoodData() in MojMap and on
+    // PlayerEntity.getHungerManager() in Yarn - two more class lookups for two
+    // numbers. Left unbound here; wire it the same way the FOV chain is done
+    // above if you need it.
+    snap.foodLevel  = -1;
+    snap.saturation = -1.0f;
+
+    // Ping requires walking Minecraft.getConnection() -> ClientPacketListener
+    // -> getPlayerInfo(UUID) -> PlayerInfo.getLatency(), which needs the local
+    // player's UUID as well. Deliberately not sampled - published as -1 so the
+    // UI can show "n/a" rather than a fabricated number.
+    snap.ping = -1;
+}
+
+void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject localPlayer,
+                    WorldSnapshot& snap) {
+    snap.entityCount = 0;
+    if (!b.mEntities) return;
+
+    jvm::LocalFrame outer(env, 16);
+
+    jobject level = env->GetObjectField(client, b.fLevel);
+    if (!level) return;
+
+    jobject iterable = env->CallObjectMethod(level, b.mEntities);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!iterable) return;
+
+    jobject iterator = env->CallObjectMethod(iterable, b.mIterator);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!iterator) return;
+
+    while (snap.entityCount < kMaxEntities) {
+        const jboolean more = env->CallBooleanMethod(iterator, b.mHasNext);
+        if (env->ExceptionCheck()) {
+            // Almost always ConcurrentModificationException: we are walking a
+            // live view of the entity list from a thread that is not the client
+            // thread, and the client mutated it mid-iteration. Dropping the rest
+            // of this capture is safe; the frame epoch check also rejects the
+            // entire capture when a game update overlapped this iteration.
+            env->ExceptionClear();
+            break;
+        }
+        if (more != JNI_TRUE) break;
+
+        // One frame per entity: getName() alone allocates several refs, and 256
+        // iterations would otherwise blow past HotSpot's local ref table.
+        jvm::LocalFrame frame(env, 24);
+
+        jobject entity = env->CallObjectMethod(iterator, b.mNext);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); break; }
+        if (!entity) continue;
+
+        // Skip our own body by reference identity. The previous check compared
+        // the distance from the camera, which is wrong the moment you go into
+        // third person - the camera sits metres behind the player and the local
+        // body then gets a box like any other entity.
+        if (localPlayer && env->IsSameObject(entity, localPlayer)) continue;
+
+        EntitySnapshot record{};
+        record.x = CallDouble(env, entity, b.mGetX);
+        record.y = CallDouble(env, entity, b.mGetY);
+        record.z = CallDouble(env, entity, b.mGetZ);
+
+        record.width    = CallFloat(env, entity, b.mBbWidth,  0.6f);
+        record.height   = CallFloat(env, entity, b.mBbHeight, 1.8f);
+        record.yaw      = CallFloat(env, entity, b.mEntityYaw, 0.0f);
+        record.entityId = static_cast<std::uint32_t>(CallInt(env, entity, b.mGetId, 0));
+
+        if (b.clsLiving && env->IsInstanceOf(entity, b.clsLiving)) {
+            record.flags |= kEntityIsLiving;
+            record.health    = CallFloat(env, entity, b.mHealth,    0.0f);
+            record.maxHealth = CallFloat(env, entity, b.mMaxHealth, 20.0f);
+        }
+        if (b.clsPlayer && env->IsInstanceOf(entity, b.clsPlayer)) record.flags |= kEntityIsPlayer;
+        if (b.clsEnemy  && env->IsInstanceOf(entity, b.clsEnemy))  record.flags |= kEntityIsHostile;
+        SampleEntityGeometry(env, b, entity, snap.partialTick, record);
+        const double dx = record.x - snap.camX, dy = record.y - snap.camY, dz = record.z - snap.camZ;
+        record.distance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
+
+        const std::string name = ReadEntityName(env, b, entity);
+        CopyField(record.name, name.c_str());
+
+        snap.entities[snap.entityCount++] = record;
+    }
+}
+
+// Reads a Text/Component off any object that returns one, then stringifies it.
+std::string ReadTextFrom(JNIEnv* env, const Bindings& b, jobject owner, jmethodID getter) {
+    if (!owner || !getter) return {};
+
+    jvm::LocalFrame frame(env, 8);
+
+    jobject component = env->CallObjectMethod(owner, getter);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return {}; }
+    if (!component) return {};
+
+    jmethodID toText = b.mTextToString ? b.mTextToString : b.mObjToString;
+    if (!toText) return {};
+
+    auto text = static_cast<jstring>(env->CallObjectMethod(component, toText));
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return {}; }
+    if (!text) return {};
+
+    return jvm::JStringToUtf8(env, text);
+}
+
+// "effect.minecraft.speed" -> "Speed"; "item.minecraft.oak_log" -> "Oak Log".
+std::string PrettyTranslationKey(const std::string& key) {
+    const std::size_t dot = key.find_last_of('.');
+    std::string       out = (dot == std::string::npos) ? key : key.substr(dot + 1);
+
+    bool capitalise = true;
+    for (char& c : out) {
+        if (c == '_') { c = ' '; capitalise = true; }
+        else if (capitalise) { c = static_cast<char>(::toupper(static_cast<unsigned char>(c))); capitalise = false; }
+    }
+    return out;
+}
+
+void SampleEquipment(JNIEnv* env, const Bindings& b, jobject player, WorldSnapshot& snap) {
+    if (!b.mGetEquipped) return;
+
+    for (int slot = 0; slot < static_cast<int>(kSlotCount); ++slot) {
+        jobject slotConstant = b.slotConstants[slot];
+        if (!slotConstant) continue;
+
+        jvm::LocalFrame frame(env, 16);
+
+        jobject stack = env->CallObjectMethod(player, b.mGetEquipped, slotConstant);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+        if (!stack) continue;
+
+        // An empty slot returns the ItemStack.EMPTY singleton rather than null.
+        if (b.mItemIsEmpty) {
+            const jboolean empty = env->CallBooleanMethod(stack, b.mItemIsEmpty);
+            if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+            if (empty == JNI_TRUE) continue;
+        }
+
+        ItemSnapshot& record = snap.equipment[slot];
+        record.present = 1;
+        record.count   = CallInt(env, stack, b.mItemCount, 1);
+        record.damage  = CallInt(env, stack, b.mItemDamage, 0);
+
+        // Only trust maxDamage when the item is actually damageable; blocks and
+        // food report a max of 0 and must not render a durability bar.
+        bool damageable = true;
+        if (b.mItemIsDamageable) {
+            const jboolean d = env->CallBooleanMethod(stack, b.mItemIsDamageable);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else damageable = (d == JNI_TRUE);
+        }
+        record.maxDamage = damageable ? CallInt(env, stack, b.mItemMaxDamage, 0) : 0;
+
+        CopyField(record.name, ReadTextFrom(env, b, stack, b.mItemName).c_str());
+    }
+}
+
+void SampleEffects(JNIEnv* env, const Bindings& b, jobject player, WorldSnapshot& snap) {
+    snap.effectCount = 0;
+    if (!b.mGetStatusEffects || !b.mIterator) return;
+
+    jvm::LocalFrame outer(env, 16);
+
+    // Collection extends Iterable, so the Iterable.iterator() id works here.
+    jobject collection = env->CallObjectMethod(player, b.mGetStatusEffects);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!collection) return;
+
+    jobject iterator = env->CallObjectMethod(collection, b.mIterator);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!iterator) return;
+
+    while (snap.effectCount < kMaxEffects) {
+        const jboolean more = env->CallBooleanMethod(iterator, b.mHasNext);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); break; }
+        if (more != JNI_TRUE) break;
+
+        jvm::LocalFrame frame(env, 16);
+
+        jobject instance = env->CallObjectMethod(iterator, b.mNext);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); break; }
+        if (!instance) continue;
+
+        EffectSnapshot record{};
+        record.amplifier     = CallInt(env, instance, b.mEffAmplifier, 0);
+        record.durationTicks = CallInt(env, instance, b.mEffDuration, 0);
+
+        if (b.mEffAmbient) {
+            const jboolean ambient = env->CallBooleanMethod(instance, b.mEffAmbient);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else record.ambient = (ambient == JNI_TRUE) ? 1u : 0u;
+        }
+
+        // getTranslationKey avoids the RegistryEntry -> StatusEffect -> Text
+        // chain entirely: one call, one string, no extra classes to resolve.
+        if (b.mEffTransKey) {
+            auto key = static_cast<jstring>(env->CallObjectMethod(instance, b.mEffTransKey));
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (key) {
+                CopyField(record.name, PrettyTranslationKey(jvm::JStringToUtf8(env, key)).c_str());
+            }
+        }
+
+        snap.effects[snap.effectCount++] = record;
+    }
+}
+
+void SampleTarget(JNIEnv* env, const Bindings& b, jobject client, WorldSnapshot& snap) {
+    snap.hasTarget      = 0;
+    snap.targetEntityId = 0;
+    if (!b.fTargetedEntity) return;
+
+    jvm::LocalFrame frame(env, 16);
+
+    // Minecraft populates this itself from the crosshair pick, already clamped
+    // to the player's interaction range - so non-null IS "in reach", by the
+    // game's own definition rather than ours.
+    jobject target = env->GetObjectField(client, b.fTargetedEntity);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!target) return;
+
+    snap.hasTarget      = 1;
+    snap.targetEntityId = static_cast<std::uint32_t>(CallInt(env, target, b.mGetId, 0));
+
+    const double dx = CallDouble(env, target, b.mGetX) - snap.camX;
+    const double dy = CallDouble(env, target, b.mGetY) - snap.camY;
+    const double dz = CallDouble(env, target, b.mGetZ) - snap.camZ;
+    snap.targetDistance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
+
+    if (b.clsLiving && env->IsInstanceOf(target, b.clsLiving)) {
+        snap.targetHealth    = CallFloat(env, target, b.mHealth, 0.0f);
+        snap.targetMaxHealth = CallFloat(env, target, b.mMaxHealth, 0.0f);
+    }
+
+    CopyField(snap.targetName, ReadEntityName(env, b, target).c_str());
+}
+
+void SampleHeap(JNIEnv* env, const Bindings& b, WorldSnapshot& snap) {
+    if (!b.mGetRuntime || !b.mTotalMemory || !b.mFreeMemory) return;
+
+    jvm::LocalFrame frame(env, 4);
+
+    jobject runtime = env->CallStaticObjectMethod(b.clsRuntime, b.mGetRuntime);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    if (!runtime) return;
+
+    const jlong total = env->CallLongMethod(runtime, b.mTotalMemory);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+    const jlong freeBytes = env->CallLongMethod(runtime, b.mFreeMemory);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+
+    snap.heapUsedBytes = static_cast<std::int64_t>(total - freeBytes);
+
+    if (b.mMaxMemory) {
+        const jlong max = env->CallLongMethod(runtime, b.mMaxMemory);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        else snap.heapMaxBytes = static_cast<std::int64_t>(max);
+    }
+}
+
+// Sweeps a cube around the player for the requested block kinds.
+//
+// This is by far the most expensive thing the agent does - a radius of 16 is
+// 35937 getBlockState calls - so it is throttled by scanIntervalMs and only
+// runs at all when the overlay has asked for at least one kind. Positions are
+// walked with a single reusable BlockPos.Mutable, and every local ref is freed
+// immediately rather than relying on a frame, because 36k live refs would
+// overflow the local reference table long before the frame popped.
+// Resumable scanner. Doing the whole cube in one call meant ~36k JNI calls in a
+// single burst at radius 16, which stalls the sampler AND contends with the
+// client thread for Minecraft's chunk storage - the game itself stutters. This
+// walks one horizontal slice per step instead, so the work is spread over many
+// sampler iterations and each one stays sub-millisecond.
+struct BlockScanner {
+    int           radius  = 0;
+    int           baseX   = 0, baseY = 0, baseZ = 0;
+    int           nextDy  = 0;      // slice cursor, 0 .. 2*radius
+    std::uint32_t mask    = 0;
+    bool          running = false;
+
+    std::vector<BlockSnapshot> accum;
+
+    void Begin(int r, std::uint32_t m, const WorldSnapshot& snap) {
+        radius  = r;
+        mask    = m;
+        baseX   = static_cast<int>(std::floor(snap.posX));
+        baseY   = static_cast<int>(std::floor(snap.posY));
+        baseZ   = static_cast<int>(std::floor(snap.posZ));
+        nextDy  = 0;
+        running = true;
+        accum.clear();
+    }
+
+    // Returns true once the full cube has been walked.
+    bool Step(JNIEnv* env, const Bindings& b, jobject client, BlockKindCache& cache, int sliceBudget) {
+        if (!running) return true;
+        if (!b.mGetBlockState || !b.mGetBlock || !b.mMutableSet || !b.mMutableCtor) {
+            running = false;
+            return true;
+        }
+
+        jvm::LocalFrame frame(env, 16);
+
+        jobject level = env->GetObjectField(client, b.fLevel);
+        if (!level) { running = false; return true; }
+
+        jobject cursor = env->NewObject(b.clsPosMut, b.mMutableCtor);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); running = false; return true; }
+        if (!cursor) { running = false; return true; }
+
+        const int span = 2 * radius + 1;
+
+        for (int slice = 0; slice < sliceBudget && nextDy < span; ++slice, ++nextDy) {
+            const int y = baseY - radius + nextDy;
+            if (y < -64 || y > 320) continue;   // outside any 1.21 world height
+
+            for (int dx = 0; dx < span && accum.size() < kMaxBlocks; ++dx) {
+                for (int dz = 0; dz < span && accum.size() < kMaxBlocks; ++dz) {
+                    const int x = baseX - radius + dx;
+                    const int z = baseZ - radius + dz;
+
+                    env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+
+                    jobject state = env->CallObjectMethod(level, b.mGetBlockState, cursor);
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+                    if (!state) continue;
+
+                    // isAir() is skipped deliberately: it is a third JNI call on
+                    // every position, and underground almost nothing is air. The
+                    // kind cache already answers "not interesting" for stone in
+                    // one pointer comparison, so going straight to getBlock is
+                    // a third fewer calls across solid terrain.
+                    jobject block = env->CallObjectMethod(state, b.mGetBlock);
+                    env->DeleteLocalRef(state);
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+                    if (!block) continue;
+
+                    const std::int8_t kind = cache.Lookup(env, b, block);
+                    env->DeleteLocalRef(block);
+
+                    if (kind < 0) continue;
+                    if (!(mask & (1u << static_cast<std::uint32_t>(kind)))) continue;
+
+                    BlockSnapshot record{};
+                    record.x    = static_cast<float>(x);
+                    record.y    = static_cast<float>(y);
+                    record.z    = static_cast<float>(z);
+                    record.kind = static_cast<std::uint8_t>(kind);
+                    accum.push_back(record);
+                }
+            }
+        }
+
+        env->DeleteLocalRef(cursor);
+
+        if (nextDy >= span || accum.size() >= kMaxBlocks) {
+            running = false;
+            return true;
+        }
+        return false;
+    }
+};
+
+// ---------------------------------------------------------------------------
+// Auto totem
+//
+// THREADING: this is the only feature that writes to the client. clickSlot
+// mutates the ScreenHandler and sends a packet, and we call it from the sampler
+// thread rather than Minecraft's. The strictly correct route is to schedule the
+// call onto the client thread with MinecraftClient.execute(Runnable), which
+// needs a Java Runnable instance - and creating one from JNI means defining a
+// class at runtime from embedded bytecode.
+//
+// Guards that make the direct call defensible in the meantime:
+//   * only when no screen is open (currentScreen == null), so nothing is
+//     iterating the handler's slots for rendering while we mutate them,
+//   * throttled, so a desync cannot turn into a click storm,
+//   * only when the offhand actually lacks a totem and one exists in the pack.
+// ---------------------------------------------------------------------------
+// Resolves the two pieces that are usually not loaded yet at bind time.
+//
+// ClientPlayerInteractionManager and SlotActionType only get class-loaded once
+// you actually join a world, while BindMappingSet typically runs at the main
+// menu. Binding them once at startup therefore fails permanently. Retrying here
+// is cheap because the caller is throttled to a few times per second.
+bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
+    if (b.mClickSlot && b.swapAction) return true;
+    if (!b.set) return false;
+
+    const mappings::MappingSet& set = *b.set;
+    const std::string           prefix = std::string(set.id) + ".";
+
+    if (!b.clsInteractionMgr) {
+        b.clsInteractionMgr = SoftClass(env, (prefix + "interact").c_str(), set.classes.interactionMgr);
+    }
+    if (!b.clsSlotAction) {
+        b.clsSlotAction = SoftClass(env, (prefix + "slotaction").c_str(), set.classes.slotAction);
+    }
+
+    if (b.clsInteractionMgr && !b.mClickSlot) {
+        b.mClickSlot = jvm::TryMethod(env, b.clsInteractionMgr,
+                                      set.methodClickSlot.name, set.methodClickSlot.signature, false);
+    }
+    if (b.clsSlotAction && !b.swapAction) {
+        if (jfieldID swap = jvm::TryField(env, b.clsSlotAction, set.fieldSwapAction.name,
+                                          set.fieldSwapAction.signature, /*isStatic=*/true)) {
+            jobject local = env->GetStaticObjectField(b.clsSlotAction, swap);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (local) { b.swapAction = env->NewGlobalRef(local); env->DeleteLocalRef(local); }
+        }
+    }
+
+    if (b.mClickSlot && b.swapAction) {
+        MCOV_LOG_INFO("auto totem: clickSlot and SWAP bound (resolved after joining a world)");
+        return true;
+    }
+    return false;
+}
+
+bool TryAutoTotem(JNIEnv* env, Bindings& b, jobject client, jobject player,
+                  const WorldSnapshot& snap) {
+    if (!EnsureTotemBindings(env, b)) return false;
+    if (!b.mClickSlot || !b.swapAction || !b.fInteractionMgr || !b.fInventory || !b.fSyncId ||
+        !b.mInvGetStack || !b.mInvSize || !b.mStackGetItem || !b.mItemTransKey) {
+        return false;
+    }
+
+    // Offhand already holding a totem? Checked against the *translation key* of
+    // the actual offhand stack, not the display name we sampled - the display
+    // name is localised, so a German client ("Totem der Unsterblichkeit") or any
+    // other language would not match a hardcoded "Totem".
+    if (b.mGetEquipped && b.slotConstants[kSlotOffHand] && b.mStackGetItem && b.mItemTransKey) {
+        jvm::LocalFrame offFrame(env, 8);
+        jobject offStack = env->CallObjectMethod(player, b.mGetEquipped, b.slotConstants[kSlotOffHand]);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        else if (offStack) {
+            jobject offItem = env->CallObjectMethod(offStack, b.mStackGetItem);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (offItem) {
+                auto key = static_cast<jstring>(env->CallObjectMethod(offItem, b.mItemTransKey));
+                if (env->ExceptionCheck()) env->ExceptionClear();
+                else if (key &&
+                         jvm::JStringToUtf8(env, key).find("totem_of_undying") != std::string::npos) {
+                    return false;   // already holding one
+                }
+            }
+        }
+    }
+    (void)snap;
+
+    jvm::LocalFrame frame(env, 24);
+
+    // A GUI being open means the client thread may be walking these slots.
+    if (!b.fCurrentScreen || (*b.profile->guiClass && !b.fGui)) return false;
+    jobject screenOwner = b.fGui ? env->GetObjectField(client, b.fGui) : client;
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    if (!screenOwner) return false;
+    jobject screen = env->GetObjectField(screenOwner, b.fCurrentScreen);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    if (screen) return false;
+
+    jobject inventory = env->GetObjectField(player, b.fInventory);
+    if (!inventory) return false;
+
+    const jint size = env->CallIntMethod(inventory, b.mInvSize);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+
+    int found = -1;
+    for (jint i = 0; i < size && i < 36; ++i) {     // main inventory + hotbar only
+        jvm::LocalFrame slotFrame(env, 8);
+
+        jobject stack = env->CallObjectMethod(inventory, b.mInvGetStack, i);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+        if (!stack) continue;
+
+        if (b.mItemIsEmpty) {
+            const jboolean empty = env->CallBooleanMethod(stack, b.mItemIsEmpty);
+            if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+            if (empty == JNI_TRUE) continue;
+        }
+
+        jobject item = env->CallObjectMethod(stack, b.mStackGetItem);
+        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+        if (!item) continue;
+
+        auto key = static_cast<jstring>(env->CallObjectMethod(item, b.mItemTransKey));
+        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+        if (!key) continue;
+
+        // Translation key, so this does not depend on the client's language.
+        if (jvm::JStringToUtf8(env, key).find("totem_of_undying") != std::string::npos) {
+            found = static_cast<int>(i);
+            break;
+        }
+    }
+    if (found < 0) return false;
+
+    jobject manager = env->GetObjectField(client, b.fInteractionMgr);
+    if (!manager) return false;
+
+    jobject handler = b.fScreenHandler ? env->GetObjectField(player, b.fScreenHandler) : nullptr;
+    if (!handler) return false;
+
+    const jint syncId = env->GetIntField(handler, b.fSyncId);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+
+    // PlayerInventory index -> player ScreenHandler slot id:
+    //   0-8   hotbar        -> 36-44
+    //   9-35  main          -> 9-35 (unchanged)
+    const int slotId = (found < 9) ? (36 + found) : found;
+
+    // Button 40 with SWAP is the offhand swap.
+    env->CallVoidMethod(manager, b.mClickSlot, syncId, slotId, 40, b.swapAction, player);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        return false;
+    }
+    return true;
+}
+
+void SampleWorldMeta(JNIEnv* env, const Bindings& b, jobject client, WorldSnapshot& snap) {
+    jvm::LocalFrame frame(env, 12);
+
+    // Dimension: level.dimension() gives a ResourceKey whose toString() already
+    // reads like "ResourceKey[minecraft:dimension / minecraft:overworld]".
+    // Going through java.lang.Object.toString() keeps this mapping-independent.
+    if (b.mDimension && b.mObjToString) {
+        jobject level = env->GetObjectField(client, b.fLevel);
+        if (level) {
+            jobject key = env->CallObjectMethod(level, b.mDimension);
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            else if (key) {
+                auto text = static_cast<jstring>(env->CallObjectMethod(key, b.mObjToString));
+                if (env->ExceptionCheck()) env->ExceptionClear();
+                else if (text) CopyField(snap.dimension, jvm::JStringToUtf8(env, text).c_str());
+            }
+        }
+    }
+
+    // Current server is null in singleplayer - not an error.
+    if (b.mCurrentServer && b.fServerAddress) {
+        jobject server = env->CallObjectMethod(client, b.mCurrentServer);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        else if (server) {
+            auto address = static_cast<jstring>(env->GetObjectField(server, b.fServerAddress));
+            if (address) CopyField(snap.serverAddress, jvm::JStringToUtf8(env, address).c_str());
+        } else {
+            CopyField(snap.serverAddress, "singleplayer");
+        }
+    }
+
+    if (b.fFps) {
+        const jint fps = env->GetStaticIntField(b.client.minecraftClass, b.fFps);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        else snap.fps = static_cast<int>(fps);
+    } else {
+        snap.fps = -1;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sampler thread
+// ---------------------------------------------------------------------------
+void SamplerThread() {
+    // Attach ONCE for the thread's whole lifetime. Attaching and detaching every
+    // frame would be far more expensive than the sampling itself and would churn
+    // the VM's thread-local JNI state on every sample.
+    jvm::ScopedEnv scope("mcov-sampler");
+    if (!scope.ok()) {
+        MCOV_LOG_ERROR("sampler could not attach to the JVM; giving up");
+        SetStatus(AgentStatus::MappingsFailed);
+        return;
+    }
+    JNIEnv* env = scope.get();
+    MCOV_LOG_INFO("sampler attached (owns attachment: %s)", scope.ownsAttachment() ? "yes" : "no");
+
+    Bindings       bindings;
+    BlockKindCache blockCache;
+    BlockScanner   scanner;
+    WorldSnapshot  snapshot{};
+    std::uint64_t  frame           = 0;
+    int            resolveAttempts = 0;
+
+    // Block results persist between scans so the ESP does not blink at the
+    // game frame cadence while the scanner runs at ~1 Hz.
+    static BlockSnapshot cachedBlocks[kMaxBlocks];
+    std::uint32_t        lastBlocks    = 0;
+    std::uint64_t        nextScanTick  = 0;
+    std::uint64_t        nextTotemTick  = 0;
+    bool                 totemAnnounced = false;
+    bool                 syncAttempted = false;
+    std::uint64_t        acceptedEpoch = 0;
+    std::uint64_t        nextHudTick = 0;
+    std::uint64_t        nextHeartbeatTick = 0;
+    std::uint64_t        lastCaptureTick = 0;
+    std::uint64_t        waitingSinceTick = 0;
+    bool                 waitAnnounced = false;
+
+    LARGE_INTEGER counter{};
+    auto awaitingCapture = [&](const FrameSync::Stamp& stamp) {
+        const auto now = ::GetTickCount64();
+        if (!lastCaptureTick || now - lastCaptureTick > 250) SetStatus(AgentStatus::WaitingForFrame);
+        if (!waitingSinceTick) waitingSinceTick = now;
+        if (!waitAnnounced && now - waitingSinceTick >= 2000) {
+            MCOV_LOG_WARN("waiting for a coherent camera/entity frame (epoch %llu); worker heartbeat remains active",
+                          static_cast<unsigned long long>(stamp.rawSequence));
+            waitAnnounced = true;
+        }
+    };
+
+    while (!g_stop.load(std::memory_order_acquire) &&
+           !jvm::Runtime::Instance().shuttingDown()) {
+
+        // A discarded geometry capture must not look like a dead connection.
+        // Keep liveness separate while loading, paused or awaiting the camera.
+        const auto loopNow = ::GetTickCount64();
+        if (loopNow >= nextHeartbeatTick) {
+            if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
+            nextHeartbeatTick = loopNow + 100;
+        }
+
+        // Honour overlay -> agent control bits.
+        if (auto* block = g_channel.block()) {
+            const std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
+            if (flags & kCtrlRequestUnload) {
+                MCOV_LOG_INFO("overlay requested unload");
+                break;
+            }
+            if (flags & kCtrlPauseSampling) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                continue;
+            }
+        }
+
+        // Lazily bind. Minecraft's classes are not loaded yet if the agent went
+        // in at JVM start, so this keeps retrying until one mapping set matches.
+        if (!bindings.ready) {
+            SetStatus(resolveAttempts >= 20 ? AgentStatus::MappingsFailed : AgentStatus::ResolvingMappings);
+            for (const auto& profile : mappings::kRuntimeProfiles) {
+                if (BindMappingSet(env, profile, bindings)) break;
+            }
+            if (!bindings.ready) {
+                if (++resolveAttempts == 20) {
+                    MCOV_LOG_ERROR("no runtime profile matched after %d attempts. Supported: "
+                                   "26.2, 1.21.11, 1.21.1, 1.20.1; see docs/compatibility.md",
+                                   resolveAttempts);
+                    SetStatus(AgentStatus::MappingsFailed);
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                continue;
+            }
+        }
+        if (!syncAttempted) {
+            syncAttempted = true;
+            if (g_frameSync.Install(env))
+                MCOV_LOG_INFO("frame synchronization active: %s; mixed render/tick snapshots are rejected", bindings.set->id);
+            else MCOV_LOG_WARN("frame synchronization unavailable; using verified camera double-reads");
+        }
+
+        jvm::Error error;
+        jobject    client = jvm::demo::GetClientInstance(env, bindings.client, &error);
+        if (!client) {
+            SetStatus(AgentStatus::NoClientInstance);
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            continue;
+        }
+
+        {
+            jvm::LocalFrame frame_guard(env, 16);
+
+            WorldSnapshot candidate = snapshot; // retain slow HUD data between geometry frames
+            candidate.entityCount = 0;
+            const auto stamp = g_frameSync.Read(env);
+            jobject player = env->GetObjectField(client, bindings.fPlayer);
+            if (g_frameSync.enabled() && player && (!stamp.sequence || stamp.sequence == acceptedEpoch)) {
+                awaitingCapture(stamp);
+                env->DeleteLocalRef(client);
+                g_frameSync.Wait();
+                continue;
+            }
+            ::QueryPerformanceCounter(&counter);
+            candidate.captureQpc = stamp.sequence ? stamp.cameraQpc : counter.QuadPart;
+            CopyField(candidate.gameVersion, bindings.profile->version);
+            CopyField(candidate.mappingProfile, bindings.set->id);
+
+            SampleCamera(env, bindings, client, candidate);
+
+            if (player) {
+                SampleEntities(env, bindings, client, player, candidate);
+                bool coherent = g_frameSync.enabled() ? g_frameSync.StillCurrent(env, stamp) : true;
+                if (!g_frameSync.enabled()) {
+                    WorldSnapshot verify{};
+                    SampleCamera(env, bindings, client, verify);
+                    coherent = candidate.camX == verify.camX && candidate.camY == verify.camY && candidate.camZ == verify.camZ &&
+                               candidate.yawDeg == verify.yawDeg && candidate.pitchDeg == verify.pitchDeg &&
+                               candidate.partialTick == verify.partialTick && candidate.fovDeg == verify.fovDeg;
+                }
+                if (!coherent) {
+                    awaitingCapture(stamp);
+                    env->DeleteLocalRef(client);
+                    g_frameSync.Wait(1);
+                    continue;
+                }
+                acceptedEpoch = stamp.sequence;
+                lastCaptureTick = ::GetTickCount64();
+                waitingSinceTick = 0;
+                waitAnnounced = false;
+                candidate.frameIndex = ++frame;
+                snapshot = candidate;
+                SetStatus(AgentStatus::Running);
+                // Publish geometry BEFORE equipment, telemetry and block scanning.
+                // These slower modules must not add latency to the entity anchor.
+                if (auto* block = g_channel.block()) PublishSnapshot(block, snapshot);
+                const auto hudNow = ::GetTickCount64();
+                if (hudNow >= nextHudTick) {
+                    SampleLocalPlayer(env, bindings, player, snapshot);
+                    SampleWorldMeta(env, bindings, client, snapshot);
+                    SampleEquipment(env, bindings, player, snapshot);
+                    SampleEffects(env, bindings, player, snapshot);
+                    SampleHeap(env, bindings, snapshot);
+                    nextHudTick = hudNow + 100;
+                }
+                SampleTarget(env, bindings, client, snapshot);
+
+                // Block scanning runs on its own, much slower cadence; between
+                // scans the previous result is republished unchanged.
+                if (auto* block = g_channel.block()) {
+                    const std::uint32_t mask = block->scanMask.load(std::memory_order_acquire);
+                    if (mask) {
+                        const std::uint32_t interval =
+                            std::max(200u, block->scanIntervalMs.load(std::memory_order_acquire));
+                        const std::uint64_t now = ::GetTickCount64();
+
+                        if (scanner.running) {
+                            // A pass is in flight: advance it by a few slices and
+                            // publish the previous result meanwhile, so the ESP
+                            // does not blink while the sweep completes.
+                            if (scanner.Step(env, bindings, client, blockCache, /*sliceBudget=*/2)) {
+                                lastBlocks = static_cast<std::uint32_t>(
+                                    std::min<std::size_t>(scanner.accum.size(), kMaxBlocks));
+                                if (lastBlocks) {
+                                    std::memcpy(cachedBlocks, scanner.accum.data(),
+                                                sizeof(BlockSnapshot) * lastBlocks);
+                                }
+                                nextScanTick = now + interval;
+                            }
+                        } else if (now >= nextScanTick) {
+                            const int radius = static_cast<int>(
+                                std::clamp(block->scanRadius.load(std::memory_order_acquire), 4u, 48u));
+                            scanner.Begin(radius, mask, snapshot);
+                        }
+
+                        snapshot.blockCount = lastBlocks;
+                        if (lastBlocks) {
+                            std::memcpy(snapshot.blocks, cachedBlocks,
+                                        sizeof(BlockSnapshot) * lastBlocks);
+                        }
+                    } else {
+                        lastBlocks      = 0;
+                        scanner.running = false;
+                    }
+                }
+
+                // Auto totem, throttled hard: it writes to the client, so a
+                // failed swap must never turn into a click storm.
+                if (auto* block = g_channel.block()) {
+                    const std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
+                    if (flags & kCtrlAutoTotem) {
+                        const std::uint64_t now = ::GetTickCount64();
+                        if (now >= nextTotemTick) {
+                            if (!totemAnnounced) {
+                                MCOV_LOG_INFO("auto totem: enabled by the overlay, watching the offhand");
+                                totemAnnounced = true;
+                            }
+                            if (TryAutoTotem(env, bindings, client, player, snapshot)) {
+                                MCOV_LOG_INFO("auto totem: swapped a totem into the offhand");
+                            }
+                            nextTotemTick = now + 400;
+                        }
+                    } else {
+                        totemAnnounced = false;
+                    }
+                }
+
+                SetStatus(AgentStatus::Running);
+            } else {
+                // In a menu / not in a world yet.
+                lastCaptureTick = 0;
+                waitingSinceTick = 0;
+                waitAnnounced = false;
+                snapshot = WorldSnapshot{};
+                snapshot.frameIndex = ++frame;
+                snapshot.captureQpc = counter.QuadPart;
+                CopyField(snapshot.gameVersion, bindings.profile->version);
+                CopyField(snapshot.mappingProfile, bindings.set->id);
+                SetStatus(AgentStatus::NoClientInstance);
+            }
+
+            if (auto* block = g_channel.block()) PublishSnapshot(block, snapshot);
+        }
+
+        env->DeleteLocalRef(client);
+
+        // Wake as soon as the next game camera is ready, rather than drifting
+        // against its frame cadence with a fixed 16 ms sleep.
+        g_frameSync.Wait(1);
+    }
+
+    SetStatus(AgentStatus::Detaching);
+    g_frameSync.Close(env);
+
+    // Release global refs while we still hold a valid env and are still attached.
+    // Doing this after DetachCurrentThread would corrupt the VM's ref table.
+    for (jobject& slot : bindings.slotConstants) {
+        if (slot) { env->DeleteGlobalRef(slot); slot = nullptr; }
+    }
+    blockCache.Release(env);
+    if (bindings.swapAction) { env->DeleteGlobalRef(bindings.swapAction); bindings.swapAction = nullptr; }
+    bindings.geometry.Release(env);
+    jvm::Runtime::Instance().ReleaseCachedRefs(env);
+
+    MCOV_LOG_INFO("sampler loop exited after %llu frames; detaching",
+                  static_cast<unsigned long long>(frame));
+    // ~ScopedEnv runs DetachCurrentThread here.
+}
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+void StopAgent(const char* reason) {
+    if (!g_started.exchange(false)) return;
+
+    MCOV_LOG_INFO("stopping agent (%s)", reason);
+
+    g_stop.store(true, std::memory_order_release);
+    jvm::Runtime::Instance().BeginShutdown();
+
+    if (g_sampler.joinable()) g_sampler.join();
+
+    // Belt and braces: the sampler detaches itself in ~ScopedEnv, but if anyone
+    // added another worker this is where we would find out.
+    if (!jvm::Runtime::Instance().WaitForThreadsDetached(3000)) {
+        MCOV_LOG_ERROR("proceeding with threads still attached - the VM may abort");
+    }
+
+    g_channel.Close();
+    MCOV_LOG_INFO("agent stopped cleanly");
+    mcov::log::Shutdown();
+}
+
+void JNICALL OnVmDeath(jvmtiEnv*, JNIEnv*) {
+    // Agent_OnUnload is not reliably invoked for dynamically attached agents, so
+    // VMDeath is the dependable shutdown signal. It fires while the VM is still
+    // alive enough for us to detach properly.
+    StopAgent("VMDeath");
+}
+
+jint StartAgent(JavaVM* vm, const char* /*options*/) {
+    if (g_started.exchange(true)) return JNI_OK;
+
+    mcov::log::Init("agent", AgentLogPath(), /*alsoConsole=*/false);
+    MCOV_LOG_INFO("=== mcov agent starting (pid %lu) ===", ::GetCurrentProcessId());
+
+    // 1. Adopt the VM we were handed. DiscoverVm()/JNI_GetCreatedJavaVMs would
+    //    also work from in here, but there is no reason to go looking for a
+    //    pointer the JVM just gave us.
+    jvm::Runtime::Instance().AdoptVm(vm);
+
+    // 2. JVMTI env. JVMTI_VERSION_1_2 is the baseline every modern HotSpot
+    //    accepts; GetLoadedClasses needs no extra capabilities, which keeps this
+    //    agent's footprint minimal.
+    void* rawJvmti = nullptr;
+    if (vm->GetEnv(&rawJvmti, JVMTI_VERSION_1_2) != JNI_OK || !rawJvmti) {
+        MCOV_LOG_ERROR("GetEnv(JVMTI_VERSION_1_2) failed - cannot install the class resolver");
+        g_started.store(false);
+        return JNI_ERR;
+    }
+    g_jvmti = static_cast<jvmtiEnv*>(rawJvmti);
+
+    jvmtiEventCallbacks callbacks{};
+    callbacks.VMDeath = &OnVmDeath;
+    g_jvmti->SetEventCallbacks(&callbacks, static_cast<jint>(sizeof(callbacks)));
+    g_jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_VM_DEATH, nullptr);
+
+    jvm::Runtime::Instance().SetFallbackClassResolver(&ResolveClassViaJvmti);
+
+    // 3. Shared memory, keyed on our own PID so the overlay can find us.
+    std::string ipcError;
+    if (!g_channel.CreateWriter(::GetCurrentProcessId(), &ipcError)) {
+        MCOV_LOG_ERROR("shared memory setup failed: %s", ipcError.c_str());
+        g_started.store(false);
+        return JNI_ERR;
+    }
+
+    // 4. Sampler.
+    g_stop.store(false, std::memory_order_release);
+    g_sampler = std::thread(&SamplerThread);
+
+    MCOV_LOG_INFO("agent ready");
+    return JNI_OK;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------------------
+// JVMTI entry points
+// ---------------------------------------------------------------------------
+extern "C" {
+
+// Loaded at JVM startup via -agentpath:mcov_agent.dll
+JNIEXPORT jint JNICALL Agent_OnLoad(JavaVM* vm, char* options, void* /*reserved*/) {
+    return StartAgent(vm, options);
+}
+
+// Loaded into a running JVM via VirtualMachine.loadAgentPath() - our normal path.
+JNIEXPORT jint JNICALL Agent_OnAttach(JavaVM* vm, char* options, void* /*reserved*/) {
+    return StartAgent(vm, options);
+}
+
+JNIEXPORT void JNICALL Agent_OnUnload(JavaVM* /*vm*/) {
+    StopAgent("Agent_OnUnload");
+}
+
+} // extern "C"
+
+// DllMain deliberately does nothing on detach: joining a thread or touching JNI
+// under the Windows loader lock is a classic self-inflicted deadlock. All real
+// teardown happens in OnVmDeath / Agent_OnUnload.
+BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
+    if (reason == DLL_PROCESS_ATTACH) ::DisableThreadLibraryCalls(module);
+    return TRUE;
+}

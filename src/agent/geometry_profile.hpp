@@ -1,0 +1,26 @@
+#pragma once
+#include "mappings.hpp"
+
+namespace mcov::mappings {
+enum class PartialTickSource { Camera, Client, CameraDelta };
+struct GeometryProfile {
+    const char* boundsClass;
+    const char* poseClass;
+    const char* walkClass;
+    const char* dimensionsClass;
+    const char* deltaClass;
+    const char* avatarOwnerClass;
+    const char* avatarStateClass;
+    const char* humanoids[5]; // zombie, skeleton, piglin, enderman, armour stand
+    PartialTickSource partialSource;
+    Member getBounds, minX, minY, minZ, maxX, maxY, maxZ;
+    Member oldX, oldY, oldZ;
+    Member bodyYaw, bodyYawOld, headPitch, headPitchOld;
+    Member getPose, poseStanding, poseCrouch, poseSwim, poseGlide, poseSleep;
+    Member isPassenger, walkState, walkSpeed, walkPosition;
+    Member getDimensions, dimensionHeight;
+    Member partialTick, getDelta, cameraEntity, avatarState;
+    Member walkDistance, walkDistanceOld, bob, bobOld;
+    Member runFrame, updateCamera;
+};
+} // namespace mcov::mappings

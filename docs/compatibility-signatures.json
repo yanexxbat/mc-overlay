@@ -1,0 +1,112 @@
+[
+  {
+    "profile": "mojmap-26.2",
+    "java": 25,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 36,
+    "client_sha1": "2dc72797acbc1b63fc16a11c4ac393605f453754",
+    "fov_source": "CameraFloat",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "mojmap-1.21.11",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 35,
+    "client_sha1": "ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd",
+    "fov_source": "RendererFloat",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "vanilla-1.21.11",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 35,
+    "client_sha1": "ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd",
+    "fov_source": "RendererFloat",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "intermediary-1.21.11",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 35,
+    "client_sha1": "ba2df812c2d12e0219c489c4cd9a5e1f0760f5bd",
+    "fov_source": "RendererFloat",
+    "namespace_mapping_sha256": "f45b9530d0becae596fd48743e3ee1733cc2cdc69128cdb7d8d3571de163ab87"
+  },
+  {
+    "profile": "mojmap-1.21.1",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "30c73b1c5da787909b2f73340419fdf13b9def88",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "vanilla-1.21.1",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "30c73b1c5da787909b2f73340419fdf13b9def88",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "intermediary-1.21.1",
+    "java": 21,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "30c73b1c5da787909b2f73340419fdf13b9def88",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": "e8bd6a4c39e235ee2dc73063558610775c72a2572fa0c6b32915b149074012a6"
+  },
+  {
+    "profile": "mojmap-1.20.1",
+    "java": 17,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "0c3ec587af28e5a785c0b4a7b8a30f9a8f78f838",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "vanilla-1.20.1",
+    "java": 17,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "0c3ec587af28e5a785c0b4a7b8a30f9a8f78f838",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": null
+  },
+  {
+    "profile": "intermediary-1.20.1",
+    "java": 17,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "0c3ec587af28e5a785c0b4a7b8a30f9a8f78f838",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": "26b60a7dac40e19609cdf095f7124a79ea426d8a84344bc8883c7210f0294799"
+  },
+  {
+    "profile": "forge-srg-1.20.1",
+    "java": 17,
+    "resolved_members": 70,
+    "missing_members": [],
+    "geometry_members": 34,
+    "client_sha1": "0c3ec587af28e5a785c0b4a7b8a30f9a8f78f838",
+    "fov_source": "RendererDouble",
+    "namespace_mapping_sha256": "f46d1050d8bed9046886b90a0d2fb80b4c6b5120fc35d32e5d37498dbe0a6d2a"
+  }
+]

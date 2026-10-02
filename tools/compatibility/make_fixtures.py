@@ -1,0 +1,215 @@
+"""Small synthetic classes for JNI regression tests; contains no game code.
+
+The fixtures use Java 17 bytecode and an isolated loader. They exercise real
+JNI method descriptors and return types, not a mock JNIEnv function table.
+"""
+from __future__ import annotations
+import json
+import re
+import struct
+import sys
+import zipfile
+from pathlib import Path
+from generate_profiles import owners, schema
+from geometry_schema import geometry_schema
+
+
+def u2(n): return struct.pack('>H', n)
+def u4(n): return struct.pack('>I', n)
+
+
+class Pool:
+    def __init__(self): self.entries, self.ids = [], {}
+    def add(self, key, value, wide=False):
+        if key in self.ids: return self.ids[key]
+        index = len(self.entries) + 1
+        self.ids[key] = index
+        self.entries.append(value)
+        if wide: self.entries.append(b'')
+        return index
+    def utf(self, text):
+        raw = text.encode()
+        return self.add(('utf', text), b'\x01' + u2(len(raw)) + raw)
+    def cls(self, name): return self.add(('cls', name), b'\x07' + u2(self.utf(name)))
+    def string(self, text): return self.add(('str', text), b'\x08' + u2(self.utf(text)))
+    def number(self, kind, value):
+        return self.add((kind, value), (b'\x06' if kind == 'D' else b'\x04') +
+                        struct.pack('>d' if kind == 'D' else '>f', value), kind == 'D')
+    def ref(self, kind, owner, name, desc):
+        cls = self.cls(owner)
+        nt = self.add(('nt', name, desc), b'\x0c' + u2(self.utf(name)) + u2(self.utf(desc)))
+        return self.add((kind, owner, name, desc), bytes([kind]) + u2(cls) + u2(nt))
+
+
+def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
+    cp = Pool()
+    this, parent, code_name = cp.cls(name), cp.cls(parent_name), cp.utf('Code')
+    compiled_fields = [u2(9 if static else 1) + u2(cp.utf(n)) + u2(cp.utf(d)) + u2(0)
+                       for (n, d), static in fields.items()]
+    methods = dict(methods)
+    methods[('<init>', '()V')] = False
+    compiled_methods = []
+    for (method, desc), static in methods.items():
+        special = specials.get((method, desc))
+        if method == '<init>':
+            code = b'\x2a\xb7' + u2(cp.ref(10, parent_name, '<init>', '()V')) + b'\xb1'
+        elif special and special[0] == 'field':
+            result = special[2][0]
+            code = b'\xb2' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae'}.get(result, b'\xb0')
+        elif special and special[0] == 'statics':
+            code = b''
+            for field, field_desc in special[1]:
+                code += b'\xbb' + u2(cp.cls(name)) + b'\x59\xb7' + u2(cp.ref(10, name, '<init>', '()V'))
+                code += b'\xb3' + u2(cp.ref(9, name, field, field_desc))
+            code += b'\xb1'
+        elif special and special[0] == 'string':
+            code = b'\x13' + u2(cp.string(special[1])) + b'\xb0'
+        elif special and special[0] == 'new':
+            owner = special[1]
+            code = b'\xbb' + u2(cp.cls(owner)) + b'\x59\xb7' + u2(cp.ref(10, owner, '<init>', '()V')) + b'\xb0'
+        elif special and special[0] == 'number':
+            kind, value = special[1:]
+            code = (b'\x14' if kind == 'D' else b'\x13') + u2(cp.number(kind, value)) + (b'\xaf' if kind == 'D' else b'\xae')
+        elif special and special[0] == 'nop':
+            code = b'\x00\xb1'
+        elif special and special[0] == 'camera_branch':
+            code = b'\x2b\xc6\x00\x04\xb1\x00\xb1'
+        else:
+            result = desc.split(')')[1][0]
+            code = {'V': b'\xb1', 'D': b'\x0e\xaf', 'F': b'\x0b\xae', 'J': b'\x09\xad',
+                    'L': b'\x01\xb0', '[': b'\x01\xb0'}.get(result, b'\x03\xac')
+        args = re.findall(r'\[*(?:L[^;]+;|[BCDFIJSZ])', desc[1:desc.index(')')])
+        locals_count = (0 if static else 1) + sum(2 if arg in ('D', 'J') else 1 for arg in args)
+        nested = u2(0)
+        if special and special[0] == 'camera_branch':
+            stack_map = u2(1) + b'\x05'  # same_frame at the null branch's offset 5
+            nested = u2(1) + u2(cp.utf('StackMapTable')) + u4(len(stack_map)) + stack_map
+        attr = u2(4) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
+        compiled_methods.append(u2(9 if static else 1) + u2(cp.utf(method)) + u2(cp.utf(desc)) + u2(1) +
+                                u2(code_name) + u4(len(attr)) + attr)
+    return (b'\xca\xfe\xba\xbe' + u2(0) + u2(61) + u2(len(cp.entries) + 1) + b''.join(cp.entries) +
+            u2(0x21) + u2(this) + u2(parent) + u2(0) + u2(len(compiled_fields)) + b''.join(compiled_fields) +
+            u2(len(compiled_methods)) + b''.join(compiled_methods) + u2(0))
+
+
+def read_profiles(path):
+    if path.suffix == '.json': return json.loads(path.read_text())
+    # Read the checked-in generated table so tests need no game downloads.
+    source = path.read_text()
+    sets = {}
+    for index, body in re.findall(r'inline constexpr MappingSet kProfileSet(\d+) = \[\] \{(.*?)\}\(\);', source, re.S):
+        sets[index] = {'id': re.search(r'set.id = "([^"]+)";', body)[1],
+                       'classes': dict(re.findall(r'set.classes.(\w+) = "([^"]+)";', body)),
+                       'members': {key: [name, desc] for key, name, desc in
+                                   re.findall(r'set.(\w+) = \{"([^"]*)", "([^"]*)"\};', body)}}
+    result = []
+    pattern = (r'\{&kProfileSet(\d+), "([^"]+)", (\d+), FovSource::(\w+),\s*'
+               r'"([^"]+)", \{"([^"]*)", "([^"]*)"\},\s*'
+               r'"([^"]+)", \{"([^"]*)", "([^"]*)"\},\s*'
+               r'"([^"]*)", \{"([^"]*)", "([^"]*)"\}, &kGeometry\d+\}')
+    for row in re.findall(pattern, source):
+        index, version, java, fov, vclass, current, csig, wclass, ident, isig, gui, gfield, gsig = row
+        result.append(dict(sets[index], version=version, java=int(java), fov=fov,
+                           version_class=vclass, current=[current, csig], world_class=wclass,
+                           version_id=[ident, isig], gui_class=gui, client_gui=[gfield, gsig]))
+        body = re.search(r'inline constexpr GeometryProfile kGeometry' + index + r' = \[\] \{(.*?)\}\(\);', source, re.S)[1]
+        classes = dict(re.findall(r'g\.(\w+) = "([^"]*)";', body))
+        humanoids = [name for _, name in re.findall(r'g\.humanoids\[(\d+)\] = "([^"]+)";', body)]
+        members = {key: [name, desc] for key, name, desc in re.findall(r'g\.(\w+) = \{"([^"]*)", "([^"]*)"\};', body)}
+        core_classes, _ = schema()
+        geometry_classes, _, definitions, partial = geometry_schema(version)
+        class_map = {canonical: result[-1]['classes'][role] for role, canonical in core_classes.items()}
+        class_map.update({canonical: classes[role] for role, canonical in geometry_classes.items() if canonical})
+        result[-1]['geometry'] = dict(classes=classes, humanoids=humanoids, members=members,
+            owners={key: class_map[definition[0]] for key, definition in definitions.items()},
+            kinds={key: definition[3:] for key, definition in definitions.items()}, partial_source=partial)
+    if len(result) != len(sets) or not result: raise ValueError('invalid generated profile table')
+    return result
+
+
+def generate(profiles_path, output):
+    output.mkdir(parents=True, exist_ok=True)
+    profiles = read_profiles(profiles_path)
+    for profile in profiles:
+        classes = {}
+        def cls(name):
+            return classes.setdefault(name, {'fields': {}, 'methods': {}, 'specials': {}})
+        def add(owner, kind, name, desc, static=False):
+            cls(owner)[kind][(name, desc)] = static
+            for reference in re.findall(r'L([^;]+);', desc):
+                if not reference.startswith('java/'): cls(reference)
+        owner_spec = owners(profile['classes'])
+        owner_spec['fieldSyncId'] = profile['members']['fieldScreenHandler'][1][1:-1]
+        if profile['fov'] == 'CameraFloat': owner_spec['methodRealFov'] = profile['classes']['camera']
+        if profile['gui_class']: owner_spec['fieldCurrentScreen'] = profile['gui_class']
+        for name in profile['classes'].values(): cls(name)
+        for key, (name, desc) in profile['members'].items():
+            add(owner_spec[key], 'methods' if key.startswith('method') else 'fields', name, desc,
+                key in ('methodGetInstance', 'fieldFps', 'fieldSwapAction') or key.startswith('slot'))
+        geometry = profile['geometry']
+        for name in geometry['classes'].values():
+            if name: cls(name)
+        for name in geometry['humanoids']: cls(name)
+        for key, (name, desc) in geometry['members'].items():
+            kind, static = geometry['kinds'][key]
+            add(geometry['owners'][key], kind, name, desc, static)
+        core = profile['classes']
+        cls(core['livingEntity'])['parent_name'] = core['entity']
+        cls(core['player'])['parent_name'] = core['livingEntity']
+        avatar_owner = geometry['classes']['avatarOwnerClass']
+        if avatar_owner: cls(avatar_owner)['parent_name'] = core['player']
+        cls(core['localPlayer'])['parent_name'] = avatar_owner or core['player']
+        for name in geometry['humanoids']: cls(name)['parent_name'] = core['livingEntity']
+        pose = geometry['classes']['poseClass']
+        constants = [tuple(geometry['members'][key]) for key in ('poseStanding', 'poseCrouch', 'poseSwim', 'poseGlide', 'poseSleep')]
+        add(pose, 'methods', '<clinit>', '()V', True)
+        cls(pose)['specials'][('<clinit>', '()V')] = ('statics', constants)
+        for key, backing in [('getBounds', 'testBounds'), ('getPose', 'testPose'), ('getDimensions', 'testDimensions'),
+                             ('avatarState', 'testAvatar')]:
+            if key not in geometry['members']: continue
+            member = geometry['members'][key]
+            owner = geometry['owners'][key]
+            desc = member[1].split(')')[1]
+            add(owner, 'fields', backing, desc, True)
+            cls(owner)['specials'][tuple(member)] = ('field', backing, desc)
+        for key, value in [('partialTick', .5), ('walkSpeed', .5), ('walkPosition', 1.5), ('headPitch', 10)]:
+            member = geometry['members'][key]
+            cls(geometry['owners'][key])['specials'][tuple(member)] = ('number', 'F', value)
+        for key in ('runFrame', 'updateCamera'):
+            member = geometry['members'][key]
+            cls(geometry['owners'][key])['specials'][tuple(member)] = ('camera_branch' if key == 'updateCamera' else 'nop',)
+        if 'getDelta' in geometry['members']:
+            member = geometry['members']['getDelta']
+            cls(core['client'])['specials'][tuple(member)] = ('new', geometry['classes']['deltaClass'])
+        opt_get = profile['members']['methodOptionGet']
+        add(core['optionValue'], 'fields', 'testValue', 'Ljava/lang/Object;', True)
+        cls(core['optionValue'])['specials'][tuple(opt_get)] = ('field', 'testValue', 'Ljava/lang/Object;')
+        add(profile['version_class'], 'methods', *profile['current'], True)
+        add(profile['world_class'], 'methods', *profile['version_id'])
+        cls(profile['version_class'])['specials'][tuple(profile['current'])] = ('new', profile['world_class'])
+        cls(profile['world_class'])['specials'][tuple(profile['version_id'])] = ('string', profile['version'])
+        for key, field, role in [('methodGetInstance', 'testInstance', 'client'),
+                                  ('methodGetCamera', 'testCamera', 'gameRenderer'),
+                                  ('methodCameraPosition', 'testPosition', 'camera')]:
+            member = profile['members'][key]
+            desc = member[1].split(')')[1]
+            owner = profile['classes'][role]
+            add(owner, 'fields', field, desc, True)
+            cls(owner)['specials'][tuple(member)] = ('field', field, desc)
+        for key, value in [('methodRealFov', 82.5), ('methodGetYaw', 29.25), ('methodGetPitch', -11.5)]:
+            member = profile['members'][key]
+            cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)
+        if profile['gui_class']:
+            add(profile['classes']['client'], 'fields', *profile['client_gui'])
+        for suffix in ('', '-field-camera'):
+            with zipfile.ZipFile(output / (profile['id'] + suffix + '.jar'), 'w') as jar:
+                for name, spec in classes.items():
+                    if suffix and name == core['camera']:
+                        spec = dict(spec, methods=dict(spec['methods']))
+                        spec['methods'].pop(tuple(profile['members']['methodCameraPosition']))
+                    jar.writestr(name + '.class', emit_class(name, **spec))
+    print(f'Generated {len(profiles) * 2} isolated JNI fixtures (accessor and field-only cameras).')
+
+
+if __name__ == '__main__':
+    generate(Path(sys.argv[1]), Path(sys.argv[2]))

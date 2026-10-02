@@ -1,0 +1,359 @@
+cmake_minimum_required(VERSION 3.20)
+project(mcov LANGUAGES CXX VERSION 0.1.0)
+enable_language(RC)
+configure_file(src/common/menu_fonts.rc.in "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" @ONLY)
+
+# ---------------------------------------------------------------------------
+# Two targets, deliberately separated:
+#
+#   mcov_overlay (exe) - runs as its own process. D3D11 + ImGui + Win32. Knows
+#                        nothing about JNI.
+#   mcov_agent   (dll) - runs INSIDE javaw.exe. JNI + JVMTI. Never links ImGui or a renderer.
+#
+# The split is not stylistic: JNI_GetCreatedJavaVMs and JavaVM* only mean
+# anything inside the JVM's own address space, so the JNI code physically cannot
+# live in the overlay process. See src/agent/jvm_interface.hpp.
+# ---------------------------------------------------------------------------
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "mcov targets Windows only (layered windows, Win32 process APIs).")
+endif()
+
+if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR
+        "A 64-bit build is required. Minecraft 1.21 runs on a 64-bit JVM, and JNI "
+        "has no cross-bitness path - a 32-bit agent simply cannot be loaded.")
+endif()
+
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+
+# ---------------------------------------------------------------------------
+# Build JDK 17+; attach runtime must match the game's Java major (17/21/25).
+# ---------------------------------------------------------------------------
+# MCOV_JAVA_HOME lets you pin the JDK explicitly; otherwise we fall back to the
+# JAVA_HOME environment variable and then to CMake's own registry probing.
+set(MCOV_JAVA_HOME "" CACHE PATH "JDK 17+ root (contains include/jni.h and include/win32)")
+
+if(MCOV_JAVA_HOME)
+    set(ENV{JAVA_HOME} "${MCOV_JAVA_HOME}")
+endif()
+
+find_package(JNI REQUIRED)
+
+# FindJNI gives us the header dirs; we never link jvm.lib. The agent gets its
+# JNIEnv* from Agent_OnAttach, and the JNI_GetCreatedJavaVMs fallback path
+# resolves through GetProcAddress at runtime. Linking jvm.lib would add a hard
+# load-time dependency on a specific JDK for no benefit.
+if(NOT JNI_INCLUDE_DIRS)
+    message(FATAL_ERROR "JNI headers not found. Set -DMCOV_JAVA_HOME=<jdk17+ root>.")
+endif()
+
+# jvmti.h ships beside jni.h; verify it so a JRE-only path fails loudly here
+# rather than with a confusing include error later.
+find_file(MCOV_JVMTI_HEADER jvmti.h PATHS ${JNI_INCLUDE_DIRS} NO_DEFAULT_PATH)
+if(NOT MCOV_JVMTI_HEADER)
+    message(FATAL_ERROR
+        "jvmti.h not found next to jni.h. MCOV_JAVA_HOME must point at a full JDK, "
+        "not a JRE.")
+endif()
+
+# Report (and sanity-check) the JDK version from the release manifest.
+list(GET JNI_INCLUDE_DIRS 0 _mcov_jni_include)
+get_filename_component(MCOV_JDK_ROOT "${_mcov_jni_include}" DIRECTORY)
+if(EXISTS "${MCOV_JDK_ROOT}/release")
+    file(STRINGS "${MCOV_JDK_ROOT}/release" _mcov_release_lines REGEX "^JAVA_VERSION=")
+    if(_mcov_release_lines)
+        string(REGEX REPLACE "JAVA_VERSION=\"?([0-9]+).*" "\\1" MCOV_JDK_MAJOR "${_mcov_release_lines}")
+        message(STATUS "mcov: JDK ${MCOV_JDK_MAJOR} at ${MCOV_JDK_ROOT}")
+        if(MCOV_JDK_MAJOR LESS 17)
+            message(FATAL_ERROR "Build with a full JDK 17 or newer.")
+        endif()
+    endif()
+endif()
+
+# javac/jar build both the attach helper and the required frame synchronization JARs.
+find_package(Java 17 COMPONENTS Development REQUIRED)
+
+# ---------------------------------------------------------------------------
+# Third-party: Dear ImGui
+# ---------------------------------------------------------------------------
+include(FetchContent)
+
+# Keep the pinned ImGui API/font atlas version for this UI change.
+FetchContent_Declare(imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.91.9b
+    GIT_SHALLOW    TRUE)
+
+# ImGui ships no CMakeLists, so MakeAvailable only populates the source tree.
+FetchContent_MakeAvailable(imgui)
+
+add_library(imgui STATIC
+    ${imgui_SOURCE_DIR}/imgui.cpp
+    ${imgui_SOURCE_DIR}/imgui_draw.cpp
+    ${imgui_SOURCE_DIR}/imgui_tables.cpp
+    ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+    ${imgui_SOURCE_DIR}/imgui_demo.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
+    ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp)
+
+target_include_directories(imgui PUBLIC
+    ${imgui_SOURCE_DIR}
+    ${imgui_SOURCE_DIR}/backends)
+
+target_link_libraries(imgui PUBLIC d3d11 dxgi d3dcompiler)
+target_compile_features(imgui PUBLIC cxx_std_20)
+
+# ---------------------------------------------------------------------------
+# Shared compile settings
+# ---------------------------------------------------------------------------
+add_library(mcov_settings INTERFACE)
+
+target_compile_definitions(mcov_settings INTERFACE
+    WIN32_LEAN_AND_MEAN
+    NOMINMAX                 # or windows.h's min/max macros break <algorithm>
+    UNICODE
+    _UNICODE)
+
+if(MSVC)
+    target_compile_options(mcov_settings INTERFACE
+        /W4
+        /permissive-
+        /Zc:__cplusplus      # without this __cplusplus reports 199711L
+        /utf-8
+        /MP
+        /wd4100)             # unreferenced formal parameter: noisy on JNI callbacks
+else()
+    # clang-cl / MinGW
+    target_compile_options(mcov_settings INTERFACE -Wall -Wextra -Wno-unused-parameter)
+endif()
+
+# ---------------------------------------------------------------------------
+# mcov_overlay - the external process
+# ---------------------------------------------------------------------------
+add_executable(mcov_overlay
+    "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+    src/main.cpp
+    src/common/flat_style.cpp
+    src/overlay/overlay.cpp
+    src/overlay/control_panel.cpp
+    src/overlay/process.cpp
+    src/common/ipc.cpp
+    src/common/log.cpp)
+
+target_include_directories(mcov_overlay PRIVATE src third_party/glass) # Embedded Inter fonts only
+
+# Bake in the JDK we built against. Minecraft launchers routinely ship a JRE,
+# which has no jdk.attach module and therefore cannot load the agent; this gives
+# the overlay a known-good fallback without requiring JAVA_HOME to be set.
+if(MCOV_JDK_ROOT)
+    target_compile_definitions(mcov_overlay PRIVATE MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
+endif()
+
+target_link_libraries(mcov_overlay PRIVATE
+    mcov_settings
+    imgui
+    d3d11
+    dxgi
+    d3dcompiler
+    user32
+    gdi32
+    shell32
+    dwmapi)   # DwmExtendFrameIntoClientArea, for per-pixel alpha
+
+set_target_properties(mcov_overlay PROPERTIES OUTPUT_NAME "mcov_overlay")
+
+# ---------------------------------------------------------------------------
+# mcov_injector - standalone flat GUI for attaching the agent
+#
+# Independent of mcov_overlay: it reuses process.cpp for JVM discovery and the
+# attach helper, and common/flat_app.cpp for the window + ImGui frame loop.
+# ---------------------------------------------------------------------------
+add_executable(mcov_injector
+    "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+    src/injector/injector_main.cpp
+    src/common/flat_style.cpp
+    src/common/flat_app.cpp
+    src/overlay/process.cpp
+    src/common/ipc.cpp
+    src/common/log.cpp)
+
+target_include_directories(mcov_injector PRIVATE src src/common third_party/glass)
+
+if(MCOV_JDK_ROOT)
+    target_compile_definitions(mcov_injector PRIVATE MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
+endif()
+
+target_link_libraries(mcov_injector PRIVATE
+    mcov_settings
+    imgui
+    d3d11
+    dxgi
+    d3dcompiler
+    user32
+    gdi32
+    shell32
+    dwmapi)
+
+# ---------------------------------------------------------------------------
+# mcov_agent - the in-JVM library
+# ---------------------------------------------------------------------------
+add_library(mcov_agent SHARED
+    src/agent/agent_main.cpp
+    src/agent/jvm_interface.cpp
+    src/common/ipc.cpp
+    src/common/log.cpp)
+
+target_include_directories(mcov_agent PRIVATE src ${JNI_INCLUDE_DIRS})
+target_link_libraries(mcov_agent PRIVATE mcov_settings)
+
+set_target_properties(mcov_agent PROPERTIES
+    OUTPUT_NAME "mcov_agent"
+    PREFIX ""            # no "lib" prefix: the loader asks for mcov_agent.dll
+    CXX_VISIBILITY_PRESET default)
+
+# Statically link the CRT into the agent. It gets loaded into a JVM that has no
+# idea about our runtime, and a missing vcruntime140.dll surfaces as an opaque
+# AgentLoadException with no further detail.
+if(MSVC)
+    set_property(TARGET mcov_agent PROPERTY
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+# ---------------------------------------------------------------------------
+# AgentLoader.java -> bin/tools/AgentLoader.class
+# ---------------------------------------------------------------------------
+if(Java_JAVAC_EXECUTABLE)
+    set(MCOV_TOOLS_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/tools)
+
+    add_custom_command(
+        OUTPUT ${MCOV_TOOLS_DIR}/AgentLoader.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_TOOLS_DIR}
+        # Java 17 bytecode runs on all supported attach JDKs (17, 21, 25).
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17
+                -d ${MCOV_TOOLS_DIR}
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/AgentLoader.java
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/tools/AgentLoader.java
+        COMMENT "Compiling AgentLoader.java (JVM attach helper)"
+        VERBATIM)
+
+    add_custom_target(mcov_agent_loader ALL
+        DEPENDS ${MCOV_TOOLS_DIR}/AgentLoader.class)
+    set(MCOV_FRAME_CLASSES ${CMAKE_BINARY_DIR}/frame-sync-classes)
+    set(MCOV_SIGNAL_CLASSES ${CMAKE_BINARY_DIR}/frame-signal-classes)
+    set(MCOV_FRAME_SOURCES
+        tools/frame-sync/FrameSynchronizer.java tools/frame-sync/FrameTransformer.java tools/frame-sync/FrameProfiles.java)
+    list(TRANSFORM MCOV_FRAME_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
+    add_custom_command(
+        OUTPUT ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_CLASSES} ${MCOV_SIGNAL_CLASSES} ${MCOV_TOOLS_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_SIGNAL_CLASSES}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
+        COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
+            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
+            -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
+        COMMAND ${Java_JAR_EXECUTABLE} --create --file ${MCOV_TOOLS_DIR}/frame-signal.jar
+            -C ${MCOV_SIGNAL_CLASSES} .
+        COMMAND ${Java_JAR_EXECUTABLE} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
+            --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
+        DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
+        COMMENT "Compiling Java frame synchronization helpers (Java 17 bytecode)"
+        VERBATIM)
+    add_custom_target(mcov_frame_agent ALL DEPENDS ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar)
+    add_dependencies(mcov_agent_loader mcov_frame_agent)
+    add_dependencies(mcov_overlay mcov_agent_loader)
+endif()
+
+# Deliberately NOT add_dependencies(mcov_overlay mcov_agent).
+#
+# The agent DLL cannot be relinked while it is mapped into a running Minecraft,
+# and coupling the two targets meant a locked DLL also blocked every overlay
+# rebuild. They are independent binaries; build "all" to get both.
+
+message(STATUS "mcov: overlay -> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/mcov_overlay.exe")
+message(STATUS "mcov: agent   -> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/mcov_agent.dll")
+
+# Optional headless checks for UI ownership, clipping and input. No JVM needed.
+option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
+if(MCOV_BUILD_UI_CHECKS)
+    enable_testing()
+    add_executable(mcov_ui_check
+        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+        tests/flat_style_smoke.cpp
+        src/common/flat_style.cpp
+        src/common/log.cpp)
+    target_include_directories(mcov_ui_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_ui_check PRIVATE mcov_settings imgui)
+    add_test(NAME flat_ui COMMAND mcov_ui_check)
+    add_executable(mcov_control_panel_check
+        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+        tests/control_panel_smoke.cpp
+        src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp
+        src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
+    target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
+        user32 gdi32 shell32 dwmapi ole32 windowscodecs)
+    add_test(NAME control_panel COMMAND mcov_control_panel_check "${CMAKE_BINARY_DIR}/ui-preview")
+    set_tests_properties(control_panel PROPERTIES TIMEOUT 30)
+endif()
+
+option(MCOV_BUILD_COMPAT_CHECKS "Build JNI profile and attach-runtime regression checks" OFF)
+if(MCOV_BUILD_COMPAT_CHECKS)
+    enable_testing()
+    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+    add_test(NAME namespace_inheritance COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/namespace_inheritance.py")
+    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/compatibility/make_fixtures.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/agent/generated_profiles.hpp" "${CMAKE_BINARY_DIR}/compat-fixtures"
+        COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
+        DEPENDS src/agent/generated_profiles.hpp tools/compatibility/make_fixtures.py
+            tools/compatibility/generate_profiles.py
+            tools/compatibility/geometry_schema.py
+        VERBATIM)
+    add_custom_target(mcov_compat_fixtures DEPENDS "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp")
+    add_executable(mcov_compat_check tests/runtime_profiles.cpp src/agent/jvm_interface.cpp
+        src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
+    target_include_directories(mcov_compat_check PRIVATE src ${JNI_INCLUDE_DIRS})
+    target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32)
+    add_dependencies(mcov_compat_check mcov_compat_fixtures mcov_frame_agent)
+    add_test(NAME runtime_profiles COMMAND mcov_compat_check "${MCOV_JDK_ROOT}" "${CMAKE_BINARY_DIR}/compat-fixtures")
+    set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
+    add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
+            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_FRAME_TEST_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncCheck.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncAttachCheck.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameProfiles.java
+        DEPENDS mcov_frame_agent tests/FrameSyncCheck.java tests/FrameSyncAttachCheck.java
+            tools/frame-sync/FrameProfiles.java tools/frame-sync/FrameSignal.java
+        VERBATIM)
+    add_custom_target(mcov_frame_check ALL DEPENDS ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
+            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class)
+    add_dependencies(mcov_frame_check mcov_compat_fixtures)
+    add_test(NAME frame_sync COMMAND ${Java_JAVA_EXECUTABLE} "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        mcov.sync.FrameSyncCheck "${CMAKE_BINARY_DIR}/compat-fixtures")
+    add_test(NAME frame_attach COMMAND ${Java_JAVA_EXECUTABLE} -Djdk.attach.allowAttachSelf=true
+        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        mcov.sync.FrameSyncAttachCheck "${CMAKE_BINARY_DIR}/compat-fixtures" "${MCOV_TOOLS_DIR}/frame-sync-agent.jar")
+endif()
+
+option(MCOV_BUILD_ESP_CHECKS "Build camera projection and world-space rig checks" OFF)
+if(MCOV_BUILD_ESP_CHECKS)
+    enable_testing()
+    add_executable(mcov_esp_check tests/esp_geometry.cpp)
+    target_link_libraries(mcov_esp_check PRIVATE mcov_settings)
+    add_test(NAME esp_geometry COMMAND mcov_esp_check)
+endif()

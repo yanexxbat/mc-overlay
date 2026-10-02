@@ -1,0 +1,5 @@
+Manifest-Version: 1.0
+Agent-Class: mcov.sync.FrameSynchronizer
+Premain-Class: mcov.sync.FrameSynchronizer
+Can-Retransform-Classes: true
+

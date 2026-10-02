@@ -1,0 +1,69 @@
+"""Semantic names for off-thread geometry, pose and camera interpolation."""
+
+
+def geometry_schema(version):
+    modern = version in ('26.2', '1.21.11')
+    classes = {
+        'boundsClass': 'net/minecraft/world/phys/AABB',
+        'poseClass': 'net/minecraft/world/entity/Pose',
+        'walkClass': 'net/minecraft/world/entity/WalkAnimationState',
+        'dimensionsClass': 'net/minecraft/world/entity/EntityDimensions',
+        'deltaClass': 'net/minecraft/client/DeltaTracker' if version == '26.2' else '',
+        'avatarOwnerClass': 'net/minecraft/client/player/AbstractClientPlayer' if modern else '',
+        'avatarStateClass': 'net/minecraft/client/entity/ClientAvatarState' if modern else '',
+    }
+    entity = 'net/minecraft/world/entity/Entity'
+    living = 'net/minecraft/world/entity/LivingEntity'
+    player = 'net/minecraft/world/entity/player/Player'
+    camera = 'net/minecraft/client/Camera'
+    client = 'net/minecraft/client/Minecraft'
+    definitions = {}
+    def add(key, owner, name, desc, kind='fields', static=False):
+        definitions[key] = (owner, name, desc, kind, static)
+    add('getBounds', entity, 'getBoundingBox', '()L' + classes['boundsClass'] + ';', 'methods')
+    for name in ['minX', 'minY', 'minZ', 'maxX', 'maxY', 'maxZ']:
+        add(name, classes['boundsClass'], name, 'D')
+    for key, name in [('oldX', 'xOld'), ('oldY', 'yOld'), ('oldZ', 'zOld')]: add(key, entity, name, 'D')
+    add('bodyYaw', living, 'yBodyRot', 'F')
+    add('bodyYawOld', living, 'yBodyRotO', 'F')
+    add('headPitch', entity, 'getXRot', '()F', 'methods')
+    add('headPitchOld', entity, 'xRotO', 'F')
+    add('getPose', entity, 'getPose', '()L' + classes['poseClass'] + ';', 'methods')
+    for key, name in [('poseStanding', 'STANDING'), ('poseCrouch', 'CROUCHING'), ('poseSwim', 'SWIMMING'),
+                      ('poseGlide', 'FALL_FLYING'), ('poseSleep', 'SLEEPING')]:
+        add(key, classes['poseClass'], name, 'L' + classes['poseClass'] + ';', static=True)
+    add('isPassenger', entity, 'isPassenger', '()Z', 'methods')
+    add('walkState', living, 'walkAnimation', 'L' + classes['walkClass'] + ';')
+    add('walkSpeed', classes['walkClass'], 'speed', '(F)F', 'methods')
+    add('walkPosition', classes['walkClass'], 'position', '(F)F', 'methods')
+    add('getDimensions', entity, 'getDimensions', '(L' + classes['poseClass'] + ';)L' + classes['dimensionsClass'] + ';', 'methods')
+    add('dimensionHeight', classes['dimensionsClass'], 'height', 'F')
+    partial_source = 'Camera'
+    if version == '26.2':
+        partial_source = 'CameraDelta'
+        add('partialTick', camera, 'getCameraEntityPartialTicks', '(L' + classes['deltaClass'] + ';)F', 'methods')
+        add('getDelta', client, 'getDeltaTracker', '()L' + classes['deltaClass'] + ';', 'methods')
+    elif version == '1.20.1':
+        partial_source = 'Client'
+        add('partialTick', client, 'getFrameTime', '()F', 'methods')
+    else:
+        add('partialTick', camera, 'getPartialTickTime', '()F', 'methods')
+    add('cameraEntity', camera, 'entity', 'L' + entity + ';')
+    add('runFrame', client, 'runTick', '(Z)V', 'methods')
+    if version == '26.2':
+        add('updateCamera', camera, 'update', '(Lnet/minecraft/client/DeltaTracker;)V', 'methods')
+    else:
+        level = 'net/minecraft/world/level/Level' if version == '1.21.11' else 'net/minecraft/world/level/BlockGetter'
+        add('updateCamera', camera, 'setup', '(L' + level + ';L' + entity + ';ZZF)V', 'methods')
+    if modern:
+        add('avatarState', classes['avatarOwnerClass'], 'avatarState', '()L' + classes['avatarStateClass'] + ';', 'methods')
+    add('walkDistance', classes['avatarStateClass'] if modern else entity, 'walkDist', 'F')
+    add('walkDistanceOld', classes['avatarStateClass'] if modern else entity, 'walkDistO', 'F')
+    add('bob', classes['avatarStateClass'] if modern else player, 'bob', 'F')
+    add('bobOld', classes['avatarStateClass'] if modern else player, 'bobO' if modern else 'oBob', 'F')
+    monster = 'net/minecraft/world/entity/monster/'
+    humanoids = [monster + ('zombie/Zombie' if modern else 'Zombie'),
+                 monster + ('skeleton/AbstractSkeleton' if modern else 'AbstractSkeleton'),
+                 monster + 'piglin/AbstractPiglin', monster + 'EnderMan',
+                 'net/minecraft/world/entity/decoration/ArmorStand']
+    return classes, humanoids, definitions, partial_source
