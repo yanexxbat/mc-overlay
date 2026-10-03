@@ -29,6 +29,11 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     mcov::agent::MinecraftCombat bridge;
     Require(bridge.Install(env,b,block.get(),reinterpret_cast<void*>(&TestCombatTick)),"combat JNI methods or native tick did not bind");
     testCombat=&bridge;
+    auto initialTick=jvm::TryMethod(env,b.client.minecraftClass,g.clientTick.name,g.clientTick.signature,false);
+    env->CallVoidMethod(client,initialTick); Healthy(env);
+    mcov::CombatReport initialReport;
+    Require(block->combatReport.Read(initialReport) && initialReport.status==mcov::CombatBridgeStatus::Disabled,
+            "empty IPC configuration raised an error before overlay connection");
     auto field=[&](jclass c,const char* name,const char* desc,bool stat=false) {
         const auto f=jvm::TryField(env,c,name,desc,stat); Require(f!=nullptr,"combat fixture field missing"); return f;
     };

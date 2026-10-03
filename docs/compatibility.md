@@ -99,7 +99,8 @@ View bob uses the sampled camera entity's walk distance and bob amplitude. The
 overlay applies the game's translation and Z/X rotations before camera rotation.
 Modern profiles read `ClientAvatarState`; older profiles read Entity/Player fields.
 Damage camera shake, camera roll and custom projection effects are not reconstructed.
-JNI remains entirely in the sampler; the renderer only consumes POD snapshots.
+Visual sampling uses JNI in the sampler; the renderer only consumes POD snapshots.
+The combat adapter has a separate, instrumented client-tick callback.
 
 ## Frame synchronization
 

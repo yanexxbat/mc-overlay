@@ -116,7 +116,7 @@ public:
             const auto now=GetTickCount64(); ++tick_;
             CombatRequest request;
             const bool read=channel_->combatRequest.Read(request);
-            if(read && request.revision!=revision_) {
+            if(read && request.sentAtMs && request.revision!=revision_) {
                 if(!config_.Publish(request.config)) throw std::runtime_error("combat configuration");
                 revision_=request.revision; failed_=false;
             }
