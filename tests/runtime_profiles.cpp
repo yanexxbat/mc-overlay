@@ -134,6 +134,15 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     request.config.attack.silentRotation=true; ++request.revision; step(6);
     Require(report.attacks==attacks && report.debug.silentUnavailable,"unsupported silent rotation was used");
     request.config.attack.silentRotation=false; ++request.revision;
+    request.inputAllowed=false;
+    env->SetObjectField(client,b.fPlayer,player); Healthy(env); step();
+    const auto previousWorld=report.debug.target;
+    request.inputAllowed=true;
+    auto respawn=NewObject(env,LoadClass(env,loader,set.classes.localPlayer));
+    env->SetBooleanField(respawn,alive,JNI_TRUE); Healthy(env);
+    floating(respawn,b.clsPlayer,"testCooldown",0);
+    env->SetObjectField(client,b.fPlayer,respawn); Healthy(env); step();
+    Require(report.attacks==attacks && report.debug.cooldown==0,"respawn retained the previous attack cooldown");
     env->SetObjectField(client,b.fPlayer,nullptr); Healthy(env); step();
     Require(report.status==mcov::CombatBridgeStatus::NoWorld && report.attacks==attacks,"world exit retained attack target");
     Require(!bridge.Send({}),"JNI transport retained a borrowed tick context");

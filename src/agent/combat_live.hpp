@@ -99,6 +99,7 @@ public:
         // Der native Stub bleibt registriert und läuft nach Close als No-op.
         // So gibt es kein Rennen mit einem bereits begonnenen Java-Aufruf.
         if(world_) { env->DeleteWeakGlobalRef(world_); world_=nullptr; }
+        if(playerIdentity_) { env->DeleteWeakGlobalRef(playerIdentity_); playerIdentity_=nullptr; }
         if(hand_) { env->DeleteGlobalRef(hand_); hand_=nullptr; }
         if(signal_) env->DeleteGlobalRef(signal_);
         signal_=nullptr; channel_=nullptr;
@@ -140,9 +141,11 @@ public:
             player_=Object(client,playerField_); auto level=Object(client,levelField_);
             mode_=Object(client,modeField_);
             if(!player_ || !level || !mode_ || !Boolean(player_,alive_)) { Pause(CombatBridgeStatus::NoWorld); return; }
-            if(!world_ || !env->IsSameObject(world_,level)) {
+            if(!world_ || !env->IsSameObject(world_,level) || !playerIdentity_ || !env->IsSameObject(playerIdentity_,player_)) {
                 if(world_) env->DeleteWeakGlobalRef(world_);
+                if(playerIdentity_) env->DeleteWeakGlobalRef(playerIdentity_);
                 world_=env->NewWeakGlobalRef(level); Check(); ++worldSerial_;
+                playerIdentity_=env->NewWeakGlobalRef(player_); Check();
             }
             frame_.world=worldSerial_; frame_.playerPosition=Position(player_); frame_.eye=Vector(CallObject(player_,eye_));
             frame_.cameraRotation=frame_.observedRotation=Rotation(player_);
@@ -283,6 +286,7 @@ private:
     combat::Frame frame_{};
     JNIEnv* env_{};
     jobject player_{},mode_{},world_{},hand_{};
+    jweak playerIdentity_{};
     jclass signal_{},entityClass_{},livingClass_{},playerClass_{};
     jfieldID enabled_{},playerField_{},levelField_{},screenField_{},guiField_{},modeField_{},crosshair_{};
     jfieldID minimum_[3]{},maximum_[3]{},vecFields_[3]{};

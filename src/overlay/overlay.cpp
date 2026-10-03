@@ -275,6 +275,11 @@ bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
 }
 
 void Overlay::Shutdown() {
+    if(auto* block=channel_.block()) {
+        CombatRequest stop;
+        stop.sentAtMs=::GetTickCount64(); stop.revision=combatMenu_.Store().Read().revision+1;
+        block->combatRequest.Publish(stop);
+    }
     if (device_) {
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();
@@ -522,13 +527,16 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
     AuraAnchor selected{};
     const AuraAnchor* target = nullptr;
     const auto count = std::min(snapshot.entityCount, kMaxEntities);
+    const auto targetId=combatMenu_.Store().Read().values.enabled && combatReport_.debug.enabled && combatReport_.debug.target &&
+        combatReport_.sampledAtMs && ::GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs ?
+        combatReport_.debug.target->id : snapshot.hasTarget ? snapshot.targetEntityId : 0;
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto& entity = snapshot.entities[i];
         if (entity.flags & kEntityIsSelf) continue;
         AuraAnchor anchor;
         if (!MakeAuraAnchor(entity, anchor)) continue;
         auraRenderer_.RefreshAnchor(anchor);
-        if (snapshot.hasTarget && entity.entityId == snapshot.targetEntityId &&
+        if (targetId && entity.entityId == targetId &&
             std::isfinite(entity.distance) && entity.distance <= visuals_.maxDistance) {
             selected = anchor;
             target = &selected;

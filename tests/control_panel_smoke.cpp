@@ -261,9 +261,9 @@ int main(int argc,char** argv) {
         SaveFrame(device.Get(),context.Get(),output/"reference-size.png");
         // Alle Combat-Bereiche verwenden echte Stores und dieselbe begrenzte Menüfläche.
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
-        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::Targets,mcov::CombatMenu::Section::Rotation,
+        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::KillAura,mcov::CombatMenu::Section::Targets,mcov::CombatMenu::Section::Rotation,
             mcov::CombatMenu::Section::Attacks,mcov::CombatMenu::Section::Sync,mcov::CombatMenu::Section::Friends,mcov::CombatMenu::Section::Debug};
-        constexpr const char* sectionFiles[]={"combat-targets.png","combat-rotation.png","combat-attacks.png","combat-sync.png","combat-friends.png","combat-debug.png"};
+        constexpr const char* sectionFiles[]={"combat-kill-aura.png","combat-targets.png","combat-rotation.png","combat-attacks.png","combat-sync.png","combat-friends.png","combat-debug.png"};
         for(int theme=0;theme<4;++theme) for(int i=0;i<IM_ARRAYSIZE(sections);++i) {
             editor.Select(sections[i]);
             for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,theme,ImVec2(1280,800));
@@ -272,6 +272,22 @@ int main(int argc,char** argv) {
             if(theme==0) SaveFrame(device.Get(),context.Get(),output/sectionFiles[i]);
             Draw(overlay,Page::Combat,theme,ImVec2(752,427));
         }
+        editor.Select(mcov::CombatMenu::Section::KillAura);
+        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        auto* auraContent=Child("/content_");
+        auto* auraTable=ImGui::GetCurrentContext()->Tables.GetByKey(auraContent->GetID("kill_aura_controls"));
+        Require(auraTable,"Kill Aura controls missing");
+        auto clickAura=[&](ImVec2 position) {
+            io.AddMousePosEvent(position.x,position.y); io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+            io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        };
+        clickAura(ImVec2(auraTable->Columns[0].MinX+40,auraTable->OuterRect.Min.y+18));
+        const auto live=editor.Store().Read().values;
+        Require(live.enabled && live.attack.enabled && live.rotation.enabled && live.sync.enabled,"Kill Aura switch did not activate the live core");
+        auraTable=ImGui::GetCurrentContext()->Tables.GetByKey(auraContent->GetID("kill_aura_controls"));
+        clickAura(ImVec2(auraTable->OuterRect.Min.x+65,auraTable->OuterRect.Max.y+12));
+        Require(editor.Store().Read().values.target.coneDegrees==180 && editor.Store().Read().values.target.range==3 && editor.Store().Read().values.enabled,"Kill Aura preset lost activation or settings");
+        mcov::OverlayUiCheck::ResetCombat(overlay);
         const auto uuid=mcov::CombatMenu::ParseUuid("12345678-1234-5678-90ab-cdef12345678");
         Require(uuid && uuid->high==0x1234567812345678 && uuid->low==0x90abcdef12345678,"Player UUID was parsed incorrectly");
         Require(!mcov::CombatMenu::ParseUuid("12345678_1234-5678-90ab-cdef12345678") &&

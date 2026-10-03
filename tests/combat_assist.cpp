@@ -1,4 +1,5 @@
 #include "combat/simulated_game.hpp"
+#include "common/combat_bridge_state.hpp"
 #include <atomic>
 #include <cstdio>
 #include <stdexcept>
@@ -20,6 +21,21 @@ void ConfigChecks() {
     std::jthread writer([&] { for(int i=0;i<2000;++i) { Config v=Enabled(); v.seed=static_cast<std::uint64_t>(i); v.target.range=i%2 ? 4 : 6; store.Publish(v); } done=true; });
     std::jthread reader([&] { while(!done) { const auto v=store.Read(); if(v.revision>version.revision && v.values.target.range!=(v.values.seed%2 ? 4 : 6)) broken=true; } });
     writer.join(); reader.join(); Require(!broken,"config torn between threads");
+    mcov::SharedMailbox<mcov::CombatRequest> mailbox;
+    done=false; broken=false;
+    std::jthread ipcWriter([&] { for(std::uint64_t i=1;i<=2000;++i) {
+        mcov::CombatRequest request; request.revision=i; request.sentAtMs=i;
+        request.config.seed=i; request.relations[0].uuid={i,i}; mailbox.Publish(request);
+    } done=true; });
+    std::jthread ipcReader([&] { while(!done) { mcov::CombatRequest request;
+        if(mailbox.Read(request) && request.revision && (request.sentAtMs!=request.revision || request.config.seed!=request.revision || request.relations[0].uuid.high!=request.revision)) broken=true;
+    } });
+    ipcWriter.join(); ipcReader.join(); Require(!broken,"IPC combat config/relations tore");
+    c=Enabled(); c.target.coneDegrees=180; Require(Validate(c),"full Kill Aura cone rejected");
+    Frame full; full.viewportHeight=1080; full.verticalFovDeg=70;
+    Require(FovRadius(full,c.target)==0,"full sphere projected a misleading FOV circle");
+    mcov::CombatRequest lease; lease.inputAllowed=true; lease.sentAtMs=1000;
+    Require(mcov::CombatLeaseValid(lease,1250) && !mcov::CombatLeaseValid(lease,1251) && !mcov::CombatLeaseValid(lease,999),"combat lease accepted stale/future data");
 }
 void TargetChecks() {
     SimulatedGame game; auto f=game.Capture(1,0.020); Config c=Enabled();
