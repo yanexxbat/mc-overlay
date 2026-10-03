@@ -139,7 +139,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(!bridge.Send({}),"JNI transport retained a borrowed tick context");
     bridge.Close(env); testCombat=nullptr;
     env->CallVoidMethod(client,tick); Healthy(env);
-    std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, friends, LOS, GUI, lease, reach)\n";
+    std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, friends, LOS, GUI, lease, reach)"<<std::endl;
 }
 void TestDetailsCache() {
     mcov::EntityDetailsCache cache;

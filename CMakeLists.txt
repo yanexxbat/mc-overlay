@@ -346,6 +346,7 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32)
     add_dependencies(mcov_compat_check mcov_compat_fixtures mcov_frame_agent)
     add_test(NAME runtime_profiles COMMAND mcov_compat_check "${MCOV_JDK_ROOT}" "${CMAKE_BINARY_DIR}/compat-fixtures")
+    set_tests_properties(runtime_profiles PROPERTIES TIMEOUT 120)
     set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
     add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
             ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class
