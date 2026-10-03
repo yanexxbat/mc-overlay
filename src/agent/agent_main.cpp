@@ -31,6 +31,9 @@
 #include "generated_profiles.hpp"
 #include "geometry_bindings.hpp"
 #include "frame_sync.hpp"
+#include "entity_details_cache.hpp"
+#include "../common/equipment_icons.hpp"
+#include "combat_live.hpp"
 
 using namespace mcov;
 
@@ -45,6 +48,8 @@ std::thread       g_sampler;
 std::atomic<bool> g_stop{false};
 std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
+mcov::agent::MinecraftCombat g_combat;
+void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client) { g_combat.Tick(env,client); }
 
 void SetStatus(AgentStatus status) {
     if (auto* block = g_channel.block()) {
@@ -178,6 +183,8 @@ struct Bindings {
     jobject   slotConstants[kSlotCount] = {};
     jmethodID mItemIsEmpty = nullptr, mItemDamage = nullptr, mItemMaxDamage = nullptr;
     jmethodID mItemIsDamageable = nullptr, mItemCount = nullptr, mItemName = nullptr;
+    jmethodID mConnection = nullptr, mEntityUuid = nullptr, mPlayerInfo = nullptr;
+    jmethodID mLatency = nullptr, mEntityById = nullptr;
 
     // Status effects
     jmethodID mGetStatusEffects = nullptr;
@@ -447,6 +454,13 @@ bool BindMappingSet(JNIEnv* env, const mappings::RuntimeProfile& profile, Bindin
         b.mEffAmbient   = jvm::TryMethod(env, b.clsEffectInst, set.methodEffectIsAmbient.name, set.methodEffectIsAmbient.signature, false);
     }
     b.fTargetedEntity = jvm::TryField(env, b.client.minecraftClass, set.fieldTargetedEntity.name, set.fieldTargetedEntity.signature, false);
+    auto connection=SoftClass(env,(prefix+"connection").c_str(),set.classes.connection);
+    auto playerInfo=SoftClass(env,(prefix+"playerinfo").c_str(),set.classes.playerInfo);
+    b.mConnection=jvm::TryMethod(env,b.client.minecraftClass,set.methodConnection.name,set.methodConnection.signature,false);
+    b.mEntityUuid=jvm::TryMethod(env,b.clsEntity,set.methodEntityUuid.name,set.methodEntityUuid.signature,false);
+    b.mPlayerInfo=jvm::TryMethod(env,connection,set.methodPlayerInfo.name,set.methodPlayerInfo.signature,false);
+    b.mLatency=jvm::TryMethod(env,playerInfo,set.methodLatency.name,set.methodLatency.signature,false);
+    b.mEntityById=jvm::TryMethod(env,b.clsLevel,set.methodEntityById.name,set.methodEntityById.signature,false);
 
     // --- block scanning ---------------------------------------------------
     b.clsBlockState = SoftClass(env, (prefix + "blockstate").c_str(), set.classes.blockState);
@@ -731,15 +745,29 @@ void SampleLocalPlayer(JNIEnv* env, const Bindings& b, jobject player, WorldSnap
     snap.foodLevel  = -1;
     snap.saturation = -1.0f;
 
-    // Ping requires walking Minecraft.getConnection() -> ClientPacketListener
-    // -> getPlayerInfo(UUID) -> PlayerInfo.getLatency(), which needs the local
-    // player's UUID as well. Deliberately not sampled - published as -1 so the
-    // UI can show "n/a" rather than a fabricated number.
-    snap.ping = -1;
+    // Der echte Ping wird im langsamen Entity-Details-Pass aktualisiert.
 }
 
+struct EntityDetailsState {
+    EntityDetailsCache cache;
+    jobject world{};
+    std::uint64_t nextTick{};
+    std::uint32_t cursor{};
+    bool active{};
+    void Clear(JNIEnv* env) {
+        cache.Clear(); nextTick=0; cursor=0; active=false;
+        if (world) { env->DeleteGlobalRef(world); world=nullptr; }
+    }
+    void ObserveWorld(JNIEnv* env,jobject level) {
+        if (world && env->IsSameObject(world,level)) return;
+        Clear(env);
+        if (level) world=env->NewGlobalRef(level);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+};
+
 void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject localPlayer,
-                    WorldSnapshot& snap) {
+                    WorldSnapshot& snap,EntityDetailsState& details) {
     snap.entityCount = 0;
     if (!b.mEntities) return;
 
@@ -747,6 +775,8 @@ void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject loca
 
     jobject level = env->GetObjectField(client, b.fLevel);
     if (!level) return;
+    details.ObserveWorld(env,level);
+    const auto detailsNow=::GetTickCount64();
 
     jobject iterable = env->CallObjectMethod(level, b.mEntities);
     if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
@@ -806,6 +836,7 @@ void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject loca
 
         const std::string name = ReadEntityName(env, b, entity);
         CopyField(record.name, name.c_str());
+        if (const auto* cached=details.cache.Find(record.entityId,detailsNow)) record.details=*cached;
 
         snap.entities[snap.entityCount++] = record;
     }
@@ -844,7 +875,8 @@ std::string PrettyTranslationKey(const std::string& key) {
     return out;
 }
 
-void SampleEquipment(JNIEnv* env, const Bindings& b, jobject player, WorldSnapshot& snap) {
+void SampleEquipmentInto(JNIEnv* env, const Bindings& b, jobject player, ItemSnapshot (&equipment)[kSlotCount]) {
+    for (auto& item:equipment) item={};
     if (!b.mGetEquipped) return;
 
     for (int slot = 0; slot < static_cast<int>(kSlotCount); ++slot) {
@@ -864,7 +896,7 @@ void SampleEquipment(JNIEnv* env, const Bindings& b, jobject player, WorldSnapsh
             if (empty == JNI_TRUE) continue;
         }
 
-        ItemSnapshot& record = snap.equipment[slot];
+        ItemSnapshot& record = equipment[slot];
         record.present = 1;
         record.count   = CallInt(env, stack, b.mItemCount, 1);
         record.damage  = CallInt(env, stack, b.mItemDamage, 0);
@@ -880,6 +912,75 @@ void SampleEquipment(JNIEnv* env, const Bindings& b, jobject player, WorldSnapsh
         record.maxDamage = damageable ? CallInt(env, stack, b.mItemMaxDamage, 0) : 0;
 
         CopyField(record.name, ReadTextFrom(env, b, stack, b.mItemName).c_str());
+        if (b.mStackGetItem && b.mItemTransKey) {
+            jobject item=env->CallObjectMethod(stack,b.mStackGetItem);
+            if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+            if (item) {
+                auto key=static_cast<jstring>(env->CallObjectMethod(item,b.mItemTransKey));
+                if (env->ExceptionCheck()) env->ExceptionClear();
+                else if (key) record.iconIndex=equipment_icons::Find(jvm::JStringToUtf8(env,key));
+            }
+        }
+    }
+}
+void SampleEquipment(JNIEnv* env,const Bindings& b,jobject player,WorldSnapshot& snap) {
+    SampleEquipmentInto(env,b,player,snap.equipment);
+}
+int ReadPlayerPing(JNIEnv* env,const Bindings& b,jobject player,jobject connection) {
+    if (!player || !connection || !b.mEntityUuid || !b.mPlayerInfo || !b.mLatency) return -1;
+    jvm::LocalFrame frame(env,8);
+    if (!frame.ok()) return -1;
+    jobject uuid=env->CallObjectMethod(player,b.mEntityUuid);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return -1; }
+    if (!uuid) return -1;
+    jobject info=env->CallObjectMethod(connection,b.mPlayerInfo,uuid);
+    if (env->ExceptionCheck()) { env->ExceptionClear(); return -1; }
+    return info ? std::max(-1,CallInt(env,info,b.mLatency,-1)) : -1;
+}
+EntityDetailsSnapshot SampleDetails(JNIEnv* env,const Bindings& b,jobject entity,jobject connection) {
+    EntityDetailsSnapshot data;
+    if (b.clsLiving && env->IsInstanceOf(entity,b.clsLiving)) {
+        data.armorValue=std::clamp(CallInt(env,entity,b.mArmor,0),0,100);
+        SampleEquipmentInto(env,b,entity,data.equipment);
+    }
+    if (b.clsPlayer && env->IsInstanceOf(entity,b.clsPlayer)) data.ping=ReadPlayerPing(env,b,entity,connection);
+    return data;
+}
+void SampleEntityDetails(JNIEnv* env,const Bindings& b,jobject client,jobject localPlayer,
+                         WorldSnapshot& snapshot,EntityDetailsState& state,bool enabled) {
+    if (!enabled) {
+        if (state.active) { state.cache.Clear(); state.active=false; }
+        snapshot.ping=-1;
+        return;
+    }
+    state.active=true;
+    const auto now=::GetTickCount64();
+    if (now<state.nextTick || !state.world || !b.mEntityById) return;
+    state.nextTick=now+50;
+    jvm::LocalFrame frame(env,16);
+    if (!frame.ok()) return;
+    jobject connection=b.mConnection ? env->CallObjectMethod(client,b.mConnection) : nullptr;
+    if (env->ExceptionCheck()) { env->ExceptionClear(); connection=nullptr; }
+    snapshot.ping=ReadPlayerPing(env,b,localPlayer,connection);
+    int sampled=0;
+    const auto count=std::min(snapshot.entityCount,kMaxEntities);
+    const auto sample=[&](EntitySnapshot& e) {
+        if (!(e.flags&kEntityIsLiving) || !std::isfinite(e.distance) || e.distance>512 ||
+            state.cache.Find(e.entityId,now,300)) return;
+        jvm::LocalFrame entityFrame(env,16);
+        if (!entityFrame.ok()) return;
+        jobject entity=env->CallObjectMethod(state.world,b.mEntityById,jint(e.entityId));
+        if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
+        if (!entity) return;
+        e.details=SampleDetails(env,b,entity,connection);
+        state.cache.Put(e.entityId,::GetTickCount64(),e.details);
+        ++sampled;
+    };
+    // Ziel zuerst, danach faire Rotation durch die sichtbaren Entity-IDs.
+    for (std::uint32_t i=0;snapshot.hasTarget && i<count;++i)
+        if (snapshot.entities[i].entityId==snapshot.targetEntityId) { sample(snapshot.entities[i]); break; }
+    for (std::uint32_t checked=0;checked<count && sampled<4 && ::GetTickCount64()-now<3;++checked) {
+        sample(snapshot.entities[state.cursor%count]); ++state.cursor;
     }
 }
 
@@ -1320,6 +1421,7 @@ void SamplerThread() {
     bool                 syncAttempted = false;
     std::uint64_t        acceptedEpoch = 0;
     std::uint64_t        nextHudTick = 0;
+    EntityDetailsState  entityDetails;
     std::uint64_t        nextHeartbeatTick = 0;
     std::uint64_t        lastCaptureTick = 0;
     std::uint64_t        waitingSinceTick = 0;
@@ -1381,9 +1483,12 @@ void SamplerThread() {
         }
         if (!syncAttempted) {
             syncAttempted = true;
-            if (g_frameSync.Install(env))
+            if (g_frameSync.Install(env)) {
                 MCOV_LOG_INFO("frame synchronization active: %s; mixed render/tick snapshots are rejected", bindings.set->id);
-            else MCOV_LOG_WARN("frame synchronization unavailable; using verified camera double-reads");
+                if(g_combat.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick)))
+                    MCOV_LOG_INFO("combat client-tick bridge active: %s",bindings.set->id);
+                else MCOV_LOG_WARN("combat bridge unavailable; ESP and HUD remain active");
+            } else MCOV_LOG_WARN("frame synchronization unavailable; using verified camera double-reads");
         }
 
         jvm::Error error;
@@ -1415,7 +1520,7 @@ void SamplerThread() {
             SampleCamera(env, bindings, client, candidate);
 
             if (player) {
-                SampleEntities(env, bindings, client, player, candidate);
+                SampleEntities(env, bindings, client, player, candidate,entityDetails);
                 bool coherent = g_frameSync.enabled() ? g_frameSync.StillCurrent(env, stamp) : true;
                 if (!g_frameSync.enabled()) {
                     WorldSnapshot verify{};
@@ -1450,6 +1555,10 @@ void SamplerThread() {
                     nextHudTick = hudNow + 100;
                 }
                 SampleTarget(env, bindings, client, snapshot);
+                const auto* detailsBlock=g_channel.block();
+                const bool detailsEnabled=detailsBlock &&
+                    (detailsBlock->controlFlags.load(std::memory_order_acquire)&kCtrlEntityDetails);
+                SampleEntityDetails(env,bindings,client,player,snapshot,entityDetails,detailsEnabled);
 
                 // Block scanning runs on its own, much slower cadence; between
                 // scans the previous result is republished unchanged.
@@ -1518,6 +1627,7 @@ void SamplerThread() {
                 waitingSinceTick = 0;
                 waitAnnounced = false;
                 snapshot = WorldSnapshot{};
+                entityDetails.Clear(env);
                 snapshot.frameIndex = ++frame;
                 snapshot.captureQpc = counter.QuadPart;
                 CopyField(snapshot.gameVersion, bindings.profile->version);
@@ -1536,6 +1646,7 @@ void SamplerThread() {
     }
 
     SetStatus(AgentStatus::Detaching);
+    g_combat.Close(env);
     g_frameSync.Close(env);
 
     // Release global refs while we still hold a valid env and are still attached.
@@ -1544,6 +1655,7 @@ void SamplerThread() {
         if (slot) { env->DeleteGlobalRef(slot); slot = nullptr; }
     }
     blockCache.Release(env);
+    entityDetails.Clear(env);
     if (bindings.swapAction) { env->DeleteGlobalRef(bindings.swapAction); bindings.swapAction = nullptr; }
     bindings.geometry.Release(env);
     jvm::Runtime::Instance().ReleaseCachedRefs(env);

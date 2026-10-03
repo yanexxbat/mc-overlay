@@ -19,6 +19,12 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Der Combat-Kern hat keine JNI-/Win32-Abhängigkeiten. Der konkrete Demo-Transport
+# simuliert Spiel-Cooldown, Raycast und Silent-Kamera; keine Live-Netzwerkbindung.
+add_library(mcov_combat INTERFACE)
+target_include_directories(mcov_combat INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(mcov_combat INTERFACE cxx_std_20)
+
 if(NOT WIN32)
     message(FATAL_ERROR "mcov targets Windows only (layered windows, Win32 process APIs).")
 endif()
@@ -145,7 +151,10 @@ add_executable(mcov_overlay
     src/main.cpp
     src/common/flat_style.cpp
     src/overlay/overlay.cpp
+    src/overlay/esp_renderer.cpp
+    src/overlay/item_icon_atlas_dx11.cpp
     src/overlay/control_panel.cpp
+    src/overlay/combat_menu.cpp
     src/overlay/aura_renderer.cpp
     src/overlay/aura_blend_dx11.cpp
     src/overlay/process.cpp
@@ -170,7 +179,7 @@ target_link_libraries(mcov_overlay PRIVATE
     user32
     gdi32
     shell32
-    dwmapi)   # DwmExtendFrameIntoClientArea, for per-pixel alpha
+    dwmapi ole32 windowscodecs)   # DWM composition and the embedded PNG atlas
 
 set_target_properties(mcov_overlay PROPERTIES OUTPUT_NAME "mcov_overlay")
 
@@ -299,7 +308,9 @@ if(MCOV_BUILD_UI_CHECKS)
     add_executable(mcov_control_panel_check
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/control_panel_smoke.cpp
-        src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp
+        src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
+        src/overlay/combat_menu.cpp
+        src/overlay/item_icon_atlas_dx11.cpp
         src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
@@ -364,4 +375,24 @@ if(MCOV_BUILD_ESP_CHECKS)
     add_executable(mcov_esp_check tests/esp_geometry.cpp)
     target_link_libraries(mcov_esp_check PRIVATE mcov_settings)
     add_test(NAME esp_geometry COMMAND mcov_esp_check)
+endif()
+
+add_executable(mcov_combat_demo tools/combat_demo.cpp)
+target_link_libraries(mcov_combat_demo PRIVATE mcov_settings mcov_combat)
+add_library(mcov_combat_hud STATIC src/combat/debug_hud.cpp)
+target_link_libraries(mcov_combat_hud PUBLIC mcov_combat imgui mcov_settings)
+target_link_libraries(mcov_overlay PRIVATE mcov_combat_hud)
+if(TARGET mcov_control_panel_check)
+    target_link_libraries(mcov_control_panel_check PRIVATE mcov_combat_hud)
+endif()
+option(MCOV_BUILD_COMBAT_CHECKS "Build deterministic Combat Assist checks" ON)
+if(MCOV_BUILD_COMBAT_CHECKS)
+    enable_testing()
+    add_executable(mcov_combat_check tests/combat_assist.cpp)
+    target_link_libraries(mcov_combat_check PRIVATE mcov_settings mcov_combat)
+    add_test(NAME combat_assist COMMAND mcov_combat_check)
+    add_test(NAME combat_demo COMMAND mcov_combat_demo)
+    add_executable(mcov_combat_hud_check tests/combat_hud.cpp)
+    target_link_libraries(mcov_combat_hud_check PRIVATE mcov_combat_hud)
+    add_test(NAME combat_hud COMMAND mcov_combat_hud_check)
 endif()

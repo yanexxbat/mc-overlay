@@ -37,6 +37,8 @@ struct ClassNames {
     const char* slotAction;     // ClickType / SlotActionType
     const char* playerInv;      // Inventory / PlayerInventory
     const char* item;           // Item
+    const char* connection;    // ClientPacketListener
+    const char* playerInfo;    // PlayerInfo
 };
 
 struct MappingSet {
@@ -137,6 +139,7 @@ struct MappingSet {
     Member methodItemTransKey;
     Member methodClickSlot;
     Member fieldSwapAction;       // SlotActionType.SWAP static
+    Member methodConnection, methodEntityUuid, methodPlayerInfo, methodLatency, methodEntityById;
 };
 
 // --- Mojang official mappings (NeoForge / Forge runtime) -------------------
@@ -167,6 +170,8 @@ inline constexpr MappingSet kMojang{
         "net/minecraft/world/inventory/ClickType",
         "net/minecraft/world/entity/player/Inventory",
         "net/minecraft/world/item/Item",
+        "net/minecraft/client/multiplayer/ClientPacketListener",
+        "net/minecraft/client/multiplayer/PlayerInfo",
     },
 
     {"getInstance",  "()Lnet/minecraft/client/Minecraft;"},
@@ -243,6 +248,11 @@ inline constexpr MappingSet kMojang{
     {"getDescriptionId", "()Ljava/lang/String;"},
     {"handleInventoryMouseClick", "(IIILnet/minecraft/world/inventory/ClickType;Lnet/minecraft/world/entity/player/Player;)V"},
     {"SWAP",             "Lnet/minecraft/world/inventory/ClickType;"},
+    {"getConnection", "()Lnet/minecraft/client/multiplayer/ClientPacketListener;"},
+    {"getUUID", "()Ljava/util/UUID;"},
+    {"getPlayerInfo", "(Ljava/util/UUID;)Lnet/minecraft/client/multiplayer/PlayerInfo;"},
+    {"getLatency", "()I"},
+    {"getEntity", "(I)Lnet/minecraft/world/entity/Entity;"},
 };
 
 // --- Yarn (Fabric *development* runtime only) ------------------------------

@@ -26,9 +26,12 @@
 #include "../common/shared_state.hpp"
 #include "process.hpp"
 #include "esp_geometry.hpp"
+#include "esp_renderer.hpp"
 #include "control_panel.hpp"
+#include "combat_menu.hpp"
 #include "aura_renderer.hpp"
 #include "aura_blend_dx11.hpp"
+#include "item_icon_atlas_dx11.hpp"
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -38,28 +41,6 @@ struct ImDrawList;
 struct ImVec2;
 
 namespace mcov {
-
-struct VisualSettings {
-    bool  boxEsp       = true;
-    bool  skeleton     = true;
-    bool  filledBox    = false;
-    bool  tracers      = false;
-    bool  nameTags     = true;
-    bool  healthBars   = true;
-    bool  distanceText = true;
-
-    bool  showPlayers  = true;
-    bool  showHostiles = true;
-    bool  showOther    = false;
-
-    float maxDistance  = 128.0f;
-    float boxThickness = 1.6f;
-
-    float playerColor[4]  = {0.30f, 0.78f, 1.00f, 1.0f};
-    float hostileColor[4] = {1.00f, 0.35f, 0.35f, 1.0f};
-    float otherColor[4]   = {0.70f, 0.70f, 0.70f, 1.0f};
-    float tracerColor[4]  = {0.55f, 0.85f, 1.00f, 0.6f};
-};
 
 // The always-on HUD widgets, independent of the ImGui menu.
 struct HudSettings {
@@ -176,13 +157,12 @@ private:
     float DrawPerformancePanel(const WorldSnapshot& snapshot, float x, float y);
     void  DrawCompassStrip(const WorldSnapshot& snapshot);
     void  DrawReachMarker(const WorldSnapshot& snapshot);
-    void  DrawSkeleton(ImDrawList* draw, const EntitySnapshot& entity,
-                       const CameraProjection& projection, unsigned int colour);
     void  UpdateTriggerbot(const WorldSnapshot& snapshot);
     void  UpdateAimLock(const WorldSnapshot& snapshot);
     void  DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection& projection,
                        float width, float height);
     void  PushScanRequest();
+    void  PushCombatRequest();
     void  DrawBlocksTab();
 
     void SampleTelemetry(const WorldSnapshot& snapshot);
@@ -208,11 +188,14 @@ private:
     AuraConfig auraConfig_{};
     AuraRenderer auraRenderer_{};
     AuraBlendDX11 auraBlend_{};
+    ItemIconAtlasDX11 itemIcons_{};
     bool auraPrepared_ = false;
     control_panel::State menu_{};
     OverlaySettings settings_{};
     HudSettings     hud_{};
     CombatSettings   combat_{};
+    CombatMenu       combatMenu_{};
+    CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
 
     // Triggerbot pacing. Stored as a raw tick count so no clock type leaks into

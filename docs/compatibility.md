@@ -61,8 +61,13 @@ The renderer reads the shared POD snapshot and never calls JNI.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **9**; restart Minecraft and use the newly built
+Shared-memory version is now **10**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
+
+Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
+equipment slots for every supported profile. Optional detail sampling is cached,
+bounded and follows geometry publication. Missing player info remains unknown;
+it is never replaced with the local client's ping. World changes clear the cache.
 
 ## ESP geometry
 

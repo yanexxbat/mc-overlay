@@ -52,7 +52,10 @@ final class FrameTransformer implements ClassFileTransformer {
                     return new MethodVisitor(Opcodes.ASM8, next) {
                         @Override public void visitCode() {
                             super.visitCode();
-                            super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "begin", "()V", false);
+                            if (role == 3) {
+                                super.visitVarInsn(Opcodes.ALOAD, 0);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
+                            } else super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "begin", "()V", false);
                         }
                         @Override public void visitInsn(int opcode) {
                             if (role == 2 && opcode == Opcodes.RETURN)

@@ -1,1 +1,2 @@
 101 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/third_party/glass/data/fa/fa-solid-900.ttf"
+102 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/src/resources/equipment_atlas.png"

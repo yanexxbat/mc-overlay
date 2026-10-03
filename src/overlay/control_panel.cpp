@@ -162,7 +162,7 @@ void NavButton(State& state,const char* glyph,const char* label,Page page,float 
     }
     FocusOutline(p,extent);
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
-        const char* hint=page==Page::Combat ? "Aim lock and triggerbot" : page==Page::Blocks ? "Block ESP and loot filters" :
+        const char* hint=page==Page::Combat ? "Aim assist, attacks, auto totem and Combat Assist settings" : page==Page::Blocks ? "Block ESP and loot filters" :
                          page==Page::Visuals ? "Entity rendering" : "HUD and equipment";
         ImGui::SetTooltip("%s",hint);
     }
@@ -370,7 +370,7 @@ Actions Render(State& state,const Status& status,void* owner,Content content) {
     ImGui::BeginChild("navigation",ImVec2(navWidth-20*gScale,height-20*gScale),ImGuiChildFlags_None,ImGuiWindowFlags_NoScrollbar);
     ImGui::SetWindowFontScale(1.f);
     const float buttonWidth=navWidth-20*gScale;
-    NavButton(state,kSkull,"AIMBOT",Page::Combat,buttonWidth);
+    NavButton(state,kSkull,"COMBAT",Page::Combat,buttonWidth);
     NavButton(state,kEye,"VISUALS",Page::Visuals,buttonWidth);
     NavButton(state,kCube,"LOOT",Page::Blocks,buttonWidth);
     NavButton(state,kLayers,"HUD",Page::Hud,buttonWidth);
@@ -434,6 +434,9 @@ bool ComboRow(const char* label,int* value,const char* const* items,int count) {
 }
 bool SliderRow(const char* label,float* value,float min,float max,const char* format) {
     return Slider(label,value,min,max,format,ImGuiDataType_Float);
+}
+bool SliderDoubleRow(const char* label,double* value,double min,double max,const char* format) {
+    return Slider(label,value,min,max,format,ImGuiDataType_Double);
 }
 bool SliderIntRow(const char* label,int* value,int min,int max,const char* format) {
     return Slider(label,value,min,max,format,ImGuiDataType_S32);

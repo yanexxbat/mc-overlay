@@ -5,6 +5,7 @@
 // padding surprises. Bump kSharedVersion whenever anything below changes, or a
 // stale agent DLL will happily scribble a mismatched layout into the mapping.
 #pragma once
+#include "combat_bridge_state.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -14,7 +15,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 9;
+inline constexpr std::uint32_t kSharedVersion = 11;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -109,6 +110,7 @@ enum ControlFlags : std::uint32_t {
     kCtrlRequestUnload = 1u << 0, // ask the sampler to stop and detach cleanly
     kCtrlPauseSampling = 1u << 1, // stop JNI work but stay resident
     kCtrlAutoTotem     = 1u << 2, // keep a totem in the offhand
+    kCtrlEntityDetails = 1u << 3, // langsame Nametag-Daten nur bei Bedarf erfassen
 };
 
 enum EntityFlags : std::uint8_t {
@@ -124,30 +126,6 @@ enum EntityPose : std::uint8_t { kPoseStanding, kPoseCrouching, kPoseSwimming, k
 inline constexpr std::uint8_t kRigRiding = 1u << 0;
 
 // ---------------------------------------------------------------------------
-// Interpolated render anchor in doubles; bounds are offsets from that anchor.
-// All geometry/animation data is read by the JNI sampler, never by the renderer.
-// ---------------------------------------------------------------------------
-struct EntitySnapshot {
-    double        x, y, z;
-    float         width;
-    float         height;
-    float         health;
-    float         maxHealth;
-    float         distance;
-    float         yaw;        // body rotation, degrees - orients the skeleton
-    float         boundsMinX, boundsMinY, boundsMinZ;
-    float         boundsMaxX, boundsMaxY, boundsMaxZ;
-    float         modelHeight, headPitch, walkPhase, walkSpeed;
-    std::uint32_t entityId;
-    std::uint8_t  flags;
-    std::uint8_t  rigKind, pose, rigFlags;
-    char          name[kNameLen];
-};
-
-static_assert(std::is_trivially_copyable_v<EntitySnapshot>);
-static_assert(sizeof(EntitySnapshot) == 136, "EntitySnapshot layout changed - bump kSharedVersion");
-
-// ---------------------------------------------------------------------------
 // One equipment slot. maxDamage == 0 means the item has no durability bar
 // (a block, food, a totem), which is different from "full durability".
 // ---------------------------------------------------------------------------
@@ -157,11 +135,42 @@ struct ItemSnapshot {
     std::int32_t maxDamage;   // 0 == not damageable
     std::int32_t count;
     std::uint8_t present;     // 0 == slot empty
-    std::uint8_t _pad[3];
+    std::uint8_t _pad;
+    std::uint16_t iconIndex;  // eingebetteter Vanilla-Atlas; 0 = unbekanntes Item
 };
 
 static_assert(std::is_trivially_copyable_v<ItemSnapshot>);
 static_assert(sizeof(ItemSnapshot) == 56, "ItemSnapshot layout changed - bump kSharedVersion");
+
+struct EntityDetailsSnapshot {
+    std::int32_t ping = -1;   // echter Tablisten-Ping dieses Spielers; -1 = unbekannt
+    std::int32_t armorValue = 0;
+    ItemSnapshot equipment[kSlotCount]{};
+};
+static_assert(std::is_trivially_copyable_v<EntityDetailsSnapshot>);
+static_assert(sizeof(EntityDetailsSnapshot) == 344);
+
+// Interpolierter Weltanker und Geometrie bleiben schnell; Details stammen aus
+// dem langsamen Worker-Cache. Rendering ruft keine JNI-Funktionen auf.
+struct EntitySnapshot {
+    double        x, y, z;
+    float         width;
+    float         height;
+    float         health;
+    float         maxHealth;
+    float         distance;
+    float         yaw;
+    float         boundsMinX, boundsMinY, boundsMinZ;
+    float         boundsMaxX, boundsMaxY, boundsMaxZ;
+    float         modelHeight, headPitch, walkPhase, walkSpeed;
+    std::uint32_t entityId;
+    std::uint8_t  flags;
+    std::uint8_t  rigKind, pose, rigFlags;
+    char          name[kNameLen];
+    EntityDetailsSnapshot details;
+};
+static_assert(std::is_trivially_copyable_v<EntitySnapshot>);
+static_assert(sizeof(EntitySnapshot) == 480, "EntitySnapshot layout changed - bump kSharedVersion");
 
 // ---------------------------------------------------------------------------
 // One active status effect. durationTicks == -1 means infinite (beacon/command).
@@ -219,7 +228,7 @@ struct WorldSnapshot {
     std::int32_t foodLevel;
     std::int32_t armorValue;
     std::int32_t fps;
-    std::int32_t ping;
+    std::int32_t ping = -1;
     // Camera bob is reconstructed from sampled walk distance and amplitude.
     std::uint8_t viewBobbing;
     std::uint8_t _padBob[3];
@@ -285,6 +294,8 @@ struct SharedBlock {
     std::atomic<std::uint32_t> scanIntervalMs;
     std::atomic<std::uint32_t> _scanPad;
 
+    SharedMailbox<CombatRequest> combatRequest; // Overlay -> Client-Tick, eigener Writer.
+    SharedMailbox<CombatReport> combatReport;   // Client-Tick -> Overlay, eigener Writer.
     WorldSnapshot snapshot;
 };
 

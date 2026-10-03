@@ -2,6 +2,7 @@
 // window, Minecraft process, attach helper, input injection or JNI is used.
 #include "overlay/overlay.hpp"
 #include "common/flat_style.hpp"
+#include "common/equipment_icons.hpp"
 #include "overlay/menu_motion.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
@@ -45,7 +46,30 @@ struct OverlayUiCheck {
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
     static void ResetVisuals(Overlay& o) { o.ResetMenuPage(Page::Visuals); }
     static void AllowCombat(Overlay& o) { o.combat_.aimLock=o.combat_.triggerbot=true; }
+    static CombatMenu& CombatEditor(Overlay& o) { return o.combatMenu_; }
+    static void ResetCombat(Overlay& o) { o.ResetMenuPage(Page::Combat); }
     static AuraConfig& AuraSettings(Overlay& o) { return o.auraConfig_; }
+    static VisualSettings& Visuals(Overlay& o) { return o.visuals_; }
+    static void InitIcons(Overlay& o,ID3D11Device* device) {
+        if (!o.itemIcons_.Texture() && !o.itemIcons_.Initialize(device))
+            throw std::runtime_error("Embedded item atlas initialization failed");
+    }
+    static void EquipmentPreview(EntitySnapshot& e) {
+        e.details.ping=42; e.details.armorValue=20;
+        constexpr const char* keys[]={"diamond_helmet","diamond_chestplate","diamond_leggings","diamond_boots","diamond_sword","totem_of_undying"};
+        constexpr const char* names[]={"Diamond Helmet","Diamond Chestplate","Diamond Leggings","Diamond Boots","Diamond Sword","Totem of Undying"};
+        for (int i=0;i<kSlotCount;++i) {
+            auto& item=e.details.equipment[i]; item.present=1; item.count=1;
+            CopyField(item.name,names[i]);
+            item.iconIndex=equipment_icons::Find(std::string("item.minecraft.")+keys[i]);
+            if (i<5) { item.maxDamage=300; item.damage=40+i*40; }
+        }
+    }
+    static void DrawEsp(Overlay& o,const WorldSnapshot& snapshot) {
+        o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
+        o.agentConnected_=true; o.heartbeatClock_.Observe(++pulse,GetTickCount64());
+        o.DrawEsp(snapshot);
+    }
     static AuraWorldSample AuraHead(Overlay& o) {
         const auto& target=o.auraRenderer_.Targets()[1];
         if (!target.valid) throw std::runtime_error("Production aura has no current target");
@@ -54,6 +78,7 @@ struct OverlayUiCheck {
         return world.trails[0][0];
     }
     static void DrawAura(Overlay& o,ID3D11Device* device) {
+        InitIcons(o,device);
         if (!o.auraBlend_.Callbacks().begin && !o.auraBlend_.Initialize(device))
             throw std::runtime_error("Aura blend preview initialization failed");
         o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
@@ -67,6 +92,8 @@ struct OverlayUiCheck {
         e.entityId=42; e.z=3.5; e.width=.6f; e.height=e.modelHeight=1.8f;
         e.distance=3.5f; e.health=e.maxHealth=20;
         e.flags=kEntityIsPlayer|kEntityIsLiving;
+        e.rigKind=kRigHumanoid;
+        EquipmentPreview(e);
         CopyField(e.name,"Aura target");
         if (!o.auraPrepared_) { AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList()); o.auraPrepared_=true; }
         o.DrawEsp(s);
@@ -137,6 +164,54 @@ ImGuiWindow* Child(const char* name) {
         if (std::strstr(w->Name,name)) return w;
     throw std::runtime_error("Missing menu child");
 }
+void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
+               const std::filesystem::path& output) {
+    mcov::OverlayUiCheck::InitIcons(overlay,device);
+    mcov::WorldSnapshot scene{};
+    scene.camY=.95; scene.fovDeg=65; scene.nearPlane=.05f; scene.farPlane=1024;
+    scene.ping=0; scene.entityCount=1; scene.hasTarget=1; scene.targetEntityId=42;
+    auto& entity=scene.entities[0];
+    entity.entityId=42; entity.z=3.3; entity.width=.6f; entity.height=entity.modelHeight=1.8f;
+    entity.distance=3.3f; entity.health=entity.maxHealth=20;
+    entity.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving;
+    entity.rigKind=mcov::kRigHumanoid;
+    mcov::OverlayUiCheck::EquipmentPreview(entity);
+    mcov::CopyField(entity.name,"test_entity");
+    auto& config=mcov::OverlayUiCheck::Visuals(overlay);
+    config=mcov::VisualSettings{};
+    const auto frame=[&](ImVec2 viewport) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=viewport; io.DeltaTime=1.f/60;
+        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto& draw=*ImGui::GetBackgroundDrawList();
+        const int clips=draw._ClipRectStack.Size;
+        mcov::OverlayUiCheck::DrawEsp(overlay,scene);
+        Require(draw._ClipRectStack.Size==clips,"ESP leaked a clipping rectangle");
+        for (const auto& vertex:draw.VtxBuffer)
+            Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"ESP generated invalid vertices");
+        const int count=draw.VtxBuffer.Size;
+        ImGui::Render(); return count;
+    };
+    Require(frame({585,745})>0,"Production ESP preview was empty");
+    SaveFrame(device,context,output/"esp-reference.png");
+    entity.health=8;
+    Require(frame({1280,800})>0,"Partially depleted entity lost its ESP");
+    SaveFrame(device,context,output/"esp-health.png");
+    // Namen ohne Nullterminator, fehlende Messwerte und Randpositionen sind echte IPC-Grenzfälle.
+    std::memset(entity.name,'W',sizeof(entity.name));
+    scene.ping=-1; entity.details.ping=-1; entity.x=2.2; entity.health=0;
+    Require(frame({480,360})>0,"Clipped ESP with a long name was rejected");
+    SaveFrame(device,context,output/"esp-edge.png");
+    entity.distance=std::numeric_limits<float>::quiet_NaN();
+    Require(frame({585,745})==0,"Invalid entity distance reached ESP or target info");
+    entity.distance=3.3f; entity.x=0; entity.flags|=mcov::kEntityIsSelf;
+    Require(frame({585,745})==0,"Self entity leaked into ESP or target info");
+    entity.flags&=~mcov::kEntityIsSelf; config.showPlayers=false;
+    Require(frame({585,745})==0,"Player filter did not hide the target info");
+    config=mcov::VisualSettings{};
+    config.boxEsp=config.skeleton=config.tracers=config.nameTags=config.healthBars=config.distanceText=config.targetInfo=false;
+    Require(frame({585,745})==0,"Disabling every ESP feature still drew target info");
+    config=mcov::VisualSettings{};
+}
 }
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -184,6 +259,48 @@ int main(int argc,char** argv) {
         Draw(overlay,Page::Combat,0,ImVec2(752,427));
         Draw(overlay,Page::Combat,0,ImVec2(752,427));
         SaveFrame(device.Get(),context.Get(),output/"reference-size.png");
+        // Alle Combat-Bereiche verwenden echte Stores und dieselbe begrenzte Menüfläche.
+        auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
+        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::Targets,mcov::CombatMenu::Section::Rotation,
+            mcov::CombatMenu::Section::Attacks,mcov::CombatMenu::Section::Sync,mcov::CombatMenu::Section::Friends,mcov::CombatMenu::Section::Debug};
+        constexpr const char* sectionFiles[]={"combat-targets.png","combat-rotation.png","combat-attacks.png","combat-sync.png","combat-friends.png","combat-debug.png"};
+        for(int theme=0;theme<4;++theme) for(int i=0;i<IM_ARRAYSIZE(sections);++i) {
+            editor.Select(sections[i]);
+            for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,theme,ImVec2(1280,800));
+            Require(editor.Current()==sections[i],"Combat subtab selection was lost");
+            Require(mcov::combat::Validate(editor.Store().Read().values),"Rendering Combat controls invalidated config");
+            if(theme==0) SaveFrame(device.Get(),context.Get(),output/sectionFiles[i]);
+            Draw(overlay,Page::Combat,theme,ImVec2(752,427));
+        }
+        const auto uuid=mcov::CombatMenu::ParseUuid("12345678-1234-5678-90ab-cdef12345678");
+        Require(uuid && uuid->high==0x1234567812345678 && uuid->low==0x90abcdef12345678,"Player UUID was parsed incorrectly");
+        Require(!mcov::CombatMenu::ParseUuid("12345678_1234-5678-90ab-cdef12345678") &&
+                !mcov::CombatMenu::ParseUuid("00000000000000000000000000000000") &&
+                !mcov::CombatMenu::ParseUuid(nullptr),"Invalid player UUID was accepted");
+        editor.Select(mcov::CombatMenu::Section::Targets);
+        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        auto* combatContent=Child("/content_");
+        auto* outer=ImGui::GetCurrentContext()->Tables.GetByKey(combatContent->GetID("combat_assist_settings"));
+        Require(outer,"Combat settings table missing");
+        auto* targets=ImGui::GetCurrentContext()->Tables.GetByKey(ImHashStr("target_selection",0,outer->ID));
+        Require(targets,"Target selector table missing");
+        const ImVec2 targetToggle(targets->Columns[0].MinX+38,targets->OuterRect.Min.y+18);
+        io.AddMousePosEvent(targetToggle.x,targetToggle.y); io.AddMouseButtonEvent(0,true);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        Require(!editor.Store().Read().values.target.enabled,"Target toggle was not published to ConfigStore");
+        targets=ImGui::GetCurrentContext()->Tables.GetByKey(ImHashStr("target_selection",0,outer->ID));
+        const ImVec2 doubleSlider(targets->Columns[1].MaxX-10,targets->OuterRect.Min.y+5*35.25f+17);
+        io.AddMousePosEvent(doubleSlider.x,doubleSlider.y); io.AddMouseButtonEvent(0,true);
+        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        Require(editor.Store().Read().values.target.coneDegrees>60,"Double slider did not publish the assist FOV");
+        Require(editor.Relations().Set(*uuid,mcov::combat::Relation::Friend),"UUID friend insertion failed");
+        mcov::OverlayUiCheck::ResetCombat(overlay);
+        Require(editor.Store().Read().values.target.enabled && editor.Store().Read().values.target.coneDegrees==20 &&
+                mcov::combat::Lookup(editor.Relations().Read(),*uuid)==mcov::combat::Relation::Neutral,"Combat reset left config or relations behind");
+        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        mcov::OverlayUiCheck::AllowCombat(overlay);
         // Click the first real Visuals row label; the backend setting must change.
         Draw(overlay,Page::Visuals,0,ImVec2(1280,800));
         auto* content=Child("/content_");
@@ -225,7 +342,7 @@ int main(int argc,char** argv) {
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         content=Child("/content_");
         const ImVec2 slider(content->DC.CursorStartPos.x+content->Size.x*.5f-24,
-                            content->DC.CursorStartPos.y+2*35.25f+17);
+                            content->DC.CursorStartPos.y+editor.NavigationHeight()+mcov::style::MenuFont()->FontSize+12.5f+2*35.25f+17);
         io.AddMousePosEvent(slider.x,slider.y); io.AddMouseButtonEvent(0,true);
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
@@ -270,6 +387,7 @@ int main(int argc,char** argv) {
         for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
         io.AddMousePosEvent(-100,-100);
+        EspChecks(overlay,device.Get(),context.Get(),output);
         auto auraFrame=[&] {
             io.DisplaySize={1280,800}; io.DeltaTime=1.f/60;
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();

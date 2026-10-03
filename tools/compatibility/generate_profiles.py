@@ -60,6 +60,11 @@ def owners(classes):
     add('item', 'methodItemTransKey')
     add('interactionMgr', 'methodClickSlot')
     add('slotAction', 'fieldSwapAction')
+    add('client', 'methodConnection')
+    add('entity', 'methodEntityUuid')
+    add('connection', 'methodPlayerInfo')
+    add('playerInfo', 'methodLatency')
+    add('clientLevel', 'methodEntityById')
     result['fieldSyncId'] = 'net/minecraft/world/inventory/AbstractContainerMenu'
     return result
 
@@ -295,17 +300,17 @@ def generate(cache):
         gui = p['client_gui']
         output.append(f'     {quote(p["gui_class"])}, {{{quote(gui[0])}, {quote(gui[1])}}}, &kGeometry{i}}},')
     output.extend(['};', '} // namespace mcov::mappings', ''])
-    (ROOT / 'src/agent/generated_profiles.hpp').write_text('\n'.join(output), encoding='utf-8')
-    (ROOT / 'docs/compatibility-signatures.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8')
+    (ROOT / 'src/agent/generated_profiles.hpp').write_text('\n'.join(output), encoding='utf-8', newline='\n')
+    (ROOT / 'docs/compatibility-signatures.json').write_text(json.dumps(report, indent=2) + '\n', encoding='utf-8', newline='\n')
     (cache / 'profiles.json').write_text(json.dumps(profiles, indent=2) + '\n', encoding='utf-8')
     java = ['// Generated from the same audited profiles as generated_profiles.hpp.',
             'package mcov.sync;', 'final class FrameProfiles {',
-            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc) {}',
+            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc, String tick, String tickDesc) {}',
             '    static final Profile[] PROFILES = {']
     for p in profiles:
         frame, update = p['geometry']['members']['runFrame'], p['geometry']['members']['updateCamera']
         values = [p['id'], p['classes']['client'], *frame, p['classes']['camera'], *update,
-                  *p['members']['methodGetInstance'], *p['members']['methodCameraPosition'], *p['members']['fieldCameraPosition']]
+                  *p['members']['methodGetInstance'], *p['members']['methodCameraPosition'], *p['members']['fieldCameraPosition'], *p['geometry']['members']['clientTick']]
         java.append('        new Profile(' + ', '.join(quote(v) for v in values) + '),')
     java.extend(['    };', '    static boolean isTarget(String owner) {',
         '        for (Profile p : PROFILES) if (p.client().equals(owner) || p.camera().equals(owner)) return true;',
@@ -320,8 +325,9 @@ def generate(cache):
         '        for (Profile p : PROFILES) {',
         '            if (p.client().equals(owner) && p.frame().equals(name) && p.frameDesc().equals(descriptor)) return 1;',
         '            if (p.camera().equals(owner) && p.update().equals(name) && p.updateDesc().equals(descriptor)) return 2;',
+        '            if (p.client().equals(owner) && p.tick().equals(name) && p.tickDesc().equals(descriptor)) return 3;',
         '        }', '        return 0;', '    }', '}', ''])
-    (ROOT / 'tools/frame-sync/FrameProfiles.java').write_text('\n'.join(java), encoding='utf-8')
+    (ROOT / 'tools/frame-sync/FrameProfiles.java').write_text('\n'.join(java), encoding='utf-8', newline='\n')
     print(f'Generated {len(profiles)} runtime profiles from checksum-verified official clients.')
 
 

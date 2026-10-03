@@ -1,4 +1,5 @@
 #include "overlay.hpp"
+#include "../combat/debug_hud.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -195,6 +196,11 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         CleanupDeviceD3D();
         return false;
     }
+    if (!itemIcons_.Initialize(device_)) {
+        if (error) *error="could not load the embedded equipment icon atlas";
+        CleanupDeviceD3D();
+        return false;
+    }
     CreateRenderTarget();
     return true;
 }
@@ -212,6 +218,7 @@ void Overlay::CleanupRenderTarget() {
 }
 
 void Overlay::CleanupDeviceD3D() {
+    itemIcons_.Shutdown();
     auraBlend_.Shutdown();
     auraRenderer_.Reset();
     auraPrepared_ = false;
@@ -472,8 +479,12 @@ bool Overlay::RunFrame() {
     // Re-assert every frame so the agent always reflects the UI, even after it
     // was re-injected and zeroed the block.
     if (agentConnected_) PushScanRequest();
+    if (agentConnected_) PushCombatRequest();
 
     if (shouldDraw) {
+        if(combatMenu_.Store().Read().values.enabled && combatReport_.sampledAtMs &&
+           ::GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs)
+            combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),combatReport_.debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
         if (haveSnapshot_) {
             DrawEsp(lastSnapshot_);
             DrawHud(lastSnapshot_);
@@ -540,7 +551,7 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
 
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
-                                 visuals_.nameTags || visuals_.healthBars || visuals_.distanceText;
+                                 visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo;
     if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) return;
 
@@ -555,80 +566,8 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     DrawBlockEsp(snapshot, projection, width, height);
     if (!entitiesEnabled) return;
 
-    ImDrawList* draw = ImGui::GetBackgroundDrawList();
-    const ImVec2 screenCentre(width * 0.5f, height);
-
-    for (std::uint32_t i = 0; i < snapshot.entityCount && i < kMaxEntities; ++i) {
-        const EntitySnapshot& entity = snapshot.entities[i];
-
-        if (entity.distance > visuals_.maxDistance) continue;
-
-        const bool isPlayer  = (entity.flags & kEntityIsPlayer) != 0;
-        const bool isHostile = (entity.flags & kEntityIsHostile) != 0;
-        if (isPlayer && !visuals_.showPlayers) continue;
-        if (!isPlayer && isHostile && !visuals_.showHostiles) continue;
-        if (!isPlayer && !isHostile && !visuals_.showOther) continue;
-
-        const float* colour = isPlayer  ? visuals_.playerColor
-                            : isHostile ? visuals_.hostileColor
-                                        : visuals_.otherColor;
-
-        ScreenRect rect;
-        const bool hasBox = projection.Bounds(EntityBounds(entity), rect);
-        if (!hasBox) {
-            if (visuals_.skeleton) DrawSkeleton(draw, entity, projection, PackColor(colour));
-            continue;
-        }
-        const ImVec2 topLeft(rect.left, rect.top), bottomRight(rect.right, rect.bottom);
-        const float labelX = (rect.left + rect.right) * 0.5f;
-
-        if (visuals_.boxEsp) {
-            if (visuals_.filledBox) {
-                draw->AddRectFilled(topLeft, bottomRight, PackColor(colour, 0.18f), 2.0f);
-            }
-            // Dark outline under the coloured one keeps the box readable against
-            // bright terrain (snow, sand) without needing a shader.
-            draw->AddRect(ImVec2(topLeft.x - 1.0f, topLeft.y - 1.0f),
-                          ImVec2(bottomRight.x + 1.0f, bottomRight.y + 1.0f),
-                          IM_COL32(0, 0, 0, 170), 2.0f, 0, visuals_.boxThickness + 2.0f);
-            draw->AddRect(topLeft, bottomRight, PackColor(colour), 2.0f, 0, visuals_.boxThickness);
-        }
-
-        if (visuals_.skeleton) DrawSkeleton(draw, entity, projection, PackColor(colour));
-
-        if (visuals_.tracers) {
-            draw->AddLine(screenCentre, ImVec2(labelX, rect.bottom), PackColor(visuals_.tracerColor), 1.2f);
-        }
-
-        if (visuals_.healthBars && (entity.flags & kEntityIsLiving) && entity.maxHealth > 0.0f) {
-            const float fraction = std::clamp(entity.health / entity.maxHealth, 0.0f, 1.0f);
-            const ImVec2 barTop(topLeft.x - 6.0f, topLeft.y);
-            const ImVec2 barBottom(topLeft.x - 2.0f, bottomRight.y);
-            draw->AddRectFilled(ImVec2(barTop.x - 1.0f, barTop.y - 1.0f),
-                                ImVec2(barBottom.x + 1.0f, barBottom.y + 1.0f),
-                                IM_COL32(0, 0, 0, 170));
-            const float fillTop = barBottom.y - (barBottom.y - barTop.y) * fraction;
-            draw->AddRectFilled(ImVec2(barTop.x, fillTop), barBottom,
-                                IM_COL32(static_cast<int>(255 * (1.0f - fraction)),
-                                         static_cast<int>(220 * fraction), 60, 235));
-        }
-
-        if (visuals_.nameTags || visuals_.distanceText) {
-            char label[96];
-            if (visuals_.nameTags && visuals_.distanceText) {
-                std::snprintf(label, sizeof(label), "%s  %.0fm", entity.name, entity.distance);
-            } else if (visuals_.nameTags) {
-                std::snprintf(label, sizeof(label), "%s", entity.name);
-            } else {
-                std::snprintf(label, sizeof(label), "%.0fm", entity.distance);
-            }
-
-            const ImVec2 textSize = ImGui::CalcTextSize(label);
-            const ImVec2 textPos(labelX - textSize.x * 0.5f, topLeft.y - textSize.y - 3.0f);
-            draw->AddText(ImVec2(textPos.x + 1.0f, textPos.y + 1.0f), IM_COL32(0, 0, 0, 200), label);
-            draw->AddText(textPos, PackColor(colour), label);
-        }
-    }
+    EspRenderer::Draw(*ImGui::GetBackgroundDrawList(),snapshot,projection,visuals_,
+                      {width,height},ImGui::GetMainViewport()->Pos,itemIcons_.Texture());
 }
 
 // ---------------------------------------------------------------------------
@@ -995,28 +934,10 @@ void Overlay::DrawHud(const WorldSnapshot& snapshot) {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton ESP
-//
-// Reconstruct recognised humanoid rigs from sampler position, body yaw, model
-// height, pose and gait. Non-humanoid entities keep their accurate hitbox ESP.
-// Renderer-specific arm/item animations are outside this reconstruction.
-// ---------------------------------------------------------------------------
-void Overlay::DrawSkeleton(ImDrawList* draw, const EntitySnapshot& entity,
-                           const CameraProjection& projection, unsigned int colour) {
-    if (entity.rigKind == kRigNone) return;
-    const auto rig = BuildHumanoidRig(entity);
-    for (const auto& edge : HumanoidRig::edges) {
-        ScreenPoint a, b;
-        if (!projection.Segment(rig.joints[edge[0]], rig.joints[edge[1]], a, b)) continue;
-        draw->AddLine(ImVec2(a.x, a.y), ImVec2(b.x, b.y), IM_COL32(0, 0, 0, 170), 3.0f);
-        draw->AddLine(ImVec2(a.x, a.y), ImVec2(b.x, b.y), colour, 1.4f);
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Triggerbot
 // ---------------------------------------------------------------------------
 void Overlay::UpdateTriggerbot(const WorldSnapshot& snapshot) {
+    if(combatMenu_.Store().Read().values.enabled) return;
     if (!combat_.triggerbot) return;
 
     // Never while our own menu is up - the injected click would land on the UI.
@@ -1072,7 +993,29 @@ void Overlay::PushScanRequest() {
     std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
     if (combat_.autoTotem) flags |= kCtrlAutoTotem;
     else                   flags &= ~kCtrlAutoTotem;
+    const bool details=visuals_.targetInfo || (visuals_.nameTags && (visuals_.nameTagPing || visuals_.nameTagEquipment));
+    if (details) flags|=kCtrlEntityDetails;
+    else flags&=~kCtrlEntityDetails;
     block->controlFlags.store(flags, std::memory_order_release);
+}
+
+void Overlay::PushCombatRequest() {
+    auto* block=channel_.block(); if(!block) return;
+    const auto version=combatMenu_.Store().Read();
+    CombatRequest request;
+    request.sentAtMs=::GetTickCount64(); request.revision=version.revision;
+    request.config=version.values; request.relations=combatMenu_.Relations().Read();
+    request.verticalFov=haveSnapshot_ && lastSnapshot_.fovDeg>1 ? lastSnapshot_.fovDeg : 70;
+    request.viewportHeight=std::max(1.f,ImGui::GetIO().DisplaySize.y);
+    request.inputAllowed=!menuVisible_ && IsForegroundWindowOwnedBy(target_.pid);
+    block->combatRequest.Publish(request);
+    CombatReport report;
+    if(block->combatReport.Read(report)) {
+        combatReport_=report;
+        if(report.sampledAtMs && request.sentAtMs>=report.sampledAtMs && request.sentAtMs-report.sampledAtMs>1000)
+            combatReport_.status=CombatBridgeStatus::Unavailable;
+        combatMenu_.Report(combatReport_);
+    }
 }
 
 void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection& projection,
@@ -1126,6 +1069,7 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
 // Aim lock
 // ---------------------------------------------------------------------------
 void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
+    if(combatMenu_.Store().Read().values.enabled) return;
     if (!combat_.aimLock || menuVisible_) return;
     if (!IsForegroundWindowOwnedBy(target_.pid)) return;
     if (!(::GetAsyncKeyState(combat_.aimKey) & 0x8000)) return;
@@ -1235,7 +1179,7 @@ void Overlay::DrawMenu() {
 
 void Overlay::ResetMenuPage(panel::Page page) {
     switch (page) {
-        case panel::Page::Combat: combat_=CombatSettings{}; nextClickTick_=0; clickCount_=0; break;
+        case panel::Page::Combat: combat_=CombatSettings{}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
         case panel::Page::Visuals: visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; auraRenderer_.Reset(); break;
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; break;
         case panel::Page::Hud: hud_=HudSettings{}; break;
@@ -1261,6 +1205,16 @@ void Overlay::DrawVisualsTab() {
                 panel::CheckRow("Name tags",&visuals_.nameTags);
                 panel::CheckRow("Health bars",&visuals_.healthBars);
                 panel::CheckRow("Distance labels",&visuals_.distanceText);
+                panel::CheckRow("Target info",&visuals_.targetInfo);
+                ImGui::EndTable();
+            }
+            MenuHeading("Name tags");
+            if (panel::BeginRows("nametag_controls")) {
+                ImGui::BeginDisabled(!visuals_.nameTags);
+                panel::CheckRow("Show HP",&visuals_.nameTagHealth);
+                panel::CheckRow("Player ping",&visuals_.nameTagPing);
+                panel::CheckRow("Armour / held items",&visuals_.nameTagEquipment);
+                ImGui::EndDisabled();
                 ImGui::EndTable();
             }
             MenuHeading("Target aura");
@@ -1292,6 +1246,9 @@ void Overlay::DrawVisualsTab() {
                 panel::CheckRow("Other entities",&visuals_.showOther);
                 panel::SliderRow("Max distance",&visuals_.maxDistance,8,512,"%.0f m");
                 panel::SliderRow("Box thickness",&visuals_.boxThickness,.5f,4,"%.1f px");
+                panel::SliderRow("Box rounding",&visuals_.boxRounding,0,16,"%.0f px");
+                panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
+                panel::SliderRow("Label size",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
             }
             MenuHeading("Colours");
@@ -1299,6 +1256,7 @@ void Overlay::DrawVisualsTab() {
                 panel::ColorRow("Players",visuals_.playerColor);
                 panel::ColorRow("Hostiles",visuals_.hostileColor);
                 panel::ColorRow("Other entities",visuals_.otherColor);
+                panel::ColorRow("Health accent",visuals_.healthColor);
                 panel::ColorRow("Tracers",visuals_.tracerColor);
                 ImGui::EndTable();
             }
@@ -1308,11 +1266,13 @@ void Overlay::DrawVisualsTab() {
 
 
 void Overlay::DrawCombatTab() {
+    if(combatMenu_.DrawNavigation()!=CombatMenu::Section::Modules) { combatMenu_.DrawSettings(); return; }
     MenuColumns("combat_columns",[&](int column) {
         if (column==0) {
+            MenuHeading("Aim assist");
             if (panel::BeginRows("aim_controls")) {
                 panel::CheckRow("Enable aim assist",&combat_.aimLock);
-                const char* targets[]={"Crosshair","Players"};
+                const char* targets[]={"Living entities","Players"};
                 int target=combat_.aimPlayersOnly ? 1 : 0;
                 if (panel::ComboRow("Target selection",&target,targets,IM_ARRAYSIZE(targets))) combat_.aimPlayersOnly=target==1;
                 ImGui::BeginDisabled(!combat_.aimLock);
@@ -1338,6 +1298,7 @@ void Overlay::DrawCombatTab() {
                 ImGui::EndTable();
             }
         } else {
+            MenuHeading("Triggerbot");
             if (panel::BeginRows("trigger_controls")) {
                 panel::CheckRow("Enable triggerbot",&combat_.triggerbot);
                 ImGui::BeginDisabled(!combat_.triggerbot);

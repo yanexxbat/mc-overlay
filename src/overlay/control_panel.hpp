@@ -42,6 +42,7 @@ bool BeginRows(const char* id);
 bool CheckRow(const char* label, bool* value);
 bool ComboRow(const char* label, int* value, const char* const* items, int count);
 bool SliderRow(const char* label, float* value, float min, float max, const char* format);
+bool SliderDoubleRow(const char* label, double* value, double min, double max, const char* format);
 bool SliderIntRow(const char* label, int* value, int min, int max, const char* format);
 bool ColorRow(const char* label, float* value);
 void ValueRow(const char* label, const char* value);

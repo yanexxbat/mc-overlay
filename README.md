@@ -4,6 +4,11 @@ C++20 / Dear ImGui overlay with a JNI/JVMTI agent supplying live game state.
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**, including Forge's
 version-specific member names. See [compatibility and verification](docs/compatibility.md).
 
+The modular C++20 [Combat Assist reference core](docs/combat-assist.md) includes
+deterministic selection/rotation/cooldown/sync tests and an executable simulator
+(`build/bin/mcov_combat_demo.exe`). It is not connected to Minecraft yet and does
+not replace the existing Aim Lock/Triggerbot or send live movement packets.
+
 ---
 
 ## The architectural correction you need to know about
@@ -190,14 +195,18 @@ lasts for the session, including when closing and reopening the menu. Dragging
 tracks the pointer directly and clamps the menu inside the game viewport.
 Appearance -> Center menu restores central placement.
 
-AIMBOT opens the existing combat modules, VISUALS entity rendering, LOOT block
+COMBAT opens the combat modules and settings, VISUALS entity rendering, LOOT block
 ESP, and HUD equipment and overlays. The three small icons open player stats,
 appearance/menu actions, and overlay/agent settings. Appearance includes the
 four existing palettes, compact navigation, reduced motion, recentering, page
 reset, connection status and menu closing. Font Awesome icons are embedded as
 an executable resource.
-Aim/trigger activation keys and target filtering are bound to CombatSettings;
-the reference's unrelated game features are not added. All six original pages
+Aim/trigger activation keys and target filtering are bound to CombatSettings.
+Combat groups Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
+Modules contains live Aim Assist, Triggerbot and Auto Totem. The other sections
+edit the reference Combat Assist configuration and UUID relations; the UI states
+that its live bridge is not connected, and live activation stays disabled.
+All six original pages
 remain accessible. The injector retains its existing flat interface.
 
 The menu uses the existing Win32/D3D11 backend and pinned ImGui version.
@@ -216,6 +225,24 @@ shows the desktop version. The check also exercises menu dragging, position
 retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
 
 ## Target aura
+
+Entity ESP follows the supplied clean reference: rounded near-white boxes,
+thin skeleton lines, a white-to-violet health bar and compact labels. Visuals
+also offers a centered target info strip with distance, name, health and the
+the selected player's ping when available. Box rounding, line widths, label size
+and the health accent are configurable. The renderer uses the existing
+coherent snapshot without extra JNI calls. Off-screen reference, health and
+edge-case previews are in `build/ui-preview/esp-*.png`.
+
+Nametags now show distance, name, HP and the player's actual tab-list ping.
+An equipment row above shows worn armor and both held items with vanilla
+inventory icons, durability bars and stack counts. Visuals → Name tags has
+separate HP, ping and equipment switches. Missing player info shows `n/a`;
+mobs have no player ping. Unsupported/modded icons use a `?` placeholder.
+The embedded atlas uses 796 vanilla 26.2 item sprites; it does not read custom
+resource packs or render 3D block/item models. Detail sampling runs only in the
+agent worker, in a bounded four-entity/3 ms pass every 50 ms with a 300 ms cache
+refresh interval per entity. Position/camera capture is published first.
 
 The optional target aura is configured under Visuals → Target aura. Soft orbs
 with white cores, violet halos and cyan fog trails orbit the current target in
@@ -410,9 +437,8 @@ runtime list. To regenerate, use the commands in `docs/compatibility.md`.
 
 Deliberately left unwired, each marked in the source:
 
-- **Ping** — needs `getConnection() -> getPlayerInfo(UUID) -> getLatency()` plus
-  the local UUID. Published as `-1` so the UI shows "not sampled" rather than a
-  fabricated zero.
+- **Ping** — sampled from `getPlayerInfo(UUID).getLatency()` per player in the
+  bounded detail worker. Missing player info stays `-1`; nametags show `n/a`.
 - **Food / saturation** — one more class chain (`getFoodData()` /
   `getHungerManager()`). Wire it like the FOV chain in `SampleCamera`.
 - **FPS** — reads `Minecraft.fps`, a private static that has moved between
@@ -446,7 +472,7 @@ including repeated attach, camera methods with multiple return paths and
 classes without the optional camera getter. Namespace tests check inherited
 Fabric method names; connection checks cover world loading and high overlay FPS.
 Flat UI and ESP projection/rig checks also pass.
-Restart Minecraft before using shared-memory version 9 with the rebuilt binaries.
+Restart Minecraft before using shared-memory version 10 with the rebuilt binaries.
 
 Live Minecraft/Forge sessions and actual Java 17/25 VMs have not been exercised
 here. See [the compatibility matrix and reproducible checks](docs/compatibility.md).

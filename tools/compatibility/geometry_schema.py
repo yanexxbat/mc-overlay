@@ -11,6 +11,8 @@ def geometry_schema(version):
         'deltaClass': 'net/minecraft/client/DeltaTracker' if version == '26.2' else '',
         'avatarOwnerClass': 'net/minecraft/client/player/AbstractClientPlayer' if modern else '',
         'avatarStateClass': 'net/minecraft/client/entity/ClientAvatarState' if modern else '',
+        'handClass': 'net/minecraft/world/InteractionHand',
+        'hitClass': 'net/minecraft/world/phys/HitResult',
     }
     entity = 'net/minecraft/world/entity/Entity'
     living = 'net/minecraft/world/entity/LivingEntity'
@@ -50,6 +52,23 @@ def geometry_schema(version):
         add('partialTick', camera, 'getPartialTickTime', '()F', 'methods')
     add('cameraEntity', camera, 'entity', 'L' + entity + ';')
     add('runFrame', client, 'runTick', '(Z)V', 'methods')
+    add('clientTick', client, 'tick', '()V', 'methods')
+    add('clientPaused', client, 'isPaused', '()Z', 'methods')
+    add('setYaw', entity, 'setYRot', '(F)V', 'methods')
+    add('setPitch', entity, 'setXRot', '(F)V', 'methods')
+    add('eyePosition', entity, 'getEyePosition', '()Lnet/minecraft/world/phys/Vec3;', 'methods')
+    add('lineOfSight', living, 'hasLineOfSight', '(L' + entity + ';)Z', 'methods')
+    add('attackCooldown', player, 'getAttackStrengthScale', '(F)F', 'methods')
+    if version == '1.20.1':
+        add('farReach', 'net/minecraft/client/multiplayer/MultiPlayerGameMode', 'hasFarPickRange', '()Z', 'methods')
+    else:
+        add('attackReach', player, 'entityInteractionRange', '()D', 'methods')
+    add('attackEntity', 'net/minecraft/client/multiplayer/MultiPlayerGameMode', 'attack', '(L' + player + ';L' + entity + ';)V', 'methods')
+    add('swingHand', living, 'swing', '(L' + classes['handClass'] + ';)V', 'methods')
+    add('mainHand', classes['handClass'], 'MAIN_HAND', 'L' + classes['handClass'] + ';', static=True)
+    add('pickBlocks', entity, 'pick', '(DFZ)L' + classes['hitClass'] + ';', 'methods')
+    add('hitLocation', classes['hitClass'], 'getLocation', '()Lnet/minecraft/world/phys/Vec3;', 'methods')
+    add('entityAlive', entity, 'isAlive', '()Z', 'methods')
     if version == '26.2':
         add('updateCamera', camera, 'update', '(Lnet/minecraft/client/DeltaTracker;)V', 'methods')
     else:

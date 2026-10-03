@@ -52,10 +52,25 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
     for (method, desc), static in methods.items():
         special = specials.get((method, desc))
         if method == '<init>':
-            code = b'\x2a\xb7' + u2(cp.ref(10, parent_name, '<init>', '()V')) + b'\xb1'
+            code = b'\x2a\xb7' + u2(cp.ref(10, parent_name, '<init>', '()V'))
+            if ('testUuid','Ljava/util/UUID;') in fields:
+                code += b'\x2a\xb8' + u2(cp.ref(10,'java/util/UUID','randomUUID','()Ljava/util/UUID;'))
+                code += b'\xb5' + u2(cp.ref(9,name,'testUuid','Ljava/util/UUID;'))
+            if ('testPitch','F') in fields:
+                code += b'\x2a\x13' + u2(cp.number('F',10)) + b'\xb5' + u2(cp.ref(9,name,'testPitch','F'))
+            code += b'\xb1'
         elif special and special[0] == 'field':
             result = special[2][0]
-            code = b'\xb2' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae'}.get(result, b'\xb0')
+            code = b'\xb2' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae', 'I': b'\xac', 'Z': b'\xac', 'J': b'\xad'}.get(result, b'\xb0')
+        elif special and special[0] == 'instance_field':
+            result = special[2][0]
+            code = b'\x2a\xb4' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae', 'I': b'\xac', 'Z': b'\xac', 'J': b'\xad'}.get(result, b'\xb0')
+        elif special and special[0] == 'set_float':
+            code = b'\x2a\x23\xb5' + u2(cp.ref(9, name, special[1], 'F')) + b'\xb1'
+        elif special and special[0] == 'attack':
+            player, cooldown = special[1:]
+            code = b'\x2b\x0b\xb5' + u2(cp.ref(9, player, cooldown, 'F'))
+            code += b'\xb2' + u2(cp.ref(9, name, 'testAttacks', 'I')) + b'\x04\x60\xb3' + u2(cp.ref(9, name, 'testAttacks', 'I')) + b'\xb1'
         elif special and special[0] == 'statics':
             code = b''
             for field, field_desc in special[1]:
@@ -69,7 +84,10 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             code = b'\xbb' + u2(cp.cls(owner)) + b'\x59\xb7' + u2(cp.ref(10, owner, '<init>', '()V')) + b'\xb0'
         elif special and special[0] == 'number':
             kind, value = special[1:]
-            code = (b'\x14' if kind == 'D' else b'\x13') + u2(cp.number(kind, value)) + (b'\xaf' if kind == 'D' else b'\xae')
+            code = (b'\x11' + struct.pack('>h', int(value)) + b'\xac') if kind in ('I', 'Z') else (
+                (b'\x14' if kind == 'D' else b'\x13') + u2(cp.number(kind, value)) + (b'\xaf' if kind == 'D' else b'\xae'))
+        elif special and special[0] == 'uuid':
+            code = b'\xb8' + u2(cp.ref(10, 'java/util/UUID', 'randomUUID', '()Ljava/util/UUID;')) + b'\xb0'
         elif special and special[0] == 'nop':
             code = b'\x00\xb1'
         elif special and special[0] == 'camera_branch':
@@ -190,12 +208,62 @@ def generate(profiles_path, output):
         cls(profile['world_class'])['specials'][tuple(profile['version_id'])] = ('string', profile['version'])
         for key, field, role in [('methodGetInstance', 'testInstance', 'client'),
                                   ('methodGetCamera', 'testCamera', 'gameRenderer'),
-                                  ('methodCameraPosition', 'testPosition', 'camera')]:
+                                  ('methodCameraPosition', 'testPosition', 'camera'),
+                                  ('methodConnection', 'testConnection', 'client'),
+                                  ('methodPlayerInfo', 'testPlayerInfo', 'connection'),
+                                  ('methodEntityById', 'testEntity', 'clientLevel'),
+                                  ('methodGetEquipped', 'testEquipment', 'livingEntity'),
+                                  ('methodStackGetItem', 'testItem', 'itemStack')]:
             member = profile['members'][key]
             desc = member[1].split(')')[1]
             owner = profile['classes'][role]
             add(owner, 'fields', field, desc, True)
             cls(owner)['specials'][tuple(member)] = ('field', field, desc)
+        add(core['equipSlot'], 'methods', '<clinit>', '()V', True)
+        slots=[tuple(profile['members'][key]) for key in
+               ('slotHead','slotChest','slotLegs','slotFeet','slotMainHand','slotOffHand')]
+        cls(core['equipSlot'])['specials'][('<clinit>', '()V')] = ('statics', slots)
+        member=profile['members']['methodEntityUuid']
+        cls(core['entity'])['specials'][tuple(member)] = ('uuid',)
+        # Echte Zustandsänderungen für die native Client-Tick-Brücke.
+        hand=geometry['classes']['handClass']
+        add(hand,'methods','<clinit>','()V',True)
+        cls(hand)['specials'][('<clinit>','()V')]=('statics',[tuple(geometry['members']['mainHand'])])
+        for key, backing, static in [('clientPaused','testPaused',True),('eyePosition','testEye',True),
+                                     ('lineOfSight','testVisible',True),('attackCooldown','testCooldown',False),
+                                     ('attackReach','testReach',True),('farReach','testFarReach',True),
+                                     ('pickBlocks','testHit',True),('hitLocation','testLocation',True),
+                                     ('entityAlive','testAlive',False)]:
+            if key not in geometry['members']: continue
+            member=geometry['members'][key]; owner=geometry['owners'][key]; desc=member[1].split(')')[1]
+            add(owner,'fields',backing,desc,static)
+            cls(owner)['specials'][tuple(member)]=('field' if static else 'instance_field',backing,desc)
+        for key,backing in [('methodGetX','testX'),('methodGetY','testY'),('methodGetZ','testZ'),('methodGetId','testId'),
+                            ('methodEntityYaw','testYaw'),('methodGetHealth','testHealth'),('methodEntityUuid','testUuid')]:
+            member=profile['members'][key]; owner=owner_spec[key]; desc=member[1].split(')')[1]
+            add(owner,'fields',backing,desc,False)
+            cls(owner)['specials'][tuple(member)]=('instance_field',backing,desc)
+        # Ping-Test kann eine leere UUID nicht nutzen; alle Test-Entities initialisieren diese selbst.
+        for key,backing in [('setYaw','testYaw'),('setPitch','testPitch')]:
+            member=geometry['members'][key]; owner=geometry['owners'][key]
+            add(owner,'fields',backing,'F',False); cls(owner)['specials'][tuple(member)]=('set_float',backing)
+        member=geometry['members']['headPitch']
+        cls(geometry['owners']['headPitch'])['specials'][tuple(member)]=('instance_field','testPitch','F')
+        member=profile['members']['methodEntitiesForRendering']
+        add(core['clientLevel'],'fields','testIterable','Ljava/lang/Iterable;',True)
+        cls(core['clientLevel'])['specials'][tuple(member)]=('field','testIterable','Ljava/lang/Iterable;')
+        member=geometry['members']['attackEntity']; owner=geometry['owners']['attackEntity']
+        add(owner,'fields','testAttacks','I',True)
+        cls(owner)['specials'][tuple(member)]=('attack',core['player'],'testCooldown')
+        for key, value in [('methodGetArmor',18),('methodLatency',87),('methodItemGetDamage',17),
+                           ('methodItemGetMaxDamage',100),('methodItemGetCount',3),('methodItemIsDamageable',1)]:
+            member=profile['members'][key]
+            cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)
+        for key, text in [('methodItemTransKey','item.minecraft.diamond_helmet'),('methodComponentToString','Diamond Helmet')]:
+            member=profile['members'][key]
+            cls(owner_spec[key])['specials'][tuple(member)] = ('string', text)
+        member=profile['members']['methodItemGetName']
+        cls(core['itemStack'])['specials'][tuple(member)] = ('new',core['component'])
         for key, value in [('methodRealFov', 82.5), ('methodGetYaw', 29.25), ('methodGetPitch', -11.5)]:
             member = profile['members'][key]
             cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)

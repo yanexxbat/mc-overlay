@@ -36,8 +36,40 @@ Preserve all real module bindings, safe disabled states, mouse and keyboard
 navigation, slider numeric input, resets and agent settings. The menu theme
 must restore the HUD/global style and font stacks after rendering.
 
-Pages: AIMBOT -> Combat; VISUALS -> Visuals; LOOT -> Blocks; HUD -> Hud.
+Pages: COMBAT -> Combat; VISUALS -> Visuals; LOOT -> Blocks; HUD -> Hud.
+Combat contains Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
+Modules owns the live Aim Assist, Triggerbot and Auto Totem controls. The other
+sections edit the Combat Assist ConfigStore and UUID relations; their status
+states that its Minecraft bridge is not connected. Live Assist activation is
+disabled until that bridge exists. Page reset covers both settings stores.
 Small icons: player -> Stats; sun -> appearance/actions; gear -> Settings.
 INSERT toggles the menu; END quits. Theme and rail preferences last for the
 current session. Background imagery from the screenshot is reference context,
 not part of the shipped overlay.
+
+## Entity ESP
+
+Mode: Operate. The user's ESP screenshot is the visual authority for this
+surface: thin near-white rounded boxes and skeleton lines, a narrow vertical
+white-to-violet health bar on the left and compact information above the entity.
+Default box stroke: 1.6 px; corner radius: 7 px, capped on small boxes;
+skeleton stroke: 1.1 px; labels: 12 px from the embedded Inter font.
+Filled boxes stay off by default. The violet health accent matches the Aura.
+
+Nametags now group distance, player ping, name and red HP in a compact dark
+rounded strip. Worn armor, main hand and offhand appear as a centered row of
+16 px vanilla inventory icons directly above it, with violet durability tracks
+and small stack counts. Unknown ping reads n/a; mobs omit it. Empty equipment
+slots use no space. Individual HP/ping/equipment toggles live under Name tags.
+
+The selected entity has a quiet dark info pill near the upper center with
+distance, available selected-player ping, name and health. Unknown ping is
+omitted. The info pill yields when it would overlap an entity nametag at the
+upper viewport edge. With nametags off, distances appear below boxes and HP
+above the health bar. Colors, label size,
+rounding, stroke widths and target info remain configurable under Visuals.
+
+EspRenderer draws only from the coherent snapshot and existing world-space
+geometry. It introduces no JNI calls, pixel smoothing or delayed anchor state.
+Aura renders below ESP, and HUD/menu above it. Text and stroke sizing use UI
+pixels while entity bounds and bones retain their actual perspective scale.

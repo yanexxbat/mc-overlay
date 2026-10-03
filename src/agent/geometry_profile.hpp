@@ -22,5 +22,11 @@ struct GeometryProfile {
     Member partialTick, getDelta, cameraEntity, avatarState;
     Member walkDistance, walkDistanceOld, bob, bobOld;
     Member runFrame, updateCamera;
+    // Auch die Client-Tick-Brücke nutzt ausschließlich auditierte Signaturen.
+    const char* handClass;
+    const char* hitClass;
+    Member clientTick, clientPaused, setYaw, setPitch, eyePosition, lineOfSight;
+    Member attackCooldown, attackReach, farReach, attackEntity, swingHand;
+    Member mainHand, pickBlocks, hitLocation, entityAlive;
 };
 } // namespace mcov::mappings
