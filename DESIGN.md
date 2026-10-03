@@ -37,11 +37,12 @@ navigation, slider numeric input, resets and agent settings. The menu theme
 must restore the HUD/global style and font stacks after rendering.
 
 Pages: COMBAT -> Combat; VISUALS -> Visuals; LOOT -> Blocks; HUD -> Hud.
-Combat contains Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
+Combat contains Kill Aura, Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
 Modules owns the live Aim Assist, Triggerbot and Auto Totem controls. The other
-sections edit the Combat Assist ConfigStore and UUID relations; their status
-states that its Minecraft bridge is not connected. Live Assist activation is
-disabled until that bridge exists. Page reset covers both settings stores.
+sections edit the active Combat Assist ConfigStore and UUID relations. Kill Aura
+shows activation, player filter, reach, live bridge status, executed attack count
+and a full-surrounding 3-block preset. Native callbacks run on the client tick;
+ImGui only publishes settings and consumes diagnostics. Page reset covers both stores.
 Small icons: player -> Stats; sun -> appearance/actions; gear -> Settings.
 INSERT toggles the menu; END quits. Theme and rail preferences last for the
 current session. Background imagery from the screenshot is reference context,

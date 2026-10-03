@@ -166,6 +166,16 @@ outside the audited profile list. Before treating a loader/version combination a
 tested in-game, check world entry, F5 camera modes, sprint/zoom FOV, equipment and
 effects, dimension changes, a container screen and normal game shutdown.
 
+Kill Aura additionally audits client tick, visible rotation setters, eye position,
+alive/LOS checks, attack-strength cooldown, interaction reach, block pick,
+game-mode attack and hand swing from the official jars. All eleven profiles pass
+the instrumented native combat adapter fixtures under `-Xcheck:jni`, including
+automatic targeting/rotation/attacks, cooldown reset/rearm, UUID friends,
+occlusion, Minecraft GUI, expired input lease, respawn and unsupported silent
+rotation. JNI for combat runs on the client tick; camera/ESP sampling stays in
+the daemon worker and the renderer consumes IPC only. The helper and agent now
+require IPC v11 and a full Minecraft restart after upgrading.
+
 ## Reproduce the checks
 
 The normal build needs no game downloads. Optional regression tests need Python

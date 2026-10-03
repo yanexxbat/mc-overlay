@@ -1,12 +1,16 @@
-# Combat Assist: C++20-Referenzkern
+# Combat Assist / Kill Aura: C++20-Kern und Minecraft-Brücke
 
 ## Lieferumfang
 
 `src/combat/` enthält die ausführbare Referenzimplementierung für TargetSelector, RotationEngine, AttackController, SyncLayer, ConfigStore und CombatHud. Der konkrete SimulatedGame-Transport führt Hitbox-Raycasts, Cooldown, HP-Verlust und getrennte Kamera-/Serverrotation aus. Die Kernklassen verwenden feste Arrays, RAII und begrenzte Mutex-Abschnitte; sie benötigen keine eigenen Heap-Allokationen pro Tick.
 
-**Die Minecraft-Anbindung ist offen.** Das bestehende Overlay behält seinen bisherigen Aim Lock und Triggerbot. Die Demo versendet keine Minecraft-Pakete. `sent` zählt vom Transport angenommene Aufträge, keine Serverbestätigungen. Es gibt keine Aussage über Anti-Cheat-Erkennung oder eine biologische/neuronale Reaktionszeit.
+**Die sichtbare Kill Aura ist mit Minecraft verbunden.** `src/agent/combat_live.hpp` erfasst UUIDs, aktuelle Hitboxen, Sichtbarkeit, Cooldown und Reichweite und führt Rotation sowie `MultiPlayerGameMode.attack`/Hand-Swing synchron auf dem instrumentierten Client-Tick aus. Die bisherigen Mausmodule pausieren während Kill Aura aktiv ist. `sent` zählt lokal ausgeführte Aufträge, keine Serverbestätigungen; das HUD zählt keine einzelnen Netzwerkpakete.
 
-Für Live-Betrieb fehlen im bisherigen IPC-Snapshot insbesondere UUID, Spieltick, echte Sichtbarkeit, Attack-Cooldown, erlaubte Spiel-Reichweite und Serverkorrekturen. Silent Rotation braucht außerdem einen geprüften Hook in der normalen Client-Tick-/Movement-Pipeline; Win32-Mausinput verändert die sichtbare Kamera.
+Der Renderprozess erhält keine JNI-Handles. IPC v11 überträgt Config/UUID-Relations und eine begrenzte Eingabe-Lease in atomaren Mailboxes; der Client-Tick publiziert Diagnosen zurück. Vor jedem Angriff prüft der Adapter Cooldown, UUID, Lebensstatus, Reichweite, Ausrichtung, LOS und den nächsten Entity-Treffer vor dem Block-Ray-Ende erneut. Für 1.20.1 gilt die Vanilla-Pick-Reichweite (3, im Creative-Fernmodus 6); neuere Profile lesen `entityInteractionRange`. Welt- und Player-Referenzwechsel erhöhen die Generation, auch beim Respawn. JNI-Fehler stoppen das Modul bis zu einer Config-Revision.
+
+Silent Rotation und echte Serverkorrektur-Ereignisse sind weiterhin offen. Die Sync-Regler steuern die lokale Auftragsqueue; Vanilla sendet die normalen Spielpakete. Reaktions- und Intervallwerte sind an die tatsächliche Client-Tick-Frequenz gebunden. Auf einem 20-Hz-Client kann eine 10-ms-Verzögerung erst beim nächsten Tick wirken.
+
+Benutzung: Minecraft nach dem Update vollständig neu starten, mit dem aktuellen Injector verbinden, INSERT → COMBAT → Kill Aura → **Use Kill Aura preset** → **Enable Kill Aura**, Menü schließen. Das Preset sucht rundherum (180° Halbwinkel), nutzt 3 Meter und respektiert den Spiel-Cooldown. **Players only** ausschalten, wenn auch Mobs Ziele sein sollen. Geöffnete Minecraft-/Overlay-Menüs, Fokusverlust, fehlende Welt und eine abgelaufene 250-ms-Lease pausieren sofort am nächsten Tick. Overlay-Shutdown publiziert einen expliziten Stop. Der visuelle Aura-Effekt folgt dem aktiven Combat-Ziel.
 
 Es bleibt bei einem Build-Ordner. Die ausführbaren Beispiele liegen in `build/bin`:
 
@@ -48,7 +52,7 @@ Der dynamische Radius folgt `height * tan(cone) / (2 * tan(cameraFov / 2))`. `co
 
 | Parameter | Standard | Validierter Bereich |
 |---|---:|---:|
-| `coneDegrees` | 20° | 1–85° |
+| `coneDegrees` | 20° (Kill-Aura-Preset 180°) | 1–180° |
 | `radiusPixels` | 160 | 10–2000 |
 | `range` | 6 Blöcke | 0,1–64 |
 | `aimHeight` | 0,75 | 0,1–0,95 |
@@ -163,7 +167,7 @@ Fallstricke: Keine alten Positionen blind als zusätzliche Movement-Pakete aussp
 
 Klassen: `ConfigStore`, `CombatAssist`, `DebugMailbox`; Dateien `config.hpp` und `combat_assist.hpp`.
 
-`ConfigStore::Publish` validiert min/max, Enum-Werte und NaN/Inf, ersetzt danach die ganze Config unter einem Mutex. Der Owner übernimmt eine Revision pro Step. Das Update wirkt am nächsten Step vollständig und verwirft alte Aufträge. Die Konfiguration und UUID-Relations sind unter COMBAT in Targets, Rotation, Attacks, Sync, Friends und Debug editierbar. Das Menü kennzeichnet die offene Live-Bridge; Live-Aktivierung ist deaktiviert. Ein Dateiwatcher/JSON-Parser ist offen. Alle Zeitwerte im C++-API sind Sekunden.
+`ConfigStore::Publish` validiert min/max, Enum-Werte und NaN/Inf, ersetzt danach die ganze Config unter einem Mutex. Der Owner übernimmt eine Revision pro Step. Das Update wirkt am nächsten Step vollständig und verwirft alte Aufträge. Die Konfiguration und UUID-Relations sind unter COMBAT in Kill Aura, Targets, Rotation, Attacks, Sync, Friends und Debug editierbar und über IPC mit dem Client-Tick verbunden. Ein Dateiwatcher/JSON-Parser ist offen. Alle Zeitwerte im C++-API sind Sekunden.
 
 `frameMaxAge=100 ms` (1–500 ms), `seed` ist uint64_t. Master-Schalter standardmäßig aus; Auswahl, Rotation, Angriff und Sync besitzen eigene Schalter. Getrennte RNG-Streams verhindern, dass zusätzliche Jitter-Samples den nächsten Klickdelay verschieben. Gleiches Seed plus gleiche Frame-/Config-/Relations-Folge erzeugt dieselben Ausgaben.
 
@@ -222,7 +226,7 @@ Fallstricke: FOV-Radius und DisplaySize müssen dieselben Einheiten haben. High-
 Minecraft-Client-Tick / normale Movement-Pipeline
        | UUID / LOS / Cooldown / Kamera / Korrekturen
        v
-JNI-Worker -> IPC / unveränderlicher Frame-Puffer
+MinecraftCombat::Tick -> aktueller Frame (JNI auf dem Client-Thread)
        |
        v
 CombatAssist [ein Owner-Thread]
@@ -234,16 +238,16 @@ CombatAssist [ein Owner-Thread]
                     v
               Transport::Send
               +-> SimulatedGame [implementiert]
-              +-> Client-Tick-Bridge [Roadmap]
+              +-> MinecraftCombat [implementiert, synchron]
        |
        +-> DebugMailbox [Mutex, feste Snapshot-Kopie]
                     |
                     v
               CombatHud / ImGui-Renderthread
 
-Menü / Reload-Worker -> ConfigStore::Publish
-Friend-/Enemy-UI     -> FriendEnemyBook::Set
-Serverkorrekturen    -> Frame::correction -> SyncLayer::Observe
+Menü -> ConfigStore::Publish -> IPC CombatRequest -> nativer ConfigStore
+Friend-/Enemy-UI -> IPC CombatRequest -> nativer FriendEnemyBook
+Serverkorrekturen -> Frame::correction -> SyncLayer::Observe [Live-Hook offen]
 ```
 
 ## Priorisierte Roadmap
@@ -255,4 +259,4 @@ Serverkorrekturen    -> Frame::correction -> SyncLayer::Observe
 5. **P4 – Silent und Server-Resync.** Normale Movement-Pipeline versionsgenau hooken, aktuelle Position erhalten, Kamera-/gesendete Rotation trennen. Korrekturen mit zeitlich passendem Erwartungswert erfassen. Zuerst Reihenfolge, Teleports und Weltwechsel, dann Target-Wechsel/Recovery testen.
 6. **P5 – Live-Matrix und Performance.** 26.2, 1.21.11, 1.21.1, 1.20.1 samt verfügbaren Loader-/Namespace-Profilen prüfen. Langsamer Server, Wand, Respawn, Inventar, Fokusverlust, High-DPI und 30/60/144 FPS testen. Sampling-Kosten und TTL messen, danach Bewegungsparameter abstimmen.
 
-Die Live-Schritte sind offen. Simulator-/Fixture-Tests ersetzen keinen Test in einem laufenden Minecraft-Client.
+P1/P2 sowie die Live-Config-/HUD-Verbindung aus P3 sind für sichtbare Kill Aura implementiert. Serverkorrekturen, Silent Rotation, Dateipersistenz und die In-Game-Matrix bleiben offen. Alle elf Profile bestehen echte instrumentierte Client-Tick-/JNI-Fixtures unter Java 21 mit `-Xcheck:jni`, inklusive automatischem Angriff, Cooldown-Rearm, UUID-Freunden, LOS, Block-Ray, GUI, Lease und fehlender Welt. Simulator-/Fixture-Tests ersetzen keinen Test in einem laufenden Minecraft-Client.

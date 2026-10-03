@@ -136,7 +136,6 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     request.config.attack.silentRotation=false; ++request.revision;
     request.inputAllowed=false;
     env->SetObjectField(client,b.fPlayer,player); Healthy(env); step();
-    const auto previousWorld=report.debug.target;
     request.inputAllowed=true;
     auto respawn=NewObject(env,LoadClass(env,loader,set.classes.localPlayer));
     env->SetBooleanField(respawn,alive,JNI_TRUE); Healthy(env);

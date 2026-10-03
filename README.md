@@ -4,10 +4,12 @@ C++20 / Dear ImGui overlay with a JNI/JVMTI agent supplying live game state.
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**, including Forge's
 version-specific member names. See [compatibility and verification](docs/compatibility.md).
 
-The modular C++20 [Combat Assist reference core](docs/combat-assist.md) includes
+The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includes
 deterministic selection/rotation/cooldown/sync tests and an executable simulator
-(`build/bin/mcov_combat_demo.exe`). It is not connected to Minecraft yet and does
-not replace the existing Aim Lock/Triggerbot or send live movement packets.
+(`build/bin/mcov_combat_demo.exe`). Kill Aura executes visible rotation and normal
+game attacks synchronously on the instrumented Minecraft client tick. Existing
+Aim Assist and Triggerbot pause while it is enabled. Silent rotation and live
+server-correction capture are not implemented.
 
 ---
 
@@ -37,7 +39,9 @@ They communicate over a lock-free shared-memory seqlock
 (`src/common/shared_state.hpp`). The agent gets into the JVM through the
 **standard attach API**. The helper first loads a small Java instrumentation
 agent for frame markers, then calls `loadAgentPath(dll)` for the native sampler.
-The markers only update a volatile epoch; game-data queries remain in the worker.
+Frame markers update a volatile epoch. The separately armed combat hook invokes
+JNI on the client tick; the external renderer only exchanges configuration and
+diagnostics through shared memory.
 
 `JNI_GetCreatedJavaVMs` *is* still implemented, in
 `jvm::Runtime::DiscoverVm()`. It runs inside the agent, where it is meaningful,
@@ -202,10 +206,16 @@ four existing palettes, compact navigation, reduced motion, recentering, page
 reset, connection status and menu closing. Font Awesome icons are embedded as
 an executable resource.
 Aim/trigger activation keys and target filtering are bound to CombatSettings.
-Combat groups Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
-Modules contains live Aim Assist, Triggerbot and Auto Totem. The other sections
-edit the reference Combat Assist configuration and UUID relations; the UI states
-that its live bridge is not connected, and live activation stays disabled.
+Combat groups Kill Aura, Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
+Kill Aura owns the activation switch, player filter, reach, bridge status, attack
+counter and preset. Choose **Use Kill Aura preset**, enable **Enable Kill Aura**,
+then close the menu. The preset uses 3 blocks, full surrounding target selection,
+visible rotation and real game cooldown. Disable Players only to include mobs.
+Modules contains Aim Assist, Triggerbot and Auto Totem. The remaining sections
+edit the active combat config and UUID relations; changes apply on the next
+client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
+overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
+the wire protocol is now IPC v11. Settings and friends remain session-local.
 All six original pages
 remain accessible. The injector retains its existing flat interface.
 
