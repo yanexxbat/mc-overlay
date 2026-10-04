@@ -19,8 +19,14 @@ jclass LoadClass(JNIEnv* env,jobject loader,const char* name);
 void SetStatic(JNIEnv* env,jclass owner,const char* name,const char* desc,jobject value);
 mcov::agent::MinecraftCombat* testCombat=nullptr;
 DWORD combatCallbackThread=0;
+bool combatAfterVanillaTick=false;
 void JNICALL TestCombatTick(JNIEnv* env,jclass,jobject client) {
     combatCallbackThread=GetCurrentThreadId();
+    auto owner=env->GetObjectClass(client);
+    auto done=env->GetStaticFieldID(owner,"testVanillaTickDone","Z");
+    combatAfterVanillaTick=done && env->GetStaticBooleanField(owner,done)==JNI_TRUE;
+    if(env->ExceptionCheck()) env->ExceptionClear();
+    env->DeleteLocalRef(owner);
     if(testCombat) testCombat->Tick(env,client,false);
 }
 void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client) {
@@ -81,7 +87,8 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     SetStatic(env,b.clsLevel,"testIterable","Ljava/lang/Iterable;",list);
     mcov::CombatRequest request; request.revision=1; request.inputAllowed=true;
     request.config.enabled=request.config.attack.enabled=true;
-    request.config.target.range=3; request.config.target.coneDegrees=180;
+    request.config.target.range=6; request.config.target.coneDegrees=1;
+    request.config.target.mode=mcov::combat::TargetMode::Crosshair; // Live-Policy muss alte widersprüchliche Werte korrigieren.
     request.config.rotation.overshootFraction={0,0}; request.config.rotation.jitterDegrees={0,0};
     request.config.rotation.yawDuration=request.config.rotation.pitchDuration={.05,.05};
     request.config.attack.firstClickDelay={0,0}; request.config.sync.interval={.01,.01};
@@ -91,15 +98,35 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
         for(int i=0;i<count;++i) {
             if(renew) request.sentAtMs=GetTickCount64();
             block->combatRequest.Publish(request);
+            staticBoolean(b.client.minecraftClass,"testVanillaTickDone",false);
             env->CallVoidMethod(client,tick); Healthy(env);
+            Require(combatAfterVanillaTick,"combat ran before Vanilla movement/model updates");
             Require(block->combatReport.Read(report),"combat report tore");
             Require(report.status!=mcov::CombatBridgeStatus::Error,"client-tick bridge hit a JNI error");
             if(count>1) Sleep(25);
         }
     };
+    // Ohne Preset/Option: schon die erste Aktivierung muss den Blick unverändert lassen.
+    auto camera=NewObject(env,b.clsCamera);
+    const std::string viewDesc="(L"+std::string(set.classes.entity)+";F)F";
+    const std::string orbitDesc="(L"+std::string(set.classes.entity)+";F)D";
+    auto cameraYaw=jvm::TryMethod(env,b.clsCamera,"testCameraYaw",viewDesc.c_str(),false);
+    auto cameraPitch=jvm::TryMethod(env,b.clsCamera,"testCameraPitch",viewDesc.c_str(),false);
+    auto orbitX=jvm::TryMethod(env,b.clsCamera,"testOrbitX",orbitDesc.c_str(),false);
+    auto orbitZ=jvm::TryMethod(env,b.clsCamera,"testOrbitZ",orbitDesc.c_str(),false);
+    auto view=[&](jmethodID method,float partial=.5f) { const auto v=env->CallFloatMethod(camera,method,player,partial); Healthy(env); return v; };
+    auto orbit=[&](jmethodID method) { const auto v=env->CallDoubleMethod(camera,method,player,.5f); Healthy(env); return v; };
     step(18);
     Require(combatCallbackThread==GetCurrentThreadId() && report.tick>=18,"combat was not invoked synchronously by instrumented client tick");
     Require(report.attacks==1 && report.debug.target && report.debug.target->id==42,"Kill Aura did not select, rotate and attack automatically");
+    const auto aimedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    const auto headYaw=env->GetFloatField(player,b.geometry.headYaw); Healthy(env);
+    const auto modelYaw=env->GetFloatField(player,b.geometry.bodyYaw); Healthy(env);
+    Require(std::abs(mcov::combat::Wrap(headYaw-aimedYaw))<.001 && std::abs(mcov::combat::Wrap(modelYaw-aimedYaw))<.001 &&
+            report.debug.error<request.config.attack.alignmentDegrees,"F5 head/body angles did not face the selected target");
+    Require(std::abs(view(cameraYaw))<.001f && std::abs(view(cameraPitch))<.001f &&
+            std::abs(orbit(orbitX))<.001 && std::abs(orbit(orbitZ)-4)<.001,
+            "Kill Aura default activation changed the camera without a preset");
     Require(!mcov::agent::RayBox({0,1.62,0},{0,0},combat::Entity{.boundsMin={.7,0,1.7},.boundsMax={1.3,1.8,2.3}}),"ray hit unrelated crosshair entity");
     const auto cooldown=env->GetFloatField(player,field(b.clsPlayer,"testCooldown","F")); Healthy(env);
     Require(cooldown==0,"real attack did not reset game cooldown");
@@ -136,9 +163,72 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
         Require(report.attacks==attacks,"game reach was exceeded");
         env->SetStaticDoubleField(b.clsPlayer,field(b.clsPlayer,"testReach","D",true),3); Healthy(env);
     }
-    request.config.attack.silentRotation=true; ++request.revision; step(6);
-    Require(report.attacks==attacks && report.debug.silentUnavailable,"unsupported silent rotation was used");
-    request.config.attack.silentRotation=false; ++request.revision;
+    // Hot-Reload ändert das feste Silent-Verhalten nicht.
+    floating(player,b.clsEntity,"testYaw",0); floating(player,b.clsEntity,"testPitch",0);
+    floating(player,b.clsPlayer,"testCooldown",1);
+    ++request.revision; step(18);
+    Require(!report.debug.silentUnavailable && report.attacks==attacks+1,"silent camera blocked automatic rotation/attacks");
+    Require(std::abs(view(cameraYaw))<.001f && std::abs(view(cameraPitch))<.001f,"combat rotation leaked into camera angles");
+    Require(std::abs(orbit(orbitX))<.001 && std::abs(orbit(orbitZ)-4)<.001,"F5 camera position orbited with combat rotation");
+    const auto bodyYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(std::abs(bodyYaw)>10,"silent mode did not rotate the real player/model/movement state");
+    auto turn=jvm::TryMethod(env,b.clsEntity,g.turn.name,g.turn.signature,false);
+    env->CallVoidMethod(player,turn,40.0,20.0); Healthy(env);
+    const auto afterMouse=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(std::abs(afterMouse-bodyYaw)<.001f && std::abs(view(cameraYaw)-6)<.001f && std::abs(view(cameraPitch)-3)<.001f,
+            "mouse look changed combat rotation or failed to move independent camera");
+    step(3);
+    Require(std::abs(view(cameraYaw,0)-6)<.001f && std::abs(view(cameraYaw,1)-6)<.001f,"partial ticks caused silent-camera jitter");
+    // Anderes Ziel auf der gegenüberliegenden Seite: View und F5-Orbit bleiben bei der Maus.
+    auto nextEntity=NewObject(env,b.clsPlayer);
+    env->SetBooleanField(nextEntity,alive,JNI_TRUE); Healthy(env);
+    env->SetIntField(nextEntity,field(b.clsEntity,"testId","I"),43); Healthy(env);
+    real(nextEntity,b.clsEntity,"testX",-1); real(nextEntity,b.clsEntity,"testZ",2);
+    floating(nextEntity,b.clsLiving,"testHealth",20);
+    env->SetDoubleField(bounds,b.geometry.min[0],-1.3); Healthy(env);
+    env->SetDoubleField(bounds,b.geometry.max[0],-.7); Healthy(env);
+    auto clear=jvm::TryMethod(env,listClass,"clear","()V",false);
+    env->CallVoidMethod(list,clear); Healthy(env);
+    env->CallBooleanMethod(list,add,nextEntity); Healthy(env);
+    floating(player,b.clsPlayer,"testCooldown",1); step(12);
+    // Richtung und Angriff sind getrennt: der erste Klick hat weiterhin eine
+    // konfigurierte Verzögerung. Kein wall-clock-abhängiges 300-ms-Rennen.
+    const auto switchDeadline=GetTickCount64()+500;
+    while(report.attacks<attacks+2 && GetTickCount64()<switchDeadline) step(2);
+    const auto switchedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    const bool switched=report.debug.target && report.debug.target->id==43 && report.attacks==attacks+2 && switchedYaw>10 &&
+        report.debug.error<request.config.attack.alignmentDegrees;
+    if(!switched) std::cerr<<"switch diagnostics: yaw="<<switchedYaw<<" error="<<report.debug.error<<" target="
+        <<(report.debug.target?report.debug.target->id:0)<<" attacks="<<report.attacks<<" expected="<<attacks+2<<'\n';
+    Require(switched,"silent camera prevented aiming/attacking a new target");
+    Require(std::abs(view(cameraYaw)-6)<.001f && std::abs(view(cameraPitch)-3)<.001f &&
+            std::abs(orbit(orbitX)-4*std::sin(6/combat::kDegrees))<.001,
+            "target switch moved the independent F5 camera");
+    // Die globale Java-Bridge darf keine Kamera/Mouse-Deltas fremder Entities verändern.
+    env->CallVoidMethod(nextEntity,turn,20.0,10.0); Healthy(env);
+    const auto foreignYaw=env->CallFloatMethod(camera,cameraYaw,nextEntity,.5f); Healthy(env);
+    Require(std::abs(foreignYaw-3)<.001f && std::abs(view(cameraYaw)-6)<.001f,"silent camera affected another entity");
+    env->SetObjectField(screenOwner,b.fCurrentScreen,screen); Healthy(env); step();
+    const auto pausedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(report.status==mcov::CombatBridgeStatus::Paused && std::abs(pausedYaw-6)<.001f,
+            "opening Minecraft GUI retained detached combat rotation");
+    env->SetObjectField(screenOwner,b.fCurrentScreen,nullptr); Healthy(env); step(12);
+    Require(std::abs(view(cameraYaw)-6)<.001f && std::abs(view(cameraPitch)-3)<.001f,"resuming after GUI changed the view");
+    request.config.enabled=false; ++request.revision; step();
+    const auto restoredYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(std::abs(restoredYaw-6)<.001f && std::abs(view(cameraPitch)-3)<.001f,"disabling silent camera snapped back to combat direction");
+    const auto oldYaw=jvm::TryField(env,b.clsEntity,g.yawOld.name,g.yawOld.signature,false);
+    const auto previousYaw=env->GetFloatField(player,oldYaw); Healthy(env);
+    Require(std::abs(previousYaw-restoredYaw)<.001f,"restored rotation retained an old combat interpolation angle");
+    const auto restoredHead=env->GetFloatField(player,b.geometry.headYaw); Healthy(env);
+    const auto restoredBody=env->GetFloatField(player,b.geometry.bodyYaw); Healthy(env);
+    Require(std::abs(mcov::combat::Wrap(restoredHead-restoredYaw))<.001 &&
+            std::abs(mcov::combat::Wrap(restoredBody-restoredYaw))<.001,"stopping combat left stale model rotations");
+    // Die normale Entity.turn-Methode arbeitet nach Abschalten wieder unverändert.
+    env->CallVoidMethod(player,turn,20.0,0.0); Healthy(env);
+    Require(std::abs(view(cameraYaw)-9)<.001f,"normal mouse look was not restored");
+    const auto afterSilentAttacks=report.attacks;
+    request.config.enabled=true; ++request.revision;
     request.inputAllowed=false;
     env->SetObjectField(client,b.fPlayer,player); Healthy(env); step();
     request.inputAllowed=true;
@@ -146,13 +236,31 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     env->SetBooleanField(respawn,alive,JNI_TRUE); Healthy(env);
     floating(respawn,b.clsPlayer,"testCooldown",0);
     env->SetObjectField(client,b.fPlayer,respawn); Healthy(env); step();
-    Require(report.attacks==attacks && report.debug.cooldown==0,"respawn retained the previous attack cooldown");
+    Require(report.attacks==afterSilentAttacks && report.debug.cooldown==0,"respawn retained the previous attack cooldown");
     env->SetObjectField(client,b.fPlayer,nullptr); Healthy(env); step();
-    Require(report.status==mcov::CombatBridgeStatus::NoWorld && report.attacks==attacks,"world exit retained attack target");
+    Require(report.status==mcov::CombatBridgeStatus::NoWorld && report.attacks==afterSilentAttacks,"world exit retained attack target");
     Require(!bridge.Send({}),"JNI transport retained a borrowed tick context");
     bridge.Close(env); testCombat=nullptr;
     env->CallVoidMethod(client,tick); Healthy(env);
-    std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, friends, LOS, GUI, lease, reach)"<<std::endl;
+    // Fehlende Camera-Hooks müssen Silent sperren, statt heimlich sichtbar zu drehen.
+    auto signal=env->FindClass("mcov/FrameSignal"); Healthy(env);
+    const auto cameraBits=field(signal,"cameraProfiles","J",true);
+    const auto savedBits=env->GetStaticLongField(signal,cameraBits); Healthy(env);
+    env->SetStaticLongField(signal,cameraBits,0); Healthy(env);
+    mcov::agent::MinecraftCombat unsupported;
+    Require(unsupported.Install(env,b,block.get(),reinterpret_cast<void*>(&TestCombatTick)),"missing camera hook prevented diagnostic bridge installation");
+    env->SetStaticLongField(signal,cameraBits,savedBits); Healthy(env);
+    testCombat=&unsupported;
+    env->SetObjectField(client,b.fPlayer,player); Healthy(env);
+    ++request.revision;
+    const auto beforeUnsupported=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    floating(player,b.clsPlayer,"testCooldown",1); step(4);
+    const auto afterUnsupported=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(report.status==mcov::CombatBridgeStatus::SilentUnavailable && report.debug.silentUnavailable &&
+            report.attacks==0 && std::abs(afterUnsupported-beforeUnsupported)<.001f,
+            "missing silent hooks allowed visible rotation/attacks");
+    unsupported.Close(env); testCombat=nullptr;
+    std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
 }
 void TestDetailsCache() {
     mcov::EntityDetailsCache cache;
@@ -164,7 +272,7 @@ void TestDetailsCache() {
 }
 void TestEntityDetails(JNIEnv* env,const Bindings& b,jobject loader,jobject client) {
     const auto& set=*b.set;
-    Require(b.mConnection && b.mEntityUuid && b.mPlayerInfo && b.mLatency && b.mEntityById,
+    Require(b.mConnection && b.mEntityUuid && b.mUuidHigh && b.mUuidLow && b.mPlayerInfo && b.mLatency && b.mEntityById,
             "entity ping/detail methods did not bind");
     auto connectionClass=LoadClass(env,loader,set.classes.connection);
     auto infoClass=LoadClass(env,loader,set.classes.playerInfo);
@@ -186,6 +294,28 @@ void TestEntityDetails(JNIEnv* env,const Bindings& b,jobject loader,jobject clie
     }
     Require(ReadPlayerPing(env,b,entity,nullptr)==-1,"missing player info produced a fabricated ping");
     EntityDetailsState state; state.ObserveWorld(env,world);
+    const auto first=state.identities.Read(env,entity,42,b.mEntityUuid,b.mUuidHigh,b.mUuidLow); Healthy(env);
+    Require(first.high||first.low,"player UUID was not sampled");
+    auto replacement=NewObject(env,b.clsPlayer);
+    auto otherUuid=env->CallObjectMethod(replacement,b.mEntityUuid); Healthy(env);
+    auto uuidField=jvm::TryField(env,b.clsEntity,"testUuid","Ljava/util/UUID;",false);
+    Require(uuidField!=nullptr,"fixture UUID field missing");
+    env->SetObjectField(entity,uuidField,otherUuid); Healthy(env);
+    Require(state.identities.Read(env,entity,42,b.mEntityUuid,b.mUuidHigh,b.mUuidLow)==first,
+            "unchanged Java entity re-read its immutable UUID"); Healthy(env);
+    const auto second=state.identities.Read(env,replacement,42,b.mEntityUuid,b.mUuidHigh,b.mUuidLow); Healthy(env);
+    Require(second!=first && (second.high||second.low),"reused entity ID kept another player's friend UUID");
+    env->DeleteLocalRef(otherUuid);
+    auto listClass=env->FindClass("java/util/ArrayList"); Healthy(env);
+    auto list=NewObject(env,listClass);
+    auto add=jvm::TryMethod(env,listClass,"add","(Ljava/lang/Object;)Z",false);
+    env->CallBooleanMethod(list,add,entity); Healthy(env);
+    SetStatic(env,b.clsLevel,"testIterable","Ljava/lang/Iterable;",list);
+    env->SetObjectField(client,b.fLevel,world); Healthy(env);
+    mcov::WorldSnapshot geometry{};
+    SampleEntities(env,b,client,nullptr,geometry,state); Healthy(env);
+    Require(geometry.entityCount==1 && geometry.entities[0].uuid==second,
+            "geometry IPC snapshot did not carry the player's real UUID");
     mcov::WorldSnapshot snapshot{}; snapshot.entityCount=1; snapshot.hasTarget=1; snapshot.targetEntityId=42;
     snapshot.entities[0].entityId=42; snapshot.entities[0].flags=mcov::kEntityIsLiving|mcov::kEntityIsPlayer;
     snapshot.entities[0].distance=5;
@@ -193,6 +323,8 @@ void TestEntityDetails(JNIEnv* env,const Bindings& b,jobject loader,jobject clie
     Require(snapshot.entities[0].details.ping==87 && state.cache.Find(42,GetTickCount64()),"slow detail pass did not publish/cache the target");
     auto nextWorld=NewObject(env,b.clsLevel); state.ObserveWorld(env,nextWorld);
     Require(!state.cache.Find(42,GetTickCount64()),"world change attached old items to a reused entity ID");
+    Require(state.identities.Read(env,entity,42,b.mEntityUuid,b.mUuidHigh,b.mUuidLow)==second,
+            "world change did not refresh cached UUIDs"); Healthy(env);
     state.Clear(env);
 }
 void TestConnectionLiveness() {

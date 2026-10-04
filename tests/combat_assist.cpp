@@ -10,7 +10,12 @@ namespace {
 int checks=0;
 void Require(bool condition,const char* message) { ++checks; if(!condition) throw std::runtime_error(message); }
 bool Near(double a,double b,double epsilon=1e-8) { return std::abs(a-b)<=epsilon; }
-Config Enabled() { Config c; c.enabled=c.attack.enabled=true; c.target.coneDegrees=60; return c; }
+// Zusätzliche Auswahlmodi bleiben als Bibliotheksfälle getestet; Live-Kill-Aura nutzt NearestEntity.
+Config Enabled() {
+    Config c; c.enabled=c.attack.enabled=true; c.target.coneDegrees=60; c.target.range=6;
+    c.target.mode=TargetMode::AngleDistance; c.target.playersOnly=c.target.prioritizeEnemies=true; c.target.multiTarget=false;
+    return c;
+}
 void ConfigChecks() {
     ConfigStore store; Config c=Enabled(); Require(store.Publish(c),"valid config rejected");
     const auto version=store.Read(); c.rotation.reactionDelay={0.040,0.010};
@@ -74,6 +79,42 @@ void TargetChecks() {
     book.Set(game.Entities()[1].uuid,Relation::Friend);
     Require(selector.Select(f,c.target,book.Read(),random)->id==1,"new friend retained as target");
 }
+void NearestEntityChecks() {
+    Config defaults;
+    Require(defaults.target.mode==TargetMode::NearestEntity && !defaults.target.playersOnly &&
+            defaults.target.range==defaults.attack.range && !defaults.hud.enabled,"Kill Aura defaults are not simple nearest-entity settings");
+    SimulatedGame game;
+    game.PutEntity(0,1,"far_player",{0,0,2.7},20);
+    game.PutEntity(1,2,"near_mob",{0,0,-1.6},20); game.Entities()[1].player=false;
+    game.PutEntity(2,3,"side_player",{1.9,0,0},1);
+    auto f=game.Capture(1,.02); auto c=defaults.target;
+    // Alte FOV-, Priority- und Lock-Einstellungen dürfen die neue Entfernungsauswahl nicht ändern.
+    c.coneDegrees=1; c.fovMode=FovMode::StaticPixels; c.radiusPixels=10;
+    c.prioritizeEnemies=true; c.multiTarget=false; c.switchImprovement=1; c.switchDelay={1,1};
+    FriendEnemyBook book; book.Set(game.Entities()[0].uuid,Relation::Enemy);
+    Random random(9); TargetSelector selector;
+    auto chosen=selector.Select(f,c,book.Read(),random);
+    Require(chosen && chosen->id==2 && chosen->angle>170,"nearest mob behind camera lost to FOV, HP or enemy priority");
+    c.playersOnly=true; chosen=selector.Select(f,c,book.Read(),random);
+    Require(chosen && chosen->id==3,"players-only filter selected a mob"); c.playersOnly=false;
+    game.PutEntity(2,3,"closer_player",{.8,0,0},1); f=game.Capture(1.02,.02);
+    chosen=selector.Select(f,c,book.Read(),random);
+    Require(chosen && chosen->id==3,"nearest target retained previous lock or switch delay");
+    game.PutEntity(1,2,"equal_mob",{-.8,0,0},20); game.Entities()[1].player=false; f=game.Capture(1.04,.02);
+    Require(selector.Select(f,c,book.Read(),random)->id==2,"equal-distance tie was not deterministic");
+    std::swap(game.Entities()[1],game.Entities()[2]); f=game.Capture(1.06,.02);
+    Require(selector.Select(f,c,book.Read(),random)->id==2,"entity iteration order changed equal-distance target");
+    book.Set(game.Entities()[2].uuid,Relation::Friend);
+    Require(selector.Select(f,c,book.Read(),random)->id==3,"nearest friend was not skipped");
+    game.Entities()[1].visibility=Visibility{false,f.now};
+    Require(selector.Select(f,c,book.Read(),random)->id==1,"occluded nearest target was not skipped");
+    game.Entities()[0].health=0;
+    game.PutEntity(3,4,"dropped_item",{0,0,.4},20); game.Entities()[3].living=false;
+    f=game.Capture(1.08,.02);
+    Require(!selector.Select(f,c,book.Read(),random),"dead entity or nonliving item was selected");
+    game.Entities()[1].visibility=Visibility{true,f.now}; c.range=.1;
+    Require(!selector.Select(f,c,book.Read(),random),"nearest entity beyond configured reach was selected");
+}
 void RotationChecks() {
     RotationConfig c; c.reactionDelay={.010,.010}; c.yawDuration=c.pitchDuration={.050,.050};
     c.overshootFraction={.08,.08}; c.jitterDegrees={0,0}; c.settleDegrees=0;
@@ -85,6 +126,7 @@ void RotationChecks() {
     for(int i=1;i<40;++i) {
         f.now=i*.010; f.tick=static_cast<std::uint64_t>(f.now/.050);
         const auto a=engine.Step(f,t,c,random);
+        f.observedRotation=a;
         Require(Finite(a) && std::abs(Wrap(a.yaw-179))<5,"yaw wrapped the long way"); highestPitch=std::max(highestPitch,a.pitch);
     }
     Require(highestPitch>10.1,"overshoot absent");
@@ -94,14 +136,41 @@ void RotationChecks() {
     Angles previous{}; double yawSum=0,pitchSum=0;
     for(int i=0;i<50;++i) {
         f.now=i*.010; const auto a=engine.Step(f,t,c,random);
+        f.observedRotation=a;
         yawSum+=std::abs(Wrap(a.yaw-previous.yaw)); pitchSum+=std::abs(a.pitch-previous.pitch); previous=a;
     }
     Require(yawSum<=5+1e-8 && pitchSum<=2+1e-8,"per-tick budget exceeded by multiple render frames");
     f.tick=51; f.now+=.01; const auto next=engine.Step(f,t,c,random); Require(next.yaw>previous.yaw,"tick budget never renewed");
     c={}; c.reactionDelay={.010,.010}; c.jitterDegrees={.04,.04}; c.settleDegrees=.08;
     t.desired={}; f={}; f.dt=.02; engine.Reset(); random.Seed(1); double noise=0;
-    for(int i=0;i<100;++i) { f.now=i*.02; f.tick=static_cast<std::uint64_t>(f.now/.05); const auto a=engine.Step(f,t,c,random); noise=std::max(noise,std::abs(a.yaw)); }
+    for(int i=0;i<100;++i) { f.now=i*.02; f.tick=static_cast<std::uint64_t>(f.now/.05); const auto a=engine.Step(f,t,c,random); f.observedRotation=a; noise=std::max(noise,std::abs(a.yaw)); }
     Require(noise>0 && noise<=.04+1e-8,"micro jitter ignored or out of range");
+}
+void ClosedLoopRotationChecks() {
+    RotationConfig c; c.yawDuration=c.pitchDuration={.5,.5}; c.reactionDelay={.01,.01}; c.settleDegrees=0;
+    Frame f; f.dt=.05;
+    Target target; target.id=1; target.uuid={1,1}; target.desired={80,0};
+    RotationEngine engine; Random random(7);
+    for(int i=0;i<5;++i) {
+        f.tick=i; f.now=i*.05;
+        f.observedRotation=engine.Step(f,target,c,random);
+    }
+    target.desired={-80,0}; f.tick=5; f.now=.25;
+    f.observedRotation=engine.Step(f,target,c,random);
+    const auto before=f.observedRotation;
+    f.tick=6; f.now=.30;
+    const auto after=engine.Step(f,target,c,random);
+    Require(AngularDistance(after,target.desired)<=AngularDistance(before,target.desired),
+            "target replan curved away from its new position");
+    // Ein realer Client kann eine geplante Pose verzögern oder korrigieren.
+    for(int i=7;i<80;++i) {
+        f.tick=i; f.now=i*.05; f.observedRotation=engine.Step(f,target,c,random);
+    }
+    f.tick=80; f.now=4; f.observedRotation={60,20};
+    const auto rebased=engine.Step(f,target,c,random);
+    Require(std::abs(Wrap(rebased.yaw-60))<=c.maxYawPerTick+1e-8 &&
+            std::abs(rebased.pitch-20)<=c.maxPitchPerTick+1e-8,
+            "rotation kept an unapplied angle instead of the observed client state");
 }
 struct Recorder final : Transport {
     std::array<Command,kQueueCapacity> commands{}; std::size_t count{}; bool fail{};
@@ -110,7 +179,7 @@ struct Recorder final : Transport {
 void SyncAndAttackChecks() {
     Config c=Enabled(); c.attack.firstClickDelay={0,0}; c.sync.interval={.04,.04}; c.sync.attackMaxAge=.2;
     Target t; t.id=1; t.uuid={1,1}; t.range=2;
-    Frame f; f.now=f.sampledAt=1; f.world=1; f.inputAllowed=true; f.crosshairId=f.attackHitId=1; f.attackCooldown=1; f.gameAttackReach=3;
+    Frame f; f.now=f.sampledAt=1; f.world=1; f.inputAllowed=f.silentSupported=true; f.crosshairId=f.attackHitId=1; f.attackCooldown=1; f.gameAttackReach=3;
     AttackController attack; Random random(1);
     Require(attack.Prepare(f,t,c,random),"ready attack rejected"); attack.Sent();
     Require(!attack.Prepare(f,t,c,random),"attack reused old cooldown"); f.attackCooldown=.5;
@@ -118,7 +187,7 @@ void SyncAndAttackChecks() {
     Require(attack.Prepare(f,t,c,random),"attack not rearmed after real cooldown reset");
     f.attackCooldown.reset(); Require(!CanAttack(f,t,c),"unknown cooldown attacked"); f.attackCooldown=1;
     f.gameAttackReach=1; Require(!CanAttack(f,t,c),"game reach ignored"); f.gameAttackReach=3;
-    c.attack.silentRotation=true; Require(!CanAttack(f,t,c),"unsupported silent rotation accepted"); c.attack.silentRotation=false;
+    f.silentSupported=false; Require(!CanAttack(f,t,c),"unsupported silent rotation accepted"); f.silentSupported=true;
     SyncLayer sync; sync.Configure(c.sync,1); Recorder transport;
     Command command; command.world=1; command.target=1; command.identity=t.uuid; command.sampledAt=1;
     Require(sync.Enqueue(command,1),"pose enqueue failed"); command.pose.rotation.yaw=1;
@@ -172,35 +241,35 @@ void SyncAndAttackChecks() {
     Require(limitedTransport.count==5 && Near(limitedTransport.commands[4].pose.rotation.yaw,31.75),"recovery failed to slow actual dispatched rotation");
 }
 void IntegrationChecks() {
-    Config config=Enabled(); config.attack.silentRotation=true;
+    Config config=Enabled();
     ConfigStore a,b; a.Publish(config); b.Publish(config);
     FriendEnemyBook relations; SimulatedGame first,second;
     relations.Set(first.Entities()[2].uuid,Relation::Friend);
     CombatAssist one(a,relations,first),two(b,relations,second);
     DebugSnapshot state;
-    for(int i=0;i<250;++i) { state=one.Step(first.Capture(i*.02,.02,true)); two.Step(second.Capture(i*.02,.02,true)); }
+    for(int i=0;i<250;++i) { state=one.Step(first.Capture(i*.02,.02)); two.Step(second.Capture(i*.02,.02)); }
     Require(first.Attacks()>0 && first.Attacks()==second.Attacks(),"simulation produced no reproducible attacks");
     Require(first.Entities()[2].health==20 && Near(first.Camera().yaw,0) && std::abs(first.ServerRotation().yaw)>1,"friend or silent camera behavior failed");
     const auto x=first.Commands(),y=second.Commands(); Require(x.size()==y.size(),"seed changed command count");
-    for(std::size_t i=0;i<x.size();++i) Require(x[i].sequence==y[i].sequence && x[i].kind==y[i].kind && x[i].due==y[i].due && x[i].pose.rotation.yaw==y[i].pose.rotation.yaw && x[i].pose.rotation.pitch==y[i].pose.rotation.pitch,"seed not reproducible");
+    for(std::size_t i=0;i<x.size();++i) Require(x[i].silent && y[i].silent && x[i].sequence==y[i].sequence && x[i].kind==y[i].kind && x[i].due==y[i].due && x[i].pose.rotation.yaw==y[i].pose.rotation.yaw && x[i].pose.rotation.pitch==y[i].pose.rotation.pitch,"default combat changed camera or seed was not reproducible");
     Require(state.traceCount>0 && state.packets.sent==x.size(),"debug mailbox statistics wrong");
     const auto before=x.size(); config.enabled=false; a.Publish(config);
-    for(int i=250;i<270;++i) one.Step(first.Capture(i*.02,.02,true));
+    for(int i=250;i<270;++i) one.Step(first.Capture(i*.02,.02));
     Require(first.Commands().size()==before && one.Debug().packets.buffered==0,"hot disable emitted input");
-    config.enabled=true; a.Publish(config); auto unsupported=first.Capture(5.5,.02,true); unsupported.silentSupported=false;
+    config.enabled=true; a.Publish(config); auto unsupported=first.Capture(5.5,.02); unsupported.silentSupported=false;
     const auto blocked=one.Step(unsupported); Require(blocked.silentUnavailable && first.Commands().size()==before,"unsupported silent fallback emitted normal camera input");
-    auto stale=first.Capture(5.6,.02,true); stale.sampledAt=5;
+    auto stale=first.Capture(5.6,.02); stale.sampledAt=5;
     Require(!one.Step(stale).enabled,"stale frame remained active");
-    auto missing=first.Capture(5.7,.02,true); missing.attackCooldown.reset();
+    auto missing=first.Capture(5.7,.02); missing.attackCooldown.reset();
     Require(one.Step(missing).cooldownUnavailable,"unknown cooldown hidden from HUD");
     for(auto& entity:first.Entities()) entity.visibility.reset();
-    auto noSight=first.Capture(5.8,.02,true);
+    auto noSight=first.Capture(5.8,.02);
     const auto noTarget=one.Step(noSight);
     Require(!noTarget.target && noTarget.packets.buffered==0,"visibility loss left a queued attack");
 }
 }
 int main() {
-    try { ConfigChecks(); TargetChecks(); RotationChecks(); SyncAndAttackChecks(); IntegrationChecks(); }
+    try { ConfigChecks(); TargetChecks(); NearestEntityChecks(); RotationChecks(); ClosedLoopRotationChecks(); SyncAndAttackChecks(); IntegrationChecks(); }
     catch(const std::exception& error) { std::printf("FAIL Combat Assist: %s\n",error.what()); return 1; }
     std::printf("PASS Combat Assist: %d checks (selection, curves, cooldown, FIFO, threads, reload, seed, simulator)\n",checks); return 0;
 }

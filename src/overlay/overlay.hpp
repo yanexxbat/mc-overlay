@@ -31,6 +31,7 @@
 #include "combat_menu.hpp"
 #include "aura_renderer.hpp"
 #include "aura_blend_dx11.hpp"
+#include "friend_hat_renderer.hpp"
 #include "item_icon_atlas_dx11.hpp"
 
 struct ID3D11Device;
@@ -188,6 +189,8 @@ private:
     AuraConfig auraConfig_{};
     AuraRenderer auraRenderer_{};
     AuraBlendDX11 auraBlend_{};
+    FriendHatRenderer friendHats_{};
+    FriendHatConfig friendHatConfig_{};
     ItemIconAtlasDX11 itemIcons_{};
     bool auraPrepared_ = false;
     control_panel::State menu_{};

@@ -1,6 +1,7 @@
 // Prüft reale GPU-Pixel, Projektionsskalierung und Speicherverhalten ohne Spiel/JNI.
 #include "overlay/aura_projection.hpp"
 #include "overlay/aura_blend_dx11.hpp"
+#include "overlay/friend_hat_renderer.hpp"
 #include "imgui_impl_dx11.h"
 #include <windows.h>
 #include <d3d11.h>
@@ -226,6 +227,86 @@ void DrawingChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX
     Require(invalid.VtxBuffer.Size==count,"Invalid projection produced geometry");
     ImGui::Render();
 }
+void FriendHatChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX11& blend) {
+    FriendHatRenderer renderer;
+    FriendHatConfig config;
+    AuraConfig colors;
+    WorldSnapshot scene=Camera(); scene.entityCount=1;
+    auto& entity=scene.entities[0];
+    entity.entityId=42; entity.uuid={1,2}; entity.z=5; entity.distance=5;
+    entity.width=.6f; entity.height=entity.modelHeight=1.8f; entity.health=20;
+    entity.flags=kEntityIsPlayer|kEntityIsLiving; entity.rigKind=kRigHumanoid;
+    combat::Relations relations{}; relations[0]={entity.uuid,combat::Relation::Friend,true};
+    Require(FriendHatRenderer::IsFriend(entity,relations),"UUID friend was not marked");
+    auto stranger=entity; stranger.uuid={7,8};
+    Require(!FriendHatRenderer::IsFriend(stranger,relations),"reused entity ID inherited a friend hat");
+    relations[0].relation=combat::Relation::Enemy;
+    Require(!FriendHatRenderer::IsFriend(entity,relations),"enemy received a friend hat");
+    relations[0].relation=combat::Relation::Friend;
+    FriendHatWorld initial,moved,crouched; FriendHatScreen normal,farther,large;
+    Require(renderer.BuildWorld(entity,config,initial),"valid friend hat rejected");
+    const auto camera=Camera();
+    Require(FriendHatRenderer::Project(CameraProjection(camera,1280,720),initial,{0,.9,0},{1280,720},normal),
+            "friend hat projection failed");
+    entity.z=10;
+    Require(renderer.BuildWorld(entity,config,moved) &&
+            FriendHatRenderer::Project(CameraProjection(camera,1280,720),moved,{0,.9,0},{1280,720},farther) &&
+            Close(farther.tipGlowRadius,normal.tipGlowRadius*.5f),"friend hat did not scale with distance");
+    Require(FriendHatRenderer::Project(CameraProjection(camera,2560,1440),initial,{0,.9,0},{2560,1440},large) &&
+            Close(large.tip.x,normal.tip.x*2) && Close(large.tipGlowRadius,normal.tipGlowRadius*2),
+            "friend hat did not scale with resolution");
+    entity.z=5; entity.x=123456.25; entity.y=3;
+    Require(renderer.BuildWorld(entity,config,moved) && std::abs(moved.tip.x-initial.tip.x-123456.25)<1e-7 &&
+            std::abs(moved.tip.y-initial.tip.y-3)<1e-7,"friend hat detached from moving head");
+    entity.x=entity.y=0; entity.pose=kPoseCrouching;
+    Require(renderer.BuildWorld(entity,config,crouched) && crouched.tip.y<initial.tip.y,"friend hat ignored crouching");
+    entity.pose=kPoseStanding; entity.z=-5;
+    Require(renderer.BuildWorld(entity,config,moved) &&
+            !FriendHatRenderer::Project(CameraProjection(camera,1280,720),moved,{0,.9,0},{1280,720},farther),
+            "friend hat behind camera was accepted");
+    entity.z=5;
+    auto& warm=Frame(); FriendHatRenderer::Prepare(warm);
+    renderer.DrawFriends(warm,scene,CameraProjection(scene,128,128),relations,64,config,colors.startColor,colors.endColor,
+                         blend.Callbacks(),blend.GlowTexture(),{128,128});
+    ImGui::Render();
+    const int before=allocations;
+    for(int i=0;i<10;++i) {
+        auto& draw=Frame(); const auto flags=draw.Flags; const auto clips=draw._ClipRectStack.Size;
+        recording=true;
+        renderer.DrawFriends(draw,scene,CameraProjection(scene,128,128),relations,64,config,colors.startColor,colors.endColor,
+                             blend.Callbacks(),blend.GlowTexture(),{128,128});
+        recording=false;
+        Require(draw.VtxBuffer.Size>0 && draw.Flags==flags && draw._ClipRectStack.Size==clips,
+                "friend hat was empty or leaked draw state");
+        for(const auto& vertex:draw.VtxBuffer)
+            Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"friend hat produced non-finite vertices");
+        ImGui::Render();
+    }
+    Require(allocations==before,"friend hat allocated after warm-up");
+    const auto pixels=Capture(device,context);
+    bool visible=false,transparent=false;
+    for(std::size_t i=3;i<pixels.data.size();i+=4) {
+        visible|=pixels.data[i]>0; transparent|=pixels.data[i]>0 && pixels.data[i]<200;
+    }
+    Require(visible&&transparent,"friend hat did not render transparent GPU pixels");
+    auto& empty=Frame(); relations[0]={};
+    renderer.DrawFriends(empty,scene,CameraProjection(scene,128,128),relations,64,config,colors.startColor,colors.endColor,
+                         blend.Callbacks(),blend.GlowTexture(),{128,128});
+    Require(empty.VtxBuffer.Size==0,"removed friend kept its hat"); ImGui::Render();
+    auto& restore=Frame(); relations[0]={entity.uuid,combat::Relation::Friend,true};
+    // Eigene Dreiecke müssen nach einem 16-Bit-Vertex-Offset weiter korrekt indizieren.
+    for(int i=0;i<17000;++i) restore.AddRectFilled({-20,-20},{-10,-10},IM_COL32_WHITE);
+    restore.AddRectFilled({8,104},{24,120},IM_COL32(51,51,51,255));
+    renderer.DrawFriends(restore,scene,CameraProjection(scene,128,128),relations,64,config,colors.startColor,colors.endColor,
+                         blend.Callbacks(),blend.GlowTexture(),{128,128});
+    restore.AddRectFilled({8,104},{24,120},IM_COL32(128,0,0,128));
+    ImGui::Render();
+    const auto restored=Capture(device,context);
+    Require(restored.At(12,108)[0]<95 && restored.At(12,108)[1]<30,"friend glow leaked additive blending into later UI");
+    bool offsetVisible=false;
+    for(int y=0;y<90;++y) for(int x=0;x<128;++x) offsetVisible|=restored.At(x,y)[3]>0;
+    Require(offsetVisible,"friend hat mesh failed after the 16-bit vertex offset");
+}
 } // namespace
 int main() {
     SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
@@ -241,6 +322,7 @@ int main() {
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"ImGui D3D11 initialization failed");
         AuraBlendDX11 blend; Require(blend.Initialize(device.Get()),"Aura blend initialization failed");
         DrawingChecks(device.Get(),context.Get(),blend);
+        FriendHatChecks(device.Get(),context.Get(),blend);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext();
         std::cout<<"PASS aura fog: world-space orbits, rotation direction/speed/pause/resume, curved trails, entity/camera movement, frame-rate independence, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
         return 0;

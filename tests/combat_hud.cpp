@@ -10,13 +10,15 @@ int main() {
     unsigned char* pixels; int width,height; io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height); io.Fonts->SetTexID(1);
     DebugSnapshot snapshot; snapshot.enabled=true; snapshot.target=Target{}; snapshot.target->id=1;
     snapshot.target->name.fill('W'); snapshot.target->range=2.75; snapshot.fovRadiusPx=300; snapshot.traceCount=kTraceCapacity;
+    HudConfig debug; debug.enabled=debug.fov=debug.trace=debug.packetStats=true;
     for(std::size_t i=0;i<kTraceCapacity;++i) snapshot.trace[i]={static_cast<double>(i),{179+static_cast<double>(i),20},{-179+static_cast<double>(i),10}};
     bool valid=true;
     const auto& style=ImGui::GetStyle(); const float alpha=style.Alpha;
     for(const ImVec2 viewport:{ImVec2(1920,1080),ImVec2(480,360),ImVec2(80,80)}) {
         io.DisplaySize=viewport; io.DeltaTime=1.0f/60;
         ImGui::NewFrame(); const auto stack=ImGui::GetBackgroundDrawList()->_ClipRectStack.Size;
-        CombatHud::Draw(*ImGui::GetBackgroundDrawList(),snapshot,HudConfig{},viewport);
+        CombatHud::Draw(*ImGui::GetBackgroundDrawList(),snapshot,debug,viewport);
+        valid&=ImGui::GetBackgroundDrawList()->VtxBuffer.Size>0;
         valid&=ImGui::GetBackgroundDrawList()->_ClipRectStack.Size==stack;
         ImGui::Render(); const auto* data=ImGui::GetDrawData();
         for(int l=0;l<data->CmdListsCount;++l) for(const auto& vertex:data->CmdLists[l]->VtxBuffer)

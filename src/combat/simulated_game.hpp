@@ -21,10 +21,10 @@ public:
         e.visibility=Visibility{true,0}; entities_[index]=e;
         count_=std::max(count_,index+1);
     }
-    Frame Capture(Seconds now,Seconds dt,bool silent=false) {
+    Frame Capture(Seconds now,Seconds dt) {
         now_=now;
         for(std::size_t i=0;i<count_;++i) if(entities_[i].visibility) entities_[i].visibility->sampledAt=now;
-        const Angles rotation=silent ? serverRotation_ : cameraRotation_;
+        const Angles rotation=serverRotation_;
         Frame f;
         f.now=f.sampledAt=now; f.dt=dt; f.world=world_; f.tick=static_cast<std::uint64_t>(now/0.050);
         f.eye={position_.x,position_.y+kEyeHeight,position_.z}; f.playerPosition=position_; f.observedRotation=rotation;

@@ -3,13 +3,13 @@
 #include <mutex>
 
 namespace mcov::combat {
-enum class TargetMode { Crosshair, NearestPlayer, LowestHealth, AngleDistance };
+enum class TargetMode { Crosshair, NearestPlayer, LowestHealth, AngleDistance, NearestEntity };
 enum class FovMode { DynamicDegrees, StaticPixels };
 struct TargetConfig {
-    bool enabled{true}, playersOnly{true}, requireVisibility{true}, prioritizeEnemies{true}, multiTarget{};
-    TargetMode mode{TargetMode::AngleDistance};
+    bool enabled{true}, playersOnly{}, requireVisibility{true}, prioritizeEnemies{}, multiTarget{true};
+    TargetMode mode{TargetMode::NearestEntity};
     FovMode fovMode{FovMode::DynamicDegrees};
-    double coneDegrees{20.0}, radiusPixels{160.0}, range{6.0};
+    double coneDegrees{180.0}, radiusPixels{160.0}, range{3.0};
     double aimHeight{0.75}, angleWeight{0.7}, distanceWeight{0.3};
     double visibilityMaxAge{0.100}, switchImprovement{0.08};
     Range<double> switchDelay{0.080,0.180};
@@ -18,13 +18,13 @@ struct RotationConfig {
     bool enabled{true};
     Range<double> reactionDelay{0.010,0.040};
     Range<double> yawDuration{0.080,0.220}, pitchDuration{0.100,0.260};
-    Range<double> overshootFraction{0.0,0.04}, jitterDegrees{0.0,0.04}, jitterPeriod{0.070,0.140};
+    Range<double> overshootFraction{0.0,0.0}, jitterDegrees{0.0,0.0}, jitterPeriod{0.070,0.140};
     double maxOvershootDegrees{1.0}, correctionDuration{0.090};
     double smoothing{1.0}, maxYawPerTick{18.0}, maxPitchPerTick{12.0}, tickSeconds{0.050};
     double tangentFraction{0.33}, replanDegrees{1.0}, settleDegrees{0.08};
 };
 struct AttackConfig {
-    bool enabled{}, silentRotation{};
+    bool enabled{};
     double range{3.0}, cooldownThreshold{0.98}, alignmentDegrees{1.5};
     Range<double> firstClickDelay{0.035,0.090};
 };
@@ -35,7 +35,7 @@ struct SyncConfig {
     double positionDesync{0.5}, angleDesync{8.0}, correctionMaxAge{0.250};
     double recoverySeconds{0.200}, recoverySpeedScale{0.35};
 };
-struct HudConfig { bool enabled{true}, target{true}, fov{true}, trace{true}, packetStats{true}; };
+struct HudConfig { bool enabled{}, target{true}, fov{}, trace{}, packetStats{}; };
 struct Config {
     bool enabled{}; // Explizite Aktivierung; der Simulator aktiviert seinen eigenen Kern.
     std::uint64_t seed{0x4d434f56};
@@ -52,7 +52,7 @@ inline bool ValidRange(Range<double> r, double lo, double hi) { return Within(r.
 inline bool Validate(const Config& c) {
     const auto& t=c.target; const auto& r=c.rotation; const auto& a=c.attack; const auto& s=c.sync;
     return Within(c.frameMaxAge,0.001,0.5) &&
-        (t.mode==TargetMode::Crosshair || t.mode==TargetMode::NearestPlayer || t.mode==TargetMode::LowestHealth || t.mode==TargetMode::AngleDistance) &&
+        (t.mode==TargetMode::Crosshair || t.mode==TargetMode::NearestPlayer || t.mode==TargetMode::LowestHealth || t.mode==TargetMode::AngleDistance || t.mode==TargetMode::NearestEntity) &&
         (t.fovMode==FovMode::DynamicDegrees || t.fovMode==FovMode::StaticPixels) &&
         Within(t.coneDegrees,1,180) && Within(t.radiusPixels,10,2000) && Within(t.range,0.1,64) &&
         Within(t.aimHeight,0.1,0.95) && Within(t.angleWeight,0,1) && Within(t.distanceWeight,0,1) &&

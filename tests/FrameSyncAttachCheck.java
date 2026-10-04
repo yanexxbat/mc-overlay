@@ -9,7 +9,8 @@ import java.util.ArrayList;
 
 /** Exercises agentmain on already loaded classes in this disposable test JVM. */
 public final class FrameSyncAttachCheck {
-    private record Target(String id, Object client, Object camera, Method frame, Method update) {}
+    private record Target(String id, Object client, Object camera, Method frame, Method update,
+                          Object entity, Method turn, Method yaw, Method pitch) {}
     private static void require(boolean value, String message) { if (!value) throw new AssertionError(message); }
     private static void attach(String agent) throws Exception {
         VirtualMachine vm = VirtualMachine.attach(Long.toString(ProcessHandle.current().pid()));
@@ -34,8 +35,12 @@ public final class FrameSyncAttachCheck {
                 for (Method method : camera.getDeclaredMethods())
                     if (method.getName().equals(profile.update()) && method.getReturnType() == void.class) update = method;
                 require(update != null, "Missing camera method " + profile.id());
+                Class<?> entity = Class.forName(profile.entity().replace('/', '.'), true, loader);
                 targets.add(new Target(profile.id() + suffix, client.getConstructor().newInstance(),
-                        camera.getConstructor().newInstance(), frame, update));
+                        camera.getConstructor().newInstance(), frame, update, entity.getConstructor().newInstance(),
+                        entity.getDeclaredMethod(profile.turn(), double.class, double.class),
+                        camera.getDeclaredMethod("testCameraYaw", entity, float.class),
+                        camera.getDeclaredMethod("testCameraPitch", entity, float.class)));
               }
             }
             attach(args[1]);
@@ -53,6 +58,21 @@ public final class FrameSyncAttachCheck {
                 }
                 target.update().invoke(target.camera(), values);
                 require((epoch.getLong(null) & 1) == 0, "Loaded camera was not retransformed " + target.id());
+                // Camera und Entity waren schon vor Attach geladen und verifiziert.
+                signal.getField("viewYaw").setFloat(null, 12);
+                signal.getField("viewPitch").setFloat(null, -7);
+                signal.getField("silentPlayer").set(null, target.entity());
+                target.turn().invoke(target.entity(), 40d, 20d);
+                require(Math.abs((float)target.yaw().invoke(target.camera(), target.entity(), .5f)-18)<.001f,
+                        "Loaded silent Camera/turn hook missing " + target.id());
+                require(Math.abs((float)target.pitch().invoke(target.camera(), target.entity(), .5f)+4)<.001f,
+                        "Loaded silent pitch hook missing " + target.id());
+                require(target.entity().getClass().getField("testYaw").getFloat(target.entity())==0,
+                        "Loaded turn hook changed player combat yaw " + target.id());
+                signal.getField("silentPlayer").set(null, null);
+                target.turn().invoke(target.entity(), 20d, 20d);
+                require(Math.abs((float)target.yaw().invoke(target.camera(), target.entity(), .5f)-3)<.001f,
+                        "Normal turn did not resume " + target.id());
                 System.out.println("PASS dynamic attach " + target.id());
             }
             // A second injector attempt must keep the installed markers intact.

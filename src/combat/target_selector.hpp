@@ -29,6 +29,7 @@ inline double ConeDegrees(const Frame& f, const TargetConfig& c) {
     return std::atan(c.radiusPixels/focal)*kDegrees;
 }
 inline double FovRadius(const Frame& f, const TargetConfig& c) {
+    if(c.mode==TargetMode::NearestEntity) return 0; // Auswahl rundherum, unabhängig von der Kamera.
     if(c.fovMode==FovMode::StaticPixels) return c.radiusPixels;
     // Ein 180-Grad-Halbkegel umfasst die ganze Umgebung, keinen projizierbaren Kreis.
     if(c.coneDegrees>=90) return 0;
@@ -50,10 +51,11 @@ inline std::optional<Target> Evaluate(const Entity& e, const Frame& f, const Tar
     if(!Finite(aim)) return {};
     const Angles desired=LookAt(f.eye,aim);
     const double angle=AngularDistance(f.cameraRotation,desired), cone=ConeDegrees(f,c);
-    if(!std::isfinite(range) || !std::isfinite(angle) || !std::isfinite(cone) || range>c.range || angle>cone ||
+    if(!std::isfinite(range) || !std::isfinite(angle) || !std::isfinite(cone) || range>c.range ||
+       (c.mode!=TargetMode::NearestEntity && angle>cone) ||
        (c.mode==TargetMode::Crosshair && f.crosshairId!=e.id)) return {};
     double score=(c.angleWeight*(angle/cone)+c.distanceWeight*(range/c.range))/(c.angleWeight+c.distanceWeight);
-    if(c.mode==TargetMode::NearestPlayer) score=range/c.range;
+    if(c.mode==TargetMode::NearestPlayer || c.mode==TargetMode::NearestEntity) score=range/c.range;
     // Monotoner HP-Term ohne Annahme, dass modifizierte Entities maximal 20 HP besitzen.
     if(c.mode==TargetMode::LowestHealth) score=e.health/(e.health+1);
     return Target{e.id,e.uuid,e.name,aim,desired,range,angle,score,relation==Relation::Enemy};
@@ -68,6 +70,8 @@ public:
             if(current_ && t->id==current_->id && t->uuid==current_->uuid) current=t;
             if(!best || Better(*t,*best,c)) best=t;
         }
+        // Kill Aura nutzt pro Tick die nächste gültige Hitbox, ohne alten Lock oder Wechselverzögerung.
+        if(c.mode==TargetMode::NearestEntity) { current_=best; pending_={}; return current_; }
         if(!current) { current_=best; pending_={}; return current_; } // Verlust bricht den alten Lock sofort ab.
         if(!best || best->id==current->id || !c.multiTarget) { current_=current; pending_={}; return current_; }
         const bool promoted=c.prioritizeEnemies && best->enemy && !current->enemy;
@@ -81,6 +85,7 @@ public:
     }
 private:
     static bool Better(const Target& a, const Target& b, const TargetConfig& c) {
+        if(c.mode==TargetMode::NearestEntity) return a.range!=b.range ? a.range<b.range : a.id<b.id;
         if(c.prioritizeEnemies && a.enemy!=b.enemy) return a.enemy;
         if(a.score!=b.score) return a.score<b.score;
         if(a.range!=b.range) return a.range<b.range;

@@ -6,10 +6,13 @@ version-specific member names. See [compatibility and verification](docs/compati
 
 The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includes
 deterministic selection/rotation/cooldown/sync tests and an executable simulator
-(`build/bin/mcov_combat_demo.exe`). Kill Aura executes visible rotation and normal
-game attacks synchronously on the instrumented Minecraft client tick. Existing
-Aim Assist and Triggerbot pause while it is enabled. Silent rotation and live
-server-correction capture are not implemented.
+(`build/bin/mcov_combat_demo.exe`). Kill Aura executes player rotation and normal
+game attacks synchronously on the instrumented Minecraft client tick. Combat
+rotation always keeps mouse-controlled camera angles separate from the player's
+combat angles, including the third-person camera position. There is no camera
+toggle or visible rotation mode. Existing
+Aim Assist and Triggerbot pause while it is enabled. Live server-correction
+capture is not implemented.
 
 ---
 
@@ -206,16 +209,24 @@ four existing palettes, compact navigation, reduced motion, recentering, page
 reset, connection status and menu closing. Font Awesome icons are embedded as
 an executable resource.
 Aim/trigger activation keys and target filtering are bound to CombatSettings.
-Combat groups Kill Aura, Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
-Kill Aura owns the activation switch, player filter, reach, bridge status, attack
-counter and preset. Choose **Use Kill Aura preset**, enable **Enable Kill Aura**,
-then close the menu. The preset uses 3 blocks, full surrounding target selection,
-visible rotation and real game cooldown. Disable Players only to include mobs.
-Modules contains Aim Assist, Triggerbot and Auto Totem. The remaining sections
-edit the active combat config and UUID relations; changes apply on the next
+Combat has three tabs: **Kill Aura**, **Other modules** and **Friends**.
+Enable **Enable Kill Aura**, close the menu and use F5. It aims and attacks
+the nearest valid living hitbox in reach, including behind the camera, and
+switches when another eligible entity is closer. Players and mobs are included
+by default; friends and occluded entities are skipped. The basic controls are
+target type, reach and smoothing. Rotation always keeps the camera independent.
+There is no preset step or selection-mode chooser. See [camera behavior and hooks](docs/silent-camera.md).
+Technical controls are under the collapsed **Advanced settings** section;
+the debug HUD is off by default. Other modules contains Aim Assist, Triggerbot
+and Auto Totem; Aim Assist and Triggerbot visibly pause while Kill Aura is enabled.
+Friends manages UUID exclusions and automatically marks those players with a
+translucent conical hat. Its soft violet/turquoise glow uses the Target Aura
+colors; it also works with Target Aura and ESP disabled. Removing the friend
+removes the hat. UUIDs are cached by Java object identity on the sampler; drawing
+adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v11. Settings and friends remain session-local.
+the wire protocol is now IPC v14. Settings and friends remain session-local.
 All six original pages
 remain accessible. The injector retains its existing flat interface.
 
@@ -472,7 +483,7 @@ Deliberately left unwired, each marked in the source:
 Built with MSVC x64, Ninja and Temurin JDK 21. Overlay, injector, agent and the
 Java 17-compatible attach helper compile successfully.
 
-The four official client JARs were checksum-verified and all 70 mapped members
+The four official client JARs were checksum-verified and all 75 mapped members
 per profile audited. All 11 profiles pass the actual JNI binder/camera sampler
 against isolated synthetic classes under `-Xcheck:jni`, including float/double
 FOV calls, version rejection, mod-loader-style class resolution, entity geometry,
@@ -482,7 +493,7 @@ including repeated attach, camera methods with multiple return paths and
 classes without the optional camera getter. Namespace tests check inherited
 Fabric method names; connection checks cover world loading and high overlay FPS.
 Flat UI and ESP projection/rig checks also pass.
-Restart Minecraft before using shared-memory version 10 with the rebuilt binaries.
+Restart Minecraft before using shared-memory version 14 with the rebuilt binaries.
 
 Live Minecraft/Forge sessions and actual Java 17/25 VMs have not been exercised
 here. See [the compatibility matrix and reproducible checks](docs/compatibility.md).

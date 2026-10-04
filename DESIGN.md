@@ -37,11 +37,23 @@ navigation, slider numeric input, resets and agent settings. The menu theme
 must restore the HUD/global style and font stacks after rendering.
 
 Pages: COMBAT -> Combat; VISUALS -> Visuals; LOOT -> Blocks; HUD -> Hud.
-Combat contains Kill Aura, Modules, Targets, Rotation, Attacks, Sync, Friends and Debug.
-Modules owns the live Aim Assist, Triggerbot and Auto Totem controls. The other
-sections edit the active Combat Assist ConfigStore and UUID relations. Kill Aura
-shows activation, player filter, reach, live bridge status, executed attack count
-and a full-surrounding 3-block preset. Native callbacks run on the client tick;
+Combat shows three tabs: Kill Aura, Other modules and Friends. Kill Aura exposes
+activation, target type, reach and smoothing, plus status and the last target.
+It always selects the nearest valid living hitbox, all around the player;
+players and mobs are included by default, friends and occluded targets are skipped.
+There is no preset or selection-mode chooser. Advanced settings is collapsed by
+default and retains targeting details, rotation, attacks, timing and diagnostics.
+The debug HUD is off by default. Other modules owns Aim Assist, Triggerbot and
+Auto Totem; conflicting controls are visibly paused while Kill Aura is enabled.
+Friends uses one action to add a UUID exclusion, with no enemy-priority chooser.
+Adding a friend also applies a translucent conical hat automatically. Its violet
+and turquoise rim shares the Target Aura colors and Gaussian glow resource.
+The hat follows the interpolated humanoid head and pose in world space, scales
+with distance, and renders below ESP labels. It remains visible when Target Aura
+and ESP are disabled; removing the UUID removes the hat. No extra menu controls.
+The player's combat angles and
+mouse-controlled view are always independent. Camera decoupling has no toggle.
+Native callbacks run on the client tick;
 ImGui only publishes settings and consumes diagnostics. Page reset covers both stores.
 Small icons: player -> Stats; sun -> appearance/actions; gear -> Settings.
 INSERT toggles the menu; END quits. Theme and rail preferences last for the

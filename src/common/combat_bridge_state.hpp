@@ -32,17 +32,18 @@ template<class T> struct SharedMailbox {
 };
 static_assert(std::atomic<std::uint64_t>::is_always_lock_free);
 inline constexpr std::uint64_t kCombatLeaseMs=250;
-enum class CombatBridgeStatus : std::uint32_t { Unavailable, Ready, Disabled, Paused, NoWorld, Active, NoTarget, Error };
+enum class CombatBridgeStatus : std::uint32_t { Unavailable, Ready, Disabled, Paused, NoWorld, Active, NoTarget, Error, SilentUnavailable };
 inline const char* CombatBridgeText(CombatBridgeStatus s) {
     switch(s) {
-        case CombatBridgeStatus::Ready:return "Client tick connected";
-        case CombatBridgeStatus::Disabled:return "Disabled";
-        case CombatBridgeStatus::Paused:return "Paused (menu / focus / input)";
-        case CombatBridgeStatus::NoWorld:return "Waiting for a world";
+        case CombatBridgeStatus::Ready:return "Ready";
+        case CombatBridgeStatus::Disabled:return "Off";
+        case CombatBridgeStatus::Paused:return "Paused - close menus and focus Minecraft";
+        case CombatBridgeStatus::NoWorld:return "Join a world";
         case CombatBridgeStatus::Active:return "Active";
         case CombatBridgeStatus::NoTarget:return "No target in range";
-        case CombatBridgeStatus::Error:return "JNI error - combat stopped";
-        default:return "Client tick bridge unavailable";
+        case CombatBridgeStatus::Error:return "Combat stopped - reconnect with injector";
+        case CombatBridgeStatus::SilentUnavailable:return "Camera hook missing - restart Minecraft";
+        default:return "Connect with the injector";
     }
 }
 struct CombatRequest {

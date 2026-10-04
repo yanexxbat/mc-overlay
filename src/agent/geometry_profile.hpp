@@ -15,7 +15,7 @@ struct GeometryProfile {
     PartialTickSource partialSource;
     Member getBounds, minX, minY, minZ, maxX, maxY, maxZ;
     Member oldX, oldY, oldZ;
-    Member bodyYaw, bodyYawOld, headPitch, headPitchOld;
+    Member bodyYaw, bodyYawOld, headYaw, headYawOld, headPitch, headPitchOld;
     Member getPose, poseStanding, poseCrouch, poseSwim, poseGlide, poseSleep;
     Member isPassenger, walkState, walkSpeed, walkPosition;
     Member getDimensions, dimensionHeight;
@@ -28,5 +28,6 @@ struct GeometryProfile {
     Member clientTick, clientPaused, setYaw, setPitch, eyePosition, lineOfSight;
     Member attackCooldown, attackReach, farReach, attackEntity, swingHand;
     Member mainHand, pickBlocks, hitLocation, entityAlive;
+    Member turn, viewYaw, viewPitch, yawOld;
 };
 } // namespace mcov::mappings

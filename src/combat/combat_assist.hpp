@@ -32,7 +32,7 @@ public:
         }
         DebugSnapshot d;
         d.cooldown=f.attackCooldown.value_or(0); d.cooldownUnavailable=!f.attackCooldown;
-        d.silentUnavailable=c.attack.silentRotation && !f.silentSupported;
+        d.silentUnavailable=c.enabled && f.inputAllowed && !f.silentSupported;
         const bool valid=std::isfinite(f.now) && std::isfinite(f.dt) && f.dt>=0 && f.world &&
             Finite(f.eye) && Finite(f.playerPosition) && Finite(f.observedRotation) && Finite(f.cameraRotation) &&
             Within(f.observedRotation.pitch,-90,90) && Within(f.cameraRotation.pitch,-90,90) &&
@@ -50,7 +50,11 @@ public:
             if(sync_.Stats().corrections!=previousCorrections) {
                 rotation_.Reset(f.observedRotation); attack_.Reset();
             }
-            d.target=selector_.Select(f,c.target,relations_.Read(),selectionRandom_);
+            auto selection=c.target;
+            // Im Live-Modus keine Ziele wählen, die der aktuelle Spielmodus nicht erreichen kann.
+            if(selection.mode==TargetMode::NearestEntity && f.gameAttackReach && Within(*f.gameAttackReach,0.1,64))
+                selection.range=std::min({selection.range,c.attack.range,*f.gameAttackReach});
+            d.target=selector_.Select(f,selection,relations_.Read(),selectionRandom_);
             if(d.target) {
                 if(!lastTarget_ || lastTarget_->id!=d.target->id || lastTarget_->uuid!=d.target->uuid) {
                     sync_.Cancel(); attack_.Reset();
@@ -62,7 +66,8 @@ public:
                 d.reacting=rotation_.Reacting(f.now); d.fovRadiusPx=FovRadius(f,c.target);
                 Command command;
                 command.world=f.world; command.target=d.target->id; command.identity=d.target->uuid;
-                command.sampledAt=f.sampledAt; command.pose={f.playerPosition,wanted}; command.silent=c.attack.silentRotation;
+                // Kill Aura dreht immer nur den Spieler; die Kamera bleibt unabhängig.
+                command.sampledAt=f.sampledAt; command.pose={f.playerPosition,wanted}; command.silent=true;
                 if(!d.silentUnavailable && c.sync.enabled) {
                     if(c.rotation.enabled && !d.reacting) sync_.Enqueue(command,f.now);
                     if(!d.resyncing && attack_.Prepare(f,*d.target,c,attackRandom_)) {

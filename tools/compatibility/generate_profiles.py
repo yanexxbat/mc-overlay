@@ -305,19 +305,22 @@ def generate(cache):
     (cache / 'profiles.json').write_text(json.dumps(profiles, indent=2) + '\n', encoding='utf-8')
     java = ['// Generated from the same audited profiles as generated_profiles.hpp.',
             'package mcov.sync;', 'final class FrameProfiles {',
-            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc, String tick, String tickDesc) {}',
+            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc, String tick, String tickDesc, String entity, String uuid, String uuidDesc, String turn, String turnDesc, String viewYaw, String viewPitch) {}',
             '    static final Profile[] PROFILES = {']
     for p in profiles:
         frame, update = p['geometry']['members']['runFrame'], p['geometry']['members']['updateCamera']
         values = [p['id'], p['classes']['client'], *frame, p['classes']['camera'], *update,
-                  *p['members']['methodGetInstance'], *p['members']['methodCameraPosition'], *p['members']['fieldCameraPosition'], *p['geometry']['members']['clientTick']]
+                  *p['members']['methodGetInstance'], *p['members']['methodCameraPosition'], *p['members']['fieldCameraPosition'], *p['geometry']['members']['clientTick'],
+                  p['classes']['entity'], *p['members']['methodEntityUuid'], *p['geometry']['members']['turn'],
+                  p['geometry']['members']['viewYaw'][0],p['geometry']['members']['viewPitch'][0]]
         java.append('        new Profile(' + ', '.join(quote(v) for v in values) + '),')
     java.extend(['    };', '    static boolean isTarget(String owner) {',
-        '        for (Profile p : PROFILES) if (p.client().equals(owner) || p.camera().equals(owner)) return true;',
+        '        for (Profile p : PROFILES) if (p.client().equals(owner) || p.camera().equals(owner) || p.entity().equals(owner)) return true;',
         '        return false;', '    }', '    static boolean marker(String owner, String name, String descriptor, boolean isStatic) {',
         '        for (Profile p : PROFILES) {',
         '            if (isStatic && p.client().equals(owner) && p.instance().equals(name) && p.instanceDesc().equals(descriptor)) return true;',
         '            if (!isStatic && p.camera().equals(owner) && p.position().equals(name) && p.positionDesc().equals(descriptor)) return true;',
+        '            if (!isStatic && p.entity().equals(owner) && p.uuid().equals(name) && p.uuidDesc().equals(descriptor)) return true;',
         '        }', '        return false;', '    }', '    static boolean fieldMarker(String owner, String name, String descriptor) {',
         '        for (Profile p : PROFILES)',
         '            if (p.camera().equals(owner) && p.positionField().equals(name) && p.positionFieldDesc().equals(descriptor)) return true;',
@@ -326,7 +329,21 @@ def generate(cache):
         '            if (p.client().equals(owner) && p.frame().equals(name) && p.frameDesc().equals(descriptor)) return 1;',
         '            if (p.camera().equals(owner) && p.update().equals(name) && p.updateDesc().equals(descriptor)) return 2;',
         '            if (p.client().equals(owner) && p.tick().equals(name) && p.tickDesc().equals(descriptor)) return 3;',
-        '        }', '        return 0;', '    }', '}', ''])
+        '            if (p.entity().equals(owner) && p.turn().equals(name) && p.turnDesc().equals(descriptor)) return 4;',
+        '        }', '        return 0;', '    }',
+        '    static int cameraAxis(String camera, String entity, String method, String descriptor) {',
+        '        if (!descriptor.equals("(F)F")) return 0;',
+        '        for (Profile p : PROFILES) if (p.camera().equals(camera) && p.entity().equals(entity)) {',
+        '            if (p.viewYaw().equals(method)) return 1;',
+        '            if (p.viewPitch().equals(method)) return 2;',
+        '        }', '        return 0;', '    }',
+        '    static long cameraMask(String owner) {',
+        '        long bits=0; for (int i=0;i<PROFILES.length;i++) if (PROFILES[i].camera().equals(owner)) bits |= 1L<<i;',
+        '        return bits;', '    }',
+        '    static long turnMask(String owner, String method, String descriptor) {',
+        '        long bits=0; for (int i=0;i<PROFILES.length;i++) { Profile p=PROFILES[i];',
+        '            if (p.entity().equals(owner) && p.turn().equals(method) && p.turnDesc().equals(descriptor)) bits |= 1L<<i;',
+        '        } return bits;', '    }', '}', ''])
     (ROOT / 'tools/frame-sync/FrameProfiles.java').write_text('\n'.join(java), encoding='utf-8', newline='\n')
     print(f'Generated {len(profiles)} runtime profiles from checksum-verified official clients.')
 

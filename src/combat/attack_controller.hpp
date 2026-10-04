@@ -4,7 +4,7 @@
 namespace mcov::combat {
 inline bool CanAttack(const Frame& f,const Target& t,const Config& c) {
     return c.attack.enabled && f.inputAllowed && Fresh(f.sampledAt,f.now,c.frameMaxAge) &&
-        (!c.attack.silentRotation || f.silentSupported) && f.attackHitId==t.id &&
+        f.silentSupported && f.attackHitId==t.id &&
         f.attackCooldown && Within(*f.attackCooldown,c.attack.cooldownThreshold,1) &&
         f.gameAttackReach && Within(*f.gameAttackReach,0.1,64) &&
         t.range<=std::min(c.attack.range,*f.gameAttackReach) &&

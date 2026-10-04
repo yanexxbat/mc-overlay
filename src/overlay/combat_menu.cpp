@@ -30,18 +30,20 @@ template<class Draw> void Columns(const char* id,Draw draw) {
 void Header(const char* text) { panel::Section(text); }
 }
 CombatMenu::Section CombatMenu::DrawNavigation() {
-    constexpr const char* labels[]={"Kill Aura","Modules","Targets","Rotation","Attacks","Sync","Friends","Debug"};
+    constexpr const char* labels[]={"Kill Aura","Other modules","Friends"};
+    constexpr Section pages[]={Section::KillAura,Section::Modules,Section::Friends};
     style::StyleScope colors;
-    const auto requested=section_;
+    const auto requested=section_==Section::Modules || section_==Section::Friends ? section_ : Section::KillAura;
     const float start=ImGui::GetCursorPosY();
     colors.Color(ImGuiCol_TabSelected,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
     colors.Color(ImGuiCol_TabHovered,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
     colors.Color(ImGuiCol_TabSelectedOverline,ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
     if(ImGui::BeginTabBar("combat_sections",ImGuiTabBarFlags_FittingPolicyScroll)) {
         for(int i=0;i<IM_ARRAYSIZE(labels);++i) {
-            const auto flags=selectNext_ && static_cast<int>(requested)==i ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            const auto flags=selectNext_ && requested==pages[i] ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
             if(ImGui::BeginTabItem(labels[i],nullptr,flags)) {
-                section_=static_cast<Section>(i); ImGui::EndTabItem();
+                if(pages[i]!=Section::KillAura || section_==Section::Modules || section_==Section::Friends) section_=pages[i];
+                ImGui::EndTabItem();
             }
         }
         ImGui::EndTabBar(); selectNext_=false;
@@ -51,39 +53,44 @@ CombatMenu::Section CombatMenu::DrawNavigation() {
     return section_;
 }
 void CombatMenu::DrawSettings() {
-    ImGui::TextWrapped("Kill Aura: automatic target selection, visible rotation and cooldown-based attacks.");
-    if(section_==Section::KillAura) { DrawKillAura(); return; }
     if(section_==Section::Friends) { DrawFriends(); return; }
+    DrawKillAura();
+    ImGui::Spacing();
+    const bool wasOpen=advancedOpen_;
+    ImGui::SetNextItemOpen(advancedOpen_,ImGuiCond_Always);
+    advancedOpen_=ImGui::CollapsingHeader("Advanced settings");
+    if(!advancedOpen_) { section_=Section::KillAura; return; }
+    if(!wasOpen) selectAdvanced_=true;
+    constexpr const char* labels[]={"Targeting","Rotation","Attacks","Timing","Diagnostics"};
+    constexpr Section pages[]={Section::Targets,Section::Rotation,Section::Attacks,Section::Sync,Section::Debug};
+    const auto requested=advancedSection_;
+    if(ImGui::BeginTabBar("combat_advanced_sections",ImGuiTabBarFlags_FittingPolicyScroll)) {
+        for(int i=0;i<IM_ARRAYSIZE(pages);++i) {
+            const auto flags=selectAdvanced_ && requested==pages[i] ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            if(ImGui::BeginTabItem(labels[i],nullptr,flags)) { advancedSection_=pages[i]; ImGui::EndTabItem(); }
+        }
+        ImGui::EndTabBar(); selectAdvanced_=false;
+    }
+    section_=advancedSection_;
+    DrawAdvancedSettings();
+}
+void CombatMenu::DrawAdvancedSettings() {
     auto next=store_.Read().values;
     bool changed=false;
     Columns("combat_assist_settings",[&](int column) {
         switch(section_) {
             case Section::Targets: {
                 auto& t=next.target;
-                Header(column==0 ? "Target selection" : "Priority & switching");
+                Header(column==0 ? "Selection rules" : "Aim point");
                 if(!panel::BeginRows(column==0 ? "target_selection" : "target_priority")) break;
                 if(column==0) {
-                    changed|=panel::CheckRow("Target selector",&t.enabled);
-                    constexpr const char* modes[]={"Crosshair","Nearest player","Lowest HP","Angle + distance"};
-                    int mode=static_cast<int>(t.mode);
-                    if(panel::ComboRow("Selection mode",&mode,modes,IM_ARRAYSIZE(modes))) { t.mode=static_cast<combat::TargetMode>(mode); changed=true; }
-                    changed|=panel::CheckRow("Players only",&t.playersOnly);
-                    changed|=panel::CheckRow("Visibility check",&t.requireVisibility);
-                    constexpr const char* fovModes[]={"Dynamic angle","Static pixels"};
-                    int fov=static_cast<int>(t.fovMode);
-                    if(panel::ComboRow("FOV mode",&fov,fovModes,IM_ARRAYSIZE(fovModes))) { t.fovMode=static_cast<combat::FovMode>(fov); changed=true; }
-                    if(t.fovMode==combat::FovMode::DynamicDegrees) changed|=Number("FOV half-angle",t.coneDegrees,1,180,"%.0f deg");
-                    else changed|=Number("FOV radius",t.radiusPixels,10,2000,"%.0f px");
-                    changed|=Number("Selection range",t.range,.1,64,"%.1f m");
-                    changed|=Number("Aim height",t.aimHeight,.1,.95,"%.0f%%",100);
+                    panel::ValueRow("Target","Nearest living entity");
+                    panel::ValueRow("Search","All around you");
+                    panel::ValueRow("Sight","Clear line of sight required");
+                    panel::ValueRow("Friends","Always ignored");
                 } else {
-                    changed|=panel::CheckRow("Enemy priority",&t.prioritizeEnemies);
-                    changed|=panel::CheckRow("Multi-target",&t.multiTarget);
-                    changed|=Number("Angle weight",t.angleWeight,0,1);
-                    changed|=Number("Distance weight",t.distanceWeight,0,1);
+                    changed|=Number("Aim height",t.aimHeight,.1,.95,"%.0f%%",100);
                     changed|=Number("Visibility age",t.visibilityMaxAge,.001,.5,"%.0f ms",1000);
-                    changed|=Number("Switch improvement",t.switchImprovement,0,1);
-                    changed|=Range("Switch delay",t.switchDelay,0,1,"%.0f ms",1000);
                 }
                 ImGui::EndTable(); break;
             }
@@ -92,7 +99,6 @@ void CombatMenu::DrawSettings() {
                 Header(column==0 ? "Bezier & reaction" : "Overshoot & jitter");
                 if(!panel::BeginRows(column==0 ? "rotation_curve" : "rotation_noise")) break;
                 if(column==0) {
-                    changed|=panel::CheckRow("Rotation engine",&r.enabled);
                     changed|=Number("Smoothing",r.smoothing,.25,4);
                     changed|=Range("Reaction",r.reactionDelay,.010,.040,"%.0f ms",1000);
                     changed|=Range("Yaw duration",r.yawDuration,.010,2,"%.0f ms",1000);
@@ -114,18 +120,15 @@ void CombatMenu::DrawSettings() {
             }
             case Section::Attacks: {
                 auto& a=next.attack;
-                Header(column==0 ? "Attack controller" : "Timing & silent rotation");
+                Header(column==0 ? "Attack controller" : "Timing");
                 if(!panel::BeginRows(column==0 ? "attack_logic" : "attack_timing")) break;
                 if(column==0) {
-                    changed|=panel::CheckRow("Attack controller",&a.enabled);
-                    changed|=Number("Attack range",a.range,.1,6,"%.1f m");
                     changed|=Number("Cooldown threshold",a.cooldownThreshold,.8,1,"%.0f%%",100);
                     changed|=Number("Alignment tolerance",a.alignmentDegrees,.1,5,"%.1f deg");
                     panel::ValueRow("Reach limit","Game attack reach");
                 } else {
                     changed|=Range("First click",a.firstClickDelay,0,.5,"%.0f ms",1000);
-                    ImGui::BeginDisabled(); panel::CheckRow("Silent rotation",&a.silentRotation); ImGui::EndDisabled();
-                    panel::ValueRow("Rotation adapter","Visible camera only");
+                    panel::ValueRow("Rotation adapter","Player aims / camera independent");
                     panel::ValueRow("On target loss","Cancel pending attack");
                     panel::ValueRow("Cooldown source","Required from game");
                 }
@@ -133,21 +136,24 @@ void CombatMenu::DrawSettings() {
             }
             case Section::Sync: {
                 auto& s=next.sync;
-                Header(column==0 ? "Queue & intervals" : "Desync recovery");
-                if(!panel::BeginRows(column==0 ? "sync_queue" : "sync_recovery")) break;
+                Header(column==0 ? "Action timing" : "Local commands");
+                if(!panel::BeginRows(column==0 ? "sync_queue" : "sync_statistics")) break;
                 if(column==0) {
-                    changed|=panel::CheckRow("Sync layer",&s.enabled);
-                    changed|=Range("Send interval",s.interval,.010,.2,"%.0f ms",1000);
+                    changed|=Range("Action interval",s.interval,.010,.2,"%.0f ms",1000);
                     changed|=Number("Pose max age",s.poseMaxAge,.010,.5,"%.0f ms",1000);
                     changed|=Number("Attack max age",s.attackMaxAge,.010,.2,"%.0f ms",1000);
                     panel::ValueRow("Queue capacity","128 commands");
                     panel::ValueRow("Order","FIFO / pose coalescing");
                 } else {
-                    changed|=Number("Position difference",s.positionDesync,.01,8,"%.2f m");
-                    changed|=Number("Angle difference",s.angleDesync,.1,90,"%.1f deg");
-                    changed|=Number("Correction max age",s.correctionMaxAge,.010,1,"%.0f ms",1000);
-                    changed|=Number("Recovery time",s.recoverySeconds,.010,1,"%.0f ms",1000);
-                    changed|=Number("Recovery speed",s.recoverySpeedScale,.05,1,"%.0f%%",100);
+                    const auto& stats=report_.debug.packets;
+                    const char* labels[]={"Buffered","Executed","Discarded","Failed"};
+                    const unsigned long long values[]={static_cast<unsigned long long>(stats.buffered),
+                        static_cast<unsigned long long>(stats.sent),static_cast<unsigned long long>(stats.discarded),
+                        static_cast<unsigned long long>(stats.failed)};
+                    for(int i=0;i<IM_ARRAYSIZE(labels);++i) {
+                        char count[32]; std::snprintf(count,sizeof(count),"%llu",values[i]);
+                        panel::ValueRow(labels[i],count);
+                    }
                 }
                 ImGui::EndTable(); break;
             }
@@ -157,16 +163,16 @@ void CombatMenu::DrawSettings() {
                 if(column==0) {
                     changed|=panel::CheckRow("Debug HUD",&next.hud.enabled);
                     changed|=panel::CheckRow("Target information",&next.hud.target);
-                    changed|=panel::CheckRow("FOV circle",&next.hud.fov);
                     changed|=panel::CheckRow("Rotation trace",&next.hud.trace);
-                    changed|=panel::CheckRow("Packet statistics",&next.hud.packetStats);
+                    changed|=panel::CheckRow("Command statistics",&next.hud.packetStats);
                 } else {
-                    changed|=panel::CheckRow("Enable Kill Aura",&next.enabled);
                     ImGui::TableNextRow(); ImGui::TableNextColumn(); ImGui::TextUnformatted("Random seed"); ImGui::TableNextColumn(); ImGui::SetNextItemWidth(-1);
                     changed|=ImGui::InputScalar("##combat_seed",ImGuiDataType_U64,&next.seed);
                     changed|=Number("Snapshot max age",next.frameMaxAge,.001,.5,"%.0f ms",1000);
                     panel::ValueRow("Hot reload","On the next assist step");
                     panel::ValueRow("Live bridge",CombatBridgeText(report_.status));
+                    char hits[32]; std::snprintf(hits,sizeof(hits),"%llu",static_cast<unsigned long long>(report_.attacks));
+                    panel::ValueRow("Attacks executed",hits);
                 }
                 ImGui::EndTable(); break;
             }
@@ -177,30 +183,26 @@ void CombatMenu::DrawSettings() {
     if(message_) ImGui::TextWrapped("%s",message_);
 }
 bool CombatMenu::DrawKillAura() {
-    Header("Kill Aura");
+    ImGui::TextWrapped("Aim and attack the nearest living target in reach. Your camera stays independent.");
     auto next=store_.Read().values;
     bool changed=false;
     if(panel::BeginRows("kill_aura_controls")) {
         if(panel::CheckRow("Enable Kill Aura",&next.enabled)) {
-            if(next.enabled) { next.target.enabled=true; next.rotation.enabled=true; next.attack.enabled=true; next.sync.enabled=true; next.attack.silentRotation=false; }
+            if(next.enabled) { next.target.enabled=true; next.rotation.enabled=true; next.attack.enabled=true; next.sync.enabled=true; }
             changed=true;
         }
-        changed|=panel::CheckRow("Players only",&next.target.playersOnly);
-        if(Number("Attack range",next.attack.range,.1,6,"%.1f m")) { next.target.range=next.attack.range; changed=true; }
+        constexpr const char* filters[]={"Players and mobs","Players only"};
+        int filter=next.target.playersOnly ? 1 : 0;
+        if(panel::ComboRow("Targets",&filter,filters,IM_ARRAYSIZE(filters))) { next.target.playersOnly=filter==1; changed=true; }
+        if(Number("Reach",next.attack.range,.1,6,"%.1f m")) { next.target.range=next.attack.range; changed=true; }
+        changed|=Number("Smoothing",next.rotation.smoothing,.25,4,"%.1f x");
         panel::ValueRow("Status",CombatBridgeText(report_.status));
-        char hits[32]; std::snprintf(hits,sizeof(hits),"%llu",static_cast<unsigned long long>(report_.attacks));
-        panel::ValueRow("Attacks",hits);
+        char target[112]="None yet";
+        if(lastTarget_) std::snprintf(target,sizeof(target),"%.*s (%.1f m)",static_cast<int>(lastTarget_->name.size()),lastTarget_->name.data(),lastTarget_->range);
+        panel::ValueRow("Last target",target);
         ImGui::EndTable();
     }
-    if(ImGui::Button("Use Kill Aura preset")) {
-        // Preset lässt Aktivierung explizit beim Benutzer; Einstellungen sind sofort sichtbar.
-        const bool enabled=next.enabled; next=combat::Config{}; next.enabled=enabled;
-        next.attack.enabled=true; next.target.mode=combat::TargetMode::AngleDistance;
-        next.target.coneDegrees=180; next.target.range=next.attack.range=3;
-        next.rotation.overshootFraction={0,0}; next.rotation.jitterDegrees={0,0};
-        changed=true;
-    }
-    ImGui::TextDisabled("Automatic while menu is closed. 180 deg half-angle = all around.");
+    ImGui::TextWrapped("Close the menu to run. Friends are skipped; Minecraft limits reach and attack cooldown.");
     if(changed) store_.Publish(next);
     return store_.Read().values.enabled;
 }
@@ -218,22 +220,21 @@ std::optional<combat::Identity> CombatMenu::ParseUuid(const char* text) {
     return id;
 }
 void CombatMenu::DrawFriends() {
-    Header("Friends / enemies");
+    ImGui::TextWrapped("Friends are never targeted. Add their player UUID below.");
+    ImGui::TextWrapped("Friends automatically wear a translucent glowing hat. Remove a friend to hide it.");
     ImGui::SetNextItemWidth(std::min(360.f,ImGui::GetContentRegionAvail().x));
     ImGui::InputText("##player_uuid",uuid_,sizeof(uuid_));
     ImGui::TextDisabled("Player UUID, with or without hyphens");
-    constexpr const char* kinds[]={"Friend","Enemy"};
-    ImGui::SetNextItemWidth(140); ImGui::Combo("Relation",&relation_,kinds,IM_ARRAYSIZE(kinds));
-    if(ImGui::Button("Add / update")) {
+    if(ImGui::Button("Add friend")) {
         const auto id=ParseUuid(uuid_);
         if(!id) message_="Enter a valid player UUID.";
-        else if(!relations_.Set(*id,relation_==0 ? combat::Relation::Friend : combat::Relation::Enemy)) message_="The relation list is full.";
+        else if(!relations_.Set(*id,combat::Relation::Friend)) message_="The friend list is full.";
         else { message_=nullptr; uuid_[0]='\0'; }
     }
     if(message_) ImGui::TextWrapped("%s",message_);
     const auto entries=relations_.Read(); std::size_t count=0;
     for(const auto& entry:entries) if(entry.used) ++count;
-    if(!count) { ImGui::TextDisabled("No friends or enemies added."); return; }
+    if(!count) { ImGui::TextDisabled("No friends added yet."); return; }
     Header("Saved players");
     for(std::size_t i=0;i<entries.size();++i) if(entries[i].used) {
         const auto& e=entries[i]; ImGui::PushID(static_cast<int>(i));
@@ -246,6 +247,6 @@ void CombatMenu::DrawFriends() {
 void CombatMenu::Reset() {
     store_.Publish(combat::Config{});
     for(const auto& entry:relations_.Read()) if(entry.used) relations_.Set(entry.uuid,combat::Relation::Neutral);
-    uuid_[0]='\0'; relation_=0; message_=nullptr; Select(Section::Modules);
+    uuid_[0]='\0'; message_=nullptr; lastTarget_.reset(); Select(Section::KillAura);
 }
 } // namespace mcov

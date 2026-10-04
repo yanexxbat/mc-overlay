@@ -27,7 +27,7 @@ public final class FrameSynchronizer {
         // Resolve the profile table before registering a transformer that uses
         // it, otherwise loading that table recursively re-enters transform().
         FrameProfiles.isTarget("");
-        FrameTransformer transformer = new FrameTransformer(inst, signal.getModule());
+        FrameTransformer transformer = new FrameTransformer(inst, signal);
         inst.addTransformer(transformer, true);
         try {
             ArrayList<Class<?>> loaded = new ArrayList<>();

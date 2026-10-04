@@ -54,6 +54,11 @@ struct OverlayUiCheck {
         if (!o.itemIcons_.Texture() && !o.itemIcons_.Initialize(device))
             throw std::runtime_error("Embedded item atlas initialization failed");
     }
+    static void InitGlow(Overlay& o,ID3D11Device* device) {
+        if (!o.auraBlend_.Callbacks().begin && !o.auraBlend_.Initialize(device))
+            throw std::runtime_error("Friend hat glow initialization failed");
+        FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+    }
     static void EquipmentPreview(EntitySnapshot& e) {
         e.details.ping=42; e.details.armorValue=20;
         constexpr const char* keys[]={"diamond_helmet","diamond_chestplate","diamond_leggings","diamond_boots","diamond_sword","totem_of_undying"};
@@ -211,6 +216,26 @@ void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* 
     config.boxEsp=config.skeleton=config.tracers=config.nameTags=config.healthBars=config.distanceText=config.targetInfo=false;
     Require(frame({585,745})==0,"Disabling every ESP feature still drew target info");
     config=mcov::VisualSettings{};
+    // Der Produktionspfad muss Freunde auch ohne ESP und Target-Aura markieren.
+    entity.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving;
+    entity.health=20; entity.uuid={11,22}; scene.hasTarget=0;
+    mcov::CopyField(entity.name,"Friend");
+    auto& friends=mcov::OverlayUiCheck::CombatEditor(overlay).Relations();
+    Require(friends.Set(entity.uuid,mcov::combat::Relation::Friend),"preview friend could not be added");
+    auto& io=ImGui::GetIO(); io.DisplaySize={1280,800}; io.DeltaTime=1.f/60;
+    ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+    mcov::OverlayUiCheck::InitGlow(overlay,device); ImGui::Render();
+    Require(frame({1280,800})>0,"friend hat production path was empty");
+    SaveFrame(device,context,output/"friend-hat.png");
+    entity.pose=mcov::kPoseCrouching; entity.height=1.5f;
+    Require(frame({585,745})>0,"crouching friend lost its hat");
+    SaveFrame(device,context,output/"friend-hat-crouched.png");
+    entity.pose=mcov::kPoseStanding; entity.height=1.8f;
+    config.boxEsp=config.skeleton=config.tracers=config.nameTags=config.healthBars=config.distanceText=config.targetInfo=false;
+    Require(frame({585,745})>0,"friend hat depended on ESP or target aura enablement");
+    friends.Set(entity.uuid,mcov::combat::Relation::Neutral);
+    Require(frame({585,745})==0,"removed friend kept its production hat");
+    config=mcov::VisualSettings{};
 }
 }
 int main(int argc,char** argv) {
@@ -267,10 +292,15 @@ int main(int argc,char** argv) {
         for(int theme=0;theme<4;++theme) for(int i=0;i<IM_ARRAYSIZE(sections);++i) {
             editor.Select(sections[i]);
             for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,theme,ImVec2(1280,800));
-            Require(editor.Current()==sections[i],"Combat subtab selection was lost");
+            Require(editor.Current()==sections[i],("Combat section lost: requested "+std::to_string(static_cast<int>(sections[i]))+
+                    " actual "+std::to_string(static_cast<int>(editor.Current()))).c_str());
             Require(mcov::combat::Validate(editor.Store().Read().values),"Rendering Combat controls invalidated config");
             if(theme==0) SaveFrame(device.Get(),context.Get(),output/sectionFiles[i]);
             Draw(overlay,Page::Combat,theme,ImVec2(752,427));
+            if(theme==0 && sections[i]==mcov::CombatMenu::Section::KillAura) {
+                Draw(overlay,Page::Combat,theme,ImVec2(752,427));
+                SaveFrame(device.Get(),context.Get(),output/"combat-kill-aura-narrow.png");
+            }
         }
         editor.Select(mcov::CombatMenu::Section::KillAura);
         for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
@@ -284,36 +314,33 @@ int main(int argc,char** argv) {
         clickAura(ImVec2(auraTable->Columns[0].MinX+40,auraTable->OuterRect.Min.y+18));
         const auto live=editor.Store().Read().values;
         Require(live.enabled && live.attack.enabled && live.rotation.enabled && live.sync.enabled,"Kill Aura switch did not activate the live core");
-        auraTable=ImGui::GetCurrentContext()->Tables.GetByKey(auraContent->GetID("kill_aura_controls"));
-        clickAura(ImVec2(auraTable->OuterRect.Min.x+65,auraTable->OuterRect.Max.y+12));
-        Require(editor.Store().Read().values.target.coneDegrees==180 && editor.Store().Read().values.target.range==3 && editor.Store().Read().values.enabled,"Kill Aura preset lost activation or settings");
+        Require(live.target.mode==mcov::combat::TargetMode::NearestEntity && !live.target.playersOnly &&
+                live.target.range==3 && !live.hud.enabled,"default Kill Aura required preset or debug cleanup");
+        editor.Select(mcov::CombatMenu::Section::Modules);
+        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        SaveFrame(device.Get(),context.Get(),output/"combat-modules-paused.png");
         mcov::OverlayUiCheck::ResetCombat(overlay);
         const auto uuid=mcov::CombatMenu::ParseUuid("12345678-1234-5678-90ab-cdef12345678");
         Require(uuid && uuid->high==0x1234567812345678 && uuid->low==0x90abcdef12345678,"Player UUID was parsed incorrectly");
         Require(!mcov::CombatMenu::ParseUuid("12345678_1234-5678-90ab-cdef12345678") &&
                 !mcov::CombatMenu::ParseUuid("00000000000000000000000000000000") &&
                 !mcov::CombatMenu::ParseUuid(nullptr),"Invalid player UUID was accepted");
-        editor.Select(mcov::CombatMenu::Section::Targets);
+        editor.Select(mcov::CombatMenu::Section::KillAura);
         for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         auto* combatContent=Child("/content_");
-        auto* outer=ImGui::GetCurrentContext()->Tables.GetByKey(combatContent->GetID("combat_assist_settings"));
-        Require(outer,"Combat settings table missing");
-        auto* targets=ImGui::GetCurrentContext()->Tables.GetByKey(ImHashStr("target_selection",0,outer->ID));
-        Require(targets,"Target selector table missing");
-        const ImVec2 targetToggle(targets->Columns[0].MinX+38,targets->OuterRect.Min.y+18);
-        io.AddMousePosEvent(targetToggle.x,targetToggle.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        Require(!editor.Store().Read().values.target.enabled,"Target toggle was not published to ConfigStore");
-        targets=ImGui::GetCurrentContext()->Tables.GetByKey(ImHashStr("target_selection",0,outer->ID));
-        const ImVec2 doubleSlider(targets->Columns[1].MaxX-10,targets->OuterRect.Min.y+5*35.25f+17);
+        auto* targets=ImGui::GetCurrentContext()->Tables.GetByKey(combatContent->GetID("kill_aura_controls"));
+        Require(targets,"main Kill Aura controls missing");
+        const ImVec2 doubleSlider(targets->Columns[1].MaxX-10,targets->OuterRect.Min.y+2*35.25f+17);
         io.AddMousePosEvent(doubleSlider.x,doubleSlider.y); io.AddMouseButtonEvent(0,true);
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        Require(editor.Store().Read().values.target.coneDegrees>60,"Double slider did not publish the assist FOV");
+        Require(editor.Store().Read().values.attack.range>4 && editor.Store().Read().values.target.range==editor.Store().Read().values.attack.range,
+                "main reach slider did not update both targeting and attack reach");
         Require(editor.Relations().Set(*uuid,mcov::combat::Relation::Friend),"UUID friend insertion failed");
         mcov::OverlayUiCheck::ResetCombat(overlay);
-        Require(editor.Store().Read().values.target.enabled && editor.Store().Read().values.target.coneDegrees==20 &&
+        Require(editor.Current()==mcov::CombatMenu::Section::KillAura && editor.Store().Read().values.target.enabled &&
+                editor.Store().Read().values.target.mode==mcov::combat::TargetMode::NearestEntity && !editor.Store().Read().values.target.playersOnly &&
+                editor.Store().Read().values.attack.range==3 && !editor.Store().Read().values.hud.enabled &&
                 mcov::combat::Lookup(editor.Relations().Read(),*uuid)==mcov::combat::Relation::Neutral,"Combat reset left config or relations behind");
         for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         mcov::OverlayUiCheck::AllowCombat(overlay);
@@ -355,6 +382,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::Collapse(overlay,false);
         // Drag the custom thin slider. Its numeric state is the combat module's
         // real value, and remains clamped to the module's supported range.
+        editor.Select(mcov::CombatMenu::Section::Modules);
         Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         content=Child("/content_");
         const ImVec2 slider(content->DC.CursorStartPos.x+content->Size.x*.5f-24,

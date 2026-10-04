@@ -10,6 +10,7 @@ struct GeometryBindings {
     jmethodID runFrame=nullptr,updateCamera=nullptr;
     jfieldID min[3]{},max[3]{},old[3]{};
     jfieldID bodyYaw=nullptr,bodyYawOld=nullptr,headPitchOld=nullptr,walkState=nullptr,dimensionHeight=nullptr;
+    jfieldID headYaw=nullptr,headYawOld=nullptr;
     jfieldID cameraEntity=nullptr,walkDistance=nullptr,walkDistanceOld=nullptr,bob=nullptr,bobOld=nullptr;
     jobject poses[5]{};
     void Release(JNIEnv* env) {
@@ -39,6 +40,7 @@ inline GeometryBindings BindGeometry(JNIEnv* env,const mcov::mappings::RuntimePr
     b.max[0]=field(b.bounds,g.maxX); b.max[1]=field(b.bounds,g.maxY); b.max[2]=field(b.bounds,g.maxZ);
     b.old[0]=field(entity,g.oldX); b.old[1]=field(entity,g.oldY); b.old[2]=field(entity,g.oldZ);
     b.bodyYaw=field(living,g.bodyYaw); b.bodyYawOld=field(living,g.bodyYawOld);
+    b.headYaw=field(living,g.headYaw); b.headYawOld=field(living,g.headYawOld);
     b.headPitch=method(entity,g.headPitch); b.headPitchOld=field(entity,g.headPitchOld);
     b.getPose=method(entity,g.getPose); b.isPassenger=method(entity,g.isPassenger);
     b.walkState=field(living,g.walkState); b.walkSpeed=method(b.walk,g.walkSpeed); b.walkPosition=method(b.walk,g.walkPosition);

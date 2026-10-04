@@ -61,7 +61,7 @@ The renderer reads the shared POD snapshot and never calls JNI.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **10**; restart Minecraft and use the newly built
+Shared-memory version is now **13**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
 Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
@@ -138,7 +138,7 @@ camera double-read fallback and logs that frame synchronization is unavailable.
 
 ## Verification and limits
 
-- All 24 class roles and 70 mapped members per profile were checked against the
+- All 24 class roles and 75 mapped members per profile were checked against the
   SHA1-verified official client files for all four releases. Namespace mapping
   artifacts are pinned by SHA256. See `compatibility-signatures.json`.
 - MSVC x64 build passed for overlay, injector, native agent and helper.
@@ -167,15 +167,24 @@ outside the audited profile list. Before treating a loader/version combination a
 tested in-game, check world entry, F5 camera modes, sprint/zoom FOV, equipment and
 effects, dimension changes, a container screen and normal game shutdown.
 
-Kill Aura additionally audits client tick, visible rotation setters, eye position,
+Kill Aura additionally audits client tick, player rotation setters, eye position,
 alive/LOS checks, attack-strength cooldown, interaction reach, block pick,
 game-mode attack and hand swing from the official jars. All eleven profiles pass
 the instrumented native combat adapter fixtures under `-Xcheck:jni`, including
 automatic targeting/rotation/attacks, cooldown reset/rearm, UUID friends,
-occlusion, Minecraft GUI, expired input lease, respawn and unsupported silent
-rotation. JNI for combat runs on the client tick; camera/ESP sampling stays in
+occlusion, Minecraft GUI, expired input lease and respawn. Silent-camera fixtures
+also check that the player rotates while camera angles and a derived F5 orbit
+remain steady through target switches, mouse look changes only the view,
+foreign entities keep their original look and partial ticks stay stable.
+Menu pause and disabling restore normal look without stale interpolation;
+missing Camera hooks block Silent output. The transformer
+wraps `Entity.getViewYRot/getViewXRot` calls inside Camera, including 26.2's
+private `alignWithEntity`, and filters mouse deltas at `Entity.turn`.
+These are synthetic call-site tests, not a live Minecraft renderer test.
+See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
+camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v11 and a full Minecraft restart after upgrading.
+require IPC v14 and a full Minecraft restart after upgrading.
 
 ## Reproduce the checks
 

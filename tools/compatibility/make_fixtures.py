@@ -71,6 +71,20 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             player, cooldown = special[1:]
             code = b'\x2b\x0b\xb5' + u2(cp.ref(9, player, cooldown, 'F'))
             code += b'\xb2' + u2(cp.ref(9, name, 'testAttacks', 'I')) + b'\x04\x60\xb3' + u2(cp.ref(9, name, 'testAttacks', 'I')) + b'\xb1'
+        elif special and special[0] == 'turn':
+            code=b''
+            for backing,load in [('testYaw',b'\x27'),('testPitch',b'\x29')]:
+                code += b'\x2a\x59\xb4'+u2(cp.ref(9,name,backing,'F'))+load
+                code += b'\x14'+u2(cp.number('D',.15))+b'\x6b\x90\x62\xb5'+u2(cp.ref(9,name,backing,'F'))
+            code += b'\xb1'
+        elif special and special[0] == 'camera_view':
+            owner,getter,orbit=special[1:]
+            code=b'\x2b\x24\xb6'+u2(cp.ref(10,owner,getter,'(F)F'))
+            if orbit:
+                code += b'\x8d\x14'+u2(cp.number('D',3.141592653589793/180))+b'\x6b'
+                code += b'\xb8'+u2(cp.ref(10,'java/lang/Math',orbit,'(D)D'))
+                code += b'\x14'+u2(cp.number('D',4))+b'\x6b\xaf'
+            else: code += b'\xae'
         elif special and special[0] == 'statics':
             code = b''
             for field, field_desc in special[1]:
@@ -90,6 +104,8 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             code = b'\xb8' + u2(cp.ref(10, 'java/util/UUID', 'randomUUID', '()Ljava/util/UUID;')) + b'\xb0'
         elif special and special[0] == 'nop':
             code = b'\x00\xb1'
+        elif special and special[0] == 'tick_done':
+            code = b'\x04\xb3' + u2(cp.ref(9,name,'testVanillaTickDone','Z')) + b'\xb1'
         elif special and special[0] == 'camera_branch':
             code = b'\x2b\xc6\x00\x04\xb1\x00\xb1'
         else:
@@ -102,7 +118,7 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
         if special and special[0] == 'camera_branch':
             stack_map = u2(1) + b'\x05'  # same_frame at the null branch's offset 5
             nested = u2(1) + u2(cp.utf('StackMapTable')) + u4(len(stack_map)) + stack_map
-        attr = u2(4) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
+        attr = u2(8) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
         compiled_methods.append(u2(9 if static else 1) + u2(cp.utf(method)) + u2(cp.utf(desc)) + u2(1) +
                                 u2(code_name) + u4(len(attr)) + attr)
     return (b'\xca\xfe\xba\xbe' + u2(0) + u2(61) + u2(len(cp.entries) + 1) + b''.join(cp.entries) +
@@ -249,6 +265,21 @@ def generate(profiles_path, output):
             add(owner,'fields',backing,'F',False); cls(owner)['specials'][tuple(member)]=('set_float',backing)
         member=geometry['members']['headPitch']
         cls(geometry['owners']['headPitch'])['specials'][tuple(member)]=('instance_field','testPitch','F')
+        for key,backing in [('viewYaw','testYaw'),('viewPitch','testPitch')]:
+            member=geometry['members'][key]
+            cls(core['entity'])['specials'][tuple(member)]=('instance_field',backing,'F')
+        member=geometry['members']['turn']
+        cls(core['entity'])['specials'][tuple(member)]=('turn',)
+        member=geometry['members']['clientTick']; owner=geometry['owners']['clientTick']
+        add(owner,'fields','testVanillaTickDone','Z',True)
+        cls(owner)['specials'][tuple(member)]=('tick_done',)
+        # Kamera-Witnesses nutzen genau dieselben Getter-Aufrufstellen wie die auditierten
+        # Setup-/alignWithEntity-Methoden, inklusive eines F5-Abstands von vier Blöcken.
+        for name,key,orbit in [('testCameraYaw','viewYaw',''),('testCameraPitch','viewPitch',''),
+                               ('testOrbitX','viewYaw','sin'),('testOrbitZ','viewYaw','cos')]:
+            desc='(L'+core['entity']+';F)'+('D' if orbit else 'F')
+            add(core['camera'],'methods',name,desc)
+            cls(core['camera'])['specials'][(name,desc)]=('camera_view',core['entity'],geometry['members'][key][0],orbit)
         member=profile['members']['methodEntitiesForRendering']
         add(core['clientLevel'],'fields','testIterable','Ljava/lang/Iterable;',True)
         cls(core['clientLevel'])['specials'][tuple(member)]=('field','testIterable','Ljava/lang/Iterable;')

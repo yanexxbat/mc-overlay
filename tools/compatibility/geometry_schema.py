@@ -28,6 +28,8 @@ def geometry_schema(version):
     for key, name in [('oldX', 'xOld'), ('oldY', 'yOld'), ('oldZ', 'zOld')]: add(key, entity, name, 'D')
     add('bodyYaw', living, 'yBodyRot', 'F')
     add('bodyYawOld', living, 'yBodyRotO', 'F')
+    add('headYaw', living, 'yHeadRot', 'F')
+    add('headYawOld', living, 'yHeadRotO', 'F')
     add('headPitch', entity, 'getXRot', '()F', 'methods')
     add('headPitchOld', entity, 'xRotO', 'F')
     add('getPose', entity, 'getPose', '()L' + classes['poseClass'] + ';', 'methods')
@@ -69,6 +71,10 @@ def geometry_schema(version):
     add('pickBlocks', entity, 'pick', '(DFZ)L' + classes['hitClass'] + ';', 'methods')
     add('hitLocation', classes['hitClass'], 'getLocation', '()Lnet/minecraft/world/phys/Vec3;', 'methods')
     add('entityAlive', entity, 'isAlive', '()Z', 'methods')
+    add('turn', entity, 'turn', '(DD)V', 'methods')
+    add('viewYaw', entity, 'getViewYRot', '(F)F', 'methods')
+    add('viewPitch', entity, 'getViewXRot', '(F)F', 'methods')
+    add('yawOld', entity, 'yRotO', 'F')
     if version == '26.2':
         add('updateCamera', camera, 'update', '(Lnet/minecraft/client/DeltaTracker;)V', 'methods')
     else:

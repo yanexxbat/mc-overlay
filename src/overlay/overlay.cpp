@@ -472,6 +472,7 @@ bool Overlay::RunFrame() {
 
     if (!auraPrepared_) {
         AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         auraPrepared_ = true;
     }
 
@@ -560,8 +561,12 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
                                  visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo;
+    const auto relations=combatMenu_.Relations().Read();
+    const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
+        return entry.used && entry.relation==combat::Relation::Friend;
+    });
     if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
-        !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) return;
+        !haveFriends && !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) return;
 
     const float width  = static_cast<float>(windowW_);
     const float height = static_cast<float>(windowH_);
@@ -571,6 +576,10 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
 
     // Die Aura liegt unter ESP und HUD. Sie teilt deren kohärenten Snapshot.
     DrawAura(snapshot, projection, width, height);
+    if(haveFriends && agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
+        friendHats_.DrawFriends(*ImGui::GetBackgroundDrawList(),snapshot,projection,relations,visuals_.maxDistance,
+            friendHatConfig_,auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),
+            {width,height},ImGui::GetMainViewport()->Pos);
     DrawBlockEsp(snapshot, projection, width, height);
     if (!entitiesEnabled) return;
 
@@ -1246,7 +1255,7 @@ void Overlay::DrawVisualsTab() {
                 ImGui::EndDisabled();
                 ImGui::EndTable();
             }
-            ImGui::TextWrapped("Soft glowing orbs orbit the current crosshair target. Their fog trails follow the entity in 3D.");
+            ImGui::TextWrapped("Orbs follow the Kill Aura target, or the crosshair target when Kill Aura is off.");
         } else {
             if (panel::BeginRows("visual_filters")) {
                 panel::CheckRow("Players",&visuals_.showPlayers);
@@ -1275,8 +1284,11 @@ void Overlay::DrawVisualsTab() {
 
 void Overlay::DrawCombatTab() {
     if(combatMenu_.DrawNavigation()!=CombatMenu::Section::Modules) { combatMenu_.DrawSettings(); return; }
+    const bool auraActive=combatMenu_.Store().Read().values.enabled;
+    if(auraActive) ImGui::TextWrapped("Aim assist and triggerbot are paused while Kill Aura is enabled.");
     MenuColumns("combat_columns",[&](int column) {
         if (column==0) {
+            ImGui::BeginDisabled(auraActive);
             MenuHeading("Aim assist");
             if (panel::BeginRows("aim_controls")) {
                 panel::CheckRow("Enable aim assist",&combat_.aimLock);
@@ -1291,12 +1303,14 @@ void Overlay::DrawCombatTab() {
                 ImGui::EndDisabled();
                 ImGui::EndTable();
             }
+            ImGui::EndDisabled();
             MenuHeading("Offhand");
             if (panel::BeginRows("totem_controls")) {
                 panel::CheckRow("Auto totem",&combat_.autoTotem);
                 ImGui::EndTable();
             }
             MenuHeading("Activation");
+            ImGui::BeginDisabled(auraActive);
             if (panel::BeginRows("aim_activation")) {
                 const char* keys[]={"Right mouse","Left mouse","ALT"};
                 const int codes[]={VK_RBUTTON,VK_LBUTTON,VK_MENU};
@@ -1305,7 +1319,9 @@ void Overlay::DrawCombatTab() {
                 panel::ValueRow("Target priority","Angular distance");
                 ImGui::EndTable();
             }
+            ImGui::EndDisabled();
         } else {
+            ImGui::BeginDisabled(auraActive);
             MenuHeading("Triggerbot");
             if (panel::BeginRows("trigger_controls")) {
                 panel::CheckRow("Enable triggerbot",&combat_.triggerbot);
@@ -1322,6 +1338,7 @@ void Overlay::DrawCombatTab() {
                 ImGui::EndDisabled();
                 ImGui::EndTable();
             }
+            ImGui::EndDisabled();
             MenuHeading("Activity");
             if (panel::BeginRows("trigger_activity")) {
                 char count[32]; std::snprintf(count,sizeof(count),"%u",clickCount_);

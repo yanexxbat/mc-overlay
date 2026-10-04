@@ -15,7 +15,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 11;
+inline constexpr std::uint32_t kSharedVersion = 14;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -154,6 +154,7 @@ static_assert(sizeof(EntityDetailsSnapshot) == 344);
 // dem langsamen Worker-Cache. Rendering ruft keine JNI-Funktionen auf.
 struct EntitySnapshot {
     double        x, y, z;
+    combat::Identity uuid;      // Sampler-Cache; Freund-Marker benötigen kein Render-JNI.
     float         width;
     float         height;
     float         health;
@@ -170,7 +171,7 @@ struct EntitySnapshot {
     EntityDetailsSnapshot details;
 };
 static_assert(std::is_trivially_copyable_v<EntitySnapshot>);
-static_assert(sizeof(EntitySnapshot) == 480, "EntitySnapshot layout changed - bump kSharedVersion");
+static_assert(sizeof(EntitySnapshot) == 496, "EntitySnapshot layout changed - bump kSharedVersion");
 
 // ---------------------------------------------------------------------------
 // One active status effect. durationTicks == -1 means infinite (beacon/command).

@@ -2,6 +2,7 @@
 #include "../combat/combat_assist.hpp"
 #include "../common/shared_state.hpp"
 #include "jvm_interface.hpp"
+#include "generated_profiles.hpp"
 #include <windows.h>
 #include <mutex>
 #include <stdexcept>
@@ -50,6 +51,10 @@ public:
         for(int i=0;i<3;++i) { minimum_[i]=b.geometry.min[i]; maximum_[i]=b.geometry.max[i]; }
         vecFields_[0]=b.fVecX; vecFields_[1]=b.fVecY; vecFields_[2]=b.fVecZ;
         crosshair_=b.fTargetedEntity;
+        yawOld_=jvm::TryField(env,entityClass_,g.yawOld.name,g.yawOld.signature,false);
+        pitchOld_=b.geometry.headPitchOld;
+        bodyYaw_=b.geometry.bodyYaw; bodyYawOld_=b.geometry.bodyYawOld;
+        headYaw_=b.geometry.headYaw; headYawOld_=b.geometry.headYawOld;
         paused_=method(b.client.minecraftClass,g.clientPaused);
         setYaw_=method(entityClass_,g.setYaw); setPitch_=method(entityClass_,g.setPitch);
         eye_=method(entityClass_,g.eyePosition); see_=method(livingClass_,g.lineOfSight);
@@ -73,7 +78,8 @@ public:
         const auto tick=method(b.client.minecraftClass,g.clientTick);
         if(!tick || !paused_ || !screenField_ || !modeField_ || !setYaw_ || !setPitch_ || !eye_ || !see_ || !cooldown_ ||
            (!reach_ && !farReach_) || !attack_ || !swing_ || !pick_ || !location_ || !alive_ || !hand_ || !uuid_ || !uuidHigh_ || !uuidLow_ ||
-           !bounds_ || !minimum_[0] || !minimum_[1] || !minimum_[2] || !maximum_[0] || !maximum_[1] || !maximum_[2]) return false;
+           !bounds_ || !bodyYaw_ || !bodyYawOld_ || !headYaw_ || !headYawOld_ ||
+           !minimum_[0] || !minimum_[1] || !minimum_[2] || !maximum_[0] || !maximum_[1] || !maximum_[2]) return false;
         auto signal=env->FindClass("mcov/FrameSignal");
         if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
         if(!signal) return false;
@@ -81,6 +87,19 @@ public:
         if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
         enabled_=jvm::TryField(env,signal_,"combatEnabled","Z",true);
         if(!enabled_) return false;
+        silentPlayer_=jvm::TryField(env,signal_,"silentPlayer","Ljava/lang/Object;",true);
+        viewYaw_=jvm::TryField(env,signal_,"viewYaw","F",true); viewPitch_=jvm::TryField(env,signal_,"viewPitch","F",true);
+        const auto cameraBits=jvm::TryField(env,signal_,"cameraProfiles","J",true),turnBits=jvm::TryField(env,signal_,"turnProfiles","J",true);
+        if(silentPlayer_ && viewYaw_ && viewPitch_ && yawOld_ && pitchOld_ && cameraBits && turnBits) {
+            const auto cameras=env->GetStaticLongField(signal_,cameraBits);
+            if(env->ExceptionCheck()) env->ExceptionClear();
+            else {
+                const auto turns=env->GetStaticLongField(signal_,turnBits);
+                if(env->ExceptionCheck()) env->ExceptionClear();
+                else for(std::size_t i=0;i<std::size(mappings::kRuntimeProfiles);++i) if(std::strcmp(b.set->id,mappings::kRuntimeProfiles[i].set->id)==0)
+                    silentSupported_=(static_cast<std::uint64_t>(cameras&turns)&(std::uint64_t{1}<<i))!=0;
+            }
+        }
         JNINativeMethod native{const_cast<char*>("nativeCombatTick"),const_cast<char*>("(Ljava/lang/Object;)V"),callback};
         const auto registered=env->RegisterNatives(signal_,&native,1);
         if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
@@ -96,6 +115,10 @@ public:
         ready_=false;
         if(signal_ && enabled_) env->SetStaticBooleanField(signal_,enabled_,JNI_FALSE);
         if(env->ExceptionCheck()) env->ExceptionClear();
+        // Close kann auf dem Sampler/VM-Shutdown laufen: hier keine Entity schreiben.
+        if(signal_ && silentPlayer_) env->SetStaticObjectField(signal_,silentPlayer_,nullptr);
+        if(env->ExceptionCheck()) env->ExceptionClear();
+        cameraDetached_=false;
         // Der native Stub bleibt registriert und läuft nach Close als No-op.
         // So gibt es kein Rennen mit einem bereits begonnenen Java-Aufruf.
         if(world_) { env->DeleteWeakGlobalRef(world_); world_=nullptr; }
@@ -117,7 +140,13 @@ public:
             CombatRequest request;
             const bool read=channel_->combatRequest.Read(request);
             if(read && request.sentAtMs && request.revision!=revision_) {
-                if(!config_.Publish(request.config)) throw std::runtime_error("combat configuration");
+                auto next=request.config;
+                // Ein fester Live-Modus: nächste lebende Entity in Reichweite, mit Sichtprüfung.
+                next.target.mode=combat::TargetMode::NearestEntity;
+                next.target.fovMode=combat::FovMode::DynamicDegrees; next.target.coneDegrees=180;
+                next.target.prioritizeEnemies=false; next.target.requireVisibility=true;
+                next.target.range=next.attack.range;
+                if(!config_.Publish(next)) throw std::runtime_error("combat configuration");
                 revision_=request.revision; failed_=false;
             }
             if(read) {
@@ -128,9 +157,10 @@ public:
             frame_.dt=previousTime_ ? std::clamp(frame_.now-previousTime_,0.0,0.2) : 0.05;
             previousTime_=frame_.now; frame_.tick=tick_; frame_.world=worldSerial_;
             const auto cfg=config_.Read().values;
-            if(failed_) { Report(CombatBridgeStatus::Error); return; }
+            if(failed_) { EndSilent(); Report(CombatBridgeStatus::Error); return; }
             const auto flags=channel_->controlFlags.load(std::memory_order_acquire);
             if(!read || !cfg.enabled || !CombatLeaseValid(request,now) || (flags&(kCtrlRequestUnload|kCtrlPauseSampling))) {
+                EndSilent();
                 report_.debug=assist_.Step(frame_);
                 Report(cfg.enabled ? CombatBridgeStatus::Paused : CombatBridgeStatus::Disabled); return;
             }
@@ -142,6 +172,7 @@ public:
             mode_=Object(client,modeField_);
             if(!player_ || !level || !mode_ || !Boolean(player_,alive_)) { Pause(CombatBridgeStatus::NoWorld); return; }
             if(!world_ || !env->IsSameObject(world_,level) || !playerIdentity_ || !env->IsSameObject(playerIdentity_,player_)) {
+                EndSilent(false);
                 if(world_) env->DeleteWeakGlobalRef(world_);
                 if(playerIdentity_) env->DeleteWeakGlobalRef(playerIdentity_);
                 world_=env->NewWeakGlobalRef(level); Check(); ++worldSerial_;
@@ -149,6 +180,11 @@ public:
             }
             frame_.world=worldSerial_; frame_.playerPosition=Position(player_); frame_.eye=Vector(CallObject(player_,eye_));
             frame_.cameraRotation=frame_.observedRotation=Rotation(player_);
+            frame_.silentSupported=silentSupported_;
+            if(silentSupported_) {
+                if(!cameraDetached_) BeginSilent(frame_.cameraRotation);
+                frame_.cameraRotation=ViewRotation();
+            }
             frame_.verticalFovDeg=request.verticalFov; frame_.viewportHeight=request.viewportHeight;
             frame_.attackCooldown=Float(player_,cooldown_,0.0f);
             frame_.gameAttackReach=reach_ ? Double(player_,reach_) : (Boolean(mode_,farReach_) ? 6.0 : 3.0);
@@ -192,26 +228,36 @@ public:
             frame_.entities={entitiesData_.data(),count_};
             frame_.attackHitId=RayTarget(frame_.observedRotation,std::min(cfg.attack.range,*frame_.gameAttackReach));
             report_.debug=assist_.Step(frame_);
-            Report(failed_ ? CombatBridgeStatus::Error : report_.debug.target ? CombatBridgeStatus::Active : CombatBridgeStatus::NoTarget);
+            if(!report_.debug.target) EndSilent();
+            else if(cameraDetached_) {
+                const auto applied=Rotation(player_);
+                SyncModelRotation(player_,applied,frame_.observedRotation);
+                report_.debug.current=applied;
+                report_.debug.error=combat::AngularDistance(applied,report_.debug.target->desired);
+            }
+            Report(failed_ ? CombatBridgeStatus::Error : report_.debug.silentUnavailable ? CombatBridgeStatus::SilentUnavailable : report_.debug.target ? CombatBridgeStatus::Active : CombatBridgeStatus::NoTarget);
         } catch(...) {
             if(env->ExceptionCheck()) env->ExceptionClear();
             failed_=true; frame_.inputAllowed=false;
+            try { EndSilent(); } catch(...) {}
             try { report_.debug=assist_.Step(frame_); } catch(...) {}
             Report(CombatBridgeStatus::Error);
         }
     }
     bool Send(const combat::Command& command) override {
         // Synchroner Abschluss auf dem Client-Thread, kein voreiliges Queue-Ack.
-        if(!env_ || !player_ || command.world!=frame_.world || command.silent) return false;
+        if(!env_ || !player_ || command.world!=frame_.world || !silentSupported_ || !cameraDetached_) return false;
         std::size_t index=0;
         while(index<count_ && (entitiesData_[index].id!=command.target || entitiesData_[index].uuid!=command.identity)) ++index;
         if(index==count_) return false;
         auto entity=refs_[index];
         if(!Boolean(entity,alive_) || Identity(entity)!=command.identity) return false;
         if(command.kind==combat::CommandKind::Pose) {
+            const auto previous=Rotation(player_);
             const float yaw=Float(player_,yaw_);
             env_->CallVoidMethod(player_,setYaw_,static_cast<jfloat>(yaw+combat::Wrap(command.pose.rotation.yaw-yaw))); Check();
             env_->CallVoidMethod(player_,setPitch_,static_cast<jfloat>(command.pose.rotation.pitch)); Check();
+            SyncModelRotation(player_,Rotation(player_),previous);
             return true;
         }
         const auto cfg=config_.Read().values;
@@ -226,6 +272,49 @@ public:
         return true;
     }
 private:
+    void SyncModelRotation(jobject player,combat::Angles applied,combat::Angles previous) {
+        const auto yaw=static_cast<jfloat>(applied.yaw);
+        const auto oldYaw=static_cast<jfloat>(applied.yaw+combat::Wrap(previous.yaw-applied.yaw));
+        // Alle Modellwinkel gehören zur tatsächlich angewendeten Spielerrotation.
+        // Die unabhängigen Kamera-Werte in FrameSignal werden hier nie verändert.
+        env_->SetFloatField(player,bodyYaw_,yaw); Check();
+        env_->SetFloatField(player,headYaw_,yaw); Check();
+        env_->SetFloatField(player,bodyYawOld_,oldYaw); Check();
+        env_->SetFloatField(player,headYawOld_,oldYaw); Check();
+        env_->SetFloatField(player,yawOld_,oldYaw); Check();
+        env_->SetFloatField(player,pitchOld_,static_cast<jfloat>(previous.pitch)); Check();
+    }
+    void BeginSilent(combat::Angles camera) {
+        env_->SetStaticFloatField(signal_,viewYaw_,static_cast<jfloat>(camera.yaw)); Check();
+        env_->SetStaticFloatField(signal_,viewPitch_,static_cast<jfloat>(camera.pitch)); Check();
+        // Erst nach den Winkeln publizieren. Nur die Camera-Getter nutzen diesen Wert;
+        // Entity-Getter, Modell und Vanilla-Movement sehen weiter die Combat-Rotation.
+        env_->SetStaticObjectField(signal_,silentPlayer_,player_); Check();
+        cameraDetached_=true;
+    }
+    combat::Angles ViewRotation() {
+        const auto yaw=env_->GetStaticFloatField(signal_,viewYaw_); Check();
+        const auto pitch=env_->GetStaticFloatField(signal_,viewPitch_); Check();
+        return {yaw,pitch};
+    }
+    void EndSilent(bool restore=true) {
+        if(!cameraDetached_) return;
+        auto player=env_->GetStaticObjectField(signal_,silentPlayer_); Check();
+        if(player && restore) {
+            const auto view=ViewRotation();
+            const float current=Float(player,yaw_);
+            const auto restored=static_cast<jfloat>(current+combat::Wrap(view.yaw-current));
+            env_->CallVoidMethod(player,setYaw_,restored); Check();
+            env_->CallVoidMethod(player,setPitch_,static_cast<jfloat>(view.pitch)); Check();
+            // Keine Interpolation von der letzten Angriffsrichtung zur Kamera nach Pause/Abschalten.
+            env_->SetFloatField(player,yawOld_,restored); Check();
+            env_->SetFloatField(player,pitchOld_,static_cast<jfloat>(view.pitch)); Check();
+            SyncModelRotation(player,{restored,view.pitch},{restored,view.pitch});
+        }
+        env_->SetStaticObjectField(signal_,silentPlayer_,nullptr); Check();
+        cameraDetached_=false;
+        if(player) env_->DeleteLocalRef(player);
+    }
     void Check() {
         if(env_->ExceptionCheck()) {
             env_->ExceptionClear(); failed_=true; frame_.inputAllowed=false;
@@ -268,6 +357,7 @@ private:
         return id;
     }
     void Pause(CombatBridgeStatus s=CombatBridgeStatus::Paused) {
+        EndSilent();
         frame_.inputAllowed=false; report_.debug=assist_.Step(frame_); Report(s);
     }
     void Report(CombatBridgeStatus status) {
@@ -289,6 +379,8 @@ private:
     jweak playerIdentity_{};
     jclass signal_{},entityClass_{},livingClass_{},playerClass_{};
     jfieldID enabled_{},playerField_{},levelField_{},screenField_{},guiField_{},modeField_{},crosshair_{};
+    jfieldID silentPlayer_{},viewYaw_{},viewPitch_{},yawOld_{},pitchOld_{};
+    jfieldID bodyYaw_{},bodyYawOld_{},headYaw_{},headYawOld_{};
     jfieldID minimum_[3]{},maximum_[3]{},vecFields_[3]{};
     jmethodID x_{},y_{},z_{},id_{},name_{},health_{},uuid_{},uuidHigh_{},uuidLow_{},yaw_{},pitch_{};
     jmethodID entities_{},iterator_{},hasNext_{},next_{},text_{},bounds_{},paused_{},alive_{};
@@ -296,5 +388,6 @@ private:
     std::uint64_t revision_{~std::uint64_t{}},worldSerial_{},tick_{};
     double previousTime_{};
     bool ready_{},failed_{};
+    bool silentSupported_{},cameraDetached_{};
 };
 } // namespace mcov::agent

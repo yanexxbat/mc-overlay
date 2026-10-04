@@ -11,10 +11,15 @@ public:
     void Reset(Angles observed={}) { active_=false; current_=Normalize(observed); velocity_={}; tick_=~std::uint64_t{}; usedYaw_=usedPitch_=0; }
     bool Reacting(Seconds now) const { return active_ && now<start_; }
     Angles Step(const Frame& f,const Target& target,const RotationConfig& c,Random& rng,double speedScale=1) {
+        if(f.tick!=tick_) {
+            tick_=f.tick; usedYaw_=usedPitch_=0;
+            // Geplante Posen sind nicht automatisch angewendet. Jeder echte Tick
+            // beginnt bei der gemessenen Rotation, auch nach Verzögerung/Korrektur.
+            current_=Normalize(f.observedRotation);
+        }
         const bool newTarget=!active_ || target.id!=id_ || target.uuid!=uuid_;
         if(newTarget) { if(!active_) current_=Normalize(f.observedRotation); Plan(target,f.now,c,rng,true); }
         else if(AngularDistance(goal_,target.desired)>c.replanDegrees) Plan(target,f.now,c,rng,false);
-        if(f.tick!=tick_) { tick_=f.tick; usedYaw_=usedPitch_=0; }
         if(!c.enabled || f.now<start_ || f.dt<=0) return current_;
         const Seconds elapsed=f.now-start_;
         Angles wanted{Evaluate(yaw_,elapsed,c),Evaluate(pitch_,elapsed,c)};
@@ -55,7 +60,10 @@ private:
             const double time=rng.Sample(duration)*c.smoothing;
             const double overshoot=std::copysign(std::min(std::abs(change)*fraction,c.maxOvershootDegrees),change);
             const double end=begin+change+overshoot;
-            const double control=begin+std::clamp(velocity*time*c.tangentFraction,-std::abs(change),std::abs(change));
+            // Eine alte Tangente darf nach einem Richtungswechsel nicht vom
+            // neuen Ziel wegführen. Ohne Overshoot bleibt die Kurve monoton.
+            const double sign=std::copysign(1.0,change);
+            const double control=begin+sign*std::clamp(velocity*time*c.tangentFraction*sign,0.0,std::abs(change));
             return Axis{begin,control,end,begin+change,time};
         };
         yaw_=axis(current_.yaw,delta.yaw,velocity_.yaw,c.yawDuration);

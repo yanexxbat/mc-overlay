@@ -32,6 +32,7 @@
 #include "geometry_bindings.hpp"
 #include "frame_sync.hpp"
 #include "entity_details_cache.hpp"
+#include "entity_identity_cache.hpp"
 #include "../common/equipment_icons.hpp"
 #include "combat_live.hpp"
 
@@ -185,6 +186,7 @@ struct Bindings {
     jmethodID mItemIsDamageable = nullptr, mItemCount = nullptr, mItemName = nullptr;
     jmethodID mConnection = nullptr, mEntityUuid = nullptr, mPlayerInfo = nullptr;
     jmethodID mLatency = nullptr, mEntityById = nullptr;
+    jmethodID mUuidHigh = nullptr, mUuidLow = nullptr;
 
     // Status effects
     jmethodID mGetStatusEffects = nullptr;
@@ -458,6 +460,13 @@ bool BindMappingSet(JNIEnv* env, const mappings::RuntimeProfile& profile, Bindin
     auto playerInfo=SoftClass(env,(prefix+"playerinfo").c_str(),set.classes.playerInfo);
     b.mConnection=jvm::TryMethod(env,b.client.minecraftClass,set.methodConnection.name,set.methodConnection.signature,false);
     b.mEntityUuid=jvm::TryMethod(env,b.clsEntity,set.methodEntityUuid.name,set.methodEntityUuid.signature,false);
+    auto uuidClass=env->FindClass("java/util/UUID");
+    if(env->ExceptionCheck()) env->ExceptionClear();
+    if(uuidClass) {
+        b.mUuidHigh=jvm::TryMethod(env,uuidClass,"getMostSignificantBits","()J",false);
+        b.mUuidLow=jvm::TryMethod(env,uuidClass,"getLeastSignificantBits","()J",false);
+        env->DeleteLocalRef(uuidClass);
+    }
     b.mPlayerInfo=jvm::TryMethod(env,connection,set.methodPlayerInfo.name,set.methodPlayerInfo.signature,false);
     b.mLatency=jvm::TryMethod(env,playerInfo,set.methodLatency.name,set.methodLatency.signature,false);
     b.mEntityById=jvm::TryMethod(env,b.clsLevel,set.methodEntityById.name,set.methodEntityById.signature,false);
@@ -750,12 +759,14 @@ void SampleLocalPlayer(JNIEnv* env, const Bindings& b, jobject player, WorldSnap
 
 struct EntityDetailsState {
     EntityDetailsCache cache;
+    EntityIdentityCache identities;
     jobject world{};
     std::uint64_t nextTick{};
     std::uint32_t cursor{};
     bool active{};
     void Clear(JNIEnv* env) {
         cache.Clear(); nextTick=0; cursor=0; active=false;
+        identities.Clear(env);
         if (world) { env->DeleteGlobalRef(world); world=nullptr; }
     }
     void ObserveWorld(JNIEnv* env,jobject level) {
@@ -828,7 +839,10 @@ void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject loca
             record.health    = CallFloat(env, entity, b.mHealth,    0.0f);
             record.maxHealth = CallFloat(env, entity, b.mMaxHealth, 20.0f);
         }
-        if (b.clsPlayer && env->IsInstanceOf(entity, b.clsPlayer)) record.flags |= kEntityIsPlayer;
+        if (b.clsPlayer && env->IsInstanceOf(entity, b.clsPlayer)) {
+            record.flags |= kEntityIsPlayer;
+            record.uuid=details.identities.Read(env,entity,record.entityId,b.mEntityUuid,b.mUuidHigh,b.mUuidLow);
+        }
         if (b.clsEnemy  && env->IsInstanceOf(entity, b.clsEnemy))  record.flags |= kEntityIsHostile;
         SampleEntityGeometry(env, b, entity, snap.partialTick, record);
         const double dx = record.x - snap.camX, dy = record.y - snap.camY, dz = record.z - snap.camZ;
