@@ -221,6 +221,7 @@ void Overlay::CleanupDeviceD3D() {
     itemIcons_.Shutdown();
     auraBlend_.Shutdown();
     auraRenderer_.Reset();
+    targetCube_.Reset();
     auraPrepared_ = false;
     CleanupRenderTarget();
     if (swapChain_) { swapChain_->Release(); swapChain_ = nullptr; }
@@ -473,6 +474,7 @@ bool Overlay::RunFrame() {
     if (!auraPrepared_) {
         AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        TargetCubeRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         auraPrepared_ = true;
     }
 
@@ -558,6 +560,31 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
     }
 }
 
+void Overlay::DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjection& projection,ImVec2 viewport) {
+    if(!targetCubeConfig_.enabled) { targetCube_.Reset(); return; }
+    const auto now=::GetTickCount64();
+    const auto& report=combatReport_;
+    const EntitySnapshot* selected=nullptr;
+    if(agentConnected_ && heartbeatClock_.Alive(now) && combatMenu_.Store().Read().values.enabled &&
+       report.status==CombatBridgeStatus::Active && report.debug.enabled && report.debug.target &&
+       report.sampledAtMs && report.sampledAtMs<=now && now-report.sampledAtMs<=kCombatLeaseMs) {
+        const auto& target=*report.debug.target;
+        for(std::uint32_t i=0;i<std::min(snapshot.entityCount,kMaxEntities);++i) {
+            const auto& e=snapshot.entities[i];
+            if(e.entityId!=target.id || ((e.uuid.high || e.uuid.low) && e.uuid!=target.uuid)) continue;
+            selected=&e; break;
+        }
+    }
+    // Windows-Menüanimationen steuern diesen Spieleffekt nicht. Der explizite
+    // Reduced-Motion-Schalter lässt den Marker sichtbar und friert seine Drehung ein.
+    targetCube_.Update(selected,ImGui::GetIO().DeltaTime,!menu_.reduceMotion,targetCubeConfig_);
+    if(!selected) return;
+    TargetCubeWorld world; TargetCubeScreen screen;
+    if(targetCube_.BuildWorld(*selected,snapshot,targetCubeConfig_,world) &&
+       TargetCubeRenderer::Project(projection,world,viewport,screen,ImGui::GetMainViewport()->Pos))
+        targetCube_.Draw(*ImGui::GetBackgroundDrawList(),screen,targetCubeConfig_,auraBlend_.Callbacks(),auraBlend_.GlowTexture());
+}
+
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
                                  visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo;
@@ -566,7 +593,8 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
     if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
-        !haveFriends && !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) return;
+        !haveFriends && !combatMenu_.Store().Read().values.enabled &&
+        !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
 
     const float width  = static_cast<float>(windowW_);
     const float height = static_cast<float>(windowH_);
@@ -576,6 +604,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
 
     // Die Aura liegt unter ESP und HUD. Sie teilt deren kohärenten Snapshot.
     DrawAura(snapshot, projection, width, height);
+    DrawTargetCube(snapshot,projection,{width,height});
     if(haveFriends && agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
         friendHats_.DrawFriends(*ImGui::GetBackgroundDrawList(),snapshot,projection,relations,visuals_.maxDistance,
             friendHatConfig_,auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),
@@ -1197,7 +1226,9 @@ void Overlay::DrawMenu() {
 void Overlay::ResetMenuPage(panel::Page page) {
     switch (page) {
         case panel::Page::Combat: combat_=CombatSettings{}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
-        case panel::Page::Visuals: visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; auraRenderer_.Reset(); break;
+        case panel::Page::Visuals:
+            visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
+            auraRenderer_.Reset(); targetCube_.Reset(); break;
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; break;
         case panel::Page::Hud: hud_=HudSettings{}; break;
         case panel::Page::Stats: break;
@@ -1234,28 +1265,20 @@ void Overlay::DrawVisualsTab() {
                 ImGui::EndDisabled();
                 ImGui::EndTable();
             }
-            MenuHeading("Target aura");
-            if (panel::BeginRows("aura_controls")) {
-                panel::CheckRow("Enable aura",&auraConfig_.enabled);
-                ImGui::BeginDisabled(!auraConfig_.enabled);
-                panel::SliderIntRow("Orbs",&auraConfig_.orbCount,1,AuraRenderer::kMaxOrbs,"%d");
-                panel::SliderRow("Orbit radius",&auraConfig_.orbitRadius,.3f,2,"%.2f x");
-                panel::SliderRow("Orb size",&auraConfig_.orbSize,.05f,.5f,"%.2f x");
-                panel::SliderRow("Trail length",&auraConfig_.trailDegrees,10,220,"%.0f deg");
-                panel::SliderRow("Intensity",&auraConfig_.opacity,0,1,"%.2f");
-                panel::CheckRow("Animation",&auraConfig_.animate);
-                ImGui::BeginDisabled(!auraConfig_.animate);
-                panel::SliderRow("Rotation",&auraConfig_.rotationDegreesPerSecond,-90,90,"%.0f deg/s");
-                panel::SliderRow("Pulse amplitude",&auraConfig_.pulseAmplitude,0,.3f,"%.2f");
-                panel::SliderRow("Pulse frequency",&auraConfig_.pulseHz,0,3,"%.2f Hz");
-                ImGui::EndDisabled();
-                panel::SliderRow("Target fade",&auraConfig_.fadeSeconds,0,.5f,"%.2f s");
-                panel::ColorRow("Orb glow",&auraConfig_.startColor.x);
-                panel::ColorRow("Trail colour",&auraConfig_.endColor.x);
-                ImGui::EndDisabled();
-                ImGui::EndTable();
+            MenuHeading("Target effects");
+            style::StyleScope tabs;
+            tabs.Color(ImGuiCol_TabSelected,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
+            tabs.Color(ImGuiCol_TabHovered,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
+            tabs.Color(ImGuiCol_TabSelectedOverline,ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
+            if(ImGui::BeginTabBar("target_effect_tabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
+                if(ImGui::BeginTabItem("Target aura")) {
+                    DrawTargetAuraSettings(); ImGui::EndTabItem();
+                }
+                if(ImGui::BeginTabItem("Target marker")) {
+                    DrawTargetMarkerSettings(); ImGui::EndTabItem();
+                }
+                ImGui::EndTabBar();
             }
-            ImGui::TextWrapped("Orbs follow the Kill Aura target, or the crosshair target when Kill Aura is off.");
         } else {
             if (panel::BeginRows("visual_filters")) {
                 panel::CheckRow("Players",&visuals_.showPlayers);
@@ -1279,6 +1302,66 @@ void Overlay::DrawVisualsTab() {
             }
         }
     });
+}
+
+void Overlay::DrawTargetAuraSettings() {
+    if(panel::BeginRows("aura_controls")) {
+        panel::CheckRow("Enable aura",&auraConfig_.enabled);
+        ImGui::BeginDisabled(!auraConfig_.enabled);
+        panel::SliderIntRow("Orbs",&auraConfig_.orbCount,1,AuraRenderer::kMaxOrbs,"%d");
+        panel::SliderRow("Orbit radius",&auraConfig_.orbitRadius,.3f,2,"%.2f x");
+        panel::SliderRow("Orb size",&auraConfig_.orbSize,.05f,.5f,"%.2f x");
+        panel::SliderRow("Trail length",&auraConfig_.trailDegrees,10,220,"%.0f deg");
+        panel::SliderRow("Intensity",&auraConfig_.opacity,0,1,"%.2f");
+        panel::CheckRow("Animation",&auraConfig_.animate);
+        ImGui::BeginDisabled(!auraConfig_.animate);
+        panel::SliderRow("Rotation",&auraConfig_.rotationDegreesPerSecond,-90,90,"%.0f deg/s");
+        panel::SliderRow("Pulse amplitude",&auraConfig_.pulseAmplitude,0,.3f,"%.2f");
+        panel::SliderRow("Pulse frequency",&auraConfig_.pulseHz,0,3,"%.2f Hz");
+        ImGui::EndDisabled();
+        panel::SliderRow("Target fade",&auraConfig_.fadeSeconds,0,.5f,"%.2f s");
+        panel::ColorRow("Orb glow",&auraConfig_.startColor.x);
+        panel::ColorRow("Trail colour",&auraConfig_.endColor.x);
+        ImGui::EndDisabled(); ImGui::EndTable();
+    }
+    ImGui::TextWrapped("Orbs follow the Kill Aura target, or the crosshair target when Kill Aura is off.");
+}
+
+void Overlay::DrawTargetMarkerSettings() {
+    auto& c=targetCubeConfig_;
+    if(panel::BeginRows("marker_controls")) {
+        panel::CheckRow("Enable marker",&c.enabled);
+        ImGui::BeginDisabled(!c.enabled);
+        panel::SliderRow("Size",&c.sizeFraction,.3f,1.5f,"%.2f x");
+        float width=c.strokeFraction*100;
+        if(panel::SliderRow("Line width",&width,.5f,8,"%.1f %%")) c.strokeFraction=width/100;
+        panel::SliderRow("Glow intensity",&c.glow,0,2,"%.2f");
+        panel::SliderRow("Opacity",&c.opacity,0,1,"%.2f");
+        panel::CheckRow("Animation",&c.animate);
+        ImGui::BeginDisabled(!c.animate);
+        panel::SliderRow("Rotation arc",&c.swingDegrees,20,180,"%.0f deg");
+        float interval=c.directionCycleSeconds*.5f;
+        if(panel::SliderRow("Direction switch",&interval,1,10,"%.1f s")) c.directionCycleSeconds=interval*2;
+        ImGui::EndDisabled();
+        panel::ColorRow("Frame colour",&c.lime.x);
+        panel::ColorRow("Highlight colour",&c.yellow.x);
+        // Die Details bleiben in derselben Tabelle, damit ihre Höhe auch unterhalb
+        // des sichtbaren Scrollbereichs erfasst wird und alle Regler erreichbar sind.
+        ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
+        ImGui::SetNextItemOpen(markerDetailsOpen_,ImGuiCond_Always);
+        markerDetailsOpen_=ImGui::CollapsingHeader("Shape & timing",ImGuiTreeNodeFlags_SpanAllColumns);
+        if(markerDetailsOpen_) {
+            float corners=c.cornerFraction*100,rounding=c.roundFraction*100;
+            if(panel::SliderRow("Corner length",&corners,10,40,"%.0f %%")) c.cornerFraction=corners/100;
+            if(panel::SliderRow("Corner rounding",&rounding,.5f,9,"%.1f %%")) c.roundFraction=rounding/100;
+            panel::CheckRow("Cube depth",&c.showDepth);
+            ImGui::BeginDisabled(!c.animate);
+            panel::SliderRow("Target fade",&c.fadeSeconds,0,.5f,"%.2f s");
+            ImGui::EndDisabled();
+        }
+        ImGui::EndDisabled(); ImGui::EndTable();
+    }
+    ImGui::TextWrapped("Follows the active Kill Aura target. Shorter direction intervals make it rotate faster.");
 }
 
 

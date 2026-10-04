@@ -5,6 +5,8 @@
 namespace mcov::combat {
 enum class TargetMode { Crosshair, NearestPlayer, LowestHealth, AngleDistance, NearestEntity };
 enum class FovMode { DynamicDegrees, StaticPixels };
+// Feste Adapter-Policy, kein weiterer Regler im Live-Menü oder in der IPC-Config.
+enum class ExecutionMode { Smoothed, Continuous };
 struct TargetConfig {
     bool enabled{true}, playersOnly{}, requireVisibility{true}, prioritizeEnemies{}, multiTarget{true};
     TargetMode mode{TargetMode::NearestEntity};
@@ -46,6 +48,19 @@ struct Config {
     SyncConfig sync{};
     HudConfig hud{};
 };
+
+inline Config MakeKillAuraConfig(const Config& requested) {
+    // Frühere technische Einstellungen dürfen die automatische Kill Aura nicht
+    // bremsen. Nur Aktivierung, Entity-Typ, Reichweite und HUD werden übernommen.
+    Config live;
+    live.enabled=requested.enabled; live.seed=requested.seed;
+    live.target.playersOnly=requested.target.playersOnly;
+    live.target.multiTarget=false;
+    live.target.range=live.attack.range=requested.attack.range;
+    live.attack.enabled=true; live.attack.firstClickDelay={0,0};
+    live.hud=requested.hud;
+    return live;
+}
 
 inline bool Within(double v, double lo, double hi) { return std::isfinite(v) && v>=lo && v<=hi; }
 inline bool ValidRange(Range<double> r, double lo, double hi) { return Within(r.min,lo,hi)&&Within(r.max,r.min,hi); }

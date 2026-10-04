@@ -33,6 +33,11 @@ public:
         f.attackCooldown=std::clamp((now-lastAttack_)/kAttackPeriod,0.0,1.0); f.gameAttackReach=kReach;
         f.inputAllowed=f.silentSupported=true; return f;
     }
+    void RefreshAfterPose(Frame& f) override {
+        f.observedRotation=serverRotation_;
+        f.attackCooldown=std::clamp((now_-lastAttack_)/kAttackPeriod,0.0,1.0);
+        f.attackHitId=Raycast(f.eye,serverRotation_);
+    }
     bool Send(const Command& command) override {
         if(command.world!=world_ || command.sequence<=lastSequence_ || (command.silent && !silentSupported_)) return false;
         if(logCount_==kCommands) return false;

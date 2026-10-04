@@ -90,8 +90,10 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     request.config.target.range=6; request.config.target.coneDegrees=1;
     request.config.target.mode=mcov::combat::TargetMode::Crosshair; // Live-Policy muss alte widersprüchliche Werte korrigieren.
     request.config.rotation.overshootFraction={0,0}; request.config.rotation.jitterDegrees={0,0};
-    request.config.rotation.yawDuration=request.config.rotation.pitchDuration={.05,.05};
-    request.config.attack.firstClickDelay={0,0}; request.config.sync.interval={.01,.01};
+    request.config.rotation.smoothing=4;
+    request.config.rotation.yawDuration=request.config.rotation.pitchDuration={2,2};
+    request.config.rotation.maxYawPerTick=request.config.rotation.maxPitchPerTick=.1;
+    request.config.attack.firstClickDelay={.5,.5}; request.config.sync.interval={.2,.2};
     auto tick=jvm::TryMethod(env,b.client.minecraftClass,g.clientTick.name,g.clientTick.signature,false);
     mcov::CombatReport report;
     auto step=[&](int count=1,bool renew=true) {
@@ -116,7 +118,21 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     auto orbitZ=jvm::TryMethod(env,b.clsCamera,"testOrbitZ",orbitDesc.c_str(),false);
     auto view=[&](jmethodID method,float partial=.5f) { const auto v=env->CallFloatMethod(camera,method,player,partial); Healthy(env); return v; };
     auto orbit=[&](jmethodID method) { const auto v=env->CallDoubleMethod(camera,method,player,.5f); Healthy(env); return v; };
-    step(18);
+    step();
+    Require(report.attacks==1 && report.debug.target && report.debug.target->id==42 &&
+            report.debug.error<.001 && report.debug.packets.buffered==0,
+            "old slow settings delayed first-tick live rotation/attack");
+    // Ein bewegtes Ziel muss schon im nächsten Tick ohne neu startende Kurve
+    // nachgeführt werden, auch wenn der alte Blick die Hitbox verfehlt.
+    for(int i=0;i<4;++i) {
+        const double x=i%2 ? 1.0 : -1.0;
+        real(entity,b.clsEntity,"testX",x);
+        env->SetDoubleField(bounds,b.geometry.min[0],x-.3); Healthy(env);
+        env->SetDoubleField(bounds,b.geometry.max[0],x+.3); Healthy(env);
+        step(); Require(report.debug.target && report.debug.target->id==42 && report.debug.error<.001,
+                        "live moving-target rotation lagged behind hitbox");
+    }
+    step(13);
     Require(combatCallbackThread==GetCurrentThreadId() && report.tick>=18,"combat was not invoked synchronously by instrumented client tick");
     Require(report.attacks==1 && report.debug.target && report.debug.target->id==42,"Kill Aura did not select, rotate and attack automatically");
     const auto aimedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
@@ -130,6 +146,18 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(!mcov::agent::RayBox({0,1.62,0},{0,0},combat::Entity{.boundsMin={.7,0,1.7},.boundsMax={1.3,1.8,2.3}}),"ray hit unrelated crosshair entity");
     const auto cooldown=env->GetFloatField(player,field(b.clsPlayer,"testCooldown","F")); Healthy(env);
     Require(cooldown==0,"real attack did not reset game cooldown");
+    auto nearerTie=NewObject(env,b.clsPlayer);
+    env->SetBooleanField(nearerTie,alive,JNI_TRUE); Healthy(env);
+    env->SetIntField(nearerTie,field(b.clsEntity,"testId","I"),41); Healthy(env);
+    floating(nearerTie,b.clsLiving,"testHealth",20);
+    env->CallBooleanMethod(list,add,nearerTie); Healthy(env); step();
+    Require(report.debug.target && report.debug.target->id==42,"valid live lock switched to a new ranked candidate");
+    floating(entity,b.clsLiving,"testHealth",0); step();
+    Require(report.debug.target && report.debug.target->id==41,"dead live lock was not released");
+    floating(entity,b.clsLiving,"testHealth",20);
+    auto clear=jvm::TryMethod(env,listClass,"clear","()V",false);
+    env->CallVoidMethod(list,clear); Healthy(env);
+    env->CallBooleanMethod(list,add,entity); Healthy(env); step();
     floating(player,b.clsPlayer,"testCooldown",1); step(4);
     Require(report.attacks==2,"game cooldown recovery did not allow another hit");
     const auto attacks=report.attacks;
@@ -187,14 +215,9 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     floating(nextEntity,b.clsLiving,"testHealth",20);
     env->SetDoubleField(bounds,b.geometry.min[0],-1.3); Healthy(env);
     env->SetDoubleField(bounds,b.geometry.max[0],-.7); Healthy(env);
-    auto clear=jvm::TryMethod(env,listClass,"clear","()V",false);
     env->CallVoidMethod(list,clear); Healthy(env);
     env->CallBooleanMethod(list,add,nextEntity); Healthy(env);
-    floating(player,b.clsPlayer,"testCooldown",1); step(12);
-    // Richtung und Angriff sind getrennt: der erste Klick hat weiterhin eine
-    // konfigurierte Verzögerung. Kein wall-clock-abhängiges 300-ms-Rennen.
-    const auto switchDeadline=GetTickCount64()+500;
-    while(report.attacks<attacks+2 && GetTickCount64()<switchDeadline) step(2);
+    floating(player,b.clsPlayer,"testCooldown",1); step();
     const auto switchedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
     const bool switched=report.debug.target && report.debug.target->id==43 && report.attacks==attacks+2 && switchedYaw>10 &&
         report.debug.error<request.config.attack.alignmentDegrees;

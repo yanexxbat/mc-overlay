@@ -8,14 +8,17 @@ class Transport {
 public:
     virtual ~Transport()=default;
     virtual bool Send(const Command& command)=0;
+    // Nur nach synchron angewendeter Pose: Rotation, Cooldown und Hit-Ray neu
+    // lesen. Ein Adapter ohne Rückmeldung lässt den ursprünglichen Frame stehen.
+    virtual void RefreshAfterPose(Frame&) {}
 };
-struct PumpResult { bool attackSent{},attackDiscarded{}; };
+struct PumpResult { bool poseSent{},attackSent{},attackDiscarded{}; };
 class SyncLayer {
 public:
-    void Configure(const SyncConfig& c,std::uint64_t seed) {
+    void Configure(const SyncConfig& c,std::uint64_t seed,ExecutionMode mode=ExecutionMode::Smoothed) {
         const std::scoped_lock consumer(dispatchMutex_);
         const std::scoped_lock lock(mutex_);
-        config_=c; rng_.Seed(seed); ClearLocked(); lastDue_=0;
+        config_=c; mode_=mode; rng_.Seed(seed); ClearLocked(); lastDue_=0;
     }
     void Cancel() {
         const std::scoped_lock consumer(dispatchMutex_);
@@ -41,7 +44,8 @@ public:
         if(count_==kQueueCapacity) { ++stats_.discarded; return false; }
         command.sequence=++sequence_;
         // Der Angriff folgt der Rotation im selben Batch; eine zweite Warteperiode würde ihn veralten lassen.
-        command.due=std::max(now,lastDue_)+(command.kind==CommandKind::Pose ? rng_.Sample(config_.interval) : 0);
+        const double delay=command.kind==CommandKind::Pose && mode_==ExecutionMode::Smoothed ? rng_.Sample(config_.interval) : 0;
+        command.due=std::max(now,lastDue_)+delay;
         lastDue_=command.due;
         queue_[(head_+count_)%kQueueCapacity]=command; ++count_; return true;
     }
@@ -52,11 +56,12 @@ public:
         for(;;) {
             Command command;
             SyncConfig settings;
+            ExecutionMode mode;
             Seconds recoveringUntil;
             {
                 const std::scoped_lock lock(mutex_);
                 if(!count_ || queue_[head_].due>frame.now) break;
-                command=queue_[head_]; head_=(head_+1)%kQueueCapacity; --count_; settings=config_; recoveringUntil=recoveringUntil_;
+                command=queue_[head_]; head_=(head_+1)%kQueueCapacity; --count_; settings=config_; mode=mode_; recoveringUntil=recoveringUntil_;
             }
             const double maxAge=command.kind==CommandKind::Attack ? settings.attackMaxAge : settings.poseMaxAge;
             const bool valid=config.enabled && settings.enabled && frame.inputAllowed && target &&
@@ -66,7 +71,7 @@ public:
                 (!command.silent || frame.silentSupported) &&
                 (command.kind!=CommandKind::Attack || CanAttack(frame,*target,config));
             Angles dispatchedDelta{};
-            if(valid && command.kind==CommandKind::Pose) {
+            if(valid && command.kind==CommandKind::Pose && mode==ExecutionMode::Smoothed) {
                 if(dispatchTick_!=frame.tick || dispatchWorld_!=frame.world) {
                     dispatchTick_=frame.tick; dispatchWorld_=frame.world; dispatchedRotation_=Normalize(frame.observedRotation);
                     dispatchedYaw_=dispatchedPitch_=0;
@@ -85,10 +90,11 @@ public:
                 const std::scoped_lock lock(mutex_);
                 if(sent) ++stats_.sent; else { ++stats_.discarded; if(valid) ++stats_.failed; }
             }
-            if(sent && command.kind==CommandKind::Pose) {
+            if(sent && command.kind==CommandKind::Pose && mode==ExecutionMode::Smoothed) {
                 dispatchedRotation_=command.pose.rotation;
                 dispatchedYaw_+=std::abs(dispatchedDelta.yaw); dispatchedPitch_+=std::abs(dispatchedDelta.pitch);
             }
+            if(sent && command.kind==CommandKind::Pose) result.poseSent=true;
             if(command.kind==CommandKind::Attack) { result.attackSent|=sent; result.attackDiscarded|=!sent; }
         }
         return result;
@@ -120,6 +126,7 @@ private:
     std::uint64_t sequence_{},correctionSerial_{};
     Seconds lastDue_{},recoveringUntil_{};
     SyncConfig config_{};
+    ExecutionMode mode_{ExecutionMode::Smoothed};
     Random rng_{};
     PacketStats stats_{};
     // Nur unter dispatchMutex_: bestätigte Ausgabe, unabhängig vom geplanten Engine-Zustand.

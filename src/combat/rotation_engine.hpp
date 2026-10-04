@@ -10,6 +10,11 @@ class RotationEngine {
 public:
     void Reset(Angles observed={}) { active_=false; current_=Normalize(observed); velocity_={}; tick_=~std::uint64_t{}; usedYaw_=usedPitch_=0; }
     bool Reacting(Seconds now) const { return active_ && now<start_; }
+    Angles Track(const Target& target) {
+        // Live-Kill-Aura folgt der aktuellen Hitbox in jedem Client-Tick direkt.
+        // Keine neu startende Kurve, Totzone, Reaktionspause oder Zufallsabweichung.
+        Reset(target.desired); return current_;
+    }
     Angles Step(const Frame& f,const Target& target,const RotationConfig& c,Random& rng,double speedScale=1) {
         if(f.tick!=tick_) {
             tick_=f.tick; usedYaw_=usedPitch_=0;

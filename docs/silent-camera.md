@@ -6,7 +6,8 @@ immer die unabhängige Blickrichtung. Stille Rotation gehört fest zur Kill Aura
 auch direkt nach einem Reset. Es gibt keinen Silent-Kamera-Schalter und kein Preset.
 Standardmäßig werden Spieler und Mobs in 3 Metern Reichweite berücksichtigt,
 unabhängig von der Blickrichtung. Die nächste gültige lebende Hitbox wird gewählt;
-ein näherer Kandidat löst das bisherige Ziel am nächsten Client-Tick ab.
+dieses Ziel bleibt gebunden, bis es stirbt, entfernt wird, zum Freund wird oder
+Reichweite/Sicht verliert. Ein näherer Kandidat unterbricht den Lock nicht.
 Die getrennte Blickrichtung wirkt auch in der Egoansicht.
 Normales View-Bob, Kamera-Kollisionen und Kameramods können den Blick weiterhin
 bewegen.
@@ -25,11 +26,18 @@ angewendete Spielerrotation synchronisiert; Vanilla kann sie danach vor dem
 Rendern nicht mehr durch Bewegungswinkel ersetzen. Die normale Movement-Pipeline
 überträgt die angewendete Rotation im folgenden Player-Tick.
 
-Die Rotation Engine beginnt jeden Tick bei den tatsächlich gemessenen Winkeln,
-statt verzögerte Queue-Posen als bereits angewendet zu behandeln. Beim Nachführen
-eines bewegten Ziels darf die Bézier-Tangente nur in dessen neue Richtung zeigen.
-Mit dem Standard-Overshoot/Jitter von null dreht die Kurve nicht zuerst vom Ziel
-weg. Die Schrittgrenzen und die unabhängige Maus-Kamera bleiben erhalten.
+Die Live-Kill-Aura nutzt `ExecutionMode::Continuous`: `RotationEngine::Track`
+liefert jeden Tick die aktuelle Zielrotation direkt. Pose-Aufträge sind sofort
+fällig und werden ohne die Begrenzungen des geglätteten Bibliotheksmodus
+angewendet. Danach aktualisiert `RefreshAfterPose` die gemessenen Winkel,
+den echten Cooldown und den wandgeprüften Hit-Ray. Erst diese Rückmeldung erlaubt
+den Angriff im selben Tick. Der abschließende JNI-Transport prüft Sicht,
+Reichweite, Ray und Cooldown weiterhin erneut.
+
+`MakeKillAuraConfig` übernimmt Aktivierung, Entity-Typ, Reichweite und HUD;
+alte Glättungs-, Reaktions- und Timing-Werte verzögern die Kill Aura nicht mehr.
+Der erste Schlag braucht keine künstliche Klickpause. Weitere Schläge warten
+auf den Minecraft-Cooldown. Die unabhängige Maus-Kamera bleibt erhalten.
 
 Beim Aktivieren übernimmt `mcov.FrameSignal` die bisherige Blickrichtung und
 eine Referenz auf den lokalen Spieler. Die instrumentierte Camera reicht
@@ -80,7 +88,16 @@ Accessor- und Field-Camera). Sie prüfen automatische Rotation/Angriffe bei
 stabiler View schon bei erster Aktivierung ohne Preset, eine aus dem View-Winkel
 abgeleitete F5-Orbitposition, Maussteuerung,
 Zielwechsel auf die gegenüberliegende Seite, fremde Entities, Partial-Ticks,
-Menü-Pause/Rückkehr und Rückgabe beim Abschalten. Fehlende Camera-Hooks sperren
+Menü-Pause/Rückkehr und Rückgabe beim Abschalten. Eine Tick-Witness prüft, dass
+Combat erst nach dem normalen Client-Tick läuft. Kopf-/Körperwinkel müssen der
+angewendeten Zielrotation entsprechen und beim Abschalten zusammen zurückkehren.
+Der Kern-Test stellt das frühere Wegdrehen bei Ziel-Replanning nach und prüft die
+Rückführung auf gemessene Winkel nach einer verzögerten/korrigierten Pose.
+Zusätzlich prüfen Kern und alle JNI-Profile sofortige Zielrotation trotz alter
+langsamer Einstellungen, kontinuierliches Nachführen und Zielbindung bis Tod.
+Der Simulator prüft wiederholte Angriffe auf ein ständig bewegtes Ziel bis 0 HP
+bei unveränderter Kamera sowie Abbruch bei Freund-, Sicht- und Reichweitenverlust.
+Fehlende Camera-Hooks sperren
 in einem negativen Test Rotation und Angriffe. Dynamisches Attach samt Camera-
 und Mouse-Hooks wird in einer separaten Test-JVM an bereits geladenen Klassen
 geprüft. Diese Tests unter Java

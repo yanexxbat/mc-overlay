@@ -14,15 +14,15 @@ private:
 // Step besitzt einen einzigen Owner-Thread. Nur Config, Freunde, Queue und HUD-Mailbox sind geteilt.
 class CombatAssist {
 public:
-    CombatAssist(ConfigStore& config,FriendEnemyBook& relations,Transport& transport)
-        : config_(config),relations_(relations),transport_(transport) {}
+    CombatAssist(ConfigStore& config,FriendEnemyBook& relations,Transport& transport,ExecutionMode mode=ExecutionMode::Smoothed)
+        : config_(config),relations_(relations),transport_(transport),mode_(mode) {}
     CombatAssist(const CombatAssist&)=delete;
     CombatAssist& operator=(const CombatAssist&)=delete;
     DebugSnapshot Debug() const { return debug_.Read(); }
     DebugSnapshot Step(const Frame& f) {
         const auto version=config_.Read(); const Config& c=version.values;
         if(version.revision!=revision_) {
-            sync_.Configure(c.sync,c.seed^kSyncSeed);
+            sync_.Configure(c.sync,c.seed^kSyncSeed,mode_);
             selector_.Reset(); rotation_.Reset(f.observedRotation); attack_.Reset(); lastTarget_={};
             if(!seeded_ || c.seed!=seed_) {
                 selectionRandom_.Seed(c.seed^kSelectionSeed); rotationRandom_.Seed(c.seed^kRotationSeed); attackRandom_.Seed(c.seed^kAttackSeed);
@@ -61,7 +61,9 @@ public:
                 }
                 lastTarget_=d.target;
                 d.resyncing=sync_.Recovering(f.now);
-                const Angles wanted=c.rotation.enabled ? rotation_.Step(f,*d.target,c.rotation,rotationRandom_,d.resyncing ? c.sync.recoverySpeedScale : 1) : f.observedRotation;
+                const bool continuous=mode_==ExecutionMode::Continuous;
+                const Angles wanted=!c.rotation.enabled ? f.observedRotation : continuous ? rotation_.Track(*d.target) :
+                    rotation_.Step(f,*d.target,c.rotation,rotationRandom_,d.resyncing ? c.sync.recoverySpeedScale : 1);
                 d.current=f.observedRotation; d.error=AngularDistance(f.observedRotation,d.target->desired);
                 d.reacting=rotation_.Reacting(f.now); d.fovRadiusPx=FovRadius(f,c.target);
                 Command command;
@@ -70,14 +72,23 @@ public:
                 command.sampledAt=f.sampledAt; command.pose={f.playerPosition,wanted}; command.silent=true;
                 if(!d.silentUnavailable && c.sync.enabled) {
                     if(c.rotation.enabled && !d.reacting) sync_.Enqueue(command,f.now);
-                    if(!d.resyncing && attack_.Prepare(f,*d.target,c,attackRandom_)) {
+                    Frame applied=f;
+                    if(continuous) {
+                        // Erst wirklich drehen, dann den aktuellen Angriffs-Ray
+                        // prüfen. Ein bewegtes Ziel darf nicht am alten Blick scheitern.
+                        const auto pose=sync_.Pump(f,d.target,c,transport_);
+                        if(pose.poseSent) transport_.RefreshAfterPose(applied);
+                        d.current=applied.observedRotation;
+                        d.error=AngularDistance(applied.observedRotation,d.target->desired);
+                    }
+                    if(!d.resyncing && attack_.Prepare(applied,*d.target,c,attackRandom_)) {
                         command.kind=CommandKind::Attack;
                         if(!sync_.Enqueue(command,f.now)) attack_.Discarded();
                     }
+                    const auto delivered=sync_.Pump(applied,d.target,c,transport_);
+                    if(delivered.attackSent) attack_.Sent(); else if(delivered.attackDiscarded) attack_.Discarded();
                 }
-                const auto delivered=sync_.Pump(f,d.target,c,transport_);
-                if(delivered.attackSent) attack_.Sent(); else if(delivered.attackDiscarded) attack_.Discarded();
-                trace_[traceCursor_]={f.now,d.target->desired,f.observedRotation};
+                trace_[traceCursor_]={f.now,d.target->desired,d.current};
                 traceCursor_=(traceCursor_+1)%kTraceCapacity; traceCount_=std::min(traceCount_+1,kTraceCapacity);
             } else Stop(f.observedRotation);
         } else Stop(valid ? f.observedRotation : Angles{});
@@ -92,6 +103,7 @@ private:
     ConfigStore& config_;
     FriendEnemyBook& relations_;
     Transport& transport_;
+    const ExecutionMode mode_;
     TargetSelector selector_{};
     RotationEngine rotation_{};
     AttackController attack_{};

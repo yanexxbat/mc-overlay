@@ -32,6 +32,7 @@
 #include "aura_renderer.hpp"
 #include "aura_blend_dx11.hpp"
 #include "friend_hat_renderer.hpp"
+#include "target_cube_renderer.hpp"
 #include "item_icon_atlas_dx11.hpp"
 
 struct ID3D11Device;
@@ -148,6 +149,7 @@ private:
     void ResetMenuPage(control_panel::Page page);
     void DrawEsp(const WorldSnapshot& snapshot);
     void DrawAura(const WorldSnapshot& snapshot, const CameraProjection& projection, float width, float height);
+    void DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjection& projection,ImVec2 viewport);
     void DrawWatermark(const WorldSnapshot& snapshot);
 
     // HUD widgets. Each returns the height it consumed so they can stack.
@@ -169,6 +171,8 @@ private:
     void SampleTelemetry(const WorldSnapshot& snapshot);
 
     void DrawVisualsTab();
+    void DrawTargetAuraSettings();
+    void DrawTargetMarkerSettings();
     void DrawStatsTab(const WorldSnapshot& snapshot);
     void DrawCombatTab();
     void DrawHudTab();
@@ -188,6 +192,9 @@ private:
     VisualSettings  visuals_{};
     AuraConfig auraConfig_{};
     AuraRenderer auraRenderer_{};
+    TargetCubeRenderer targetCube_{};
+    TargetCubeConfig targetCubeConfig_{};
+    bool markerDetailsOpen_=false;
     AuraBlendDX11 auraBlend_{};
     FriendHatRenderer friendHats_{};
     FriendHatConfig friendHatConfig_{};

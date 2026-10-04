@@ -8,11 +8,22 @@ The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includ
 deterministic selection/rotation/cooldown/sync tests and an executable simulator
 (`build/bin/mcov_combat_demo.exe`). Kill Aura executes player rotation and normal
 game attacks synchronously on the instrumented Minecraft client tick. Combat
+acquires the nearest living target in reach, follows its current hitbox directly
+every tick and keeps the lock until death or loss of range/sight. Attacks repeat
+when the game's cooldown is ready. The menu only needs activation, target type
+and reach; old smoothing/timing settings are normalized by the live adapter.
+Combat
 rotation always keeps mouse-controlled camera angles separate from the player's
 combat angles, including the third-person camera position. There is no camera
 toggle or visible rotation mode. Existing
 Aim Assist and Triggerbot pause while it is enabled. Live server-correction
 capture is not implemented.
+
+An active Kill Aura target automatically gets a glowing yellow/lime corner cube
+that follows its hitbox and smoothly alternates rotation direction. It also works
+with ESP and Aura orbs disabled. Configure it under **VISUALS → Target effects →
+Target marker**: size, colours, glow, opacity, animation and direction interval.
+**Shape & timing** contains corner geometry, depth and fade. See [target cube](docs/target-cube.md).
 
 ---
 

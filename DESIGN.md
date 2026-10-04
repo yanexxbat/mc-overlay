@@ -38,11 +38,15 @@ must restore the HUD/global style and font stacks after rendering.
 
 Pages: COMBAT -> Combat; VISUALS -> Visuals; LOOT -> Blocks; HUD -> Hud.
 Combat shows three tabs: Kill Aura, Other modules and Friends. Kill Aura exposes
-activation, target type, reach and smoothing, plus status and the last target.
-It always selects the nearest valid living hitbox, all around the player;
-players and mobs are included by default, friends and occluded targets are skipped.
-There is no preset or selection-mode chooser. Advanced settings is collapsed by
-default and retains targeting details, rotation, attacks, timing and diagnostics.
+activation, target type and reach, plus status and the last target.
+It acquires the nearest valid living hitbox all around the player, then keeps
+that target until death or loss of range/sight. Players and mobs are included
+by default; friends and occluded targets are skipped. Rotation follows the
+current hitbox directly every client tick, with no smoothing or reaction controls.
+Attacks use Minecraft's cooldown, with the hit ray refreshed after rotation.
+There is no preset or selection-mode chooser. Diagnostics is collapsed by
+default and exposes HUD toggles and read-only live state. Old technical settings
+are normalized in the client adapter and cannot delay this behavior.
 The debug HUD is off by default. Other modules owns Aim Assist, Triggerbot and
 Auto Totem; conflicting controls are visibly paused while Kill Aura is enabled.
 Friends uses one action to add a UUID exclusion, with no enemy-priority chooser.
@@ -53,6 +57,21 @@ with distance, and renders below ESP labels. It remains visible when Target Aura
 and ESP are disabled; removing the UUID removes the hat. No extra menu controls.
 The player's combat angles and
 mouse-controlled view are always independent. Camera decoupling has no toggle.
+An active Kill Aura target automatically receives a neon yellow/lime corner
+cube inspired by the user's target-marker screenshot. Four thick front corner
+brackets have rounded joins/end caps and a soft Gaussian glow; faint rear corners
+and connectors give depth. The frame uses the interpolated hitbox center and
+perspective size, faces the camera and reverses its roll smoothly every 3.5 s.
+Visuals groups Target aura and Target marker in adjacent tabs under Target effects.
+The marker exposes enable, size, stroke, glow, opacity, animation, rotation arc,
+direction interval and two colours using the existing row controls. Shape & timing
+folds away corner length/rounding, rear depth and fade duration. Values update live;
+Visuals Reset restores all three visual configs. Animation pause keeps the current
+angle, and interval edits retain the phase. It works with ESP/orbs off. Only a fresh active Combat
+report can show it; target loss, death or pause removes it. Explicit Reduced motion
+freezes its roll; Windows menu-animation settings do not block the game effect.
+No new render-thread JNI, texture creation or shader passes. It draws below ESP
+labels and restores ordinary alpha blending after its glow.
 Native callbacks run on the client tick;
 ImGui only publishes settings and consumes diagnostics. Page reset covers both stores.
 Small icons: player -> Stats; sun -> appearance/actions; gear -> Settings.

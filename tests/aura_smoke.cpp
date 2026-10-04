@@ -2,6 +2,7 @@
 #include "overlay/aura_projection.hpp"
 #include "overlay/aura_blend_dx11.hpp"
 #include "overlay/friend_hat_renderer.hpp"
+#include "overlay/target_cube_renderer.hpp"
 #include "imgui_impl_dx11.h"
 #include <windows.h>
 #include <d3d11.h>
@@ -307,6 +308,125 @@ void FriendHatChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlend
     for(int y=0;y<90;++y) for(int x=0;x<128;++x) offsetVisible|=restored.At(x,y)[3]>0;
     Require(offsetVisible,"friend hat mesh failed after the 16-bit vertex offset");
 }
+void TargetCubeChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX11& blend) {
+    TargetCubeRenderer renderer; TargetCubeConfig config;
+    auto camera=Camera(); EntitySnapshot e{};
+    e.entityId=42; e.uuid={11,22}; e.width=.6f; e.height=1.8f; e.health=20; e.z=5;
+    e.flags=kEntityIsPlayer|kEntityIsLiving;
+    renderer.Update(&e,.016f,true,config);
+    TargetCubeWorld world; TargetCubeScreen normal,large,moved;
+    Require(renderer.BuildWorld(e,camera,config,world)&&std::abs(world.center.y-.9)<.00001,"target cube left actual hitbox center");
+    Require(TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},normal),"visible target cube rejected");
+    Require(TargetCubeRenderer::Project(CameraProjection(camera,256,256),world,{256,256},large)&&
+            Close(large.corners[0][0].x,normal.corners[0][0].x*2)&&Close(large.corners[0][0].y,normal.corners[0][0].y*2),
+            "target cube did not scale with viewport");
+    // Größen-/Linienregler verändern die wirkliche Geometrie, nicht nur die UI.
+    auto custom=config; custom.sizeFraction=1.2f; custom.strokeFraction=.02f;
+    TargetCubeWorld resized;
+    Require(renderer.BuildWorld(e,camera,custom,resized)&&resized.worldStroke<world.worldStroke&&
+            std::abs(resized.corners[0][5].z-resized.center.z)>std::abs(world.corners[0][5].z-world.center.z),
+            "custom cube size/line width did not reach world geometry");
+    custom=config; custom.cornerFraction=.4f; custom.roundFraction=.09f;
+    Require(renderer.BuildWorld(e,camera,custom,resized)&&
+            std::abs(resized.corners[0][0].x-world.corners[0][0].x)>.05,
+            "custom cube corner shape was ignored");
+    e.z=10; renderer.BuildWorld(e,camera,config,world);
+    Require(TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},moved)&&
+            std::abs(moved.corners[0][0].x-64)<std::abs(normal.corners[0][0].x-64),"target cube did not shrink with distance");
+    e.z=5; e.x=camera.camX=100000000; camera.camZ=100000000; e.z+=camera.camZ;
+    renderer.BuildWorld(e,camera,config,world);
+    Require(TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},moved)&&
+            Close(normal.corners[0][0].x,moved.corners[0][0].x),"target cube lost precision at large world coordinates");
+    camera=Camera(); e.x=0; e.z=-5; renderer.BuildWorld(e,camera,config,world);
+    Require(!TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},moved),"cube behind camera was drawn");
+    e.z=.1; renderer.BuildWorld(e,camera,config,world);
+    Require(!TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},moved),"near-plane cube created huge triangles");
+    e.z=5; renderer.Reset();
+    double previous=0; bool left=false,right=false;
+    for(int i=0;i<480;++i) {
+        renderer.Update(&e,1.f/60,true,config); const auto current=renderer.Angle();
+        if(i>0) { left|=current-previous<0; right|=current-previous>0; }
+        previous=current;
+    }
+    Require(left&&right,"target cube never reversed rotation direction");
+    const auto paused=renderer.Angle();
+    for(int i=0;i<30;++i) renderer.Update(&e,1.f/60,false,config);
+    Require(renderer.Angle()==paused&&renderer.Alpha()==1,"reduced motion moved or hid target cube");
+    config.animate=false;
+    for(int i=0;i<30;++i) renderer.Update(&e,1.f/60,true,config);
+    Require(renderer.Angle()==paused,"marker animation checkbox did not pause");
+    config.animate=true; renderer.Update(&e,1.f/60,true,config);
+    Require(renderer.Angle()!=paused,"marker animation failed to resume");
+    const auto beforeSpeed=renderer.Angle(); config.directionCycleSeconds=2;
+    renderer.Update(&e,0,true,config);
+    Require(renderer.Angle()==beforeSpeed,"live direction interval change jumped the marker angle");
+    config.directionCycleSeconds=7;
+    TargetCubeRenderer fading;
+    config.fadeSeconds=0; fading.Update(&e,0,true,config);
+    Require(fading.Alpha()==1,"zero-duration marker fade was not immediate");
+    fading.Reset(); config.fadeSeconds=.5f; fading.Update(&e,.016f,true,config);
+    Require(fading.Alpha()>.65f&&fading.Alpha()<1,"configured marker fade was ignored");
+    config=TargetCubeConfig{};
+    TargetCubeRenderer sixty,thirty;
+    for(int i=0;i<60;++i) sixty.Update(&e,1.f/60,true,config);
+    for(int i=0;i<30;++i) thirty.Update(&e,1.f/30,true,config);
+    Require(std::abs(sixty.Angle()-thirty.Angle())<.00001,"target cube animation depends on FPS");
+    renderer.Update(&e,0,false,config); renderer.BuildWorld(e,camera,config,world);
+    TargetCubeRenderer::Project(CameraProjection(camera,128,128),world,{128,128},normal);
+    auto& warm=Frame(); TargetCubeRenderer::Prepare(warm); ImGui::Render(); allocations=0;
+    for(int i=0;i<20;++i) {
+        auto& draw=Frame(); const auto flags=draw.Flags; const auto textures=draw._TextureIdStack.Size;
+        recording=true; renderer.Draw(draw,normal,config,blend.Callbacks(),blend.GlowTexture()); recording=false;
+        Require(draw.Flags==flags&&draw._TextureIdStack.Size==textures,"target cube leaked draw flags/textures");
+        Require(draw.VtxBuffer.Size<=TargetCubeRenderer::kMaxVertices&&draw.IdxBuffer.Size<=TargetCubeRenderer::kMaxIndices,"target cube exceeded reserved geometry");
+        ImGui::Render();
+    }
+    Require(allocations==0,"target cube allocated in warmed-up render loop");
+    auto& draw=Frame();
+    draw.AddRectFilled({0,112},{16,128},IM_COL32(51,51,51,255));
+    renderer.Draw(draw,normal,config,blend.Callbacks(),blend.GlowTexture());
+    draw.AddRectFilled({0,112},{16,128},IM_COL32(128,0,0,128)); ImGui::Render();
+    const auto pixels=Capture(device,context); bool visible=false,soft=false;
+    for(int y=32;y<96;++y) for(int x=32;x<96;++x) {
+        visible|=pixels.At(x,y)[1]>150; soft|=pixels.At(x,y)[3]>0&&pixels.At(x,y)[3]<150;
+    }
+    Require(visible&&soft,"target cube lost bright green core or soft glow");
+    Require(pixels.At(8,120)[0]<95&&pixels.At(8,120)[1]<30,"target cube leaked additive blending into later UI");
+    auto& hidden=Frame(); config.enabled=false;
+    renderer.Draw(hidden,normal,config,blend.Callbacks(),blend.GlowTexture());
+    Require(hidden.VtxBuffer.empty(),"disabled marker produced geometry");
+    config.enabled=true; config.opacity=0;
+    renderer.Draw(hidden,normal,config,blend.Callbacks(),blend.GlowTexture());
+    Require(hidden.VtxBuffer.empty(),"zero-opacity marker produced geometry"); ImGui::Render();
+    config.opacity=1; config.glow=0;
+    auto& solid=Frame(); renderer.Draw(solid,normal,config,blend.Callbacks(),blend.GlowTexture());
+    const int depthVertices=solid.VtxBuffer.Size;
+    for(const auto& command:solid.CmdBuffer) Require(!command.UserCallback,"zero-glow marker still used additive callbacks");
+    Require(depthVertices>0,"zero-glow marker lost its solid core"); ImGui::Render();
+    auto& flat=Frame(); config.showDepth=false; renderer.Draw(flat,normal,config,blend.Callbacks(),blend.GlowTexture());
+    Require(flat.VtxBuffer.Size<depthVertices,"cube depth checkbox did not hide rear geometry"); ImGui::Render();
+    // Zwei frei gewählte Farben und Glow müssen auch im GPU-Ergebnis ankommen.
+    config.lime={.85f,.1f,1,1}; config.yellow={.1f,.6f,1,1}; config.glow=2;
+    auto& tinted=Frame(); renderer.Draw(tinted,normal,config,blend.Callbacks(),blend.GlowTexture()); ImGui::Render();
+    const auto colors=Capture(device,context); bool purple=false,blue=false;
+    for(int y=32;y<96;++y) for(int x=32;x<96;++x) {
+        const auto* p=colors.At(x,y);
+        purple|=p[0]>100&&p[2]>150&&p[1]<100;
+        blue|=p[2]>150&&p[0]<100;
+    }
+    Require(purple&&blue,"custom marker colours did not reach GPU output");
+    config=TargetCubeConfig{};
+    auto& clipped=Frame(); clipped.PushClipRect({64,32},{96,96},true);
+    renderer.Draw(clipped,normal,config,blend.Callbacks(),blend.GlowTexture()); clipped.PopClipRect(); ImGui::Render();
+    const auto crop=Capture(device,context);
+    Require(crop.At(60,64)[3]==0,"target cube escaped clipping");
+    config.enabled=false; renderer.Update(&e,.016f,true,config);
+    Require(renderer.Alpha()==0&&!renderer.BuildWorld(e,camera,config,world),"disabled marker retained its target");
+    config.enabled=true; renderer.Update(&e,.016f,true,config);
+    Require(renderer.BuildWorld(e,camera,config,world),"re-enabled marker failed to reacquire target");
+    renderer.Update(nullptr,.016f,true,config);
+    Require(renderer.Alpha()==0&&!renderer.BuildWorld(e,camera,config,world),"lost target kept stale cube");
+}
 } // namespace
 int main() {
     SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);
@@ -323,6 +443,7 @@ int main() {
         AuraBlendDX11 blend; Require(blend.Initialize(device.Get()),"Aura blend initialization failed");
         DrawingChecks(device.Get(),context.Get(),blend);
         FriendHatChecks(device.Get(),context.Get(),blend);
+        TargetCubeChecks(device.Get(),context.Get(),blend);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext();
         std::cout<<"PASS aura fog: world-space orbits, rotation direction/speed/pause/resume, curved trails, entity/camera movement, frame-rate independence, interrupted fades, no warmed-up allocations, additive RGB, alpha coverage, blend reset, clipping and vertex offsets\n";
         return 0;

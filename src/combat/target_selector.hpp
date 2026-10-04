@@ -70,8 +70,12 @@ public:
             if(current_ && t->id==current_->id && t->uuid==current_->uuid) current=t;
             if(!best || Better(*t,*best,c)) best=t;
         }
-        // Kill Aura nutzt pro Tick die nächste gültige Hitbox, ohne alten Lock oder Wechselverzögerung.
-        if(c.mode==TargetMode::NearestEntity) { current_=best; pending_={}; return current_; }
+        // Ein gültiger Single-Target-Lock erhält frische Position/Winkel, ohne
+        // bei einem näher vorbeilaufenden Kandidaten den Angriff abzubrechen.
+        if(c.mode==TargetMode::NearestEntity) {
+            current_=current && !c.multiTarget ? current : best;
+            pending_={}; return current_;
+        }
         if(!current) { current_=best; pending_={}; return current_; } // Verlust bricht den alten Lock sofort ab.
         if(!best || best->id==current->id || !c.multiTarget) { current_=current; pending_={}; return current_; }
         const bool promoted=c.prioritizeEnemies && best->enemy && !current->enemy;

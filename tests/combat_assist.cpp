@@ -88,9 +88,9 @@ void NearestEntityChecks() {
     game.PutEntity(1,2,"near_mob",{0,0,-1.6},20); game.Entities()[1].player=false;
     game.PutEntity(2,3,"side_player",{1.9,0,0},1);
     auto f=game.Capture(1,.02); auto c=defaults.target;
-    // Alte FOV-, Priority- und Lock-Einstellungen dürfen die neue Entfernungsauswahl nicht ändern.
+    // FOV und Priority ändern das Distanzranking nicht; Multi-Target bleibt als Bibliotheksfall verfügbar.
     c.coneDegrees=1; c.fovMode=FovMode::StaticPixels; c.radiusPixels=10;
-    c.prioritizeEnemies=true; c.multiTarget=false; c.switchImprovement=1; c.switchDelay={1,1};
+    c.prioritizeEnemies=true; c.multiTarget=true; c.switchImprovement=1; c.switchDelay={1,1};
     FriendEnemyBook book; book.Set(game.Entities()[0].uuid,Relation::Enemy);
     Random random(9); TargetSelector selector;
     auto chosen=selector.Select(f,c,book.Read(),random);
@@ -114,6 +114,56 @@ void NearestEntityChecks() {
     Require(!selector.Select(f,c,book.Read(),random),"dead entity or nonliving item was selected");
     game.Entities()[1].visibility=Visibility{true,f.now}; c.range=.1;
     Require(!selector.Select(f,c,book.Read(),random),"nearest entity beyond configured reach was selected");
+}
+void ContinuousKillAuraChecks() {
+    auto requested=Enabled();
+    requested.target.enabled=requested.rotation.enabled=requested.attack.enabled=requested.sync.enabled=false;
+    requested.rotation.smoothing=4; requested.rotation.yawDuration=requested.rotation.pitchDuration={2,2};
+    requested.rotation.maxYawPerTick=requested.rotation.maxPitchPerTick=.1;
+    requested.attack.firstClickDelay={.5,.5}; requested.sync.interval={.2,.2};
+    const auto live=MakeKillAuraConfig(requested);
+    Require(Validate(live) && live.enabled && live.target.enabled && live.rotation.enabled && live.attack.enabled && live.sync.enabled &&
+            live.target.mode==TargetMode::NearestEntity && !live.target.multiTarget && live.attack.firstClickDelay.max==0,
+            "old controls prevented automatic live Kill Aura");
+    ConfigStore store; store.Publish(live);
+    FriendEnemyBook relations; SimulatedGame game;
+    game.PutEntity(0,1,"locked",{0,0,-2},12);
+    game.PutEntity(1,2,"next",{2.6,0,0},20); game.Entities()[2].health=0;
+    CombatAssist assist(store,relations,game,ExecutionMode::Continuous);
+    auto state=assist.Step(game.Capture(1,.05));
+    constexpr double angularTolerance=1e-4; // acos-Skalarprodukt hat auch bei identischen Winkeln Rundungsfehler.
+    Require(state.target && state.target->id==1 && game.Attacks()==1 && state.error<angularTolerance && state.packets.buffered==0,
+            "target behind camera was not aimed and attacked on the first client tick");
+    Require(game.Commands().size()==2 && game.Commands()[0].kind==CommandKind::Pose && game.Commands()[1].kind==CommandKind::Attack &&
+            game.Commands()[0].due==1 && game.Commands()[1].due==1,"direct pose/attack were delayed or reordered");
+    game.PutEntity(1,2,"closer",{0,0,.8},20);
+    int tick=0;
+    while(game.Entities()[0].health>0 && tick<64) {
+        ++tick;
+        const double health=game.Entities()[0].health;
+        game.PutEntity(0,1,"moving_lock",{tick%2 ? 1.0 : -1.0,0,-1.8},health);
+        state=assist.Step(game.Capture(1+tick*.05,.05));
+        Require(state.target && state.target->id==1 && state.error<angularTolerance && state.packets.buffered==0,
+                "moving lock lagged, waited or switched to a closer candidate");
+        Require(Near(Wrap(game.ServerRotation().yaw-state.target->desired.yaw),0) && Near(game.ServerRotation().pitch,state.target->desired.pitch) &&
+                Near(game.Camera().yaw,0) && Near(game.Camera().pitch,0),
+                "continuous rotation missed current hitbox or moved camera");
+    }
+    Require(game.Entities()[0].health==0 && game.Attacks()==3,"continuous moving-target attacks stopped before death");
+    state=assist.Step(game.Capture(1+(++tick)*.05,.05));
+    Require(state.target && state.target->id==2 && state.error<angularTolerance,"dead lock did not release to the next nearest entity");
+    relations.Set(game.Entities()[1].uuid,Relation::Friend);
+    state=assist.Step(game.Capture(1+(++tick)*.05,.05));
+    Require(!state.target && state.packets.buffered==0,"newly added friend retained continuous lock");
+    relations.Set(game.Entities()[1].uuid,Relation::Neutral);
+    state=assist.Step(game.Capture(1+(++tick)*.05,.05));
+    Require(state.target && state.target->id==2,"valid target was not reacquired");
+    game.Entities()[1].visibility=Visibility{false,0};
+    state=assist.Step(game.Capture(1+(++tick)*.05,.05));
+    Require(!state.target && state.packets.buffered==0,"visibility loss retained continuous lock");
+    game.PutEntity(1,2,"out_of_range",{0,0,4},20);
+    state=assist.Step(game.Capture(1+(++tick)*.05,.05));
+    Require(!state.target,"continuous tracking ignored range");
 }
 void RotationChecks() {
     RotationConfig c; c.reactionDelay={.010,.010}; c.yawDuration=c.pitchDuration={.050,.050};
@@ -269,7 +319,7 @@ void IntegrationChecks() {
 }
 }
 int main() {
-    try { ConfigChecks(); TargetChecks(); NearestEntityChecks(); RotationChecks(); ClosedLoopRotationChecks(); SyncAndAttackChecks(); IntegrationChecks(); }
+    try { ConfigChecks(); TargetChecks(); NearestEntityChecks(); ContinuousKillAuraChecks(); RotationChecks(); ClosedLoopRotationChecks(); SyncAndAttackChecks(); IntegrationChecks(); }
     catch(const std::exception& error) { std::printf("FAIL Combat Assist: %s\n",error.what()); return 1; }
     std::printf("PASS Combat Assist: %d checks (selection, curves, cooldown, FIFO, threads, reload, seed, simulator)\n",checks); return 0;
 }

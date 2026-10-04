@@ -8,9 +8,9 @@
 
 Der Renderprozess erhält keine JNI-Handles. IPC v14 überträgt Config/UUID-Relations und eine begrenzte Eingabe-Lease in atomaren Mailboxes; der Client-Tick publiziert Diagnosen zurück. Vor jedem Angriff prüft der Adapter Cooldown, UUID, Lebensstatus, Reichweite, Ausrichtung, LOS und den nächsten Entity-Treffer vor dem Block-Ray-Ende erneut. Für 1.20.1 gilt die Vanilla-Pick-Reichweite (3, im Creative-Fernmodus 6); neuere Profile lesen `entityInteractionRange`. Welt- und Player-Referenzwechsel erhöhen die Generation, auch beim Respawn. JNI-Fehler stoppen das Modul bis zu einer Config-Revision.
 
-Die Silent-Kamera ist implementiert; echte Serverkorrektur-Ereignisse bleiben offen. Die Entity behält die tatsächliche Zielrotation für ihr Modell und die normale Vanilla-Movement-Pipeline. Die Sync-Regler steuern die lokale Auftragsqueue; Vanilla sendet die normalen Spielpakete. Reaktions- und Intervallwerte sind an die tatsächliche Client-Tick-Frequenz gebunden. Auf einem 20-Hz-Client kann eine 10-ms-Verzögerung erst beim nächsten Tick wirken. Details zu Hooks, Rückgabe und Grenzen stehen in [silent-camera.md](silent-camera.md).
+Die Silent-Kamera ist implementiert; echte Serverkorrektur-Ereignisse bleiben offen. Die Entity behält die tatsächliche Zielrotation für ihr Modell und die normale Vanilla-Movement-Pipeline; Vanilla sendet die normalen Spielpakete. Die Live-Kill-Aura richtet sich direkt in jedem Client-Tick aus. Der erste Treffer ist bei freiem Ray und bereitem Cooldown im selben Tick möglich; danach bestimmt der Spiel-Cooldown das Tempo. Auf einem 20-Hz-Client werden Zielpositionen alle 50 ms nachgeführt. Details zu Hooks, Rückgabe und Grenzen stehen in [silent-camera.md](silent-camera.md).
 
-Benutzung: Minecraft nach dem Update vollständig neu starten, mit dem aktuellen Injector verbinden, INSERT → COMBAT → Kill Aura → **Enable Kill Aura**, Menü schließen und F5 drücken. Nächste gültige Entity, Rundum-Auswahl, 3 Meter und stille Rotation sind die Standards; ein Preset ist nicht nötig. **Targets** wechselt bei Bedarf von **Players and mobs** zu **Players only**. Die Maus dreht weiter deinen Blick; die Kill Aura dreht den Spieler zum Ziel und schlägt. COMBAT hat nur noch Kill Aura, Other modules und Friends. Technische Regler stehen unter **Advanced settings**, Diagnosen sind standardmäßig aus. Geöffnete Minecraft-/Overlay-Menüs, Fokusverlust, fehlende Welt und eine abgelaufene 250-ms-Lease pausieren sofort am nächsten Tick. Overlay-Shutdown publiziert einen expliziten Stop. Der visuelle Aura-Effekt folgt dem aktiven Combat-Ziel.
+Benutzung: Minecraft nach dem Update vollständig neu starten, mit dem aktuellen Injector verbinden, INSERT → COMBAT → Kill Aura → **Enable Kill Aura**, Menü schließen und F5 drücken. Das nächste gültige Ziel wird rundum in 3 Metern gesucht, sofort nachgeführt und bis Tod oder Zielverlust gehalten. **Targets** wechselt bei Bedarf von **Players and mobs** zu **Players only**; **Reach** begrenzt die Reichweite. Die Maus dreht weiter deinen Blick. Weitere Rotations-/Timing-Einstellungen sind nicht nötig; der Client normalisiert alte technische Werte automatisch. COMBAT bietet Kill Aura, Other modules und Friends. **Diagnostics** enthält optionale HUD-Toggles und Zustandsanzeigen und bleibt standardmäßig geschlossen. Geöffnete Minecraft-/Overlay-Menüs, Fokusverlust, fehlende Welt und eine abgelaufene 250-ms-Lease pausieren sofort am nächsten Tick. Overlay-Shutdown publiziert einen expliziten Stop. Der visuelle Aura-Effekt folgt dem aktiven Combat-Ziel.
 
 Es bleibt bei einem Build-Ordner. Die ausführbaren Beispiele liegen in `build/bin`:
 
@@ -24,17 +24,17 @@ Es bleibt bei einem Build-Ordner. Die ausführbaren Beispiele liegen in `build/b
 
 Klassen: `TargetSelector`, `FriendEnemyBook`; Datei `src/combat/target_selector.hpp`.
 
-Die Live-Kill-Aura verwendet fest **NearestEntity**: nächste gültige lebende Hitbox in Sicht und Reichweite, unabhängig von der Kamera. Ein näherer Kandidat ersetzt den bisherigen Lock am nächsten Tick. UUID-Freunde, eigene/tote Entities, Item-Drops, ungültige Hitboxen und veraltete Sichtbarkeit sind ausgeschlossen. Auswahl-Reichweite ist zusätzlich durch Attack-Reichweite und den Spielmodus begrenzt. Abstand wird zum nächsten Hitboxpunkt gemessen; die Rotations-Zielposition liegt separat standardmäßig bei 75 % der Hitboxhöhe. Die Bibliothek behält weitere Modi für Tests und andere Adapter; sie sind im Live-Menü nicht auswählbar.
+Die Live-Kill-Aura verwendet fest **NearestEntity** mit `multiTarget=false`: nächste gültige lebende Hitbox in Sicht und Reichweite, unabhängig von der Kamera. Ein gültiger Lock erhält pro Tick frische Position/Winkel und bleibt bis Tod, Entfernen, Freundstatus oder Sicht-/Reichweitenverlust bestehen. Dann wird sofort das nächste gültige Ziel gewählt. UUID-Freunde, eigene/tote Entities, Item-Drops, ungültige Hitboxen und veraltete Sichtbarkeit sind ausgeschlossen. Auswahl-Reichweite ist zusätzlich durch Attack-Reichweite und den Spielmodus begrenzt. Abstand wird zum nächsten Hitboxpunkt gemessen; die Rotations-Zielposition liegt bei 75 % der Hitboxhöhe. Die Bibliothek behält weitere Modi für Tests und andere Adapter; sie sind im Live-Menü nicht auswählbar.
 
 | Modus | Ranking |
 |---|---|
-| NearestEntity (Live-Standard) | Kürzester Hitbox-Abstand einer lebenden Entity; sofortiger Wechsel, stabile Entity-ID bei gleicher Distanz |
+| NearestEntity (Live-Standard) | Kürzester Hitbox-Abstand beim Erwerb; gültiger Lock bleibt bis Zielverlust, stabile Entity-ID bei Gleichstand |
 | Crosshair | Entity im Crosshair der sichtbaren Kamera, unter Beachtung aller Filter |
 | NearestPlayer | Kürzester Hitbox-Abstand eines Spielers |
 | LowestHealth | Kleinste HP, dann Distanz/Winkel bei Gleichstand |
 | AngleDistance | Normalisierte Winkel-/Distanzkosten, standardmäßig 0,7 / 0,3 |
 
-NearestEntity ignoriert FOV, Enemy-Priorität, HP-Ranking, Wechselverzögerung und Single-Target-Lock. Die anderen Bibliotheksmodi halten einen gültigen Single-Target-Lock; Multi-Target wechselt dort nach einer min/max-Verzögerung und ausreichender Score-Verbesserung. Zielverlust hebt den alten Lock sofort auf. Relation-Änderungen greifen am nächsten Owner-Tick.
+NearestEntity ignoriert FOV, Enemy-Priorität, HP-Ranking und Wechselverzögerung. Mit `multiTarget=false` hält es den gültigen Lock; mit `true` bleibt die sofortige Entfernungsauswahl für andere Adapter verfügbar. Die anderen Bibliotheksmodi halten ebenfalls einen Single-Target-Lock; Multi-Target wechselt dort nach einer min/max-Verzögerung und ausreichender Score-Verbesserung. Zielverlust hebt den alten Lock sofort auf. Relation-Änderungen greifen am nächsten Owner-Tick.
 
 Konkreter Aufruf mit persistentem Selector:
 
@@ -67,6 +67,8 @@ Fallstricke: `isInvisible` ist kein Occlusion-Test. Unbekannte Sichtbarkeit wird
 ## 2. RotationEngine
 
 Klasse: `RotationEngine`; Datei `src/combat/rotation_engine.hpp`.
+
+Die Live-Kill-Aura nutzt `Track(target)` und `ExecutionMode::Continuous`: Ziel-Yaw/Pitch werden in jedem Client-Tick direkt angewendet. Kurven, Reaktionspause, Mikro-Jitter, Totzone und kleine Winkelbudgets entfallen. `Transport::RefreshAfterPose` liefert danach die tatsächlich angewendeten Winkel, den aktuellen Cooldown und den Hit-Ray, bevor der Kern einen Angriff vorbereitet. Dadurch funktionieren auch bewegte Ziele ohne den Blick des vorherigen Ticks. Die folgenden Kurvenparameter betreffen ausschließlich den geglätteten Bibliotheksmodus `ExecutionMode::Smoothed` und sind im Live-Menü nicht mehr einstellbar.
 
 Yaw und Pitch haben getrennte kubische Bézier-Verläufe und Laufzeiten. Das erste Segment endet am kleinen Overshoot-Punkt, das zweite korrigiert zum Ziel. Am Umkehrpunkt haben beide Nullgeschwindigkeit. Jeder neue Spieltick beginnt bei der gemessenen Spielerrotation; verzögerte Queue-Posen werden nicht als angewendet vorausgesetzt. Replanning eines bewegten Ziels übernimmt nur eine in die neue Zielrichtung begrenzte Geschwindigkeitstangente; nur ein neues Ziel löst die Reaktionspause aus. Overshoot und Jitter sind standardmäßig null.
 
@@ -101,7 +103,7 @@ Fallstricke: Ein Renderframe ist kein Spieltick. Höheres Smoothing erhöht die 
 
 Klasse: `AttackController`; Datei `src/combat/attack_controller.hpp`.
 
-Beim neuen Ziel startet eine erste Klickverzögerung. `Prepare` merkt erst dann einen Angriff vor, wenn der echte Spiel-Cooldown, Reichweite, Ausrichtung und der wandgeprüfte Angriffs-Raycaster passen. `Sent` wartet anschließend auf einen tatsächlich abgesunkenen Cooldown. `Discarded` gibt einen verworfenen Auftrag wieder frei. Ein alter, weiter bei 1,0 liegender Cooldown erzeugt keine Klickserie.
+Beim neuen Ziel startet eine erste Klickverzögerung; im Live-Modus beträgt sie fest null. `Prepare` merkt erst dann einen Angriff vor, wenn der echte Spiel-Cooldown, Reichweite, Ausrichtung und der wandgeprüfte Angriffs-Raycaster passen. `Sent` wartet anschließend auf einen tatsächlich abgesunkenen Cooldown. `Discarded` gibt einen verworfenen Auftrag wieder frei. Ein alter, weiter bei 1,0 liegender Cooldown erzeugt keine Klickserie. Bei jedem neu bereiten Cooldown wird das gehaltene Ziel erneut angegriffen.
 
 Konkreter Teil der Angriffsprüfung:
 
@@ -137,18 +139,21 @@ Klasse: `SyncLayer`; Datei `src/combat/sync_layer.hpp`. Konkreter Referenztransp
 
 Ein FIFO mit 128 Slots hält Pose- und Angriffsaufträge samt Sequenz, Weltgeneration, Entity-ID, UUID, Erfassungs- und Fälligkeitszeit. Mehrere Producer und ein serialisierter Consumer sind möglich. Benachbarte Pose-Aufträge werden zusammengefasst; ein Angriff bildet eine Barriere. Pose-A / Angriff / Pose-B bleiben geordnet. Der Angriff folgt seiner Pose im selben Batch.
 
+`Configure(config.sync, seed, ExecutionMode::Continuous)` aktiviert die feste Live-Policy. Aufträge sind sofort im aktuellen Client-Tick fällig; die Winkel werden direkt ausgegeben. Alters-, Welt-, UUID-, Sicht-, Reichweiten- und Cooldown-Prüfungen bleiben bestehen. `ExecutionMode::Smoothed` behält für andere Adapter das folgende verzögerte Scheduling und die kumulierten Winkelbudgets.
+
 Konkretes Scheduling aus `Enqueue`, unter dem Queue-Mutex:
 
 ```cpp
 command.sequence = ++sequence_;
-command.due = std::max(now, lastDue_)
-    + (command.kind == CommandKind::Pose ? rng_.Sample(config_.interval) : 0);
+const double delay = command.kind == CommandKind::Pose && mode_ == ExecutionMode::Smoothed
+    ? rng_.Sample(config_.interval) : 0;
+command.due = std::max(now, lastDue_) + delay;
 lastDue_ = command.due;
 ```
 
 `Pump(frame, target, config, transport)` prüft Alter, Generation, UUID, Ziel und Angriffsvoraussetzungen. `Observe(frame)` verarbeitet echte Serverkorrekturen. `Cancel()` entfernt ausstehende Aufträge. `Transport::Send` hat eine konkrete Simulatorimplementierung und meldet Annahme, keine Serverbestätigung.
 
-Auch bei der Ausgabe gilt ein kumuliertes Yaw-/Pitch-Budget pro Spieltick. Coalescing und verspätete Aufträge können dadurch mehrere geplante Schritte nicht zu einem einzigen großen Sprung bündeln. Cancel oder ein Zielwechsel erneuern dieses Budget innerhalb desselben Ticks nicht.
+Im geglätteten Bibliotheksmodus gilt auch bei der Ausgabe ein kumuliertes Yaw-/Pitch-Budget pro Spieltick. Coalescing und verspätete Aufträge können dadurch mehrere geplante Schritte nicht zu einem einzigen großen Sprung bündeln. Cancel oder ein Zielwechsel erneuern dieses Budget innerhalb desselben Ticks nicht.
 
 | Parameter | Standard | Validierter Bereich |
 |---|---:|---:|
@@ -169,7 +174,7 @@ Fallstricke: Keine alten Positionen blind als zusätzliche Movement-Pakete aussp
 
 Klassen: `ConfigStore`, `CombatAssist`, `DebugMailbox`; Dateien `config.hpp` und `combat_assist.hpp`.
 
-`ConfigStore::Publish` validiert min/max, Enum-Werte und NaN/Inf, ersetzt danach die ganze Config unter einem Mutex. Der Owner übernimmt eine Revision pro Step. Das Update wirkt am nächsten Step vollständig und verwirft alte Aufträge. COMBAT bietet Kill Aura, Other modules und Friends. Aktivierung, Entity-Typ, Reichweite und Glättung stehen direkt in Kill Aura; technische Parameter sind unter Advanced settings gebündelt. Config und UUID-Freunde sind über IPC mit dem Client-Tick verbunden. Server-Resync-Regler werden nicht angeboten, solange der Live-Korrektur-Hook fehlt. Ein Dateiwatcher/JSON-Parser ist offen. Alle Zeitwerte im C++-API sind Sekunden.
+`ConfigStore::Publish` validiert min/max, Enum-Werte und NaN/Inf, ersetzt danach die ganze Config unter einem Mutex. Der Owner übernimmt eine Revision pro Step. Das Update wirkt am nächsten Step vollständig und verwirft alte Aufträge. `MakeKillAuraConfig` normalisiert die Live-Werte in Menü und Client: nur Aktivierung, Entity-Typ, Reichweite, Seed und HUD bleiben aus der Anfrage erhalten. COMBAT bietet Kill Aura, Other modules und Friends. Direkt einstellbar sind Aktivierung, Entity-Typ und Reichweite; **Diagnostics** enthält optionale HUD-Toggles und Zustandsanzeigen. Config und UUID-Freunde sind über IPC mit dem Client-Tick verbunden. Ein Dateiwatcher/JSON-Parser ist offen. Alle Zeitwerte im C++-API sind Sekunden.
 
 `frameMaxAge=100 ms` (1–500 ms), `seed` ist uint64_t. Kill Aura ist standardmäßig aus; der eine Aktivierungsschalter aktiviert Auswahl, Rotation, Angriff und Sync gemeinsam. Getrennte Subkomponenten-Schalter bleiben im Bibliotheks-API für Tests und andere Adapter. Getrennte RNG-Streams verhindern, dass zusätzliche Jitter-Samples den nächsten Klickdelay verschieben. Gleiches Seed plus gleiche Frame-/Config-/Relations-Folge erzeugt dieselben Ausgaben.
 
@@ -184,12 +189,11 @@ int main() {
     ConfigStore store;
     FriendEnemyBook friends;
     SimulatedGame game;
-    Config config;
-    config.enabled = config.attack.enabled = true;
-    config.target.mode = TargetMode::NearestEntity;
+    Config config = MakeKillAuraConfig({});
+    config.enabled = true;
     if (!store.Publish(config)) return 1;
     if (!friends.Set(game.Entities()[2].uuid, Relation::Friend)) return 2;
-    CombatAssist assist(store, friends, game);
+    CombatAssist assist(store, friends, game, ExecutionMode::Continuous);
     for (int tick = 0; tick < 250; ++tick)
         assist.Step(game.Capture(tick * 0.020, 0.020));
     std::printf("Angriffe: %llu\n",

@@ -49,6 +49,16 @@ struct OverlayUiCheck {
     static CombatMenu& CombatEditor(Overlay& o) { return o.combatMenu_; }
     static void ResetCombat(Overlay& o) { o.ResetMenuPage(Page::Combat); }
     static AuraConfig& AuraSettings(Overlay& o) { return o.auraConfig_; }
+    static TargetCubeConfig& CubeSettings(Overlay& o) { return o.targetCubeConfig_; }
+    static void MarkerDetails(Overlay& o,bool open) { o.markerDetailsOpen_=open; }
+    static void CubeReport(Overlay& o,const EntitySnapshot& e,CombatBridgeStatus status=CombatBridgeStatus::Active,std::uint64_t age=0) {
+        auto config=combat::MakeKillAuraConfig({}); config.enabled=true; o.combatMenu_.Store().Publish(config);
+        o.combatReport_={}; o.combatReport_.sampledAtMs=GetTickCount64()-age;
+        o.combatReport_.status=status; o.combatReport_.debug.enabled=true;
+        combat::Target target; target.id=e.entityId; target.uuid=e.uuid; o.combatReport_.debug.target=target;
+    }
+    static void StopCube(Overlay& o) { o.combatMenu_.Store().Publish(combat::MakeKillAuraConfig({})); o.combatReport_={}; }
+    static double CubeAngle(const Overlay& o) { return o.targetCube_.Angle(); }
     static VisualSettings& Visuals(Overlay& o) { return o.visuals_; }
     static void InitIcons(Overlay& o,ID3D11Device* device) {
         if (!o.itemIcons_.Texture() && !o.itemIcons_.Initialize(device))
@@ -169,6 +179,66 @@ ImGuiWindow* Child(const char* name) {
         if (std::strstr(w->Name,name)) return w;
     throw std::runtime_error("Missing menu child");
 }
+void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
+                      const std::filesystem::path& output) {
+    auto& io=ImGui::GetIO(); auto& ctx=*ImGui::GetCurrentContext();
+    auto& config=mcov::OverlayUiCheck::CubeSettings(overlay);
+    auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+    mcov::OverlayUiCheck::Center(overlay); frame(); frame();
+    auto bar=[&]() -> ImGuiTabBar* {
+        const auto* columns=ctx.Tables.GetByKey(Child("/content_")->GetID("visual_columns"));
+        Require(columns!=nullptr,"Missing Visuals columns");
+        auto* tabs=ctx.TabBars.GetByKey(ImHashStr("target_effect_tabs",0,columns->ID));
+        Require(tabs&&tabs->Tabs.Size==2,"Target effects did not expose both tabs"); return tabs;
+    };
+    auto* content=Child("/content_");
+    ImGui::SetScrollY(content,content->Scroll.y+bar()->BarRect.Min.y-content->InnerRect.Min.y-28);
+    frame(); frame();
+    const auto& markerTab=bar()->Tabs[1]; const auto markerId=markerTab.ID;
+    const ImVec2 tabClick(bar()->BarRect.Min.x+markerTab.Offset+markerTab.Width*.5f,
+                         bar()->BarRect.GetCenter().y);
+    auto click=[&](ImVec2 p) {
+        // ImGui-Tabs mit AllowOverlap benötigen zuerst einen Hover-Frame.
+        io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
+        io.AddMouseButtonEvent(0,false); frame(); frame();
+    };
+    click(tabClick);
+    Require(bar()->SelectedTabId==markerId,"Target marker tab could not be selected through input");
+    auto controls=[&]() -> ImGuiTable* {
+        auto* table=ctx.Tables.GetByKey(ImHashStr("marker_controls",0,markerId));
+        Require(table!=nullptr,"Marker controls are missing"); return table;
+    };
+    const auto top=controls()->OuterRect.Min;
+    click({top.x+32,top.y+18});
+    Require(!config.enabled,"Enable marker checkbox did not update renderer config");
+    click({top.x+32,top.y+18});
+    Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
+    // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
+    const float row=35.25f;
+    const auto& column=controls()->Columns[1];
+    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+18});
+    Require(config.sizeFraction>1&&config.sizeFraction<=1.5f,"Marker size slider was not wired to renderer config");
+    config.glow=.4f; config.animate=false; config.showDepth=false; config.lime={.85f,.15f,1,1};
+    mcov::OverlayUiCheck::ResetVisuals(overlay);
+    Require(config.enabled&&config.animate&&config.showDepth&&config.glow==1&&config.sizeFraction==.68f&&config.lime.y==1,
+            "Visuals reset did not restore marker defaults");
+    frame(); frame();
+    SaveFrame(device,context,output/"marker-settings.png");
+    mcov::OverlayUiCheck::MarkerDetails(overlay,true); frame(); frame();
+    content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+    Require(controls()->OuterRect.Max.y<=content->InnerRect.Max.y,"Expanded marker controls were unreachable by scrolling");
+    SaveFrame(device,context,output/"marker-settings-details.png");
+    mcov::OverlayUiCheck::Center(overlay);
+    for(int i=0;i<3;++i) Draw(overlay,Page::Visuals,0,{480,360});
+    content=Child("/content_");
+    ImGui::SetScrollY(content,content->Scroll.y+bar()->BarRect.Min.y-content->InnerRect.Min.y-28);
+    for(int i=0;i<3;++i) Draw(overlay,Page::Visuals,0,{480,360});
+    Require(bar()->SelectedTabId==markerId,"Marker tab selection did not survive compact layout");
+    SaveFrame(device,context,output/"marker-settings-small.png");
+    mcov::OverlayUiCheck::MarkerDetails(overlay,false);
+    ImGui::SetScrollY(Child("/content_"),0);
+    io.AddMousePosEvent(-100,-100); mcov::OverlayUiCheck::Center(overlay); frame(); frame();
+}
 void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                const std::filesystem::path& output) {
     mcov::OverlayUiCheck::InitIcons(overlay,device);
@@ -237,6 +307,57 @@ void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* 
     Require(frame({585,745})==0,"removed friend kept its production hat");
     config=mcov::VisualSettings{};
 }
+void TargetCubePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto& v=mcov::OverlayUiCheck::Visuals(overlay); const auto saved=v; v={};
+    v.boxEsp=v.skeleton=v.tracers=v.nameTags=v.healthBars=v.distanceText=v.targetInfo=false;
+    mcov::WorldSnapshot scene{}; scene.camY=.95; scene.fovDeg=65; scene.nearPlane=.05f; scene.farPlane=1024; scene.entityCount=1;
+    auto& e=scene.entities[0]; e.entityId=42; e.uuid={11,22}; e.z=3.3; e.width=.6f; e.height=1.8f; e.health=20;
+    e.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving; e.distance=3.3f; mcov::CopyField(e.name,"Kill Aura target");
+    auto frame=[&](ImVec2 viewport) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=viewport; io.DeltaTime=1.f/60;
+        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        mcov::TargetCubeRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        mcov::OverlayUiCheck::DrawEsp(overlay,scene); const int count=ImGui::GetBackgroundDrawList()->VtxBuffer.Size;
+        ImGui::Render(); return count;
+    };
+    mcov::OverlayUiCheck::CubeReport(overlay,e);
+    Require(frame({585,745})>0,"live target cube required ESP/Aura to be enabled");
+    const auto startAngle=mcov::OverlayUiCheck::CubeAngle(overlay);
+    for(int i=0;i<20;++i) frame({585,745});
+    Require(std::abs(mcov::OverlayUiCheck::CubeAngle(overlay)-startAngle)>.1,"production cube rotation was blocked by Windows menu animations");
+    SaveFrame(device,context,output/"target-cube.png");
+    auto& marker=mcov::OverlayUiCheck::CubeSettings(overlay);
+    marker.enabled=false;
+    Require(frame({585,745})==0,"disabled production marker still rendered");
+    marker.enabled=true; marker.opacity=0;
+    Require(frame({585,745})==0,"production marker ignored opacity");
+    marker.opacity=1; marker.animate=false; frame({585,745});
+    const auto frozen=mcov::OverlayUiCheck::CubeAngle(overlay);
+    for(int i=0;i<10;++i) frame({585,745});
+    Require(mcov::OverlayUiCheck::CubeAngle(overlay)==frozen,"production marker ignored animation checkbox");
+    marker.lime={.65f,.12f,1,1}; marker.yellow={.1f,.9f,1,1}; marker.glow=1.4f;
+    marker.sizeFraction=.85f; marker.showDepth=false; marker.strokeFraction=.03f;
+    frame({585,745}); SaveFrame(device,context,output/"target-cube-custom.png");
+    marker=mcov::TargetCubeConfig{};
+    v.boxEsp=v.skeleton=v.nameTags=v.healthBars=true;
+    frame({1280,800}); SaveFrame(device,context,output/"target-cube-esp.png");
+    v.boxEsp=v.skeleton=v.nameTags=v.healthBars=false;
+    mcov::OverlayUiCheck::ReduceMotion(overlay,true); frame({480,360});
+    const auto angle=mcov::OverlayUiCheck::CubeAngle(overlay);
+    for(int i=0;i<15;++i) frame({480,360});
+    Require(mcov::OverlayUiCheck::CubeAngle(overlay)==angle,"production cube ignored reduced motion");
+    SaveFrame(device,context,output/"target-cube-small.png");
+    mcov::OverlayUiCheck::ReduceMotion(overlay,false);
+    mcov::OverlayUiCheck::CubeReport(overlay,e,mcov::CombatBridgeStatus::Active,mcov::kCombatLeaseMs+1);
+    Require(frame({585,745})==0,"stale combat report retained target cube");
+    mcov::OverlayUiCheck::CubeReport(overlay,e,mcov::CombatBridgeStatus::Paused);
+    Require(frame({585,745})==0,"paused Kill Aura retained target cube");
+    mcov::OverlayUiCheck::CubeReport(overlay,e); e.uuid={33,44};
+    Require(frame({585,745})==0,"reused entity ID received another UUID's target cube");
+    e.uuid={11,22}; e.health=0;
+    Require(frame({585,745})==0,"dead entity retained target cube");
+    mcov::OverlayUiCheck::StopCube(overlay); v=saved;
+}
 }
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
@@ -286,9 +407,8 @@ int main(int argc,char** argv) {
         SaveFrame(device.Get(),context.Get(),output/"reference-size.png");
         // Alle Combat-Bereiche verwenden echte Stores und dieselbe begrenzte Menüfläche.
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
-        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::KillAura,mcov::CombatMenu::Section::Targets,mcov::CombatMenu::Section::Rotation,
-            mcov::CombatMenu::Section::Attacks,mcov::CombatMenu::Section::Sync,mcov::CombatMenu::Section::Friends,mcov::CombatMenu::Section::Debug};
-        constexpr const char* sectionFiles[]={"combat-kill-aura.png","combat-targets.png","combat-rotation.png","combat-attacks.png","combat-sync.png","combat-friends.png","combat-debug.png"};
+        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::KillAura,mcov::CombatMenu::Section::Friends,mcov::CombatMenu::Section::Debug};
+        constexpr const char* sectionFiles[]={"combat-kill-aura.png","combat-friends.png","combat-debug.png"};
         for(int theme=0;theme<4;++theme) for(int i=0;i<IM_ARRAYSIZE(sections);++i) {
             editor.Select(sections[i]);
             for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,theme,ImVec2(1280,800));
@@ -315,7 +435,8 @@ int main(int argc,char** argv) {
         const auto live=editor.Store().Read().values;
         Require(live.enabled && live.attack.enabled && live.rotation.enabled && live.sync.enabled,"Kill Aura switch did not activate the live core");
         Require(live.target.mode==mcov::combat::TargetMode::NearestEntity && !live.target.playersOnly &&
-                live.target.range==3 && !live.hud.enabled,"default Kill Aura required preset or debug cleanup");
+                live.target.range==3 && !live.target.multiTarget && live.attack.firstClickDelay.max==0 && !live.hud.enabled,
+                "default Kill Aura required preset or debug cleanup");
         editor.Select(mcov::CombatMenu::Section::Modules);
         for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
         SaveFrame(device.Get(),context.Get(),output/"combat-modules-paused.png");
@@ -431,7 +552,9 @@ int main(int argc,char** argv) {
         for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
         SaveFrame(device.Get(),context.Get(),output/"compact.png");
         io.AddMousePosEvent(-100,-100);
+        MarkerMenuChecks(overlay,device.Get(),context.Get(),output);
         EspChecks(overlay,device.Get(),context.Get(),output);
+        TargetCubePreview(overlay,device.Get(),context.Get(),output);
         auto auraFrame=[&] {
             io.DisplaySize={1280,800}; io.DeltaTime=1.f/60;
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();

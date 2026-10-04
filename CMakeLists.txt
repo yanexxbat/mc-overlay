@@ -157,6 +157,7 @@ add_executable(mcov_overlay
     src/overlay/combat_menu.cpp
     src/overlay/aura_renderer.cpp
     src/overlay/friend_hat_renderer.cpp
+    src/overlay/target_cube_renderer.cpp
     src/overlay/aura_blend_dx11.cpp
     src/overlay/process.cpp
     src/common/ipc.cpp
@@ -314,6 +315,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/item_icon_atlas_dx11.cpp
         src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
         src/overlay/friend_hat_renderer.cpp
+        src/overlay/target_cube_renderer.cpp
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
@@ -321,7 +323,7 @@ if(MCOV_BUILD_UI_CHECKS)
     add_test(NAME control_panel COMMAND mcov_control_panel_check "${CMAKE_BINARY_DIR}/ui-preview")
     set_tests_properties(control_panel PROPERTIES TIMEOUT 30)
     add_executable(mcov_aura_check tests/aura_smoke.cpp src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
-        src/overlay/friend_hat_renderer.cpp)
+        src/overlay/friend_hat_renderer.cpp src/overlay/target_cube_renderer.cpp)
     target_include_directories(mcov_aura_check PRIVATE src)
     target_link_libraries(mcov_aura_check PRIVATE mcov_settings imgui)
     add_test(NAME aura_rendering COMMAND mcov_aura_check)

@@ -28,7 +28,7 @@ inline std::optional<double> RayBox(combat::Vec3 eye,combat::Angles rotation,con
 // denselben Mutex und halten globale Referenzen bis zum letzten Callback gültig.
 class MinecraftCombat final : public combat::Transport {
 public:
-    MinecraftCombat() : assist_(config_,relations_,*this) {}
+    MinecraftCombat() : assist_(config_,relations_,*this,combat::ExecutionMode::Continuous) {}
     template<class B> bool Install(JNIEnv* env,const B& b,SharedBlock* channel,void* callback) {
         const std::scoped_lock lock(mutex_);
         if(ready_) return true;
@@ -140,12 +140,7 @@ public:
             CombatRequest request;
             const bool read=channel_->combatRequest.Read(request);
             if(read && request.sentAtMs && request.revision!=revision_) {
-                auto next=request.config;
-                // Ein fester Live-Modus: nächste lebende Entity in Reichweite, mit Sichtprüfung.
-                next.target.mode=combat::TargetMode::NearestEntity;
-                next.target.fovMode=combat::FovMode::DynamicDegrees; next.target.coneDegrees=180;
-                next.target.prioritizeEnemies=false; next.target.requireVisibility=true;
-                next.target.range=next.attack.range;
+                const auto next=combat::MakeKillAuraConfig(request.config);
                 if(!config_.Publish(next)) throw std::runtime_error("combat configuration");
                 revision_=request.revision; failed_=false;
             }
@@ -243,6 +238,14 @@ public:
             try { report_.debug=assist_.Step(frame_); } catch(...) {}
             Report(CombatBridgeStatus::Error);
         }
+    }
+    void RefreshAfterPose(combat::Frame& actual) override {
+        // Auf demselben Client-Tick; ImGui liest weiterhin nur die IPC-Diagnose.
+        if(!env_ || !player_ || actual.world!=frame_.world) return;
+        const auto cfg=config_.Read().values;
+        actual.observedRotation=Rotation(player_);
+        actual.attackCooldown=Float(player_,cooldown_,0.0f);
+        actual.attackHitId=RayTarget(actual.observedRotation,std::min(cfg.attack.range,*actual.gameAttackReach));
     }
     bool Send(const combat::Command& command) override {
         // Synchroner Abschluss auf dem Client-Thread, kein voreiliges Queue-Ack.
