@@ -226,7 +226,7 @@ removes the hat. UUIDs are cached by Java object identity on the sampler; drawin
 adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v14. Settings and friends remain session-local.
+the wire protocol is now IPC v15. Settings and friends remain session-local.
 All six original pages
 remain accessible. The injector retains its existing flat interface.
 
@@ -493,7 +493,7 @@ including repeated attach, camera methods with multiple return paths and
 classes without the optional camera getter. Namespace tests check inherited
 Fabric method names; connection checks cover world loading and high overlay FPS.
 Flat UI and ESP projection/rig checks also pass.
-Restart Minecraft before using shared-memory version 14 with the rebuilt binaries.
+Restart Minecraft before using shared-memory version 15 with the rebuilt binaries.
 
 Live Minecraft/Forge sessions and actual Java 17/25 VMs have not been exercised
 here. See [the compatibility matrix and reproducible checks](docs/compatibility.md).
@@ -517,3 +517,5 @@ API and font atlas behavior.
 Written for single-player, private servers you control, and modding/tooling
 research. Using it on public multiplayer servers violates essentially every
 server's rules and Minecraft's EULA.
+
+Chunkfinder, hold-only Crystal/Anchor macros and the Auto Totem client-tick fix are documented in [item assist](docs/item-assist.md).

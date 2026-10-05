@@ -13,13 +13,13 @@ Jede Hauptseite hat eine zweite Tab-Leiste. Die Pfeile rechts erreichen Tabs,
 die auf dem aktuellen Viewport nicht nebeneinander passen. Die Auswahl bleibt
 beim Wechsel der Hauptseite erhalten; neue Funktionsseiten beginnen oben.
 
-- **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends. Diagnostics
+- **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends, Crystal Macro, Anchor Macro. Diagnostics
   bleibt innerhalb von Kill Aura eingeklappt.
 - **Visuals:** Box ESP, Skeleton, Name tags, Health bars, Distance labels, Tracers,
   Target info, Target aura, Target marker, Trails, Hit particles, Ambient particles,
   Hit bubbles, Kill effect, BreadCrumbs, China hat, Entity filters. Gemeinsame Entity-Farben
   und Sichtbarkeitsfilter liegen unter Entity filters.
-- **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers.
+- **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers, Chunkfinder.
 - **HUD:** Editor und ein Tab pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
@@ -43,7 +43,7 @@ Doppelte Belegungen werden abgewiesen; die Meldung bleibt im Editor sichtbar.
 
 Belegbare Module: Kill Aura, Aim Assist, Triggerbot, Auto Totem, Box ESP, Skeleton,
 Name tags, Block ESP, Target Aura, Target Marker, Trails, Hit particles,
-Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat und gesamtes HUD. Die wichtigsten
+Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat, Crystal Macro, Anchor Macro, Chunkfinder und gesamtes HUD. Die wichtigsten
 Module bieten zusätzlich ein Tastenfeld direkt neben ihrem Aktivierungsschalter.
 
 **Toggle** schaltet einmal pro Tastendruck um. **Hold** aktiviert bis zum Loslassen;
@@ -101,3 +101,5 @@ Geprüft: reale Menüeingaben, Tastenerfassung/Konflikte, Toggle/Hold/Fokus,
 Store-Änderung, Speichern/Laden, HUD-Ziehen und kleine Viewports. D3D11-WARP-
 Vorschauen liegen unter `build/ui-preview/classic-*.png` und `modular-hud*.png`.
 Diese Prüfungen laufen ohne Minecraft; die Live-Optik wurde nicht im Spiel geprüft.
+
+Crystal Macro und Anchor Macro verwenden immer Hold und brauchen einen physisch gehaltenen Bind. Bedienung und Statusmeldungen stehen in [Item Assist](item-assist.md).
