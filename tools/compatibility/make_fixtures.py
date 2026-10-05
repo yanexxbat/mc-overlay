@@ -61,7 +61,28 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             if ('testTranslation','Ljava/lang/String;') in fields:
                 code += b'\x2a\x13' + u2(cp.string('item.minecraft.diamond_helmet'))
                 code += b'\xb5' + u2(cp.ref(9,name,'testTranslation','Ljava/lang/String;'))
+            if special and special[0]=='constructor_fields':
+                for field,field_desc,load in special[1]:
+                    code+=b'\x2a'+load+b'\xb5'+u2(cp.ref(9,name,field,field_desc))
+            if ('testStepY','I') in fields:
+                code+=b'\x2a\x04\xb5'+u2(cp.ref(9,name,'testStepY','I'))
             code += b'\xb1'
+        elif special and special[0]=='world_states':
+            pos,get_y,state=special[1:]
+            code=b'\xb2'+u2(cp.ref(9,name,'testStates','Ljava/util/Map;'))+b'\x59\xc7\x00\x08\x57'
+            code+=b'\xb2'+u2(cp.ref(9,name,'testBlockState','L'+state+';'))+b'\xb0'
+            code+=b'\x2b\xb6'+u2(cp.ref(10,pos,get_y,'()I'))
+            code+=b'\xb8'+u2(cp.ref(10,'java/lang/Integer','valueOf','(I)Ljava/lang/Integer;'))
+            code+=b'\xb9'+u2(cp.ref(11,'java/util/Map','get','(Ljava/lang/Object;)Ljava/lang/Object;'))+b'\x02\x00\xc0'+u2(cp.cls(state))+b'\xb0'
+        elif special and special[0]=='optional_field':
+            backing,fallback,field_desc=special[1:]
+            code=b'\x2a\xb4'+u2(cp.ref(9,name,backing,field_desc))+b'\x59\xc7\x00\x08\x57'
+            code+=b'\xb2'+u2(cp.ref(9,name,fallback,field_desc))+b'\xb0\xb0'
+        elif special and special[0]=='use_on':
+            hit_desc,result=special[1:]
+            code=b'\x2d\xb3'+u2(cp.ref(9,name,'testLastHit',hit_desc))
+            code+=b'\xb2'+u2(cp.ref(9,name,'testSiteUses','I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,'testSiteUses','I'))
+            code+=b'\xbb'+u2(cp.cls(result))+b'\x59\xb7'+u2(cp.ref(10,result,'<init>','()V'))+b'\xb0'
         elif special and special[0] == 'inventory_get':
             stack=special[1]
             code=b'\x2a\xb4'+u2(cp.ref(9,name,'testStacks','Ljava/util/List;'))+b'\x1b'
@@ -142,6 +163,11 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
         if special and special[0] == 'camera_branch':
             stack_map = u2(1) + b'\x05'  # same_frame at the null branch's offset 5
             nested = u2(1) + u2(cp.utf('StackMapTable')) + u4(len(stack_map)) + stack_map
+        elif special and special[0] in ('world_states','optional_field'):
+            offset=12 if special[0]=='world_states' else 13
+            stack_type='java/util/Map' if special[0]=='world_states' else special[3][1:-1]
+            stack_map=u2(1)+bytes([64+offset])+b'\x07'+u2(cp.cls(stack_type))
+            nested=u2(1)+u2(cp.utf('StackMapTable'))+u4(len(stack_map))+stack_map
         attr = u2(8) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
         compiled_methods.append(u2(9 if static else 1) + u2(cp.utf(method)) + u2(cp.utf(desc)) + u2(1) +
                                 u2(code_name) + u4(len(attr)) + attr)
@@ -370,6 +396,41 @@ def generate(profiles_path, output):
             cls(owner)['specials'][tuple(member)]=('instance_field','testAnchorWorks','Z')
         member=geometry['members']['useItem']; add(core['client'],'fields','testUses','I',True)
         cls(core['client'])['specials'][tuple(member)]=('increment','testUses')
+        # Place/Use kommt aus dem Spiel, feste HitResults und bestätigte Weltzustände.
+        for key,backing,desc,static,value in [('keyDown','testDown','Z',False,None),
+            ('replaceable','testReplaceable','Z',False,None),('blockReach','testBlockReach','D',True,None),
+            ('oldBlockReach','testBlockReach','F',True,None),('consumesAction','testConsumes','Z',True,None)]:
+            if key not in geometry['members']: continue
+            member=geometry['members'][key]; owner=geometry['owners'][key]
+            add(owner,'fields',backing,desc,static)
+            cls(owner)['specials'][tuple(member)]=('field' if static else 'instance_field',backing,desc)
+        pos=geometry['classes']['blockPosClass']; vec=core['vec3']; hit=geometry['classes']['blockHitClass']
+        for key,owner,fields_to_load in [('blockPosCtor',pos,[(geometry['members']['pos'+axis][0],'I',bytes([0x1b+i])) for i,axis in enumerate('XYZ')]),
+            ('vecCtor',vec,[(profile['members']['fieldVec'+axis][0],'D',load) for axis,load in zip('XYZ',(b'\x27',b'\x29',b'\x18\x05'))]),
+            ('blockHitCtor',hit,[('testOwnLocation','L'+vec+';',b'\x2b'),('testDirection','L'+geometry['classes']['directionClass']+';',b'\x2c'),('testOwnPos','L'+pos+';',b'\x2d')])]:
+            for field,desc,load in fields_to_load: add(owner,'fields',field,desc,False)
+            cls(owner)['specials'][tuple(geometry['members'][key])]=('constructor_fields',fields_to_load)
+        for axis in 'XYZ':
+            member=geometry['members']['pos'+axis]
+            cls(pos)['specials'][tuple(member)]=('instance_field',member[0],'I')
+            member=geometry['members']['step'+axis]; direction=geometry['classes']['directionClass']
+            add(direction,'fields','testStep'+axis,'I',False)
+            cls(direction)['specials'][tuple(member)]=('instance_field','testStep'+axis,'I')
+        add(direction,'methods','<clinit>','()V',True)
+        cls(direction)['specials'][('<clinit>','()V')]=('statics',[tuple(geometry['members']['upDirection'])])
+        member=geometry['members']['hitDirection']; cls(hit)['specials'][tuple(member)]=('instance_field','testDirection','L'+direction+';')
+        member=geometry['members']['blockHitPos']; cls(hit)['specials'][tuple(member)]=('optional_field','testOwnPos','testBlockPos','L'+pos+';')
+        member=geometry['members']['hitLocation']; add(hit,'methods',*member)
+        cls(hit)['specials'][tuple(member)]=('instance_field','testOwnLocation','L'+vec+';')
+        member=geometry['members']['useOn']; owner=geometry['owners']['useOn']; result=geometry['classes']['resultClass']
+        add(owner,'fields','testLastHit','L'+hit+';',True); add(owner,'fields','testSiteUses','I',True)
+        cls(owner)['specials'][tuple(member)]=('use_on','L'+hit+';',result)
+        add(core['clientLevel'],'fields','testStates','Ljava/util/Map;',True)
+        member=profile['members']['methodGetBlockState']
+        cls(core['clientLevel'])['specials'][tuple(member)]=('world_states',pos,geometry['members']['posY'][0],core['blockState'])
+        add(core['blockState'],'fields','testOwnBlock','L'+core['block']+';',False)
+        member=profile['members']['methodStateGetBlock']
+        cls(core['blockState'])['specials'][tuple(member)]=('optional_field','testOwnBlock','testBlock','L'+core['block']+';')
         if profile['gui_class']:
             add(profile['classes']['client'], 'fields', *profile['client_gui'])
         for suffix in ('', '-field-camera'):
