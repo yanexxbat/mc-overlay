@@ -34,7 +34,10 @@ struct GeometryProfile {
     const char* pillarClass;
     const char* anchorClass;
     const char* dimensionTypeClass;
+    const char* environmentClass;
+    const char* environmentAttrsClass;
     Member useItem, selectedSlot, inventoryMenu, carriedStack, hitResult, hitType, blockHitPos;
     Member stateValue, axisProperty, anchorCharge, dimensionType, anchorWorks;
+    Member environment, environmentValue, environmentAnchor;
 };
 } // namespace mcov::mappings

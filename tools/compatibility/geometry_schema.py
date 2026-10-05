@@ -18,6 +18,8 @@ def geometry_schema(version):
         'pillarClass': 'net/minecraft/world/level/block/RotatedPillarBlock',
         'anchorClass': 'net/minecraft/world/level/block/RespawnAnchorBlock',
         'dimensionTypeClass': 'net/minecraft/world/level/dimension/DimensionType',
+        'environmentClass': 'net/minecraft/world/attribute/EnvironmentAttributeSystem' if modern else '',
+        'environmentAttrsClass': 'net/minecraft/world/attribute/EnvironmentAttributes' if modern else '',
     }
     entity = 'net/minecraft/world/entity/Entity'
     living = 'net/minecraft/world/entity/LivingEntity'
@@ -71,8 +73,13 @@ def geometry_schema(version):
     add('stateValue','net/minecraft/world/level/block/state/BlockState','getValue','(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;','methods')
     add('axisProperty',classes['pillarClass'],'AXIS','Lnet/minecraft/world/level/block/state/properties/EnumProperty;',static=True)
     add('anchorCharge',classes['anchorClass'],'CHARGE','Lnet/minecraft/world/level/block/state/properties/IntegerProperty;',static=True)
-    add('dimensionType','net/minecraft/world/level/Level','dimensionType','()L'+classes['dimensionTypeClass']+';','methods')
-    add('anchorWorks',classes['dimensionTypeClass'],'respawnAnchorWorks','()Z','methods')
+    if modern:
+        add('environment','net/minecraft/world/level/Level','environmentAttributes','()L'+classes['environmentClass']+';','methods')
+        add('environmentValue',classes['environmentClass'],'getValue','(Lnet/minecraft/world/attribute/EnvironmentAttribute;Lnet/minecraft/core/BlockPos;)Ljava/lang/Object;','methods')
+        add('environmentAnchor',classes['environmentAttrsClass'],'RESPAWN_ANCHOR_WORKS','Lnet/minecraft/world/attribute/EnvironmentAttribute;',static=True)
+    else:
+        add('dimensionType','net/minecraft/world/level/Level','dimensionType','()L'+classes['dimensionTypeClass']+';','methods')
+        add('anchorWorks',classes['dimensionTypeClass'],'respawnAnchorWorks','()Z','methods')
     add('setYaw', entity, 'setYRot', '(F)V', 'methods')
     add('setPitch', entity, 'setXRot', '(F)V', 'methods')
     add('eyePosition', entity, 'getEyePosition', '()Lnet/minecraft/world/phys/Vec3;', 'methods')
