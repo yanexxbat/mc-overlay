@@ -26,7 +26,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::KillAura:return combatMenu_.Store().Read().values.enabled;
         case keys::Action::AimAssist:return combat_.aimLock;
         case keys::Action::Triggerbot:return combat_.triggerbot;
-        case keys::Action::AutoTotem:return combat_.autoTotem;
+        case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
         case keys::Action::Skeleton:return visuals_.skeleton;
         case keys::Action::NameTags:return visuals_.nameTags;
@@ -41,6 +41,9 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::KillEffect:return worldVisualsConfig_.kills.enabled;
         case keys::Action::BreadCrumbs:return worldVisualsConfig_.crumbs.enabled;
         case keys::Action::ChinaHat:return localHatConfig_.enabled;
+        case keys::Action::CrystalMacro:return crystalMacro_.enabled;
+        case keys::Action::AnchorMacro:return anchorMacro_.enabled;
+        case keys::Action::ChunkFinder:return chunkFinder_.enabled;
         default:return false;
     }
 }
@@ -49,7 +52,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::KillAura: { auto c=combatMenu_.Store().Read().values; c.enabled=value; combatMenu_.Store().Publish(c); break; }
         case keys::Action::AimAssist:combat_.aimLock=value;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
-        case keys::Action::AutoTotem:combat_.autoTotem=value;break;
+        case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
         case keys::Action::Skeleton:visuals_.skeleton=value;break;
         case keys::Action::NameTags:visuals_.nameTags=value;break;
@@ -64,6 +67,9 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::KillEffect:worldVisualsConfig_.kills.enabled=value;break;
         case keys::Action::BreadCrumbs:worldVisualsConfig_.crumbs.enabled=value;break;
         case keys::Action::ChinaHat:localHatConfig_.enabled=value;break;
+        case keys::Action::CrystalMacro:crystalMacro_.enabled=value;break;
+        case keys::Action::AnchorMacro:anchorMacro_.enabled=value;break;
+        case keys::Action::ChunkFinder:chunkFinder_.enabled=value;break;
         default:break;
     }
 }
@@ -133,6 +139,7 @@ void Overlay::DrawKeybindSettings() {
             ImGui::TableSetColumnIndex(1); DrawBind(a);
             ImGui::TableSetColumnIndex(2);
             if(keys::System(a)) ImGui::TextDisabled("Toggle");
+            else if(keys::HoldOnly(a)) ImGui::TextDisabled("Hold only");
             else { int mode=int(bindings_[i].mode); const char* modes[]={"Toggle","Hold"}; ImGui::SetNextItemWidth(-1);
                 if(ImGui::Combo("##mode",&mode,modes,2)) { bindings_[i].mode=static_cast<keys::Mode>(mode); preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
             }
@@ -167,7 +174,7 @@ void Overlay::LoadPreferences() {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
-               (i>1||k>0)) bindings_[i]={k,mods,i<=2?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
+               (i>1||k>0)) bindings_[i]={k,mods,i<=2?keys::Mode::Toggle:keys::HoldOnly(static_cast<keys::Action>(i))?keys::Mode::Hold:static_cast<keys::Mode>(mode)};
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }
         } else if(tag=="place") { int i,placed; float x,y,scale;

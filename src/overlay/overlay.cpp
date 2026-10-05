@@ -991,17 +991,20 @@ void Overlay::PushScanRequest() {
     SharedBlock* block = channel_.block();
     if (!block) return;
 
-    const std::uint32_t mask = blocks_.enabled ? blocks_.mask : 0u;
+    const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
+        (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u);
+    const int radius=std::max(blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4);
+    const int interval=std::min(blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000);
     block->scanMask.store(mask, std::memory_order_release);
-    block->scanRadius.store(static_cast<std::uint32_t>(blocks_.radius), std::memory_order_release);
-    block->scanIntervalMs.store(static_cast<std::uint32_t>(blocks_.interval), std::memory_order_release);
+    block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
+    block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
 
     // Auto totem lives in the same push. Both are re-asserted EVERY frame, not
     // just when a control changes: the agent zeroes the shared block when it
     // attaches, so anything set before an inject - or before a re-inject - would
     // otherwise be silently lost while the UI still showed it as enabled.
     std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
-    if (combat_.autoTotem) flags |= kCtrlAutoTotem;
+    if (combat_.autoTotem.enabled) flags |= kCtrlAutoTotem;
     else                   flags &= ~kCtrlAutoTotem;
     const bool details=visuals_.targetInfo || (visuals_.nameTags && (visuals_.nameTagPing || visuals_.nameTagEquipment));
     if (details) flags|=kCtrlEntityDetails;
@@ -1019,6 +1022,11 @@ void Overlay::PushCombatRequest() {
     request.viewportHeight=std::max(1.f,ImGui::GetIO().DisplaySize.y);
     request.inputAllowed=!menuVisible_&&!hudEditing_ && IsForegroundWindowOwnedBy(target_.pid);
     block->combatRequest.Publish(request);
+    block->itemRequest.Publish(BuildItemRequest(request.sentAtMs,request.inputAllowed,request.config.enabled));
+    items::Report items;
+    if(block->itemReport.Read(items)) itemReport_=items;
+    if(!itemReport_.sampledAtMs||request.sentAtMs<itemReport_.sampledAtMs||request.sentAtMs-itemReport_.sampledAtMs>1000)
+        itemReport_.totem=itemReport_.crystal=itemReport_.anchor=items::Status::Unsupported;
     CombatReport report;
     if(block->combatReport.Read(report)) {
         combatReport_=report;
@@ -1049,10 +1057,12 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
         IM_COL32(240, 235, 225, 255),  // quartz
         IM_COL32(200, 160,  90, 255),  // chest
         IM_COL32(120, 200, 190, 255),  // spawner
+        IM_COL32(120, 215, 255, 255),  // rotated deepslate
     };
 
     for (std::uint32_t i = 0; i < snapshot.blockCount && i < kMaxBlocks; ++i) {
         const BlockSnapshot& b = snapshot.blocks[i];
+        if(b.kind>=kBlockKindCount||!(blocks_.mask&(1u<<b.kind))) continue;
 
         const double dx = (b.x + 0.5) - snapshot.camX;
         const double dy = (b.y + 0.5) - snapshot.camY;
@@ -1352,14 +1362,9 @@ void Overlay::DrawCombatTab() {
         if(section!=CombatMenu::Section::Friends) { ImGui::TextUnformatted("Kill Aura key"); ImGui::SameLine(); DrawBind(keys::Action::KillAura); }
         combatMenu_.DrawSettings(); return;
     }
-    if(section==CombatMenu::Section::AutoTotem) {
-        if(panel::BeginRows("totem_controls")) {
-            panel::CheckRow("Enable Auto Totem",&combat_.autoTotem); DrawBind(keys::Action::AutoTotem,true);
-            ImGui::EndTable();
-        }
-        ImGui::TextWrapped("Moves an available totem into the offhand when it is not already holding one.");
-        return;
-    }
+    if(section==CombatMenu::Section::AutoTotem) { DrawItemAssistSettings(0); return; }
+    if(section==CombatMenu::Section::CrystalMacro) { DrawItemAssistSettings(1); return; }
+    if(section==CombatMenu::Section::AnchorMacro) { DrawItemAssistSettings(2); return; }
     const bool auraActive=combatMenu_.Store().Read().values.enabled;
     if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura is enabled.");
     ImGui::BeginDisabled(auraActive);
@@ -1409,8 +1414,9 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
+    if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     bool dirty=false;
     if(blocksSection_==0) {
         if(panel::BeginRows("block_scanning")) {
@@ -1426,7 +1432,7 @@ void Overlay::DrawBlocksTab() {
             ImGui::TextWrapped("Result limit reached. Reduce the scan radius to focus on nearby blocks.");
     } else if(blocksSection_==1) {
         if(panel::BeginRows("block_filters")) {
-            for(std::uint8_t kind=0;kind<kBlockKindCount;++kind) {
+            for(std::uint8_t kind=0;kind<kBlockRotatedDeepslate;++kind) {
                 const std::uint32_t bit=1u<<kind; bool on=(blocks_.mask&bit)!=0;
                 if(panel::CheckRow(BlockKindLabel(kind),&on)) { blocks_.mask=on ? blocks_.mask|bit : blocks_.mask&~bit; dirty=true; }
             }
