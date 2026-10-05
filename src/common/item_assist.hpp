@@ -65,6 +65,7 @@ class Controller final {
 public:
     void Reset() { nextTotem_=nextMacro_=0; original_=lastSelected_=-1; }
     const Report& GetReport() const { return report_; }
+    bool HasRestore() const { return original_>=0; }
     Action Tick(const Request& r,const Frame& f,std::uint64_t now) {
         report_.sampledAtMs=now;
         report_.totem=r.totem.enabled?Status::Ready:Status::Off;
@@ -99,12 +100,13 @@ public:
             original_=lastSelected_=-1; nextMacro_=0; return {};
         }
         auto& status=anchor?report_.anchor:report_.crystal;
-        if(!f.macroSupported||anchor&&!f.anchorSupported) { status=Status::Unsupported; return {}; }
+        if(!f.macroSupported||(anchor&&!f.anchorSupported)||f.selected<0||f.selected>=9) { status=Status::Unsupported; return {}; }
         if(anchor&&f.anchorWorks) { status=Status::AnchorSafeDimension; return {}; }
         Action action;
         if(crystal&&f.target==Target::Crystal) action={Operation::AttackCrystal,f.selected,false};
         else if(crystal&&f.target==Target::CrystalBase) action={Operation::Use,Find(f,Item::Crystal,9),false};
         else if(anchor&&f.target==Target::Anchor) {
+            if(f.charges<0||f.charges>4) { status=Status::WaitingTarget; return {}; }
             int slot=-1;
             if(f.charges==0) slot=Find(f,Item::Glowstone,9);
             else {

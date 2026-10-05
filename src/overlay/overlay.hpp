@@ -65,6 +65,13 @@ struct BlockEspSettings {
     float         maxDraw  = 64.0f;  // do not draw boxes further than this
 };
 
+struct ChunkFinderSettings {
+    bool enabled=false,blocks=true,labels=true;
+    int radius=20,interval=900,minHints=1;
+    float maxDraw=64;
+    ImVec4 color{.48f,.85f,1.f,.95f};
+};
+
 struct CombatSettings {
     bool  triggerbot    = false;
 
@@ -78,7 +85,7 @@ struct CombatSettings {
     bool  aimPlayersOnly= false;
 
     // Handled entirely in the agent; the overlay only raises the control bit.
-    bool  autoTotem     = false;
+    items::TotemConfig autoTotem{};
     float cps           = 8.0f;   // clicks per second
     float jitter        = 0.25f;  // +/- fraction of the interval, so it is not metronomic
     float maxDistance   = 3.0f;   // survival attack range
@@ -165,6 +172,10 @@ private:
                        float width, float height);
     void  PushScanRequest();
     void  PushCombatRequest();
+    items::Request BuildItemRequest(std::uint64_t now,bool inputAllowed,bool combatActive) const;
+    void  DrawItemAssistSettings(int section);
+    void  DrawChunkFinderSettings();
+    void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
 
     void SampleTelemetry(const WorldSnapshot& snapshot);
@@ -229,6 +240,9 @@ private:
     CombatMenu       combatMenu_{};
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
+    ChunkFinderSettings chunkFinder_{};
+    items::MacroConfig crystalMacro_{},anchorMacro_{};
+    items::Report itemReport_{};
 
     // Triggerbot pacing. Stored as a raw tick count so no clock type leaks into
     // this header.
