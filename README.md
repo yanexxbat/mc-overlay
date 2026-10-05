@@ -226,7 +226,7 @@ removes the hat. UUIDs are cached by Java object identity on the sampler; drawin
 adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v15. Settings and friends remain session-local.
+the wire protocol is now IPC v16. Settings and friends remain session-local.
 All six original pages
 remain accessible. The injector retains its existing flat interface.
 
@@ -518,4 +518,4 @@ Written for single-player, private servers you control, and modding/tooling
 research. Using it on public multiplayer servers violates essentially every
 server's rules and Minecraft's EULA.
 
-Chunkfinder, hold-only Crystal/Anchor macros and the Auto Totem client-tick fix are documented in [item assist](docs/item-assist.md).
+Chunkfinder, Place/Use-driven Crystal/Anchor cycles and the Auto Totem client-tick fix are documented in [item assist](docs/item-assist.md).
