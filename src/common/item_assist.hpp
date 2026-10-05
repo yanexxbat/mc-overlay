@@ -76,7 +76,7 @@ public:
     const Report& GetReport() const { return report_; }
     bool HasRestore() const { return original_>=0; }
     bool Active() const { return cycle_!=Item::Empty; }
-    Item Cycle() const { return cycle_; }
+    int ExpectedSlot() const { return lastSelected_; }
     Action Tick(const Request& r,const Frame& f,std::uint64_t now) {
         report_.sampledAtMs=now;
         report_.totem=r.totem.enabled?Status::Ready:Status::Off;
@@ -108,6 +108,10 @@ public:
             if(crystal&&r.crystal.enabled) report_.crystal=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             if(anchor&&r.anchor.enabled) report_.anchor=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             cycle_=Item::Empty; waiting_=Operation::None; confirmUntil_=0;
+            nextMacro_=0;
+            // Ein offenes Container-/Pausemenü darf den Restore nicht verlieren.
+            // Die Auswahl prüfen wir beim nächsten sicheren Tick erneut.
+            if(original_>=0&&f.selected==lastSelected_&&(!f.ownMenu||!f.cursorEmpty||f.paused)) return {};
             if(original_>=0&&f.ownMenu&&f.cursorEmpty&&!f.paused) {
                 const int original=original_,expected=lastSelected_;
                 original_=lastSelected_=-1; nextMacro_=0;

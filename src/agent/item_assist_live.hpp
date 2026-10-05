@@ -274,6 +274,7 @@ public:
             Menu(env,player,f); if(!f.ownMenu||!f.cursorEmpty) return false;
             auto inventory=env->GetObjectField(player,b_.fInventory); Check(env); if(!inventory) return false;
             f.selected=env->GetIntField(inventory,selected_); Check(env); if(f.selected<0||f.selected>=9) return false;
+            if(controller_.HasRestore()&&!controller_.Active()) return f.selected==controller_.ExpectedSlot();
             if(site_.kind!=items::Item::Empty) {
                 const bool armed=site_.kind==items::Item::Crystal?r.crystal.enabled:r.anchor.enabled;
                 // Wegsehen beendet den Ablauf im Tick. Bis zum Slot-Restore darf

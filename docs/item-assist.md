@@ -32,6 +32,8 @@ Auslöser ist die echte Minecraft-Use-Taste, auch bei eigener Tastenbelegung.
 Beim Loslassen stoppt die Schleife und der zuvor ausgewählte Slot wird
 standardmäßig wiederhergestellt. Manuelle Slotwahl, Wegsehen, Weltwechsel,
 Menus, Fokusverlust oder aktive Kill Aura beenden den Vorgang. Beide Module
+Bei blockierendem Inventar-/Pausemenü wartet die Slot-Wiederherstellung bis zum
+Schließen; eine inzwischen manuell geänderte Auswahl bleibt erhalten.
 können bereit sein; das ausgewählte Item entscheidet über den Ablauf.
 Der Aktionsabstand ist 100–500 ms, standardmäßig 150 ms. Jede Folgeaktion wartet
 auf Spawn, Entfernung, Block- oder Ladestandsänderung. Der Bestätigungs-Timeout

@@ -478,6 +478,11 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     // Vorhandene Anchor werden geladen; in Respawn-Dimensionen bleiben normale Uses erhalten.
     worldState(65,anchorState); charge(0); hitAt(0,65,0); down(true); use(); report=tick();
     Require(report.anchorActions==5&&env->GetIntField(inventory,selected)==3,"existing anchor could not start cycle"); Healthy(env);
+    env->SetStaticBooleanField(b.client.minecraftClass,field(b.client.minecraftClass,"testPaused","Z",true),JNI_TRUE); Healthy(env);
+    report=tick(); Require(report.anchor==Status::Paused&&env->GetIntField(inventory,selected)==3,"pause must defer restore without game action"); Healthy(env);
+    env->SetStaticBooleanField(b.client.minecraftClass,field(b.client.minecraftClass,"testPaused","Z",true),JNI_FALSE); Healthy(env);
+    use(); report=tick(); Require(report.anchorActions==5&&env->GetIntField(inventory,selected)==1,"closing pause must restore before allowing held Vanilla Use"); Healthy(env);
+    use(); report=tick(); Require(report.anchorActions==6,"anchor cycle could not restart after deferred restore");
     if(g.dimensionType.name&&*g.dimensionType.name) {
         auto dimensionClass=LoadClass(env,loader,g.dimensionTypeClass);
         auto dimension=env->GetStaticObjectField(b.clsLevel,field(b.clsLevel,"testDimension",std::strchr(g.dimensionType.signature,')')+1,true)); Healthy(env);
@@ -487,7 +492,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
         auto value=env->CallStaticObjectMethod(boolean,env->GetStaticMethodID(boolean,"valueOf","(Z)Ljava/lang/Boolean;"),JNI_TRUE); Healthy(env);
         SetStatic(env,LoadClass(env,loader,g.environmentClass),"testAttribute","Ljava/lang/Object;",value);
     }
-    charge(1); report=tick(); Require(report.anchor==Status::AnchorSafeDimension&&report.anchorActions==5,"native dimension guard allowed detonation");
+    charge(1); report=tick(); Require(report.anchor==Status::AnchorSafeDimension&&report.anchorActions==6,"native dimension guard allowed detonation");
     down(false); tick(); Require(env->GetIntField(inventory,selected)==1,"paused anchor release failed to restore"); Healthy(env);
     down(true); const int normal=env->GetStaticIntField(b.client.minecraftClass,usesId); Healthy(env);
     use(); Require(env->GetStaticIntField(b.client.minecraftClass,usesId)==normal+1,"respawn anchor ordinary Use was intercepted"); Healthy(env);

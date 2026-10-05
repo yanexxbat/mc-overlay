@@ -73,6 +73,16 @@ int main() try {
     r.sentAtMs=5600; Check(c.Tick(r,f,5600).operation==Operation::None,"confirmation wait ignored");
     r.sentAtMs=5750; Check(c.Tick(r,f,5750).operation==Operation::PlaceAnchor,"confirmation timeout must permit retry");
     r.sentAtMs=6000; r.anchor.enabled=false; c.Tick(r,f,6000); Check(!c.Active(),"disabling module must stop cycle");
+    c.Reset(); r.anchor.enabled=true; r.sentAtMs=7000; f.selected=1; f.target=Target::Anchor; f.charges=0;
+    a=c.Tick(r,f,7000); c.Complete(a,true); f.selected=a.slot; f.paused=true;
+    Check(c.Tick(r,f,7050).operation==Operation::None&&!c.Active()&&c.HasRestore(),"pause must stop cycle and retain pending restore");
+    f.paused=false; f.ownMenu=false;
+    Check(c.Tick(r,f,7100).operation==Operation::None&&c.HasRestore(),"container must defer pending restore");
+    f.ownMenu=true; a=c.Tick(r,f,7150);
+    Check(a.operation==Operation::RestoreSlot&&a.slot==1&&!c.HasRestore(),"closing menu must complete pending restore");
+    c.Reset(); f.selected=1; r.sentAtMs=7200; a=c.Tick(r,f,7200); c.Complete(a,true); f.selected=a.slot; f.paused=true;
+    c.Tick(r,f,7250); f.selected=6; f.paused=false;
+    Check(c.Tick(r,f,7300).operation==Operation::None&&!c.HasRestore(),"manual choice during pause must cancel pending restore");
     Check(mcov::RotatedDeepslate("block.minecraft.deepslate","x")&&mcov::RotatedDeepslate("block.minecraft.deepslate","z"),"horizontal raw deepslate must be a hint");
     Check(!mcov::RotatedDeepslate("block.minecraft.deepslate","y")&&!mcov::RotatedDeepslate("block.minecraft.deepslate_diamond_ore","x")&&!mcov::RotatedDeepslate("block.minecraft.infested_deepslate","z"),"vertical deepslate and ores must not be hints");
     Check(mcov::ChunkCoordinate(-.1)==-1&&mcov::ChunkCoordinate(-16)==-1&&mcov::ChunkCoordinate(-17)==-2&&mcov::ChunkCoordinate(16)==1,"negative chunk coordinates must floor correctly");
