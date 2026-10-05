@@ -10,28 +10,34 @@ Bindings. Ein geöffnetes fremdes Inventar oder ein Item am Mauszeiger blockiert
 den Swap. Pausiertes Spiel, Overlay-Menü, HUD-Editor und Fokusverlust pausieren
 ebenfalls. Der Retry-Abstand ist 50–500 ms, standardmäßig 100 ms.
 
-**Combat → Crystal Macro:** im Tastenfeld einen freien Bind vergeben. End Crystals
-in die Hotbar legen, Menü schließen und die Taste halten. Auf Obsidian/Bedrock
-zielen zum Platzieren; auf einen End Crystal zielen zum Zerstören. Das Macro
-steuert den Hotbar-Slot und die normale Interaktion, nicht die Blickrichtung.
-Platzierung braucht die üblichen freien Räume; eine fehlgeschlagene Interaktion
-wird beim nächsten erlaubten Intervall erneut versucht.
+**Combat → Crystal Macro:** aktivieren, End Crystals auswählen und Minecrafts
+normale Platzieren-/Benutzen-Taste auf Obsidian oder Bedrock halten. Das Macro
+speichert diesen Platz: platzieren → Crystal automatisch zerstören → erneut
+platzieren. Der Crystal muss zwischen den Schritten nicht neu anvisiert werden.
+Er wird anhand seiner Position über dem gewählten Block gesucht. Die üblichen
+Platzierungs- und Reichweitenregeln gelten weiterhin.
 
-**Combat → Anchor Macro:** Bind vergeben und Anchor, Glowstone sowie ein weiteres
-Item in die Hotbar legen. Mit gehaltener Taste zuerst den Platzierungsblock und
-danach den Anchor anvisieren. Ladestand 0 wählt Glowstone; ein geladener Anchor
-wird mit einem anderen Item ausgelöst. Glowstone in der Offhand blockiert diesen
+**Combat → Anchor Macro:** aktivieren, Anchor auswählen und Anchor, Glowstone
+sowie ein weiteres Item in der Hotbar bereithalten. Minecrafts Platzieren-Taste
+auf einem Platzierungsblock oder vorhandenen Anchor halten. Am gespeicherten
+Platz läuft automatisch: platzieren → laden → detonieren → erneut platzieren.
+Ladestand 0 wählt Glowstone; ein geladener Anchor wird mit einem anderen Item
+ausgelöst. Glowstone in der Offhand blockiert diesen
 Schritt bei Ladestand 1–3; die Statuszeile fordert dann zum Entfernen auf. Die Dimensionsregel kommt aus Minecraft:
 funktionierende Respawn-Dimensionen erlauben keine Detonation durch das Macro.
 
-Beide Macros bleiben zunächst ungebunden und verwenden ausschließlich **Hold**,
-auch wenn eine alte Einstellungsdatei Toggle enthält. Der Schalter alleine führt
-keine Aktion aus. Keine Minecraft-Taste für Use/Attack doppelt belegen. Beim
-Loslassen wird standardmäßig der alte Hotbar-Slot wiederhergestellt; eine eigene
-Slot-Änderung wird dabei respektiert. Ein offenes GUI, Fokusverlust, aktive Kill
-Aura oder gleichzeitig gehaltene Macro-Binds blockieren neue Interaktionen.
-Der Aktionsabstand ist 100–500 ms, standardmäßig 150 ms. „Actions sent“ zählt
-ausgeführte Spielaufrufe; es bestätigt keine Platzierung oder Serverannahme.
+Beide Modul-Binds sind anfangs ungebunden und unterstützen Toggle oder Hold.
+Sie steuern die Bereitschaft. Der Schalter alleine führt keine Aktion aus.
+Auslöser ist die echte Minecraft-Use-Taste, auch bei eigener Tastenbelegung.
+Beim Loslassen stoppt die Schleife und der zuvor ausgewählte Slot wird
+standardmäßig wiederhergestellt. Manuelle Slotwahl, Wegsehen, Weltwechsel,
+Menus, Fokusverlust oder aktive Kill Aura beenden den Vorgang. Beide Module
+können bereit sein; das ausgewählte Item entscheidet über den Ablauf.
+Der Aktionsabstand ist 100–500 ms, standardmäßig 150 ms. Jede Folgeaktion wartet
+auf Spawn, Entfernung, Block- oder Ladestandsänderung. Der Bestätigungs-Timeout
+ist 100–2.000 ms, standardmäßig 750 ms; erst danach darf eine unbeantwortete
+Aktion wiederholt werden. „Actions sent“ zählt erfolgreiche Spielinteraktionen,
+keine abschließende Serverbestätigung.
 
 **Blocks → Chunkfinder:** aktivieren, Radius und Mindestzahl der Hinweise pro Chunk
 wählen. Gesucht wird ausschließlich roher Deepslate mit horizontaler X/Z-Achse.
@@ -56,8 +62,12 @@ Inventar nicht ab. IPC-Anfragen haben eine 250-ms-Lease und einen zusätzlichen
 Fokus-Check im Agent. Fehlende optionale Handles werden erneut aufgelöst.
 
 Totem-Swaps nutzen die aktuelle Container-ID, die normale Inventory→Container-
-Slot-Zuordnung und SWAP-Button 40 für die Offhand. Macros nutzen `startUseItem`,
-den ausgewählten Hotbar-Slot sowie reguläre Attack-/Swing-Methoden. Die
+Slot-Zuordnung und SWAP-Button 40 für die Offhand. Der Java-Hook in `startUseItem`
+übernimmt ausschließlich passende Platzierungsversuche. Während des Vorgangs
+verhindert er konkurrierende Vanilla-Uses beim automatischen Slotwechsel.
+Die Folgeaktionen nutzen reguläres `MultiPlayerGameMode.useItemOn` mit festen
+HitResults sowie Attack-/Swing-Methoden. Keine direkten Paketmanipulationen.
+Die
 Versionsprofile auditieren die zusätzlichen Signaturen anhand der
 checksum-geprüften offiziellen Client-JARs. Moderne Versionen lesen die
 Anchor-Regel aus EnvironmentAttributeSystem, ältere aus DimensionType.
@@ -71,13 +81,14 @@ vorhandenen Mailboxes veröffentlicht. Der Client-Tick-Controller besitzt einen
 Mutex für Installation/Shutdown und eigene globale Item-/Property-Referenzen.
 
 Die Tests decken Slot-Zuordnung, Verbrauch, Cursor-/Container-Gates, Lease,
-Hold-only, Wiederherstellung, Macro-Konflikte, Anchor-Ladestände, Dimensionsregeln
+Spiel-Use, Wiederherstellung, feste Platzierungszyklen, Bestätigungs-Timeouts,
+abgelehnte Interaktionen, Anchor-Ladestände, Dimensionsregeln
 und Chunk-Grenzen ab. Isolierte JVM-Fixtures prüfen die nativen Swap-/Attack-
 Aufrufe, spät verfügbare Inventar-Bindings und die Achsen-Property. UI-Prüfungen
 rendern die Untertabs auf Desktop und 480×360. Ein Live-Test in Minecraft ist
 weiterhin erforderlich, insbesondere mit Mods, die Inventare/Interaktionen ändern.
 
-**IPC v15:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
+**IPC v16:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
 Dateien erneut starten. Ein bereits geladener alter Agent kann nicht aktualisiert
 werden, indem nur das Overlay neu gestartet wird. Der einzige Build liegt unter
 `build/bin`.

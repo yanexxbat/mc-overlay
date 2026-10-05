@@ -358,7 +358,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     report=tick(); Require(report.totem==Status::NoTotem,"missing totem was not reported");
     request.totem.enabled=false; request.crystal.enabled=true; request.crystal.intervalMs=100;
     auto selected=field(b.clsPlayerInv,g.selectedSlot.name,g.selectedSlot.signature);
-    auto options=NewObject(env,b.clsOptions),keyClass=LoadClass(env,loader,g.keyMappingClass);
+    auto options=NewObject(env,b.clsOptions); auto keyClass=LoadClass(env,loader,g.keyMappingClass);
     auto key=NewObject(env,keyClass);
     env->SetObjectField(client,b.fOptions,options);
     env->SetObjectField(options,field(b.clsOptions,g.useKey.name,g.useKey.signature),key); Healthy(env);
@@ -400,11 +400,11 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     };
     auto air=makeState("block.minecraft.air",true),anchorState=makeState("block.minecraft.respawn_anchor",false);
     auto integer=env->FindClass("java/lang/Integer"); auto box=env->GetStaticMethodID(integer,"valueOf","(I)Ljava/lang/Integer;");
-    auto mapClass=env->FindClass("java/util/HashMap"),states=NewObject(env,mapClass);
+    auto mapClass=env->FindClass("java/util/HashMap"); auto states=NewObject(env,mapClass);
     auto put=env->GetMethodID(mapClass,"put","(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
     auto worldState=[&](int y,jobject st) { auto index=env->CallStaticObjectMethod(integer,box,y); Healthy(env); env->CallObjectMethod(states,put,index,st); Healthy(env); };
     worldState(64,state); worldState(65,air); SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",states);
-    auto entities=NewObject(env,listClass),clear=env->GetMethodID(listClass,"clear","()V");
+    auto entities=NewObject(env,listClass); auto clear=env->GetMethodID(listClass,"clear","()V");
     SetStatic(env,b.clsLevel,"testIterable","Ljava/lang/Iterable;",entities);
     env->SetObjectField(client,b.fTargetedEntity,nullptr); hitAt(0,64,0);
     env->CallObjectMethod(list,replace,2,stack("item.minecraft.end_crystal")); Healthy(env);
@@ -420,7 +420,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     env->SetDoubleField(crystal,field(b.clsEntity,"testZ","D"),.5);
     env->SetIntField(crystal,field(b.clsEntity,"testId","I"),123);
     env->SetBooleanField(crystal,field(b.clsEntity,"testAlive","Z"),JNI_TRUE); Healthy(env);
-    auto boundsClass=LoadClass(env,loader,g.boundsClass),bounds=NewObject(env,boundsClass);
+    auto boundsClass=LoadClass(env,loader,g.boundsClass); auto bounds=NewObject(env,boundsClass);
     for(int axis=0;axis<3;++axis) {
         env->SetDoubleField(bounds,b.geometry.min[axis],axis==1?65:-.5);
         env->SetDoubleField(bounds,b.geometry.max[axis],axis==1?67:1.5);
