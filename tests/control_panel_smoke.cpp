@@ -647,11 +647,12 @@ int main(int argc,char** argv) {
                 mcov::OverlayUiCheck::Center(overlay);
                 for(int i=0;i<20;++i) Draw(overlay,Page::Combat,0,size);
                 SaveFrame(device.Get(),context.Get(),output/(std::string("item-settings-")+std::to_string(section)+suffix));
-                auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y);
+                auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            mcov::OverlayUiCheck::ChunkTab(overlay); mcov::OverlayUiCheck::Center(overlay);
+            SelectSubTab(overlay,Page::Blocks,"block_sections",3,4,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
+            Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
         }
         auto& finder=mcov::OverlayUiCheck::Chunk(overlay); finder.enabled=true; finder.minHints=2; finder.labels=false;

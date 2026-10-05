@@ -52,7 +52,7 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
     for (method, desc), static in methods.items():
         special = specials.get((method, desc))
         if method == '<init>':
-            code = b'\x2a\xb7' + u2(cp.ref(10, parent_name, '<init>', '()V'))
+            code = (b'\x2a\x13'+u2(cp.string('BLOCK'))+b'\x03\xb7'+u2(cp.ref(10,parent_name,'<init>','(Ljava/lang/String;I)V'))) if parent_name=='java/lang/Enum' else (b'\x2a\xb7'+u2(cp.ref(10,parent_name,'<init>','()V')))
             if ('testUuid','Ljava/util/UUID;') in fields:
                 code += b'\x2a\xb8' + u2(cp.ref(10,'java/util/UUID','randomUUID','()Ljava/util/UUID;'))
                 code += b'\xb5' + u2(cp.ref(9,name,'testUuid','Ljava/util/UUID;'))
@@ -349,7 +349,8 @@ def generate(profiles_path, output):
         swap_owner=owner_spec['methodClickSlot']; stack_desc=profile['members']['methodGetEquipped'][1].split(')')[1]
         for field in ('testSwaps','testSwapId','testSwapSlot','testSwapButton'): add(swap_owner,'fields',field,'I',True)
         cls(swap_owner)['specials'][tuple(profile['members']['methodClickSlot'])]=('swap',core['player'],inventory,*profile['members']['fieldInventory'],core['livingEntity'],stack_desc)
-        for key,backing in [('carriedStack','testCarried'),('stateValue','testStateValue'),
+        cls(geometry['members']['hitType'][1].split(')')[1][1:-1])['parent_name']='java/lang/Enum'
+        for key,backing in [('hitType','testHitType'),('blockHitPos','testBlockPos'),('carriedStack','testCarried'),('stateValue','testStateValue'),
                             ('dimensionType','testDimension'),('environment','testEnvironment'),('environmentValue','testAttribute')]:
             if key not in geometry['members']: continue
             member=geometry['members'][key]; owner=geometry['owners'][key]; desc=member[1].split(')')[1]
@@ -357,6 +358,15 @@ def generate(profiles_path, output):
         if 'environmentAnchor' in geometry['members']:
             member=geometry['members']['environmentAnchor']; owner=geometry['owners']['environmentAnchor']
             add(owner,'methods','<clinit>','()V',True); cls(owner)['specials'][('<clinit>','()V')]=('statics',[tuple(member)])
+        member=profile['members']['methodGetBlockState']; add(core['clientLevel'],'fields','testBlockState',member[1].split(')')[1],True)
+        cls(core['clientLevel'])['specials'][tuple(member)]=('field','testBlockState',member[1].split(')')[1])
+        member=profile['members']['methodStateGetBlock']; add(core['blockState'],'fields','testBlock',member[1].split(')')[1],True)
+        cls(core['blockState'])['specials'][tuple(member)]=('field','testBlock',member[1].split(')')[1])
+        member=profile['members']['methodBlockTransKey']; add(core['block'],'fields','testBlockKey','Ljava/lang/String;')
+        cls(core['block'])['specials'][tuple(member)]=('instance_field','testBlockKey','Ljava/lang/String;')
+        if 'anchorWorks' in geometry['members']:
+            member=geometry['members']['anchorWorks']; owner=geometry['owners']['anchorWorks']; add(owner,'fields','testAnchorWorks','Z')
+            cls(owner)['specials'][tuple(member)]=('instance_field','testAnchorWorks','Z')
         member=geometry['members']['useItem']; add(core['client'],'fields','testUses','I',True)
         cls(core['client'])['specials'][tuple(member)]=('increment','testUses')
         if profile['gui_class']:

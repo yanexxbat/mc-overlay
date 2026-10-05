@@ -122,6 +122,7 @@ public:
         // Deaktivierte Module verursachen keine Inventarabfragen. Ein ausstehender
         // Slot-Restore muss beim Loslassen einmal im Client-Tick abgeschlossen werden.
         if(!request.totem.enabled&&!request.crystal.enabled&&!request.anchor.enabled&&!controller_.HasRestore()) {
+            controller_.Reset();
             auto report=controller_.GetReport(); report.sampledAtMs=now;
             report.totem=report.crystal=report.anchor=items::Status::Off;
             channel_->itemReport.Publish(report); return;
@@ -143,24 +144,35 @@ public:
                 f.paused=paused_?env->CallBooleanMethod(client,paused_)==JNI_TRUE:true; Check(env);
                 jobject screenOwner=b_.fGui?env->GetObjectField(client,b_.fGui):client; Check(env);
                 f.screen=!screenOwner||!b_.fCurrentScreen||env->GetObjectField(screenOwner,b_.fCurrentScreen)!=nullptr; Check(env);
-                if(totemReady_) {
+                const bool held=(request.crystal.enabled&&request.crystalHeld)||(request.anchor.enabled&&request.anchorHeld);
+                const bool macroActive=held&&items::Lease(request,now)&&!f.paused&&!f.screen&&!request.combatActive;
+                if(totemReady_&&(request.totem.enabled||held||controller_.HasRestore())) {
                     auto menu=env->GetObjectField(player,b_.fScreenHandler),own=env->GetObjectField(player,ownMenu_); Check(env);
                     f.ownMenu=menu&&own&&env->IsSameObject(menu,own);
                     auto carried=menu?env->CallObjectMethod(menu,carried_):nullptr; Check(env);
                     f.cursorEmpty=Item(env,carried)==items::Item::Empty;
-                    auto inventory=env->GetObjectField(player,b_.fInventory); Check(env);
-                    if(inventory) {
-                        const int count=std::clamp(env->CallIntMethod(inventory,b_.mInvSize),0,36); Check(env);
-                        for(int i=0;i<count;++i) {
-                            jvm::LocalFrame slot(env,8);
-                            auto stack=env->CallObjectMethod(inventory,b_.mInvGetStack,i); Check(env); f.inventory[i]=Item(env,stack);
-                        }
-                        if(selected_) { f.selected=env->GetIntField(inventory,selected_); Check(env); }
-                    }
                     auto offhand=env->CallObjectMethod(player,b_.mGetEquipped,b_.slotConstants[kSlotOffHand]); Check(env);
                     f.offhand=Item(env,offhand);
+                    const bool needTotem=request.totem.enabled&&f.offhand!=items::Item::Totem&&
+                        items::Lease(request,now)&&!f.paused&&f.ownMenu&&f.cursorEmpty;
+                    // Trägt die Offhand bereits ein Totem, entfällt der komplette
+                    // Inventarscan. Macros lesen ausschließlich die neun Hotbar-Slots.
+                    if(needTotem||macroActive||controller_.HasRestore()) {
+                        auto inventory=env->GetObjectField(player,b_.fInventory); Check(env);
+                        if(!inventory) f.ownMenu=false;
+                        else {
+                            if(needTotem||macroActive) {
+                                const int count=std::clamp(env->CallIntMethod(inventory,b_.mInvSize),0,needTotem?36:9); Check(env);
+                                for(int i=0;i<count;++i) {
+                                    jvm::LocalFrame slot(env,8);
+                                    auto stack=env->CallObjectMethod(inventory,b_.mInvGetStack,i); Check(env); f.inventory[i]=Item(env,stack);
+                                }
+                            }
+                            if(selected_) { f.selected=env->GetIntField(inventory,selected_); Check(env); }
+                        }
+                    }
                 }
-                if(macroReady_&&((request.crystal.enabled&&request.crystalHeld)||(request.anchor.enabled&&request.anchorHeld))) {
+                if(macroReady_&&macroActive&&f.ownMenu&&f.cursorEmpty) {
                     auto target=b_.fTargetedEntity?env->GetObjectField(client,b_.fTargetedEntity):nullptr; Check(env);
                     if(target&&env->IsInstanceOf(target,crystal_)) f.target=items::Target::Crystal;
                     else {
