@@ -1189,7 +1189,7 @@ struct BlockScanner {
 
         const int span = 2 * radius + 1;
 
-        const auto deadline=::GetTickCount64()+std::max(1,sliceBudget);
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(std::max(1,sliceBudget));
         const int cells=span*span*span;
         while(nextCell<cells&&accum.size()<kMaxBlocks) {
                     const int cell=nextCell++;
@@ -1197,7 +1197,7 @@ struct BlockScanner {
                     const int z=baseZ-radius+(cell/span)%span;
                     const int y=baseY-radius+cell/(span*span);
                     nextDy=cell/(span*span);
-                    if((cell&31)==0&&::GetTickCount64()>=deadline) { --nextCell; break; }
+                    if((cell&31)==0&&std::chrono::steady_clock::now()>=deadline) { --nextCell; break; }
                     if(y < -64 || y >= 320) continue;
                     auto moved=env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
                     if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }

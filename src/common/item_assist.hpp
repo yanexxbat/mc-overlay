@@ -8,7 +8,7 @@ namespace mcov::items {
 enum class Item : std::uint8_t { Empty, Other, Totem, Crystal, Anchor, Glowstone };
 enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crystal };
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
-    MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension };
+    MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
@@ -26,6 +26,7 @@ inline const char* Text(Status s) {
         case Status::Error:return "Game action failed - see agent log";
         case Status::Conflict:return "Hold only one macro bind";
         case Status::AnchorSafeDimension:return "Anchors cannot explode in this dimension";
+        case Status::OffhandFuel:return "Remove glowstone from offhand to detonate";
     }
     return "Unavailable";
 }
@@ -108,6 +109,8 @@ public:
         else if(crystal&&f.target==Target::CrystalBase) action={Operation::Use,Find(f,Item::Crystal,9),false};
         else if(anchor&&f.target==Target::Anchor) {
             if(f.charges<0||f.charges>4) { status=Status::WaitingTarget; return {}; }
+            // Vanilla priorisiert Glowstone in der Offhand, solange Ladungen frei sind.
+            if(f.charges>0&&f.charges<4&&f.offhand==Item::Glowstone) { status=Status::OffhandFuel; return {}; }
             int slot=-1;
             if(f.charges==0) slot=Find(f,Item::Glowstone,9);
             else {

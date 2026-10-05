@@ -47,6 +47,9 @@ int main() try {
     Check(c.Tick(r,f,3450).operation==Operation::None&&c.GetReport().anchor==Status::AnchorSafeDimension,"respawn dimension must refuse detonation");
     f.anchorWorks=false; f.charges=-1;
     Check(c.Tick(r,f,3450).operation==Operation::None,"unknown anchor charge must refuse interaction");
+    f.charges=1; f.offhand=Item::Glowstone;
+    Check(c.Tick(r,f,3450).operation==Operation::None&&c.GetReport().anchor==Status::OffhandFuel,"offhand glowstone must not accidentally overcharge anchor");
+    f.offhand=Item::Empty;
     f.charges=1; r.crystal.enabled=r.crystalHeld=true;
     a=c.Tick(r,f,3450); Check(a.operation!=Operation::Use&&a.operation!=Operation::AttackCrystal,"simultaneous macros must conflict");
     c.Reset(); r.crystal.enabled=r.crystalHeld=false; r.combatActive=true;

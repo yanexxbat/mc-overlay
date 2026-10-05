@@ -20,7 +20,8 @@ wird beim nächsten erlaubten Intervall erneut versucht.
 **Combat → Anchor Macro:** Bind vergeben und Anchor, Glowstone sowie ein weiteres
 Item in die Hotbar legen. Mit gehaltener Taste zuerst den Platzierungsblock und
 danach den Anchor anvisieren. Ladestand 0 wählt Glowstone; ein geladener Anchor
-wird mit einem anderen Item ausgelöst. Die Dimensionsregel kommt aus Minecraft:
+wird mit einem anderen Item ausgelöst. Glowstone in der Offhand blockiert diesen
+Schritt bei Ladestand 1–3; die Statuszeile fordert dann zum Entfernen auf. Die Dimensionsregel kommt aus Minecraft:
 funktionierende Respawn-Dimensionen erlauben keine Detonation durch das Macro.
 
 Beide Macros bleiben zunächst ungebunden und verwenden ausschließlich **Hold**,
