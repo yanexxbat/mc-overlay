@@ -1256,6 +1256,18 @@ bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
     const mappings::MappingSet& set = *b.set;
     const std::string           prefix = std::string(set.id) + ".";
 
+    if(!b.fInteractionMgr) b.fInteractionMgr=jvm::TryField(env,b.client.minecraftClass,set.fieldInteractionMgr.name,set.fieldInteractionMgr.signature,false);
+    if(!b.fCurrentScreen||(*b.profile->guiClass&&!b.fGui)) {
+        auto owner=b.client.minecraftClass;
+        if(*b.profile->guiClass) {
+            owner=SoftClass(env,(prefix+"gui").c_str(),b.profile->guiClass);
+            b.fGui=jvm::TryField(env,b.client.minecraftClass,b.profile->clientGui.name,b.profile->clientGui.signature,false);
+        }
+        b.fCurrentScreen=jvm::TryField(env,owner,set.fieldCurrentScreen.name,set.fieldCurrentScreen.signature,false);
+    }
+    if(!b.clsItemStack) b.clsItemStack=SoftClass(env,(prefix+"itemstack").c_str(),set.classes.itemStack);
+    if(!b.mItemIsEmpty) b.mItemIsEmpty=jvm::TryMethod(env,b.clsItemStack,set.methodItemIsEmpty.name,set.methodItemIsEmpty.signature,false);
+
     if (!b.clsInteractionMgr) {
         b.clsInteractionMgr = SoftClass(env, (prefix + "interact").c_str(), set.classes.interactionMgr);
     }
@@ -1296,7 +1308,8 @@ bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
         auto cls=SoftClass(env,(prefix+"menu").c_str(),desc.substr(1,desc.size()-2).c_str());
         b.fSyncId=jvm::TryField(env,cls,set.fieldSyncId.name,set.fieldSyncId.signature,false);
     }
-    if (b.mClickSlot && b.swapAction && b.fInventory && b.fScreenHandler && b.fSyncId && b.mInvSize && b.mInvGetStack && b.mStackGetItem && b.mItemTransKey) {
+    if (b.mClickSlot && b.swapAction && b.fInteractionMgr && b.fCurrentScreen && (!*b.profile->guiClass||b.fGui) &&
+        b.fInventory && b.fScreenHandler && b.fSyncId && b.mInvSize && b.mInvGetStack && b.mStackGetItem && b.mItemTransKey && b.mItemIsEmpty) {
         return true;
     }
     return false;

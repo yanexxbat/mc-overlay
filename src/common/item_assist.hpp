@@ -19,7 +19,7 @@ inline const char* Text(Status s) {
         case Status::WaitingBind:return "Hold the assigned key";
         case Status::WaitingTarget:return "Aim at a valid crosshair target";
         case Status::MissingItem:return "Required item missing from hotbar";
-        case Status::Paused:return "Paused - focus game / close menu / stop Kill Aura";
+        case Status::Paused:return "Paused - focus Minecraft / close menus";
         case Status::InventoryBusy:return "Container or carried item blocks inventory actions";
         case Status::NoWorld:return "Join a world";
         case Status::Unsupported:return "Required game binding unavailable";
