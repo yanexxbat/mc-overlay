@@ -1,0 +1,184 @@
+#include "overlay.hpp"
+#include "../common/flat_style.hpp"
+#include <windows.h>
+#include <cstdio>
+
+namespace mcov {
+bool Overlay::HudEnabled(int i) const {
+    switch(static_cast<HudModule>(i)) {
+        case HudModule::Equipment:return hud_.equipment;
+        case HudModule::Effects:return hud_.effects;
+        case HudModule::Coordinates:return hud_.coordinates;
+        case HudModule::Performance:return hud_.performance;
+        case HudModule::Compass:return hud_.compass;
+        case HudModule::Reach:return hud_.reachMarker;
+        case HudModule::Watermark:return settings_.showWatermark;
+        case HudModule::Modules:return hud_.modules;
+        case HudModule::Keybinds:return hud_.keybinds;
+        default:return false;
+    }
+}
+void Overlay::SetHudEnabled(int i,bool value) {
+    switch(static_cast<HudModule>(i)) {
+        case HudModule::Equipment:hud_.equipment=value;break;
+        case HudModule::Effects:hud_.effects=value;break;
+        case HudModule::Coordinates:hud_.coordinates=value;break;
+        case HudModule::Performance:hud_.performance=value;break;
+        case HudModule::Compass:hud_.compass=value;break;
+        case HudModule::Reach:hud_.reachMarker=value;break;
+        case HudModule::Watermark:settings_.showWatermark=value;break;
+        case HudModule::Modules:hud_.modules=value;break;
+        case HudModule::Keybinds:hud_.keybinds=value;break;
+        default:break;
+    }
+}
+void Overlay::SetHudEditing(bool editing) {
+    if(hudEditing_==editing) return;
+    hudEditing_=editing;
+    if(editing) {
+        SetMenuVisible(false); ApplyExtendedStyles(false); ForceForeground(hwnd_,settings_.focusMode);
+    } else {
+        preferencesDirty_=true; SavePreferences();
+        ApplyExtendedStyles(!menuVisible_&&settings_.clickThroughWhenIdle);
+        if(!menuVisible_) ForceForeground(target_.window,settings_.focusMode==FocusMode::None?FocusMode::None:FocusMode::Simple);
+    }
+}
+void Overlay::DrawHud(const WorldSnapshot& s) {
+    if(!hud_.visible&&!hudEditing_) return;
+    ImGui::PushFont(style::ClassicMenuFont());
+    auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
+    int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
+    const int effects=std::min<int>(s.effectCount,kMaxEffects);
+    int active=0,assigned=0;
+    for(int i=3;i<keys::kCount;++i) if(i!=keys::Index(keys::Action::Hud)) {
+        active+=ModuleEnabled(static_cast<keys::Action>(i)); assigned+=bindings_[i].key!=0;
+    }
+    float stackY=44;
+    for(int i=0;i<kHudModules;++i) {
+        hudRects_[i]={}; const auto kind=static_cast<HudModule>(i);
+        if(hudEditing_&&(viewport.x<640||viewport.y<480)&&i!=hudSelected_) continue;
+        if(!HudEnabled(i)&&!hudEditing_) continue;
+        const bool empty=(kind==HudModule::Equipment&&!equipment)||(kind==HudModule::Effects&&!effects)||
+                         (kind==HudModule::Reach&&!s.hasTarget)||(kind==HudModule::Modules&&!active)||(kind==HudModule::Keybinds&&!assigned);
+        if(empty&&!hudEditing_) continue;
+        ImVec2 size{232,50};
+        switch(kind) {
+            case HudModule::Equipment:size.y=equipment?24+equipment*22.f:50;break;
+            case HudModule::Effects:size.y=effects?28+effects*17.f:50;break;
+            case HudModule::Coordinates:size.y=92;break;
+            case HudModule::Performance:size.y=132;break;
+            case HudModule::Compass:size={320,26};break;
+            case HudModule::Reach:size.y=54;break;
+            case HudModule::Watermark:size={260,25};break;
+            case HudModule::Modules:size.y=24+std::max(1,active)*17.f;break;
+            case HudModule::Keybinds:size.y=24+std::max(1,assigned)*17.f;break;
+            default:break;
+        }
+        ImVec2 start{16,stackY};
+        if(i<=3) stackY+=size.y+12;
+        else if(kind==HudModule::Compass) start={(viewport.x-size.x)*.5f,12};
+        else if(kind==HudModule::Reach) start={(viewport.x-size.x)*.5f,(viewport.y-size.y)*.5f};
+        else if(kind==HudModule::Watermark) start={16,8};
+        else if(kind==HudModule::Modules) start={viewport.x-size.x-16,44};
+        else if(kind==HudModule::Keybinds) start={viewport.x-size.x-16,viewport.y-size.y-16};
+        auto& placement=hud_.layout[i]; const bool wasPlaced=placement.placed;
+        const auto rect=PlaceHud(placement,viewport,size,start); hudRects_[i]=rect;
+        if(!wasPlaced) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
+        // Bestehende Snapshot-Widgets zeichnen lokal; nur ihre eigenen Vertices
+        // und Clip-Commands werden versetzt/skaliert. Keine JNI-Abfragen im HUD.
+        const int vertexStart=draw.VtxBuffer.Size;
+        draw.PushClipRect({0,0},size,false); const int commandStart=draw.CmdBuffer.Size-1;
+        if(empty) {
+            DrawHudPanel(draw,{0,0},size); draw.AddText({8,7},style::kText,kHudNames[i]);
+            draw.AddText({8,26},style::kMuted,"No data / editor preview");
+        } else switch(kind) {
+            case HudModule::Equipment:DrawEquipmentPanel(s,0,0);break;
+            case HudModule::Effects:DrawEffectsPanel(s,0,0);break;
+            case HudModule::Coordinates:DrawCoordinatesPanel(s,0,0);break;
+            case HudModule::Performance:DrawPerformancePanel(s,0,0);break;
+            case HudModule::Compass:DrawCompassStrip(s,size.x);break;
+            case HudModule::Reach:DrawReachMarker(s);break;
+            case HudModule::Watermark: {
+                DrawHudPanel(draw,{0,0},size); char text[100];
+                std::snprintf(text,sizeof(text),"mcov | %d FPS | %s",s.fps,s.gameVersion[0]?s.gameVersion:"waiting");
+                draw.AddText({8,6},style::kText,text); break;
+            }
+            case HudModule::Modules:case HudModule::Keybinds: {
+                DrawHudPanel(draw,{0,0},size); draw.AddText({8,6},style::kText,kHudNames[i]); float y=24;
+                for(int a=3;a<keys::kCount;++a) {
+                    if(a==keys::Index(keys::Action::Hud)) continue;
+                    const bool on=ModuleEnabled(static_cast<keys::Action>(a));
+                    if(kind==HudModule::Modules?!on:!bindings_[a].key) continue;
+                    draw.AddText({8,y},on?IM_COL32(204,156,229,255):style::kMuted,keys::kNames[a]);
+                    if(kind==HudModule::Keybinds) {
+                        const auto key=BindName(bindings_[a]); const auto extent=ImGui::CalcTextSize(key.c_str());
+                        draw.AddText({size.x-8-extent.x,y},style::kText,key.c_str());
+                    }
+                    y+=17;
+                } break;
+            }
+            default:break;
+        }
+        const int commandEnd=draw.CmdBuffer.Size;
+        const float scale=(rect.max.x-rect.min.x)/size.x;
+        for(int v=vertexStart;v<draw.VtxBuffer.Size;++v) { auto& p=draw.VtxBuffer[v].pos; p={rect.min.x+p.x*scale,rect.min.y+p.y*scale}; }
+        for(int c=commandStart;c<commandEnd;++c) draw.CmdBuffer[c].ClipRect={rect.min.x,rect.min.y,rect.max.x,rect.max.y};
+        draw.PopClipRect();
+    }
+    ImGui::PopFont();
+}
+void Overlay::DrawHudEditor() {
+    const auto size=ImGui::GetIO().DisplaySize;
+    ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize(size);
+    style::StyleScope scoped;
+    scoped.Var(ImGuiStyleVar_WindowPadding,ImVec2(5,5)); scoped.Var(ImGuiStyleVar_ChildRounding,0.f);
+    scoped.Var(ImGuiStyleVar_FrameRounding,0.f); scoped.Var(ImGuiStyleVar_FramePadding,ImVec2(4,2));
+    scoped.Var(ImGuiStyleVar_PopupRounding,0.f); scoped.Var(ImGuiStyleVar_FrameBorderSize,1.f);
+    scoped.Var(ImGuiStyleVar_ItemSpacing,ImVec2(6,4));
+    scoped.Color(ImGuiCol_ChildBg,IM_COL32(36,36,36,255)); scoped.Color(ImGuiCol_Border,IM_COL32(8,8,8,255));
+    scoped.Color(ImGuiCol_FrameBg,IM_COL32(25,25,25,255)); scoped.Color(ImGuiCol_Button,IM_COL32(25,25,25,255));
+    scoped.Color(ImGuiCol_PopupBg,IM_COL32(36,36,36,255)); scoped.Color(ImGuiCol_Header,IM_COL32(46,39,51,255));
+    scoped.Color(ImGuiCol_HeaderHovered,IM_COL32(64,50,71,255));
+    scoped.Color(ImGuiCol_ButtonHovered,IM_COL32(57,48,63,255)); scoped.Color(ImGuiCol_ButtonActive,IM_COL32(73,52,81,255));
+    scoped.Color(ImGuiCol_CheckMark,IM_COL32(174,105,209,255)); scoped.Color(ImGuiCol_SliderGrab,IM_COL32(174,105,209,255));
+    scoped.Color(ImGuiCol_SliderGrabActive,IM_COL32(205,160,225,255));
+    ImGui::PushFont(style::ClassicMenuFont());
+    ImGui::Begin("HUD editor",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings);
+    auto& draw=*ImGui::GetWindowDrawList();
+    const int selected=hudSelected_;
+    // Das ausgewählte Element bekommt bei überlappenden Vorschauen die oberste
+    // Hit-Fläche. Die Toolbar erreicht auch Elemente unter einem anderen Modul.
+    for(int pass=0;pass<=kHudModules;++pass) {
+        const int i=pass==kHudModules?selected:pass;
+        if(pass<kHudModules&&i==selected) continue;
+        auto rect=hudRects_[i]; const ImVec2 extent{rect.max.x-rect.min.x,rect.max.y-rect.min.y};
+        if(extent.x<=0||extent.y<=0) continue;
+        ImGui::SetCursorScreenPos(rect.min); ImGui::PushID(i);
+        ImGui::InvisibleButton("##move",extent);
+        if(ImGui::IsItemActivated()) hudSelected_=i;
+        if(ImGui::IsItemActive()&&ImGui::IsMouseDragging(0,0)) {
+            MoveHud(hud_.layout[i],rect,size,ImGui::GetIO().MouseDelta); preferencesDirty_=true;
+        }
+        if(ImGui::IsItemHovered()) {
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move",kHudNames[i]);
+        }
+        draw.AddRect(rect.min,rect.max,hudSelected_==i?IM_COL32(190,119,225,255):IM_COL32(140,134,146,180));
+        if(!HudEnabled(i)) draw.AddText({rect.min.x+8,rect.min.y+5},IM_COL32(232,130,130,255),"Disabled");
+        ImGui::PopID();
+    }
+    const float width=std::min(430.f,size.x-16);
+    ImGui::SetCursorScreenPos({(size.x-width)*.5f,size.y-91});
+    ImGui::BeginChild("editor_toolbar",{width,83},ImGuiChildFlags_Borders|ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::Text("HUD editor | Esc / %s finishes",BindName(bindings_[keys::Index(keys::Action::HudEditor)]).c_str());
+    if(size.x<640||size.y<480) ImGui::TextDisabled("Compact editor: selected element only");
+    ImGui::SetNextItemWidth(width*.42f);
+    ImGui::Combo("##module",&hudSelected_,kHudNames.data(),kHudModules); ImGui::SameLine();
+    bool enabled=HudEnabled(hudSelected_);
+    if(ImGui::Checkbox("Enabled",&enabled)) { SetHudEnabled(hudSelected_,enabled); preferencesDirty_=true; }
+    ImGui::SameLine(); if(ImGui::Button("Done")) SetHudEditing(false);
+    ImGui::SetNextItemWidth(width*.55f);
+    if(ImGui::SliderFloat("Scale",&hud_.layout[hudSelected_].scale,.65f,1.6f,"%.2f x")) preferencesDirty_=true;
+    ImGui::SameLine(); if(ImGui::Button("Reset layout")) { hud_.layout={}; preferencesDirty_=true; }
+    ImGui::EndChild(); ImGui::End(); ImGui::PopFont();
+}
+} // namespace mcov

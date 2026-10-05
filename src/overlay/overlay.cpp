@@ -61,7 +61,7 @@ using style::SectionHeader;
 // Rows retain the caller's real settings; no separate demo module state.
 namespace panel = control_panel;
 template<class Draw> void MenuColumns(const char* id, Draw draw) {
-    const int columns = ImGui::GetContentRegionAvail().x >= 540 ? 2 : 1;
+    const int columns = ImGui::GetContentRegionAvail().x >= 500 ? 2 : 1;
     style::StyleScope spacing;
     spacing.Var(ImGuiStyleVar_CellPadding,ImVec2(4 * panel::Scale(),0));
     if (!ImGui::BeginTable(id, columns, ImGuiTableFlags_SizingStretchSame)) return;
@@ -239,6 +239,8 @@ void Overlay::ApplyCaptureAffinity() {
 bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
     ImGui_ImplWin32_EnableDpiAwareness();
     target_ = target;
+    preferencesPath_=std::filesystem::path(ExecutableDirectory())/L"client-settings.ini";
+    LoadPreferences();
 
     if (!GetClientRectOnScreen(target_.window, windowX_, windowY_, windowW_, windowH_)) {
         if (error) *error = "could not read the game window's client rectangle";
@@ -276,6 +278,7 @@ bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
 }
 
 void Overlay::Shutdown() {
+    if(preferencesDirty_) SavePreferences();
     if(auto* block=channel_.block()) {
         CombatRequest stop;
         stop.sentAtMs=::GetTickCount64(); stop.revision=combatMenu_.Store().Read().revision+1;
@@ -378,20 +381,16 @@ void Overlay::TrackTargetWindow() {
 // Input
 // ---------------------------------------------------------------------------
 void Overlay::PollHotkeys() {
-    // GetAsyncKeyState rather than GLFW key callbacks: while the menu is closed
-    // the overlay is click-through and unfocused, so it receives no keyboard
-    // events at all. GetAsyncKeyState reads global key state regardless of who
-    // owns focus, which is the only way a toggle key can work here.
-    const bool toggleDown = (::GetAsyncKeyState(settings_.toggleKey) & 0x8000) != 0;
-    if (toggleDown && !toggleKeyDown_) SetMenuVisible(!menuVisible_);
-    toggleKeyDown_ = toggleDown;
-
-    const bool panicDown = (::GetAsyncKeyState(settings_.panicKey) & 0x8000) != 0;
-    if (panicDown && !panicKeyDown_) {
-        MCOV_LOG_INFO("panic key pressed; shutting down");
-        running_ = false;
+    keys::Input input{};
+    const auto read=[&](int key){if(key>0&&key<256) input[key]=(::GetAsyncKeyState(key)&0x8000)!=0;};
+    if(captureAction_>=0) for(int i=1;i<256;++i) read(i);
+    else {
+        for(const auto& bind:bindings_) read(bind.key);
+        for(int key:{VK_SHIFT,VK_CONTROL,VK_MENU,VK_LSHIFT,VK_RSHIFT,VK_LCONTROL,VK_RCONTROL,VK_LMENU,VK_RMENU}) read(key);
+        if(hudEditing_) read(VK_ESCAPE);
     }
-    panicKeyDown_ = panicDown;
+    const bool focused=IsForegroundWindowOwnedBy(target_.pid)||::GetForegroundWindow()==static_cast<HWND>(hwnd_);
+    ProcessKeyInput(input,focused);
 }
 
 void Overlay::SetMenuVisible(bool visible) {
@@ -399,6 +398,7 @@ void Overlay::SetMenuVisible(bool visible) {
     menuVisible_ = visible;
 
     if (visible) {
+        hudEditing_=false;
         menu_.pageAlpha=menu_.pageStartAlpha=1.f;
         menu_.pageElapsed=.16f;
         menu_.animateNextPage=false;
@@ -409,10 +409,12 @@ void Overlay::SetMenuVisible(bool visible) {
         ForceForeground(hwnd_, settings_.focusMode);
     } else {
         menu_.dragging = false;
-        ApplyExtendedStyles(settings_.clickThroughWhenIdle);
+        captureAction_=-1;
+        if(preferencesDirty_) SavePreferences();
+        ApplyExtendedStyles(!hudEditing_&&settings_.clickThroughWhenIdle);
         // Handing focus back is a plain activation of a window that is already
         // allowed to have it, so it never needs the riskier modes.
-        ForceForeground(target_.window,
+        if(!hudEditing_) ForceForeground(target_.window,
                         settings_.focusMode == FocusMode::None ? FocusMode::None
                                                                : FocusMode::Simple);
     }
@@ -475,6 +477,7 @@ bool Overlay::RunFrame() {
         AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         TargetCubeRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        WorldVisualsRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         auraPrepared_ = true;
     }
 
@@ -483,6 +486,15 @@ bool Overlay::RunFrame() {
         UpdateTriggerbot(lastSnapshot_);
         UpdateAimLock(lastSnapshot_);
     }
+    const bool worldEffects=worldVisualsConfig_.Enabled();
+    if(haveSnapshot_&&worldEffects&&agentConnected_&&heartbeatClock_.Alive(::GetTickCount64())) {
+        const auto& report=combatReport_;
+        const bool combatEnabled=combatMenu_.Store().Read().values.enabled;
+        const bool combatTarget=report.status==CombatBridgeStatus::Active&&report.debug.target&&
+            report.sampledAtMs&&::GetTickCount64()-report.sampledAtMs<=kCombatLeaseMs&&combatEnabled;
+        const auto target=combatEnabled ? (combatTarget?report.debug.target->id:0) : lastSnapshot_.hasTarget ? lastSnapshot_.targetEntityId : 0;
+        worldVisuals_.Update(lastSnapshot_,double(::GetTickCount64())/1000.,worldVisualsConfig_,target);
+    } else worldVisuals_.Reset();
 
     // Re-assert every frame so the agent always reflects the UI, even after it
     // was re-injected and zeroed the block.
@@ -495,11 +507,12 @@ bool Overlay::RunFrame() {
             combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),combatReport_.debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
         if (haveSnapshot_) {
             DrawEsp(lastSnapshot_);
-            DrawHud(lastSnapshot_);
-            if (settings_.showWatermark) DrawWatermark(lastSnapshot_);
         }
+        if(haveSnapshot_||hudEditing_) DrawHud(lastSnapshot_);
         if (menuVisible_) DrawMenu();
+        if(hudEditing_) DrawHudEditor();
     }
+    if(preferencesDirty_&&::GetTickCount64()>=preferenceSaveAt_) SavePreferences();
 
     ImGui::Render();
 
@@ -593,6 +606,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
     if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
+        !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
 
@@ -601,6 +615,8 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     if (width < 1.0f || height < 1.0f) return;
 
     const CameraProjection projection(snapshot, width, height, settings_.fovTrim);
+    worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
+        auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
 
     // Die Aura liegt unter ESP und HUD. Sie teilt deren kohärenten Snapshot.
     DrawAura(snapshot, projection, width, height);
@@ -608,6 +624,10 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     if(haveFriends && agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
         friendHats_.DrawFriends(*ImGui::GetBackgroundDrawList(),snapshot,projection,relations,visuals_.maxDistance,
             friendHatConfig_,auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),
+            {width,height},ImGui::GetMainViewport()->Pos);
+    if(agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
+        friendHats_.DrawLocal(*ImGui::GetBackgroundDrawList(),snapshot,projection,localHatConfig_,
+            auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),
             {width,height},ImGui::GetMainViewport()->Pos);
     DrawBlockEsp(snapshot, projection, width, height);
     if (!entitiesEnabled) return;
@@ -672,7 +692,7 @@ float Overlay::DrawEquipmentPanel(const WorldSnapshot& snapshot, float x, float 
     const float lineHeight = ImGui::GetTextLineHeight() + 9.0f;
     const float height     = 24.0f + visible * lineHeight;
 
-    style::DrawFlatPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
+    DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "EQUIPMENT");
 
     float row = y + 24.0f;
@@ -723,7 +743,7 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
     const float lineHeight = ImGui::GetTextLineHeight() + 4.0f;
     const float height     = 24.0f + snapshot.effectCount * lineHeight + 4.0f;
 
-    style::DrawFlatPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
+    DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "EFFECTS");
 
     float row = y + 24.0f;
@@ -764,7 +784,7 @@ float Overlay::DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, floa
     const float lineHeight = ImGui::GetTextLineHeight() + 3.0f;
     const float height     = 24.0f + 4 * lineHeight + 4.0f;
 
-    style::DrawFlatPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
+    DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "POSITION");
 
     char line[96];
@@ -802,7 +822,7 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
     ImDrawList* draw = ImGui::GetBackgroundDrawList();
     const float height = 132.0f;
 
-    style::DrawFlatPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
+    DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "TELEMETRY");
 
     char line[96];
@@ -848,16 +868,13 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
     return height + kPanelGap;
 }
 
-void Overlay::DrawCompassStrip(const WorldSnapshot& snapshot) {
+void Overlay::DrawCompassStrip(const WorldSnapshot& snapshot,float stripWidth) {
     ImDrawList* draw = ImGui::GetBackgroundDrawList();
 
-    const float width      = static_cast<float>(windowW_);
-    const float stripWidth = std::min(420.0f, width * 0.42f);
-    const float left       = (width - stripWidth) * 0.5f;
-    const float top        = 14.0f;
+    const float left=0,top=2;
     const float height     = 22.0f;
 
-    style::DrawFlatPanel(*draw, ImVec2(left, top), ImVec2(left + stripWidth, top + height), 6.0f);
+    DrawHudPanel(*draw, ImVec2(left, top), ImVec2(left + stripWidth, top + height));
 
     const float bearing = YawToBearing(snapshot.yawDeg);
     // 90 degrees of arc across the strip.
@@ -893,8 +910,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
     if (!snapshot.hasTarget) return;
 
     ImDrawList* draw = ImGui::GetBackgroundDrawList();
-    const float cx = static_cast<float>(windowW_) * 0.5f;
-    const float cy = static_cast<float>(windowH_) * 0.5f;
+    const float cx=kPanelWidth*.5f,cy=14;
 
     // Minecraft sets targetedEntity only for entities inside the interaction
     // range, so its presence alone means "you can hit this right now".
@@ -927,58 +943,6 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
     DrawHudText(draw, cx - size.x * 0.5f, cy + radius + 8.0f, IM_COL32(200, 250, 215, 255), label);
 }
 
-void Overlay::DrawHud(const WorldSnapshot& snapshot) {
-    // Heights are derived from the snapshot before anything is drawn, so a
-    // bottom-anchored stack can be positioned in one pass and the panel order
-    // stays visually identical in all four corners.
-    const float lineHeight = ImGui::GetTextLineHeight();
-
-    int visibleEquipment = 0;
-    for (const ItemSnapshot& item : snapshot.equipment) if (item.present) ++visibleEquipment;
-
-    enum Kind { kEquipment, kEffects, kCoordinates, kPerformance };
-    struct Panel { Kind kind; float height; };
-
-    Panel panels[4];
-    int   count = 0;
-
-    if (hud_.equipment && visibleEquipment > 0) {
-        panels[count++] = {kEquipment, 24.0f + visibleEquipment * (lineHeight + 9.0f)};
-    }
-    if (hud_.effects && snapshot.effectCount > 0) {
-        panels[count++] = {kEffects, 24.0f + snapshot.effectCount * (lineHeight + 4.0f) + 4.0f};
-    }
-    if (hud_.coordinates) {
-        panels[count++] = {kCoordinates, 24.0f + 4 * (lineHeight + 3.0f) + 4.0f};
-    }
-    if (hud_.performance) {
-        panels[count++] = {kPerformance, 132.0f};
-    }
-
-    const bool  right  = (hud_.corner == 1 || hud_.corner == 3);
-    const bool  bottom = (hud_.corner == 2 || hud_.corner == 3);
-    const float x      = right ? static_cast<float>(windowW_) - kPanelWidth - 16.0f : 16.0f;
-
-    float total = 0.0f;
-    for (int i = 0; i < count; ++i) total += panels[i].height + kPanelGap;
-
-    float y = bottom ? static_cast<float>(windowH_) - 16.0f - total + kPanelGap
-                     : 44.0f;
-
-    for (int i = 0; i < count; ++i) {
-        switch (panels[i].kind) {
-            case kEquipment:   DrawEquipmentPanel(snapshot, x, y);   break;
-            case kEffects:     DrawEffectsPanel(snapshot, x, y);     break;
-            case kCoordinates: DrawCoordinatesPanel(snapshot, x, y); break;
-            case kPerformance: DrawPerformancePanel(snapshot, x, y); break;
-        }
-        y += panels[i].height + kPanelGap;
-    }
-
-    if (hud_.compass)     DrawCompassStrip(snapshot);
-    if (hud_.reachMarker) DrawReachMarker(snapshot);
-}
-
 // ---------------------------------------------------------------------------
 // Triggerbot
 // ---------------------------------------------------------------------------
@@ -987,7 +951,7 @@ void Overlay::UpdateTriggerbot(const WorldSnapshot& snapshot) {
     if (!combat_.triggerbot) return;
 
     // Never while our own menu is up - the injected click would land on the UI.
-    if (menuVisible_) return;
+    if (menuVisible_||hudEditing_) return;
 
     // Only when Minecraft actually owns the foreground, so a click can never be
     // delivered to some other application.
@@ -1053,7 +1017,7 @@ void Overlay::PushCombatRequest() {
     request.config=version.values; request.relations=combatMenu_.Relations().Read();
     request.verticalFov=haveSnapshot_ && lastSnapshot_.fovDeg>1 ? lastSnapshot_.fovDeg : 70;
     request.viewportHeight=std::max(1.f,ImGui::GetIO().DisplaySize.y);
-    request.inputAllowed=!menuVisible_ && IsForegroundWindowOwnedBy(target_.pid);
+    request.inputAllowed=!menuVisible_&&!hudEditing_ && IsForegroundWindowOwnedBy(target_.pid);
     block->combatRequest.Publish(request);
     CombatReport report;
     if(block->combatReport.Read(report)) {
@@ -1116,7 +1080,7 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
 // ---------------------------------------------------------------------------
 void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
     if(combatMenu_.Store().Read().values.enabled) return;
-    if (!combat_.aimLock || menuVisible_) return;
+    if (!combat_.aimLock || menuVisible_ || hudEditing_) return;
     if (!IsForegroundWindowOwnedBy(target_.pid)) return;
     if (!(::GetAsyncKeyState(combat_.aimKey) & 0x8000)) return;
 
@@ -1186,21 +1150,6 @@ void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
     (void)kDegToRad;
 }
 
-void Overlay::DrawWatermark(const WorldSnapshot& snapshot) {
-    ImDrawList* draw = ImGui::GetBackgroundDrawList();
-
-    char text[192];
-    std::snprintf(text, sizeof(text), "mcov  |  %s  |  %u entities  |  %s",
-                  statusLine_.c_str(), snapshot.entityCount,
-                  snapshot.serverAddress[0] ? snapshot.serverAddress : "-");
-
-    const ImVec2 size = ImGui::CalcTextSize(text);
-    const ImVec2 pos(22.0f, 14.0f);
-    style::DrawFlatPanel(*draw, ImVec2(pos.x - 6.0f, pos.y - 4.0f),
-                         ImVec2(pos.x + size.x + 6.0f, pos.y + size.y + 4.0f), 6.0f);
-    draw->AddText(pos, style::kText, text);
-}
-
 // ---------------------------------------------------------------------------
 // Theme + menu
 // ---------------------------------------------------------------------------
@@ -1228,14 +1177,17 @@ void Overlay::ResetMenuPage(panel::Page page) {
         case panel::Page::Combat: combat_=CombatSettings{}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
+            worldVisualsConfig_=WorldVisualsConfig{}; worldVisuals_.Reset();
+            localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset(); break;
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; break;
-        case panel::Page::Hud: hud_=HudSettings{}; break;
+        case panel::Page::Hud: hud_=HudSettings{}; preferencesDirty_=true; break;
         case panel::Page::Stats: break;
         case panel::Page::Settings:
             settings_=OverlaySettings{};
+            preferencesDirty_=true;
             ApplyCaptureAffinity();
-            ApplyExtendedStyles(!menuVisible_ && settings_.clickThroughWhenIdle);
+            ApplyExtendedStyles(!menuVisible_&&!hudEditing_ && settings_.clickThroughWhenIdle);
             break;
     }
     PushScanRequest();
@@ -1243,70 +1195,98 @@ void Overlay::ResetMenuPage(panel::Page page) {
 
 
 void Overlay::DrawVisualsTab() {
-    MenuColumns("visual_columns",[&](int column) {
-        if (column==0) {
-            if (panel::BeginRows("visual_rendering")) {
-                panel::CheckRow("Box ESP",&visuals_.boxEsp);
-                panel::CheckRow("Skeleton",&visuals_.skeleton);
+    constexpr const char* sections[]={"Box ESP","Skeleton","Name tags","Health bars","Distance labels",
+        "Tracers","Target info","Target aura","Target marker","Trails","Hit particles","Ambient particles",
+        "Hit bubbles","Kill effect","BreadCrumbs","China hat","Entity filters"};
+    visualsSection_=panel::SubTabs("visual_sections",sections,IM_ARRAYSIZE(sections),visualsSection_);
+    // Jede Funktion besitzt ihre Regler; gemeinsame Entity-Filter bleiben an einer Stelle.
+    switch(visualsSection_) {
+        case 0:
+            if(panel::BeginRows("box_controls")) {
+                panel::CheckRow("Enable Box ESP",&visuals_.boxEsp); DrawBind(keys::Action::BoxEsp,true);
+                ImGui::BeginDisabled(!visuals_.boxEsp);
                 panel::CheckRow("Filled boxes",&visuals_.filledBox);
-                panel::CheckRow("Tracers",&visuals_.tracers);
-                panel::CheckRow("Name tags",&visuals_.nameTags);
-                panel::CheckRow("Health bars",&visuals_.healthBars);
-                panel::CheckRow("Distance labels",&visuals_.distanceText);
-                panel::CheckRow("Target info",&visuals_.targetInfo);
-                ImGui::EndTable();
+                panel::SliderRow("Box thickness",&visuals_.boxThickness,.5f,4,"%.1f px");
+                panel::SliderRow("Box rounding",&visuals_.boxRounding,0,16,"%.0f px");
+                ImGui::EndDisabled(); ImGui::EndTable();
             }
-            MenuHeading("Name tags");
-            if (panel::BeginRows("nametag_controls")) {
+            break;
+        case 1:
+            if(panel::BeginRows("skeleton_controls")) {
+                panel::CheckRow("Enable skeleton",&visuals_.skeleton); DrawBind(keys::Action::Skeleton,true);
+                ImGui::BeginDisabled(!visuals_.skeleton);
+                panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
+                ImGui::EndDisabled(); ImGui::EndTable();
+            }
+            break;
+        case 2:
+            if(panel::BeginRows("nametag_controls")) {
+                panel::CheckRow("Enable name tags",&visuals_.nameTags); DrawBind(keys::Action::NameTags,true);
                 ImGui::BeginDisabled(!visuals_.nameTags);
                 panel::CheckRow("Show HP",&visuals_.nameTagHealth);
                 panel::CheckRow("Player ping",&visuals_.nameTagPing);
                 panel::CheckRow("Armour / held items",&visuals_.nameTagEquipment);
-                ImGui::EndDisabled();
-                ImGui::EndTable();
+                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
+                ImGui::EndDisabled(); ImGui::EndTable();
             }
-            MenuHeading("Target effects");
-            style::StyleScope tabs;
-            tabs.Color(ImGuiCol_TabSelected,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
-            tabs.Color(ImGuiCol_TabHovered,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
-            tabs.Color(ImGuiCol_TabSelectedOverline,ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
-            if(ImGui::BeginTabBar("target_effect_tabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
-                if(ImGui::BeginTabItem("Target aura")) {
-                    DrawTargetAuraSettings(); ImGui::EndTabItem();
-                }
-                if(ImGui::BeginTabItem("Target marker")) {
-                    DrawTargetMarkerSettings(); ImGui::EndTabItem();
-                }
-                ImGui::EndTabBar();
-            }
-        } else {
-            if (panel::BeginRows("visual_filters")) {
-                panel::CheckRow("Players",&visuals_.showPlayers);
-                panel::CheckRow("Hostile mobs",&visuals_.showHostiles);
-                panel::CheckRow("Other entities",&visuals_.showOther);
-                panel::SliderRow("Max distance",&visuals_.maxDistance,8,512,"%.0f m");
-                panel::SliderRow("Box thickness",&visuals_.boxThickness,.5f,4,"%.1f px");
-                panel::SliderRow("Box rounding",&visuals_.boxRounding,0,16,"%.0f px");
-                panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
-                panel::SliderRow("Label size",&visuals_.labelSize,9,18,"%.0f px");
-                ImGui::EndTable();
-            }
-            MenuHeading("Colours");
-            if (panel::BeginRows("visual_colours")) {
-                panel::ColorRow("Players",visuals_.playerColor);
-                panel::ColorRow("Hostiles",visuals_.hostileColor);
-                panel::ColorRow("Other entities",visuals_.otherColor);
+            break;
+        case 3:
+            if(panel::BeginRows("health_controls")) {
+                panel::CheckRow("Enable health bars",&visuals_.healthBars);
+                ImGui::BeginDisabled(!visuals_.healthBars);
                 panel::ColorRow("Health accent",visuals_.healthColor);
-                panel::ColorRow("Tracers",visuals_.tracerColor);
+                ImGui::EndDisabled(); ImGui::EndTable();
+            }
+            break;
+        case 4:
+            if(panel::BeginRows("distance_controls")) {
+                panel::CheckRow("Enable distance labels",&visuals_.distanceText);
+                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
             }
-        }
-    });
+            ImGui::TextWrapped("With name tags enabled, distance appears in the name strip. Otherwise it appears below the box.");
+            break;
+        case 5:
+            if(panel::BeginRows("tracer_controls")) {
+                panel::CheckRow("Enable tracers",&visuals_.tracers);
+                ImGui::BeginDisabled(!visuals_.tracers);
+                panel::ColorRow("Tracer colour",visuals_.tracerColor);
+                ImGui::EndDisabled(); ImGui::EndTable();
+            }
+            break;
+        case 6:
+            if(panel::BeginRows("target_info_controls")) {
+                panel::CheckRow("Enable target info",&visuals_.targetInfo);
+                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
+                ImGui::EndTable();
+            }
+            break;
+        case 7: DrawTargetAuraSettings(); break;
+        case 8: DrawTargetMarkerSettings(); break;
+        case 9: case 10: case 11: case 12: case 13: case 14: case 15: DrawWorldVisualSettings(visualsSection_-9); break;
+        case 16:
+            MenuColumns("visual_filter_columns",[&](int column) {
+                MenuHeading(column==0 ? "Visible entities" : "Entity colours");
+                if(!panel::BeginRows(column==0 ? "visual_filters" : "visual_colours")) return;
+                if(column==0) {
+                    panel::CheckRow("Players",&visuals_.showPlayers);
+                    panel::CheckRow("Hostile mobs",&visuals_.showHostiles);
+                    panel::CheckRow("Other entities",&visuals_.showOther);
+                    panel::SliderRow("Max distance",&visuals_.maxDistance,8,512,"%.0f m");
+                } else {
+                    panel::ColorRow("Players",visuals_.playerColor);
+                    panel::ColorRow("Hostiles",visuals_.hostileColor);
+                    panel::ColorRow("Other entities",visuals_.otherColor);
+                }
+                ImGui::EndTable();
+            });
+            break;
+    }
 }
 
 void Overlay::DrawTargetAuraSettings() {
     if(panel::BeginRows("aura_controls")) {
-        panel::CheckRow("Enable aura",&auraConfig_.enabled);
+        panel::CheckRow("Enable aura",&auraConfig_.enabled); DrawBind(keys::Action::TargetAura,true);
         ImGui::BeginDisabled(!auraConfig_.enabled);
         panel::SliderIntRow("Orbs",&auraConfig_.orbCount,1,AuraRenderer::kMaxOrbs,"%d");
         panel::SliderRow("Orbit radius",&auraConfig_.orbitRadius,.3f,2,"%.2f x");
@@ -1330,7 +1310,7 @@ void Overlay::DrawTargetAuraSettings() {
 void Overlay::DrawTargetMarkerSettings() {
     auto& c=targetCubeConfig_;
     if(panel::BeginRows("marker_controls")) {
-        panel::CheckRow("Enable marker",&c.enabled);
+        panel::CheckRow("Enable marker",&c.enabled); DrawBind(keys::Action::TargetMarker,true);
         ImGui::BeginDisabled(!c.enabled);
         panel::SliderRow("Size",&c.sizeFraction,.3f,1.5f,"%.2f x");
         float width=c.strokeFraction*100;
@@ -1366,259 +1346,266 @@ void Overlay::DrawTargetMarkerSettings() {
 
 
 void Overlay::DrawCombatTab() {
-    if(combatMenu_.DrawNavigation()!=CombatMenu::Section::Modules) { combatMenu_.DrawSettings(); return; }
-    const bool auraActive=combatMenu_.Store().Read().values.enabled;
-    if(auraActive) ImGui::TextWrapped("Aim assist and triggerbot are paused while Kill Aura is enabled.");
-    MenuColumns("combat_columns",[&](int column) {
-        if (column==0) {
-            ImGui::BeginDisabled(auraActive);
-            MenuHeading("Aim assist");
-            if (panel::BeginRows("aim_controls")) {
-                panel::CheckRow("Enable aim assist",&combat_.aimLock);
-                const char* targets[]={"Living entities","Players"};
-                int target=combat_.aimPlayersOnly ? 1 : 0;
-                if (panel::ComboRow("Target selection",&target,targets,IM_ARRAYSIZE(targets))) combat_.aimPlayersOnly=target==1;
-                ImGui::BeginDisabled(!combat_.aimLock);
-                panel::SliderRow("Lock cone",&combat_.aimFov,2,90,"%.0f deg");
-                panel::SliderRow("Lock range",&combat_.aimRange,1,8,"%.1f m");
-                panel::SliderRow("Gain",&combat_.aimGain,.02f,1,"%.2f");
-                panel::SliderRow("Max mouse step",&combat_.aimMaxStep,2,80,"%.0f px");
-                ImGui::EndDisabled();
-                ImGui::EndTable();
-            }
-            ImGui::EndDisabled();
-            MenuHeading("Offhand");
-            if (panel::BeginRows("totem_controls")) {
-                panel::CheckRow("Auto totem",&combat_.autoTotem);
-                ImGui::EndTable();
-            }
-            MenuHeading("Activation");
-            ImGui::BeginDisabled(auraActive);
-            if (panel::BeginRows("aim_activation")) {
-                const char* keys[]={"Right mouse","Left mouse","ALT"};
-                const int codes[]={VK_RBUTTON,VK_LBUTTON,VK_MENU};
-                int key=combat_.aimKey==VK_MENU ? 2 : combat_.aimKey==VK_LBUTTON ? 1 : 0;
-                if (panel::ComboRow("Aim assist key",&key,keys,IM_ARRAYSIZE(keys))) combat_.aimKey=codes[key];
-                panel::ValueRow("Target priority","Angular distance");
-                ImGui::EndTable();
-            }
-            ImGui::EndDisabled();
-        } else {
-            ImGui::BeginDisabled(auraActive);
-            MenuHeading("Triggerbot");
-            if (panel::BeginRows("trigger_controls")) {
-                panel::CheckRow("Enable triggerbot",&combat_.triggerbot);
-                ImGui::BeginDisabled(!combat_.triggerbot);
-                panel::SliderRow("Clicks per second",&combat_.cps,1,20,"%.1f");
-                panel::SliderRow("Click jitter",&combat_.jitter,0,.9f,"%.2f");
-                panel::SliderRow("Max attack range",&combat_.maxDistance,1,6,"%.1f m");
-                panel::CheckRow("Living targets only",&combat_.livingOnly);
-                panel::CheckRow("Require hold key",&combat_.requireHoldKey);
-                const char* keys[]={"Right mouse","Left mouse","ALT"};
-                const int codes[]={VK_RBUTTON,VK_LBUTTON,VK_MENU};
-                int key=combat_.holdKey==VK_MENU ? 2 : combat_.holdKey==VK_LBUTTON ? 1 : 0;
-                if (panel::ComboRow("Activation key",&key,keys,IM_ARRAYSIZE(keys))) combat_.holdKey=codes[key];
-                ImGui::EndDisabled();
-                ImGui::EndTable();
-            }
-            ImGui::EndDisabled();
-            MenuHeading("Activity");
-            if (panel::BeginRows("trigger_activity")) {
-                char count[32]; std::snprintf(count,sizeof(count),"%u",clickCount_);
-                panel::ValueRow("Clicks sent",count);
-                panel::ValueRow("Activation","Menu closed");
-                ImGui::EndTable();
-            }
+    const auto section=combatMenu_.DrawNavigation();
+    if(section==CombatMenu::Section::KillAura || section==CombatMenu::Section::Debug || section==CombatMenu::Section::Friends) {
+        if(section!=CombatMenu::Section::Friends) { ImGui::TextUnformatted("Kill Aura key"); ImGui::SameLine(); DrawBind(keys::Action::KillAura); }
+        combatMenu_.DrawSettings(); return;
+    }
+    if(section==CombatMenu::Section::AutoTotem) {
+        if(panel::BeginRows("totem_controls")) {
+            panel::CheckRow("Enable Auto Totem",&combat_.autoTotem); DrawBind(keys::Action::AutoTotem,true);
+            ImGui::EndTable();
         }
-    });
+        ImGui::TextWrapped("Moves an available totem into the offhand when it is not already holding one.");
+        return;
+    }
+    const bool auraActive=combatMenu_.Store().Read().values.enabled;
+    if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura is enabled.");
+    ImGui::BeginDisabled(auraActive);
+    if(section==CombatMenu::Section::AimAssist) {
+        if(panel::BeginRows("aim_controls")) {
+            panel::CheckRow("Enable aim assist",&combat_.aimLock); DrawBind(keys::Action::AimAssist,true);
+            const char* targets[]={"Living entities","Players"};
+            int target=combat_.aimPlayersOnly ? 1 : 0;
+            if(panel::ComboRow("Target selection",&target,targets,IM_ARRAYSIZE(targets))) combat_.aimPlayersOnly=target==1;
+            ImGui::BeginDisabled(!combat_.aimLock);
+            panel::SliderRow("Lock cone",&combat_.aimFov,2,90,"%.0f deg");
+            panel::SliderRow("Lock range",&combat_.aimRange,1,8,"%.1f m");
+            panel::SliderRow("Gain",&combat_.aimGain,.02f,1,"%.2f");
+            panel::SliderRow("Max mouse step",&combat_.aimMaxStep,2,80,"%.0f px");
+            const char* keys[]={"Right mouse","Left mouse","ALT"};
+            const int codes[]={VK_RBUTTON,VK_LBUTTON,VK_MENU};
+            int key=combat_.aimKey==VK_MENU ? 2 : combat_.aimKey==VK_LBUTTON ? 1 : 0;
+            if(panel::ComboRow("Activation key",&key,keys,IM_ARRAYSIZE(keys))) combat_.aimKey=codes[key];
+            ImGui::EndDisabled();
+            panel::ValueRow("Target priority","Angular distance");
+            ImGui::EndTable();
+        }
+    } else if(section==CombatMenu::Section::Triggerbot) {
+        if(panel::BeginRows("trigger_controls")) {
+            panel::CheckRow("Enable triggerbot",&combat_.triggerbot); DrawBind(keys::Action::Triggerbot,true);
+            ImGui::BeginDisabled(!combat_.triggerbot);
+            panel::SliderRow("Clicks per second",&combat_.cps,1,20,"%.1f");
+            panel::SliderRow("Click jitter",&combat_.jitter,0,.9f,"%.2f");
+            panel::SliderRow("Max attack range",&combat_.maxDistance,1,6,"%.1f m");
+            panel::CheckRow("Living targets only",&combat_.livingOnly);
+            panel::CheckRow("Require hold key",&combat_.requireHoldKey);
+            const char* keys[]={"Right mouse","Left mouse","ALT"};
+            const int codes[]={VK_RBUTTON,VK_LBUTTON,VK_MENU};
+            int key=combat_.holdKey==VK_MENU ? 2 : combat_.holdKey==VK_LBUTTON ? 1 : 0;
+            if(panel::ComboRow("Activation key",&key,keys,IM_ARRAYSIZE(keys))) combat_.holdKey=codes[key];
+            ImGui::EndDisabled(); ImGui::EndTable();
+        }
+        MenuHeading("Activity");
+        if(panel::BeginRows("trigger_activity")) {
+            char count[32]; std::snprintf(count,sizeof(count),"%u",clickCount_);
+            panel::ValueRow("Clicks sent",count);
+            panel::ValueRow("Activation","Menu closed");
+            ImGui::EndTable();
+        }
+    }
+    ImGui::EndDisabled();
 }
-
 
 void Overlay::DrawBlocksTab() {
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers"};
+    blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
     bool dirty=false;
-    MenuColumns("block_columns",[&](int column) {
-        if (column==0) {
-            if (panel::BeginRows("block_filters")) {
-                for (std::uint8_t kind=0; kind<kBlockKindCount; ++kind) {
-                    const std::uint32_t bit=1u<<kind;
-                    bool on=(blocks_.mask&bit)!=0;
-                    if (panel::CheckRow(BlockKindLabel(kind),&on)) {
-                        blocks_.mask=on ? blocks_.mask|bit : blocks_.mask&~bit;
-                        dirty=true;
-                    }
-                }
-                ImGui::EndTable();
-            }
-        } else {
-            if (panel::BeginRows("block_scanning")) {
-                dirty|=panel::CheckRow("Enable scanning",&blocks_.enabled);
-                dirty|=panel::SliderIntRow("Scan radius",&blocks_.radius,4,48,"%d blocks");
-                dirty|=panel::SliderIntRow("Scan interval",&blocks_.interval,200,3000,"%d ms");
-                panel::SliderRow("Draw distance",&blocks_.maxDraw,8,128,"%.0f m");
-                panel::CheckRow("Tracers to blocks",&blocks_.tracers);
-                ImGui::EndTable();
-            }
-            ImGui::TextWrapped("A larger scan radius takes longer to finish. Results stay visible between scans.");
-            if (haveSnapshot_) ImGui::TextDisabled("Found: %u blocks",lastSnapshot_.blockCount);
-            if (haveSnapshot_ && lastSnapshot_.blockCount>=kMaxBlocks)
-                ImGui::TextWrapped("Result limit reached. Reduce the scan radius to focus on nearby blocks.");
+    if(blocksSection_==0) {
+        if(panel::BeginRows("block_scanning")) {
+            dirty|=panel::CheckRow("Enable Block ESP",&blocks_.enabled); DrawBind(keys::Action::BlockEsp,true);
+            dirty|=panel::SliderIntRow("Scan radius",&blocks_.radius,4,48,"%d blocks");
+            dirty|=panel::SliderIntRow("Scan interval",&blocks_.interval,200,3000,"%d ms");
+            panel::SliderRow("Draw distance",&blocks_.maxDraw,8,128,"%.0f m");
+            ImGui::EndTable();
         }
-    });
-    if (dirty) PushScanRequest();
+        ImGui::TextWrapped("Choose blocks under Block types. A larger radius takes longer to scan; results remain visible between scans.");
+        if(haveSnapshot_) ImGui::TextDisabled("Found: %u blocks",lastSnapshot_.blockCount);
+        if(haveSnapshot_&&lastSnapshot_.blockCount>=kMaxBlocks)
+            ImGui::TextWrapped("Result limit reached. Reduce the scan radius to focus on nearby blocks.");
+    } else if(blocksSection_==1) {
+        if(panel::BeginRows("block_filters")) {
+            for(std::uint8_t kind=0;kind<kBlockKindCount;++kind) {
+                const std::uint32_t bit=1u<<kind; bool on=(blocks_.mask&bit)!=0;
+                if(panel::CheckRow(BlockKindLabel(kind),&on)) { blocks_.mask=on ? blocks_.mask|bit : blocks_.mask&~bit; dirty=true; }
+            }
+            ImGui::EndTable();
+        }
+    } else if(panel::BeginRows("block_tracers")) {
+        panel::CheckRow("Tracers to blocks",&blocks_.tracers);
+        panel::SliderRow("Draw distance (shared)",&blocks_.maxDraw,8,128,"%.0f m");
+        ImGui::EndTable();
+        ImGui::TextWrapped("Tracers use the Block ESP scan results. Enable Block ESP and choose at least one block type.");
+    }
+    if(dirty) PushScanRequest();
 }
-
 
 void Overlay::DrawHudTab() {
-    MenuColumns("hud_columns",[&](int column) {
-        if (column==0) {
-            if (panel::BeginRows("hud_panels")) {
-                panel::CheckRow("Armour & equipment",&hud_.equipment);
-                panel::CheckRow("Status effects",&hud_.effects);
-                panel::CheckRow("Coordinates",&hud_.coordinates);
-                panel::CheckRow("Telemetry graphs",&hud_.performance);
-                panel::CheckRow("Compass strip",&hud_.compass);
-                panel::CheckRow("Reach indicator",&hud_.reachMarker);
-                ImGui::EndTable();
+    constexpr std::array<const char*,kHudModules+1> sections={"Editor","Equipment","Status effects","Coordinates",
+        "Performance","Compass","Reach indicator","Watermark","Active modules","Keybinds"};
+    hudSection_=panel::SubTabs("hud_sections",sections.data(),int(sections.size()),hudSection_);
+    if(hudSection_>0) hudSelected_=hudSection_-1;
+    if(ImGui::Button("Open HUD editor")) SetHudEditing(true);
+    bool changed=false;
+    if(hudSection_==0) {
+        if(panel::BeginRows("hud_modules")) {
+            changed|=panel::CheckRow("Show HUD",&hud_.visible); DrawBind(keys::Action::Hud,true);
+            for(int i=0;i<kHudModules;++i) { bool on=HudEnabled(i);
+                if(panel::CheckRow(kHudNames[i],&on)) { SetHudEnabled(i,on); changed=true; }
             }
-        } else {
-            static const char* corners[]={"Top left","Top right","Bottom left","Bottom right"};
-            if (panel::BeginRows("hud_layout")) {
-                panel::ComboRow("Panel anchor",&hud_.corner,corners,IM_ARRAYSIZE(corners));
-                float warn=100*hud_.durabilityWarn;
-                if (panel::SliderRow("Durability warning",&warn,5,50,"%.0f%%")) hud_.durabilityWarn=warn/100;
-                ImGui::EndTable();
-            }
-            ImGui::TextWrapped("Equipment bars pulse red below the durability threshold. The reach indicator lights up for a target within attack range.");
+            ImGui::EndTable();
         }
-    });
+        if(ImGui::Button("Reset HUD layout")) { hud_.layout={}; changed=true; }
+        ImGui::TextWrapped("Choose an element tab for its scale and position. In the editor, drag elements directly; empty and disabled elements are previewed too.");
+    } else {
+        const int module=hudSection_-1; bool on=HudEnabled(module);
+        if(panel::BeginRows("hud_element")) {
+            if(panel::CheckRow("Show element",&on)) { SetHudEnabled(module,on); changed=true; }
+            auto& placement=hud_.layout[module];
+            changed|=panel::SliderRow("Scale",&placement.scale,.65f,1.6f,"%.2f x");
+            bool moved=panel::SliderRow("Horizontal position",&placement.position.x,0,1,"%.2f");
+            moved|=panel::SliderRow("Vertical position",&placement.position.y,0,1,"%.2f");
+            if(moved) { placement.placed=true; changed=true; }
+            if(module==int(HudModule::Equipment)) {
+                float warn=hud_.durabilityWarn*100;
+                if(panel::SliderRow("Durability warning",&warn,5,50,"%.0f %%")) { hud_.durabilityWarn=warn/100; changed=true; }
+            }
+            ImGui::EndTable();
+        }
+        if(ImGui::Button("Reset element layout")) { hud_.layout[module]={}; changed=true; }
+        if(!hud_.visible) ImGui::TextWrapped("The entire HUD is hidden. Enable Show HUD in the Editor tab to display this element.");
+    }
+    if(changed) { preferencesDirty_=true; preferenceSaveAt_=::GetTickCount64()+500; }
 }
-
 
 void Overlay::DrawStatsTab(const WorldSnapshot& snapshot) {
 
+    constexpr const char* sections[]={"Local player","Client","Entities"};
+    statsSection_=panel::SubTabs("stats_sections",sections,IM_ARRAYSIZE(sections),statsSection_);
     if (!haveSnapshot_) {
         ImGui::TextDisabled("Waiting for the agent's first snapshot...");
         return;
     }
 
-    SectionHeader("LOCAL PLAYER");
-    ImGui::Text("Name       %s", snapshot.username[0] ? snapshot.username : "-");
-    ImGui::Text("Position   %.1f, %.1f, %.1f", snapshot.posX, snapshot.posY, snapshot.posZ);
-    ImGui::Text("Facing     yaw %.1f  pitch %.1f", snapshot.yawDeg, snapshot.pitchDeg);
-    ImGui::Text("Dimension  %s", snapshot.dimension[0] ? snapshot.dimension : "-");
-    ImGui::Text("Server     %s", snapshot.serverAddress[0] ? snapshot.serverAddress : "-");
+    if(statsSection_==0) {
+        ImGui::Text("Name       %s", snapshot.username[0] ? snapshot.username : "-");
+        ImGui::Text("Position   %.1f, %.1f, %.1f", snapshot.posX, snapshot.posY, snapshot.posZ);
+        ImGui::Text("Facing     yaw %.1f  pitch %.1f", snapshot.yawDeg, snapshot.pitchDeg);
+        ImGui::Text("Dimension  %s", snapshot.dimension[0] ? snapshot.dimension : "-");
+        ImGui::Text("Server     %s", snapshot.serverAddress[0] ? snapshot.serverAddress : "-");
 
-    if (snapshot.maxHealth > 0.0f && snapshot.health >= 0.0f) {
-        const float fraction = std::clamp(snapshot.health / snapshot.maxHealth, 0.0f, 1.0f);
-        char label[48];
-        std::snprintf(label, sizeof(label), "%.1f / %.1f", snapshot.health, snapshot.maxHealth);
-        ImGui::ProgressBar(fraction, ImVec2(-1, 0), label);
-    }
-    ImGui::Text("Armour     %d", snapshot.armorValue);
-    ImGui::Text("Absorption %.1f", snapshot.absorption);
-
-    SectionHeader("CLIENT");
-    // Values the agent deliberately does not sample come through as -1 rather
-    // than as a plausible-looking zero.
-    if (snapshot.fps  >= 0) ImGui::Text("FPS        %d", snapshot.fps);
-    else                    ImGui::TextDisabled("FPS        not sampled");
-    if (snapshot.ping >= 0) ImGui::Text("Ping       %d ms", snapshot.ping);
-    else                    ImGui::TextDisabled("Ping       not sampled");
-    ImGui::Text("FOV        %.0f deg", snapshot.fovDeg);
-    ImGui::Text("Snapshot   #%llu", static_cast<unsigned long long>(snapshot.frameIndex));
-
-    SectionHeader("ENTITIES");
-    if (ImGui::BeginTable("##entities", 4,
-                          ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                          ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp,
-                          ImVec2(0, 180))) {
-        ImGui::TableSetupScrollFreeze(0, 1);
-        ImGui::TableSetupColumn("Name");
-        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-        ImGui::TableSetupColumn("Health", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-        ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 60.0f);
-        ImGui::TableHeadersRow();
-
-        for (std::uint32_t i = 0; i < snapshot.entityCount && i < kMaxEntities; ++i) {
-            const EntitySnapshot& entity = snapshot.entities[i];
-            ImGui::TableNextRow();
-
-            ImGui::TableSetColumnIndex(0);
-            ImGui::TextUnformatted(entity.name[0] ? entity.name : "<unnamed>");
-
-            ImGui::TableSetColumnIndex(1);
-            if (entity.flags & kEntityIsPlayer)       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "player");
-            else if (entity.flags & kEntityIsHostile) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f), "hostile");
-            else                                      ImGui::TextDisabled("other");
-
-            ImGui::TableSetColumnIndex(2);
-            if (entity.flags & kEntityIsLiving) ImGui::Text("%.0f / %.0f", entity.health, entity.maxHealth);
-            else                                ImGui::TextDisabled("-");
-
-            ImGui::TableSetColumnIndex(3);
-            ImGui::Text("%.0f m", entity.distance);
+        if (snapshot.maxHealth > 0.0f && snapshot.health >= 0.0f) {
+            const float fraction = std::clamp(snapshot.health / snapshot.maxHealth, 0.0f, 1.0f);
+            char label[48];
+            std::snprintf(label, sizeof(label), "%.1f / %.1f", snapshot.health, snapshot.maxHealth);
+            ImGui::ProgressBar(fraction, ImVec2(-1, 0), label);
         }
-        ImGui::EndTable();
+        ImGui::Text("Armour     %d", snapshot.armorValue);
+        ImGui::Text("Absorption %.1f", snapshot.absorption);
+
+    } else if(statsSection_==1) {
+        // Values the agent deliberately does not sample come through as -1 rather
+        // than as a plausible-looking zero.
+        if (snapshot.fps  >= 0) ImGui::Text("FPS        %d", snapshot.fps);
+        else                    ImGui::TextDisabled("FPS        not sampled");
+        if (snapshot.ping >= 0) ImGui::Text("Ping       %d ms", snapshot.ping);
+        else                    ImGui::TextDisabled("Ping       not sampled");
+        ImGui::Text("FOV        %.0f deg", snapshot.fovDeg);
+        ImGui::Text("Snapshot   #%llu", static_cast<unsigned long long>(snapshot.frameIndex));
+
+    } else {
+        if (ImGui::BeginTable("##entities", 4,
+                              ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+                              ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp,
+                              ImVec2(0, 180))) {
+            ImGui::TableSetupScrollFreeze(0, 1);
+            ImGui::TableSetupColumn("Name");
+            ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("Health", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn("Dist", ImGuiTableColumnFlags_WidthFixed, 60.0f);
+            ImGui::TableHeadersRow();
+
+            for (std::uint32_t i = 0; i < snapshot.entityCount && i < kMaxEntities; ++i) {
+                const EntitySnapshot& entity = snapshot.entities[i];
+                ImGui::TableNextRow();
+
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(entity.name[0] ? entity.name : "<unnamed>");
+
+                ImGui::TableSetColumnIndex(1);
+                if (entity.flags & kEntityIsPlayer)       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "player");
+                else if (entity.flags & kEntityIsHostile) ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f), "hostile");
+                else                                      ImGui::TextDisabled("other");
+
+                ImGui::TableSetColumnIndex(2);
+                if (entity.flags & kEntityIsLiving) ImGui::Text("%.0f / %.0f", entity.health, entity.maxHealth);
+                else                                ImGui::TextDisabled("-");
+
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%.0f m", entity.distance);
+            }
+            ImGui::EndTable();
+        }
+
     }
-
 }
-
 
 void Overlay::DrawSettingsTab() {
-    MenuColumns("settings_columns",[&](int column) {
-        if (column==0) {
-            if (panel::BeginRows("overlay_settings")) {
-                panel::SliderRow("FOV trim",&settings_.fovTrim,-20,20,"%+.1f deg");
-                if (panel::CheckRow("Click-through when closed",&settings_.clickThroughWhenIdle) && !menuVisible_)
-                    ApplyExtendedStyles(settings_.clickThroughWhenIdle);
-                panel::CheckRow("Hide when game is unfocused",&settings_.hideWhenUnfocused);
-                panel::CheckRow("Show watermark",&settings_.showWatermark);
-                panel::CheckRow("VSync",&settings_.vsync);
-                if (panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
-                ImGui::EndTable();
-            }
-            MenuHeading("Focus & keys");
-            static const char* focusLabels[]={"No focus","Activate","Unlock","Legacy"};
-            if (panel::BeginRows("focus_settings")) {
-                int focus=int(settings_.focusMode);
-                if (panel::ComboRow("Focus mode",&focus,focusLabels,IM_ARRAYSIZE(focusLabels))) settings_.focusMode=FocusMode(focus);
-                panel::ValueRow("Toggle menu","INSERT");
-                panel::ValueRow("Quit overlay","END");
-                ImGui::EndTable();
-            }
-            if (settings_.focusMode==FocusMode::Simple)
-                ImGui::TextWrapped("If the menu does not accept clicks, choose Unlock foreground.");
-            if (settings_.focusMode==FocusMode::AttachInput)
-                ImGui::TextWrapped("Legacy attach input can crash GLFW games while the mouse is captured.");
-        } else {
-            if (panel::BeginRows("agent_details")) {
-                char pid[32]; std::snprintf(pid,sizeof(pid),"%u",target_.pid);
-                panel::ValueRow("Process",pid);
-                panel::ValueRow("Status",statusLine_.c_str());
-                panel::ValueRow("Minecraft",lastSnapshot_.gameVersion[0] ? lastSnapshot_.gameVersion : "detecting");
-                panel::ValueRow("Profile",lastSnapshot_.mappingProfile[0] ? lastSnapshot_.mappingProfile : "detecting");
-                ImGui::EndTable();
-            }
-            ImGui::Spacing();
-            if (!agentConnected_) {
-                if (ImGui::Button("Load agent into Minecraft",ImVec2(-1,0))) {
-                    const auto directory=ExecutableDirectory();
-                    std::uint32_t exitCode=0; std::string loadError;
-                    if (LaunchAgentLoader(target_,directory+L"\\tools",directory+L"\\mcov_agent.dll",&exitCode,&loadError))
-                        statusLine_="agent loaded; connecting";
-                    else { statusLine_=loadError; MCOV_LOG_ERROR("agent load failed: %s",loadError.c_str()); }
-                }
-            } else if (ImGui::Button("Stop agent sampling",ImVec2(-1,0))) {
-                if (auto* block=channel_.block()) {
-                    block->controlFlags.fetch_or(kCtrlRequestUnload,std::memory_order_acq_rel);
-                    statusLine_="unload requested";
-                }
-            }
-            ImGui::Spacing();
-            if (ImGui::Button("Close overlay",ImVec2(-1,0))) running_=false;
+    constexpr const char* sections[]={"Overlay","Focus","Keybinds","Agent"};
+    settingsSection_=panel::SubTabs("settings_sections",sections,IM_ARRAYSIZE(sections),settingsSection_);
+    if(settingsSection_==0) {
+        if(panel::BeginRows("overlay_settings")) {
+            panel::SliderRow("FOV trim",&settings_.fovTrim,-20,20,"%+.1f deg");
+            if(panel::CheckRow("Click-through when closed",&settings_.clickThroughWhenIdle)&&!menuVisible_)
+                ApplyExtendedStyles(!hudEditing_&&settings_.clickThroughWhenIdle);
+            panel::CheckRow("Hide when game is unfocused",&settings_.hideWhenUnfocused);
+            panel::CheckRow("VSync",&settings_.vsync);
+            panel::CheckRow("Reduced motion",&menu_.reduceMotion);
+            if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
+            ImGui::EndTable();
         }
-    });
+        ImGui::TextWrapped("Watermark visibility and layout are configured under HUD > Watermark.");
+        if(ImGui::Button("Close overlay",ImVec2(-1,0))) running_=false;
+    } else if(settingsSection_==1) {
+        static const char* focusLabels[]={"No focus","Activate","Unlock","Legacy"};
+        if(panel::BeginRows("focus_settings")) {
+            int focus=int(settings_.focusMode);
+            if(panel::ComboRow("Focus mode",&focus,focusLabels,IM_ARRAYSIZE(focusLabels))) settings_.focusMode=FocusMode(focus);
+            panel::ValueRow("Toggle menu",BindName(bindings_[keys::Index(keys::Action::Menu)]).c_str());
+            panel::ValueRow("HUD editor",BindName(bindings_[keys::Index(keys::Action::HudEditor)]).c_str());
+            panel::ValueRow("Quit overlay",BindName(bindings_[keys::Index(keys::Action::Quit)]).c_str());
+            ImGui::EndTable();
+        }
+        if(settings_.focusMode==FocusMode::Simple)
+            ImGui::TextWrapped("If the menu does not accept clicks, choose Unlock foreground.");
+        if(settings_.focusMode==FocusMode::AttachInput)
+            ImGui::TextWrapped("Legacy attach input can crash GLFW games while the mouse is captured.");
+    } else if(settingsSection_==2) {
+        DrawKeybindSettings();
+    } else {
+        if(panel::BeginRows("agent_details")) {
+            char pid[32]; std::snprintf(pid,sizeof(pid),"%u",target_.pid);
+            panel::ValueRow("Process",pid);
+            panel::ValueRow("Status",statusLine_.c_str());
+            panel::ValueRow("Minecraft",lastSnapshot_.gameVersion[0] ? lastSnapshot_.gameVersion : "detecting");
+            panel::ValueRow("Profile",lastSnapshot_.mappingProfile[0] ? lastSnapshot_.mappingProfile : "detecting");
+            ImGui::EndTable();
+        }
+        if(!agentConnected_) {
+            if(ImGui::Button("Load agent into Minecraft",ImVec2(-1,0))) {
+                const auto directory=ExecutableDirectory();
+                std::uint32_t exitCode=0; std::string loadError;
+                if(LaunchAgentLoader(target_,directory+L"\\tools",directory+L"\\mcov_agent.dll",&exitCode,&loadError))
+                    statusLine_="agent loaded; connecting";
+                else { statusLine_=loadError; MCOV_LOG_ERROR("agent load failed: %s",loadError.c_str()); }
+            }
+        } else if(ImGui::Button("Stop agent sampling",ImVec2(-1,0))) {
+            if(auto* block=channel_.block()) {
+                block->controlFlags.fetch_or(kCtrlRequestUnload,std::memory_order_acq_rel);
+                statusLine_="unload requested";
+            }
+        }
+    }
 }
-
 
 } // namespace mcov

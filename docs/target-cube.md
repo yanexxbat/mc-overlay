@@ -14,7 +14,7 @@ Eine analytische Sinusbewegung wechselt die Drehrichtung weich alle 3,5 Sekunden
 ohne Sprung in Winkel oder Geschwindigkeit. Die Anfangsdeckkraft ist bereits
 65 % und erreicht in 160 ms den vollen Wert.
 
-Unter **VISUALS → Target effects → Target marker** ist der Marker unabhängig
+Unter **VISUALS → Target marker** ist der Marker unabhängig
 von **Target aura** konfigurierbar. Die Regler wirken sofort; **Reset** auf der
 Visuals-Seite setzt ESP, Aura und Marker auf ihre Standardwerte zurück. Die
 Einstellungen gelten für die aktuelle Overlay-Sitzung.

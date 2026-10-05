@@ -40,7 +40,6 @@ struct OverlayUiCheck {
     }
     static bool Box(const Overlay& o) { return o.visuals_.boxEsp; }
     static const control_panel::State& Menu(const Overlay& o) { return o.menu_; }
-    static void Collapse(Overlay& o,bool value) { o.menu_.navCollapsed=value; }
     static void ReduceMotion(Overlay& o,bool value) { o.menu_.reduceMotion=value; }
     static void Center(Overlay& o) { o.menu_.positioned=false; }
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
@@ -51,6 +50,24 @@ struct OverlayUiCheck {
     static AuraConfig& AuraSettings(Overlay& o) { return o.auraConfig_; }
     static TargetCubeConfig& CubeSettings(Overlay& o) { return o.targetCubeConfig_; }
     static void MarkerDetails(Overlay& o,bool open) { o.markerDetailsOpen_=open; }
+    static HudSettings& Hud(Overlay& o) { return o.hud_; }
+    static WorldVisualsConfig& WorldSettings(Overlay& o) { return o.worldVisualsConfig_; }
+    static LocalHatConfig& HatSettings(Overlay& o) { return o.localHatConfig_; }
+    static void UpdateWorld(Overlay& o,const WorldSnapshot& s,double now) {
+        o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
+    }
+    static keys::Bindings& Binds(Overlay& o) { return o.bindings_; }
+    static int Capture(const Overlay& o) { return o.captureAction_; }
+    static void Capture(Overlay& o,keys::Action a) { o.captureAction_=keys::Index(a); o.captureArmed_=true; o.menuVisible_=true; o.capturePrevious_={}; }
+    static void Input(Overlay& o,const keys::Input& input,bool menu=false) { o.menuVisible_=menu; o.ProcessKeyInput(input,true); }
+    static void PrefPath(Overlay& o,const std::filesystem::path& path) { o.preferencesPath_=path; }
+    static void Save(Overlay& o) { o.SavePreferences(); }
+    static void Load(Overlay& o) { o.LoadPreferences(); }
+    static void DrawHud(Overlay& o,const WorldSnapshot& s,bool editing) {
+        o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
+        o.hudEditing_=editing; o.DrawHud(s); if(editing) o.DrawHudEditor();
+    }
+    static const auto& HudRects(const Overlay& o) { return o.hudRects_; }
     static void CubeReport(Overlay& o,const EntitySnapshot& e,CombatBridgeStatus status=CombatBridgeStatus::Active,std::uint64_t age=0) {
         auto config=combat::MakeKillAuraConfig({}); config.enabled=true; o.combatMenu_.Store().Publish(config);
         o.combatReport_={}; o.combatReport_.sampledAtMs=GetTickCount64()-age;
@@ -175,9 +192,41 @@ void Draw(mcov::Overlay& overlay,Page page,int theme,ImVec2 size,bool preserveSt
     ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"Empty control panel");
 }
 ImGuiWindow* Child(const char* name) {
-    for (auto* w:ImGui::GetCurrentContext()->Windows)
-        if (std::strstr(w->Name,name)) return w;
+    for(auto* w:ImGui::GetCurrentContext()->Windows) {
+        const auto* match=std::strstr(w->Name,name);
+        if(match&&!std::strchr(match+1,'/')) return w;
+    }
     throw std::runtime_error("Missing menu child");
+}
+// Echte Maus-Eingaben erreichen auch Tabs hinter den nativen Scroll-Pfeilen.
+void SelectSubTab(mcov::Overlay& overlay,Page page,const char* id,int index,int count,ImVec2 viewport={1280,800}) {
+    auto frame=[&] { Draw(overlay,page,0,viewport); };
+    frame(); ImGui::SetScrollY(Child("/content_"),0); frame(); frame();
+    auto bar=[&] {
+        auto* tabs=ImGui::GetCurrentContext()->TabBars.GetByKey(Child("/content_")->GetID(id));
+        if(!tabs||tabs->Tabs.Size!=count) {
+            throw std::runtime_error(std::string("Function tabs are missing: ")+id+" count="+std::to_string(tabs ? tabs->Tabs.Size : -1));
+        }
+        return tabs;
+    };
+    const auto wanted=bar()->Tabs[index].ID;
+    for(int attempt=0;attempt<count+1&&bar()->SelectedTabId!=wanted;++attempt) {
+        auto* tabs=bar(); int current=0;
+        while(current<count&&tabs->Tabs[current].ID!=tabs->SelectedTabId) ++current;
+        Require(current<count,"Unknown selected function tab");
+        ImVec2 point;
+        if(tabs->WidthAllTabsIdeal>tabs->BarRect.GetWidth()) {
+            point={tabs->BarRect.Max.x+1+(index>current ? 16.5f : 5.5f),tabs->BarRect.GetCenter().y};
+        } else {
+            const auto& tab=tabs->Tabs[index];
+            point={tabs->BarRect.Min.x+tab.Offset-tabs->ScrollingAnim+tab.Width*.5f,tabs->BarRect.GetCenter().y};
+        }
+        auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame();
+        io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+    }
+    Require(bar()->SelectedTabId==wanted,"Function tab could not be selected through input");
+    for(int settle=0;settle<20;++settle) frame();
+    ImGui::GetIO().AddMousePosEvent(-100,-100); frame();
 }
 void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                       const std::filesystem::path& output) {
@@ -186,37 +235,29 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
     mcov::OverlayUiCheck::Center(overlay); frame(); frame();
     auto bar=[&]() -> ImGuiTabBar* {
-        const auto* columns=ctx.Tables.GetByKey(Child("/content_")->GetID("visual_columns"));
-        Require(columns!=nullptr,"Missing Visuals columns");
-        auto* tabs=ctx.TabBars.GetByKey(ImHashStr("target_effect_tabs",0,columns->ID));
-        Require(tabs&&tabs->Tabs.Size==2,"Target effects did not expose both tabs"); return tabs;
+        auto* tabs=ctx.TabBars.GetByKey(Child("/content_")->GetID("visual_sections"));
+        Require(tabs&&tabs->Tabs.Size==17,"Visuals did not expose all function tabs"); return tabs;
     };
+    SelectSubTab(overlay,Page::Visuals,"visual_sections",8,17);
     auto* content=Child("/content_");
-    ImGui::SetScrollY(content,content->Scroll.y+bar()->BarRect.Min.y-content->InnerRect.Min.y-28);
-    frame(); frame();
-    const auto& markerTab=bar()->Tabs[1]; const auto markerId=markerTab.ID;
-    const ImVec2 tabClick(bar()->BarRect.Min.x+markerTab.Offset+markerTab.Width*.5f,
-                         bar()->BarRect.GetCenter().y);
+    const auto markerId=bar()->Tabs[8].ID;
     auto click=[&](ImVec2 p) {
-        // ImGui-Tabs mit AllowOverlap benötigen zuerst einen Hover-Frame.
         io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
         io.AddMouseButtonEvent(0,false); frame(); frame();
     };
-    click(tabClick);
-    Require(bar()->SelectedTabId==markerId,"Target marker tab could not be selected through input");
     auto controls=[&]() -> ImGuiTable* {
-        auto* table=ctx.Tables.GetByKey(ImHashStr("marker_controls",0,markerId));
+        auto* table=ctx.Tables.GetByKey(Child("/content_")->GetID("marker_controls"));
         Require(table!=nullptr,"Marker controls are missing"); return table;
     };
     const auto top=controls()->OuterRect.Min;
-    click({top.x+32,top.y+18});
+    click({top.x+32,top.y+8});
     Require(!config.enabled,"Enable marker checkbox did not update renderer config");
-    click({top.x+32,top.y+18});
+    click({top.x+32,top.y+8});
     Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
     // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
-    const float row=35.25f;
-    const auto& column=controls()->Columns[1];
-    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+18});
+    const float row=23.f;
+    const auto& column=controls()->Columns[0];
+    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+24});
     Require(config.sizeFraction>1&&config.sizeFraction<=1.5f,"Marker size slider was not wired to renderer config");
     config.glow=.4f; config.animate=false; config.showDepth=false; config.lime={.85f,.15f,1,1};
     mcov::OverlayUiCheck::ResetVisuals(overlay);
@@ -238,6 +279,89 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     mcov::OverlayUiCheck::MarkerDetails(overlay,false);
     ImGui::SetScrollY(Child("/content_"),0);
     io.AddMousePosEvent(-100,-100); mcov::OverlayUiCheck::Center(overlay); frame(); frame();
+}
+void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto& config=mcov::OverlayUiCheck::WorldSettings(overlay);
+    mcov::WorldSnapshot scene{}; scene.health=scene.maxHealth=20; scene.camY=1.8;
+    scene.pitchDeg=8; scene.fovDeg=65; scene.nearPlane=.05f; scene.farPlane=1024;
+    scene.entityCount=1; scene.hasTarget=1; scene.targetEntityId=42;
+    auto& e=scene.entities[0]; e.entityId=42; e.uuid={11,22}; e.z=5;
+    e.width=.6f; e.height=e.modelHeight=1.8f; e.health=e.maxHealth=20;
+    e.flags=mcov::kEntityIsLiving|mcov::kEntityIsPlayer; e.rigKind=mcov::kRigHumanoid;
+    mcov::CopyField(e.name,"Effect preview");
+    config.trails.enabled=config.hits.enabled=config.ambient.enabled=true;
+    config.bubbles.enabled=config.kills.enabled=config.crumbs.enabled=true;
+    config.trails.subjects=mcov::TrailSubjects::Target;
+    config.ambient.amount=80; config.ambient.radius=5;
+    for(int i=0;i<90;++i) {
+        scene.frameIndex++; e.x=-2+i*.035; e.z=5+std::sin(i*.04)*.6;
+        scene.posX=-1.5f; scene.posZ=3+i*.015f;
+        e.distance=float(std::sqrt(e.x*e.x+e.z*e.z));
+        if(i==83) e.health=18;
+        mcov::OverlayUiCheck::UpdateWorld(overlay,scene,1+i*.04);
+    }
+    const auto render=[&](ImVec2 size) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
+        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        mcov::OverlayUiCheck::InitGlow(overlay,device);
+        mcov::WorldVisualsRenderer::Prepare(*ImGui::GetBackgroundDrawList());
+        mcov::OverlayUiCheck::DrawEsp(overlay,scene);
+        const auto& draw=*ImGui::GetBackgroundDrawList();
+        for(const auto& vertex:draw.VtxBuffer) Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"World preview generated invalid vertices");
+        Require(draw.VtxBuffer.Size>100,"World visual preview is empty"); ImGui::Render();
+    };
+    render({1280,720}); SaveFrame(device,context,output/"world-visuals.png");
+    config.trails.shape=mcov::TrailShape::Dots; config.hits.shape=mcov::ParticleShape::Stars;
+    config.ambient.shape=mcov::AmbientShape::Stars;
+    render({1280,720}); SaveFrame(device,context,output/"world-visuals-stars.png");
+    render({480,360}); SaveFrame(device,context,output/"world-visuals-small.png");
+    ++scene.frameIndex; e.health=0;
+    mcov::OverlayUiCheck::UpdateWorld(overlay,scene,4.6);
+    ++scene.frameIndex; mcov::OverlayUiCheck::UpdateWorld(overlay,scene,4.78);
+    render({1280,720}); SaveFrame(device,context,output/"world-kill-effect.png");
+    // Echter Self-Record, perspektivisch getrennte F5-Kamera; ESP bleibt nur am Fremdspieler.
+    scene.entityCount=2; auto& self=scene.entities[1]; self=e;
+    self.entityId=99; self.uuid={33,44}; self.x=-1.5; self.z=4;
+    self.health=20; self.headPitch=12; self.flags|=mcov::kEntityIsSelf;
+    render({1280,720}); SaveFrame(device,context,output/"world-own-hat.png");
+    render({480,360}); SaveFrame(device,context,output/"world-own-hat-small.png");
+    auto& hat=mcov::OverlayUiCheck::HatSettings(overlay);
+    bool* enabled[]={&config.trails.enabled,&config.hits.enabled,&config.ambient.enabled,&config.bubbles.enabled,
+        &config.kills.enabled,&config.crumbs.enabled,&hat.enabled};
+    for(int section=9;section<=15;++section) {
+        SelectSubTab(overlay,Page::Visuals,"visual_sections",section,17);
+        const char* names[]={"trail_settings","hit_particle_settings","ambient_particle_settings","hit_bubble_settings",
+            "kill_effect_settings","breadcrumb_settings","local_hat_settings"};
+        auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID(names[section-9]));
+        Require(table!=nullptr,"New visual settings were not reachable");
+        auto& io=ImGui::GetIO(); const auto top=table->OuterRect.Min;
+        auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+        io.AddMousePosEvent(top.x+30,top.y+8); frame(); io.AddMouseButtonEvent(0,true); frame();
+        io.AddMouseButtonEvent(0,false); frame();
+        Require(!*enabled[section-9],"Visual checkbox did not update real renderer configuration");
+        io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+        Require(*enabled[section-9],"Visual checkbox did not re-enable the effect");
+        io.AddMousePosEvent(-100,-100); frame();
+        SaveFrame(device,context,output/(std::string("world-settings-")+std::to_string(section-9)+".png"));
+    }
+    const auto& binds=mcov::OverlayUiCheck::Binds(overlay);
+    for(int index=mcov::keys::Index(mcov::keys::Action::Trails);index<mcov::keys::kCount;++index)
+        Require(!binds[index].key,"New visual binds collided with existing Minecraft keys");
+    // Neue Keybind-Aktionen schalten die tatsächlichen Module, inklusive des eigenen Huts.
+    mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input);
+    const mcov::keys::Action actions[]={mcov::keys::Action::HitBubbles,mcov::keys::Action::KillEffect,
+        mcov::keys::Action::BreadCrumbs,mcov::keys::Action::ChinaHat};
+    for(int i=0;i<4;++i) {
+        auto& binding=mcov::OverlayUiCheck::Binds(overlay)[mcov::keys::Index(actions[i])];
+        binding={0x78+i,0,mcov::keys::Mode::Toggle};
+        input[0x78+i]=true; mcov::OverlayUiCheck::Input(overlay,input);
+        Require(!*enabled[3+i],"New keybind failed to disable real visual configuration");
+        input={}; mcov::OverlayUiCheck::Input(overlay,input); input[0x78+i]=true;
+        mcov::OverlayUiCheck::Input(overlay,input); Require(*enabled[3+i],"New keybind failed to re-enable real configuration");
+        input={}; mcov::OverlayUiCheck::Input(overlay,input); binding={};
+    }
+    mcov::OverlayUiCheck::ResetVisuals(overlay);
+    Require(!config.Enabled()&&hat.enabled&&!hat.firstPerson,"Visual reset retained effects or removed the default F5 hat");
 }
 void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                const std::filesystem::path& output) {
@@ -382,177 +506,110 @@ int main(int argc,char** argv) {
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"Off-screen ImGui renderer failed");
         mcov::Overlay overlay; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings};
-        for (int theme=0;theme<4;++theme) {
-            for (Page page:pages) {
-                Draw(overlay,page,theme,ImVec2(1280,800));
-                Draw(overlay,page,theme,ImVec2(1280,800));
-                if (page==Page::Visuals) {
-                    for (int i=0;i<12;++i) Draw(overlay,page,theme,ImVec2(1280,800));
-                    SaveFrame(device.Get(),context.Get(),output/("theme-"+std::to_string(theme)+".png"));
-                }
-            }
-        }
-        Require(mcov::style::MenuIconFont()->FindGlyphNoFallback(0xf54c),"Embedded skull icon is missing");
-        Require(mcov::style::MenuFont()->FontSize==14 && io.FontDefault->FontSize==17,
-                "Larger menu font changed the HUD font");
-        mcov::OverlayUiCheck::AllowCombat(overlay);
-        mcov::OverlayUiCheck::Center(overlay);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        auto* panel=ImGui::FindWindowByName("mcov control panel");
-        Require(panel->Size.x<=900 && panel->Size.y<=510,"Menu footprint was not reduced");
-        for (int i=0;i<12;++i) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        SaveFrame(device.Get(),context.Get(),output/"combat.png");
-        Draw(overlay,Page::Combat,0,ImVec2(752,427));
-        Draw(overlay,Page::Combat,0,ImVec2(752,427));
-        SaveFrame(device.Get(),context.Get(),output/"reference-size.png");
-        // Alle Combat-Bereiche verwenden echte Stores und dieselbe begrenzte Menüfläche.
+        auto frame=[&](Page page,bool preserve=false) { Draw(overlay,page,0,{1280,800},preserve); };
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
-        const mcov::CombatMenu::Section sections[]={mcov::CombatMenu::Section::KillAura,mcov::CombatMenu::Section::Friends,mcov::CombatMenu::Section::Debug};
-        constexpr const char* sectionFiles[]={"combat-kill-aura.png","combat-friends.png","combat-debug.png"};
-        for(int theme=0;theme<4;++theme) for(int i=0;i<IM_ARRAYSIZE(sections);++i) {
-            editor.Select(sections[i]);
-            for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,theme,ImVec2(1280,800));
-            Require(editor.Current()==sections[i],("Combat section lost: requested "+std::to_string(static_cast<int>(sections[i]))+
-                    " actual "+std::to_string(static_cast<int>(editor.Current()))).c_str());
-            Require(mcov::combat::Validate(editor.Store().Read().values),"Rendering Combat controls invalidated config");
-            if(theme==0) SaveFrame(device.Get(),context.Get(),output/sectionFiles[i]);
-            Draw(overlay,Page::Combat,theme,ImVec2(752,427));
-            if(theme==0 && sections[i]==mcov::CombatMenu::Section::KillAura) {
-                Draw(overlay,Page::Combat,theme,ImVec2(752,427));
-                SaveFrame(device.Get(),context.Get(),output/"combat-kill-aura-narrow.png");
-            }
+        editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
+        constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections"};
+        constexpr int sectionCounts[]={5,17,3,10,3,4};
+        for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
+            for(int section=0;section<sectionCounts[p];++section)
+                SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
+            SelectSubTab(overlay,pages[p],sectionIds[p],0,sectionCounts[p]);
         }
-        editor.Select(mcov::CombatMenu::Section::KillAura);
-        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        auto* auraContent=Child("/content_");
-        auto* auraTable=ImGui::GetCurrentContext()->Tables.GetByKey(auraContent->GetID("kill_aura_controls"));
-        Require(auraTable,"Kill Aura controls missing");
-        auto clickAura=[&](ImVec2 position) {
-            io.AddMousePosEvent(position.x,position.y); io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-            io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
+        editor.Select(mcov::CombatMenu::Section::AimAssist); frame(Page::Combat); frame(Page::Combat);
+        frame(Page::Combat); SaveFrame(device.Get(),context.Get(),output/"classic-combat.png");
+        frame(Page::Visuals); SaveFrame(device.Get(),context.Get(),output/"classic-visuals.png");
+        frame(Page::Hud); SaveFrame(device.Get(),context.Get(),output/"classic-hud-settings.png");
+        auto click=[&](ImVec2 p,Page page=Page::Visuals) {
+            io.AddMousePosEvent(p.x,p.y); frame(page,true); io.AddMouseButtonEvent(0,true); frame(page,true);
+            io.AddMouseButtonEvent(0,false); frame(page,true); frame(page,true);
         };
-        clickAura(ImVec2(auraTable->Columns[0].MinX+40,auraTable->OuterRect.Min.y+18));
-        const auto live=editor.Store().Read().values;
-        Require(live.enabled && live.attack.enabled && live.rotation.enabled && live.sync.enabled,"Kill Aura switch did not activate the live core");
-        Require(live.target.mode==mcov::combat::TargetMode::NearestEntity && !live.target.playersOnly &&
-                live.target.range==3 && !live.target.multiTarget && live.attack.firstClickDelay.max==0 && !live.hud.enabled,
-                "default Kill Aura required preset or debug cleanup");
-        editor.Select(mcov::CombatMenu::Section::Modules);
-        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        SaveFrame(device.Get(),context.Get(),output/"combat-modules-paused.png");
-        mcov::OverlayUiCheck::ResetCombat(overlay);
-        const auto uuid=mcov::CombatMenu::ParseUuid("12345678-1234-5678-90ab-cdef12345678");
-        Require(uuid && uuid->high==0x1234567812345678 && uuid->low==0x90abcdef12345678,"Player UUID was parsed incorrectly");
-        Require(!mcov::CombatMenu::ParseUuid("12345678_1234-5678-90ab-cdef12345678") &&
-                !mcov::CombatMenu::ParseUuid("00000000000000000000000000000000") &&
-                !mcov::CombatMenu::ParseUuid(nullptr),"Invalid player UUID was accepted");
-        editor.Select(mcov::CombatMenu::Section::KillAura);
-        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        auto* combatContent=Child("/content_");
-        auto* targets=ImGui::GetCurrentContext()->Tables.GetByKey(combatContent->GetID("kill_aura_controls"));
-        Require(targets,"main Kill Aura controls missing");
-        const ImVec2 doubleSlider(targets->Columns[1].MaxX-10,targets->OuterRect.Min.y+2*35.25f+17);
-        io.AddMousePosEvent(doubleSlider.x,doubleSlider.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        Require(editor.Store().Read().values.attack.range>4 && editor.Store().Read().values.target.range==editor.Store().Read().values.attack.range,
-                "main reach slider did not update both targeting and attack reach");
-        Require(editor.Relations().Set(*uuid,mcov::combat::Relation::Friend),"UUID friend insertion failed");
-        mcov::OverlayUiCheck::ResetCombat(overlay);
-        Require(editor.Current()==mcov::CombatMenu::Section::KillAura && editor.Store().Read().values.target.enabled &&
-                editor.Store().Read().values.target.mode==mcov::combat::TargetMode::NearestEntity && !editor.Store().Read().values.target.playersOnly &&
-                editor.Store().Read().values.attack.range==3 && !editor.Store().Read().values.hud.enabled &&
-                mcov::combat::Lookup(editor.Relations().Read(),*uuid)==mcov::combat::Relation::Neutral,"Combat reset left config or relations behind");
-        for(int pass=0;pass<3;++pass) Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        mcov::OverlayUiCheck::AllowCombat(overlay);
-        // Click the first real Visuals row label; the backend setting must change.
-        Draw(overlay,Page::Visuals,0,ImVec2(1280,800));
-        auto* content=Child("/content_");
-        const ImVec2 click(content->DC.CursorStartPos.x+38,content->DC.CursorStartPos.y+18);
-        io.AddMousePosEvent(click.x,click.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Visuals,0,ImVec2(1280,800));
-        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Visuals,0,ImVec2(1280,800));
-        Require(!mcov::OverlayUiCheck::Box(overlay),"Row label was not wired to the real Box ESP setting");
-        mcov::OverlayUiCheck::ResetVisuals(overlay);
-        Require(mcov::OverlayUiCheck::Box(overlay),"Reset did not restore real settings");
-        // Exercise the navigation through ImGui input; retain state across frames.
-        auto clickMenu=[&](ImVec2 at) {
-            io.AddMousePosEvent(at.x,at.y); io.AddMouseButtonEvent(0,true);
-            Draw(overlay,Page::Visuals,0,ImVec2(1280,800),true);
-            io.AddMouseButtonEvent(0,false);
-            Draw(overlay,Page::Visuals,0,ImVec2(1280,800),true);
-            Draw(overlay,Page::Visuals,0,ImVec2(1280,800),true);
-        };
+        frame(Page::Visuals); auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(Page::Visuals);
+        auto* boxTable=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("box_controls"));
+        Require(boxTable!=nullptr,"Box ESP settings are missing");
+        const ImVec2 checkbox{boxTable->OuterRect.Min.x+23,boxTable->OuterRect.Min.y+8};
+        click(checkbox); Require(!mcov::OverlayUiCheck::Box(overlay),"Classic checkbox did not update real ESP setting");
+        mcov::OverlayUiCheck::ResetVisuals(overlay); Require(mcov::OverlayUiCheck::Box(overlay),"Visuals reset failed");
         auto* nav=Child("/navigation_");
-        clickMenu(ImVec2(nav->DC.CursorStartPos.x+nav->WorkRect.GetWidth()*.5f,nav->DC.CursorStartPos.y+38));
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Navigation did not select Combat");
-        nav=Child("/navigation_");
-        clickMenu(ImVec2(nav->DC.CursorStartPos.x+nav->WorkRect.GetWidth()*.5f,nav->DC.CursorStartPos.y+126));
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Visuals,"Navigation did not select Visuals");
-        auto* tools=Child("/tools_");
-        clickMenu(ImVec2(tools->DC.CursorStartPos.x+21,tools->DC.CursorStartPos.y+22));
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Stats,"Player icon did not select statistics");
-        tools=Child("/tools_");
-        clickMenu(ImVec2(tools->DC.CursorStartPos.x+21,tools->DC.CursorStartPos.y+125));
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Settings,"Gear icon did not select settings");
-        mcov::OverlayUiCheck::Collapse(overlay,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        nav=Child("/navigation_");
-        Require(nav->Size.x==35,"Collapsed navigation did not resize");
-        SaveFrame(device.Get(),context.Get(),output/"collapsed.png");
-        mcov::OverlayUiCheck::Collapse(overlay,false);
-        // Drag the custom thin slider. Its numeric state is the combat module's
-        // real value, and remains clamped to the module's supported range.
-        editor.Select(mcov::CombatMenu::Section::Modules);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        content=Child("/content_");
-        const ImVec2 slider(content->DC.CursorStartPos.x+content->Size.x*.5f-24,
-                            content->DC.CursorStartPos.y+editor.NavigationHeight()+mcov::style::MenuFont()->FontSize+12.5f+2*35.25f+17);
-        io.AddMousePosEvent(slider.x,slider.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,ImVec2(1280,800));
-        Require(mcov::OverlayUiCheck::AimFov(overlay)>60 && mcov::OverlayUiCheck::AimFov(overlay)<=90,
-                "Thin slider did not update the real aim lock cone");
-        // Drag the empty top strip; both floating panels move as a single menu.
-        panel=ImGui::FindWindowByName("mcov control panel");
-        const ImVec2 original=panel->Pos;
-        const ImVec2 grip(original.x+panel->Size.x*.4f,original.y+10);
-        io.AddMousePosEvent(grip.x,grip.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        Require(mcov::OverlayUiCheck::Menu(overlay).dragging,"Drag strip did not capture the mouse");
-        io.AddMousePosEvent(grip.x+64,grip.y+45);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        io.AddMouseButtonEvent(0,false);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        panel=ImGui::FindWindowByName("mcov control panel");
-        const ImVec2 moved=panel->Pos;
-        Require(moved.x==original.x+64 && moved.y==original.y+45 && !mcov::OverlayUiCheck::Menu(overlay).dragging,
-                "Menu drag lagged, changed its offset or failed to release");
-        for (int i=0;i<12;++i) Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        Require(panel->Pos.x==moved.x && panel->Pos.y==moved.y,"Menu position snapped back after dragging");
-        SaveFrame(device.Get(),context.Get(),output/"dragged.png");
-        const ImVec2 edgeGrip(moved.x+panel->Size.x*.4f,moved.y+10);
-        io.AddMousePosEvent(edgeGrip.x,edgeGrip.y); io.AddMouseButtonEvent(0,true);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        io.AddMousePosEvent(-200,-200);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        io.AddMouseButtonEvent(0,false);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        Require(panel->Pos.x==0 && panel->Pos.y==0,"Drag escaped the viewport");
-        mcov::OverlayUiCheck::Center(overlay);
-        Draw(overlay,Page::Combat,0,ImVec2(1280,800),true);
-        mcov::OverlayUiCheck::ReduceMotion(overlay,true);
-        nav=Child("/navigation_");
-        clickMenu(ImVec2(nav->DC.CursorStartPos.x+nav->WorkRect.GetWidth()*.5f,nav->DC.CursorStartPos.y+126));
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Visuals &&
-                mcov::OverlayUiCheck::Menu(overlay).pageAlpha==1,"Reduced motion delayed navigation");
-        mcov::OverlayUiCheck::ReduceMotion(overlay,false);
-        for (auto size:{ImVec2(720,560),ImVec2(480,360)})
-            for (Page page:pages) Draw(overlay,page,2,size);
-        for (int i=0;i<12;++i) Draw(overlay,Page::Settings,2,ImVec2(480,360));
-        SaveFrame(device.Get(),context.Get(),output/"compact.png");
-        io.AddMousePosEvent(-100,-100);
+        const float width=nav->Size.x/6;
+        click({nav->Pos.x+width*.5f,nav->Pos.y+15});
+        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Top navigation did not select Combat");
+        nav=Child("/navigation_"); click({nav->Pos.x+width*5.5f,nav->Pos.y+15},Page::Combat);
+        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Settings,"Top navigation did not select Settings");
+        auto* panel=ImGui::FindWindowByName("mcov control panel"); const auto original=panel->Pos;
+        const ImVec2 grip{original.x+panel->Size.x*.5f,original.y+12};
+        io.AddMousePosEvent(grip.x,grip.y); frame(Page::Settings); io.AddMouseButtonEvent(0,true); frame(Page::Settings);
+        Require(mcov::OverlayUiCheck::Menu(overlay).dragging,"Classic title bar did not start drag");
+        io.AddMousePosEvent(grip.x+55,grip.y+35); frame(Page::Settings); io.AddMouseButtonEvent(0,false); frame(Page::Settings);
+        Require(panel->Pos.x==original.x+55&&panel->Pos.y==original.y+35,"Classic menu drag lost its offset");
+        mcov::OverlayUiCheck::Center(overlay); frame(Page::Settings);
+        auto& ctx=*ImGui::GetCurrentContext(); content=Child("/content_");
+        auto* settingsTabs=ctx.TabBars.GetByKey(content->GetID("settings_sections"));
+        Require(settingsTabs&&settingsTabs->Tabs.Size==4,"Settings lacks Keybinds tab");
+        const auto& keyTab=settingsTabs->Tabs[2];
+        click({settingsTabs->BarRect.Min.x+keyTab.Offset+keyTab.Width*.5f,settingsTabs->BarRect.GetCenter().y},Page::Settings);
+        SaveFrame(device.Get(),context.Get(),output/"classic-keybinds.png");
+        auto* keysTable=ctx.Tables.GetByKey(content->GetID("keybind_editor"));
+        Require(keysTable!=nullptr,"Keybind editor not rendered");
+        click({keysTable->Columns[1].WorkMinX+50,keysTable->OuterRect.Min.y+19+3*23+12},Page::Settings);
+        Require(mcov::OverlayUiCheck::Capture(overlay)==mcov::keys::Index(mcov::keys::Action::KillAura),"Real bind button did not enter capture");
+        mcov::keys::Input input{}; input[0x4B]=input[0x11]=true;
+        mcov::OverlayUiCheck::Input(overlay,input,true);
+        auto& binds=mcov::OverlayUiCheck::Binds(overlay); const int auraKey=mcov::keys::Index(mcov::keys::Action::KillAura);
+        Require(binds[auraKey].key==0x4B&&binds[auraKey].modifiers==mcov::keys::Ctrl,"Key capture failed to store Ctrl+K");
+        mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::Input(overlay,input);
+        Require(editor.Store().Read().values.enabled,"Captured key did not toggle the production Kill Aura store");
+        mcov::OverlayUiCheck::Input(overlay,{});
+        mcov::OverlayUiCheck::Capture(overlay,mcov::keys::Action::Skeleton); mcov::OverlayUiCheck::Input(overlay,input,true);
+        Require(mcov::OverlayUiCheck::Capture(overlay)>=0&&!binds[mcov::keys::Index(mcov::keys::Action::Skeleton)].key,"Conflicting keybind was accepted");
+        mcov::OverlayUiCheck::Input(overlay,{},true);
+        Require(!binds[mcov::keys::Index(mcov::keys::Action::Skeleton)].key,"Rejected chord silently rebound its modifier on release");
+        input={}; input[0x1B]=true; mcov::OverlayUiCheck::Input(overlay,input,true);
+        Require(mcov::OverlayUiCheck::Capture(overlay)<0,"Escape failed to cancel binding capture");
+        mcov::OverlayUiCheck::Capture(overlay,mcov::keys::Action::Skeleton);
+        input={}; input[0x10]=input[0xA0]=true; mcov::OverlayUiCheck::Input(overlay,input,true);
+        Require(mcov::OverlayUiCheck::Capture(overlay)>=0,"Standalone modifier was captured before release");
+        mcov::OverlayUiCheck::Input(overlay,{},true);
+        Require(binds[mcov::keys::Index(mcov::keys::Action::Skeleton)].key==0xA0,"Standalone modifier capture did not finish on release");
+        mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::ResetCombat(overlay);
+        const auto prefs=output/"client-preferences-test.ini"; mcov::OverlayUiCheck::PrefPath(overlay,prefs);
+        binds[auraKey].mode=mcov::keys::Mode::Hold;
+        auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
+        mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; mcov::OverlayUiCheck::Load(overlay);
+        Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
+                hud.layout[2].placed&&hud.layout[2].position.x==.4f&&hud.layout[2].scale==1.3f,"HUD/bind preferences did not survive save/load");
+        mcov::OverlayUiCheck::PrefPath(overlay,{}); std::filesystem::remove(prefs); binds=mcov::keys::Defaults(); hud={};
+        for(auto size:{ImVec2(720,560),ImVec2(480,360)}) for(Page page:pages) { Draw(overlay,page,0,size); Draw(overlay,page,0,size); }
+        SaveFrame(device.Get(),context.Get(),output/"classic-small.png");
         MarkerMenuChecks(overlay,device.Get(),context.Get(),output);
+        WorldVisualChecks(overlay,device.Get(),context.Get(),output);
+        mcov::WorldSnapshot hudScene{}; hudScene.health=hudScene.maxHealth=20; hudScene.fps=144; hudScene.hasTarget=1;
+        hudScene.targetDistance=2.4f; hudScene.targetHealth=16; hudScene.targetMaxHealth=20;
+        mcov::CopyField(hudScene.targetName,"Target player"); mcov::CopyField(hudScene.gameVersion,"1.21.11");
+        hudScene.posX=124; hudScene.posY=64; hudScene.posZ=-285; hudScene.effectCount=2;
+        mcov::CopyField(hudScene.effects[0].name,"Speed"); hudScene.effects[0].durationTicks=2400;
+        mcov::CopyField(hudScene.effects[1].name,"Strength"); hudScene.effects[1].durationTicks=900;
+        for(int i=0;i<mcov::kSlotCount;++i) { hudScene.equipment[i].present=1; mcov::CopyField(hudScene.equipment[i].name,"Diamond item"); hudScene.equipment[i].maxDamage=300; hudScene.equipment[i].damage=i*30; }
+        binds[auraKey]={0x4B,0,mcov::keys::Mode::Toggle}; hud.performance=true;
+        auto hudFrame=[&](ImVec2 size,bool edit=true) {
+            io.DisplaySize=size; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            const auto before=ImGui::GetStyle(); const auto vars=ctx.StyleVarStack.Size,colors=ctx.ColorStack.Size,fonts=ctx.FontStack.Size;
+            mcov::OverlayUiCheck::DrawHud(overlay,hudScene,edit);
+            Require(vars==ctx.StyleVarStack.Size&&colors==ctx.ColorStack.Size&&fonts==ctx.FontStack.Size&&
+                    std::memcmp(&before,&ImGui::GetStyle(),sizeof(ImGuiStyle))==0,"HUD editor leaked global style or fonts"); ImGui::Render();
+        };
+        hudFrame({1280,800}); hudFrame({1280,800});
+        SaveFrame(device.Get(),context.Get(),output/"modular-hud-editor.png");
+        const auto rect=mcov::OverlayUiCheck::HudRects(overlay)[2]; const auto before=hud.layout[2].position;
+        const ImVec2 pick{rect.min.x+25,rect.min.y+30};
+        io.AddMousePosEvent(pick.x,pick.y); hudFrame({1280,800}); io.AddMouseButtonEvent(0,true); hudFrame({1280,800});
+        io.AddMousePosEvent(pick.x+100,pick.y+20); hudFrame({1280,800}); io.AddMouseButtonEvent(0,false); hudFrame({1280,800});
+        Require(hud.layout[2].position.x>before.x,"HUD editor drag did not move the coordinates module");
+        io.AddMousePosEvent(-100,-100); hudFrame({480,360}); hudFrame({480,360});
+        for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"HUD module escaped small viewport");
+        SaveFrame(device.Get(),context.Get(),output/"modular-hud-small.png");
+        hud.layout[2]={}; hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"modular-hud.png");
+        hud={}; binds=mcov::keys::Defaults(); io.AddMousePosEvent(-100,-100);
         EspChecks(overlay,device.Get(),context.Get(),output);
         TargetCubePreview(overlay,device.Get(),context.Get(),output);
         auto auraFrame=[&] {
@@ -585,7 +642,7 @@ int main(int argc,char** argv) {
         for (int i=0;i<16;++i) auraFrame();
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: compact geometry, larger scoped fonts, drag capture/release and bounds, reduced menu motion, independent aura rotation/pause/resume, embedded icons, 6 pages, 4 themes, settings binding, navigation and small viewports\n";
+        std::cout<<"PASS control panel: classic menu, 6 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

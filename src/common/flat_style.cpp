@@ -252,6 +252,8 @@ bool LoadFonts(float uiSize) {
         io.Fonts->AddFontFromMemoryTTF(LockResource(data), static_cast<int>(SizeofResource(module, resource)),
                                      30.f, &iconCfg, range);
     }
+    ImFontConfig classic; classic.PixelSnapH=true; classic.SizePixels=13;
+    io.Fonts->AddFontDefault(&classic);
     return true;
 }
 
@@ -262,5 +264,9 @@ ImFont* MenuFont(bool bold) {
 ImFont* MenuIconFont() {
     const auto& fonts = ImGui::GetIO().Fonts->Fonts;
     return fonts.Size >= 5 ? fonts[4] : ImGui::GetFont();
+}
+ImFont* ClassicMenuFont() {
+    const auto& fonts=ImGui::GetIO().Fonts->Fonts;
+    return fonts.Size>=6?fonts[5]:fonts.back();
 }
 } // namespace mcov::style

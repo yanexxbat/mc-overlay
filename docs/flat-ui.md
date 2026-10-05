@@ -1,5 +1,10 @@
 # Flat UI
 
+Diese Helfer bleiben die Grundlage des Injectors und der gemeinsamen UI-Runtime.
+Das Overlay-Menü und HUD verwenden inzwischen das vom Benutzer vorgegebene
+kantige Violett-Design; Bedienung, HUD-Editor und Keybinds stehen in
+[client-ui.md](client-ui.md).
+
 Die gemeinsame Implementierung liegt in `src/common/flat_style.hpp/.cpp`.
 Nach `ImGui::CreateContext()` einmal das Theme anwenden:
 

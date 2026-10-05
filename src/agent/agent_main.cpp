@@ -789,6 +789,43 @@ void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject loca
     details.ObserveWorld(env,level);
     const auto detailsNow=::GetTickCount64();
 
+    const auto sample=[&](jobject entity,bool self) {
+        jvm::LocalFrame sampleFrame(env,32);
+        if (!entity || !sampleFrame.ok()) return;
+        EntitySnapshot record{};
+        if (self) record.flags |= kEntityIsSelf;
+        record.x = CallDouble(env, entity, b.mGetX);
+        record.y = CallDouble(env, entity, b.mGetY);
+        record.z = CallDouble(env, entity, b.mGetZ);
+
+        record.width    = CallFloat(env, entity, b.mBbWidth,  0.6f);
+        record.height   = CallFloat(env, entity, b.mBbHeight, 1.8f);
+        record.yaw      = CallFloat(env, entity, b.mEntityYaw, 0.0f);
+        record.entityId = static_cast<std::uint32_t>(CallInt(env, entity, b.mGetId, 0));
+
+        if (b.clsLiving && env->IsInstanceOf(entity, b.clsLiving)) {
+            record.flags |= kEntityIsLiving;
+            record.health    = CallFloat(env, entity, b.mHealth,    0.0f);
+            record.maxHealth = CallFloat(env, entity, b.mMaxHealth, 20.0f);
+        }
+        if (b.clsPlayer && env->IsInstanceOf(entity, b.clsPlayer)) {
+            record.flags |= kEntityIsPlayer;
+            record.uuid=details.identities.Read(env,entity,record.entityId,b.mEntityUuid,b.mUuidHigh,b.mUuidLow);
+        }
+        if (b.clsEnemy  && env->IsInstanceOf(entity, b.clsEnemy))  record.flags |= kEntityIsHostile;
+        SampleEntityGeometry(env, b, entity, snap.partialTick, record);
+        const double dx = record.x - snap.camX, dy = record.y - snap.camY, dz = record.z - snap.camZ;
+        record.distance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
+
+        const std::string name = self ? std::string(snap.username) : ReadEntityName(env, b, entity);
+        CopyField(record.name, name.c_str());
+        if (const auto* cached=details.cache.Find(record.entityId,detailsNow)) record.details=*cached;
+
+        snap.entities[snap.entityCount++] = record;
+    };
+    // Der eigene Körper erhält einen garantierten Slot; gleiche Interpolation wie die Kamera.
+    sample(localPlayer,true);
+
     jobject iterable = env->CallObjectMethod(level, b.mEntities);
     if (env->ExceptionCheck()) { env->ExceptionClear(); return; }
     if (!iterable) return;
@@ -818,41 +855,10 @@ void SampleEntities(JNIEnv* env, const Bindings& b, jobject client, jobject loca
         if (env->ExceptionCheck()) { env->ExceptionClear(); break; }
         if (!entity) continue;
 
-        // Skip our own body by reference identity. The previous check compared
-        // the distance from the camera, which is wrong the moment you go into
-        // third person - the camera sits metres behind the player and the local
-        // body then gets a box like any other entity.
+        // Bereits separat erfasst; kein zweiter Self-Record aus dem World-Iterator.
         if (localPlayer && env->IsSameObject(entity, localPlayer)) continue;
 
-        EntitySnapshot record{};
-        record.x = CallDouble(env, entity, b.mGetX);
-        record.y = CallDouble(env, entity, b.mGetY);
-        record.z = CallDouble(env, entity, b.mGetZ);
-
-        record.width    = CallFloat(env, entity, b.mBbWidth,  0.6f);
-        record.height   = CallFloat(env, entity, b.mBbHeight, 1.8f);
-        record.yaw      = CallFloat(env, entity, b.mEntityYaw, 0.0f);
-        record.entityId = static_cast<std::uint32_t>(CallInt(env, entity, b.mGetId, 0));
-
-        if (b.clsLiving && env->IsInstanceOf(entity, b.clsLiving)) {
-            record.flags |= kEntityIsLiving;
-            record.health    = CallFloat(env, entity, b.mHealth,    0.0f);
-            record.maxHealth = CallFloat(env, entity, b.mMaxHealth, 20.0f);
-        }
-        if (b.clsPlayer && env->IsInstanceOf(entity, b.clsPlayer)) {
-            record.flags |= kEntityIsPlayer;
-            record.uuid=details.identities.Read(env,entity,record.entityId,b.mEntityUuid,b.mUuidHigh,b.mUuidLow);
-        }
-        if (b.clsEnemy  && env->IsInstanceOf(entity, b.clsEnemy))  record.flags |= kEntityIsHostile;
-        SampleEntityGeometry(env, b, entity, snap.partialTick, record);
-        const double dx = record.x - snap.camX, dy = record.y - snap.camY, dz = record.z - snap.camZ;
-        record.distance = static_cast<float>(std::sqrt(dx * dx + dy * dy + dz * dz));
-
-        const std::string name = ReadEntityName(env, b, entity);
-        CopyField(record.name, name.c_str());
-        if (const auto* cached=details.cache.Find(record.entityId,detailsNow)) record.details=*cached;
-
-        snap.entities[snap.entityCount++] = record;
+        sample(entity,false);
     }
 }
 
@@ -979,7 +985,7 @@ void SampleEntityDetails(JNIEnv* env,const Bindings& b,jobject client,jobject lo
     int sampled=0;
     const auto count=std::min(snapshot.entityCount,kMaxEntities);
     const auto sample=[&](EntitySnapshot& e) {
-        if (!(e.flags&kEntityIsLiving) || !std::isfinite(e.distance) || e.distance>512 ||
+        if ((e.flags&kEntityIsSelf) || !(e.flags&kEntityIsLiving) || !std::isfinite(e.distance) || e.distance>512 ||
             state.cache.Find(e.entityId,now,300)) return;
         jvm::LocalFrame entityFrame(env,16);
         if (!entityFrame.ok()) return;

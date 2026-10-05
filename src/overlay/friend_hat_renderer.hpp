@@ -10,6 +10,13 @@ struct FriendHatConfig {
     float heightScale=.55f;                 // Kegelhöhe relativ zum Radius.
     float headGap=.025f;
 };
+struct LocalHatConfig {
+    bool enabled=true;                     // Eigener Hut standardmäßig sichtbar in F5.
+    bool firstPerson=false;
+    bool auraColours=true;
+    FriendHatConfig shape{};
+    ImVec4 start{.66f,.42f,1.f,1.f},end{.05f,1.f,.88f,1.f};
+};
 inline constexpr int kFriendHatSegments=48;
 struct FriendHatWorld {
     WorldPoint tip{};
@@ -31,6 +38,10 @@ public:
     static void Prepare(ImDrawList& draw);
     static bool IsFriend(const EntitySnapshot& entity,const combat::Relations& relations) noexcept;
     bool BuildWorld(const EntitySnapshot& entity,const FriendHatConfig& config,FriendHatWorld& out) const noexcept;
+    static bool LocalVisible(const EntitySnapshot& entity,WorldPoint camera,bool firstPerson) noexcept;
+    void DrawLocal(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
+                   const LocalHatConfig& config,ImVec4 start,ImVec4 end,AuraBlend blend,
+                   ImTextureID texture,ImVec2 viewport,ImVec2 origin={}) const;
     static bool Project(const CameraProjection& projection,const FriendHatWorld& world,
                         WorldPoint camera,ImVec2 viewport,FriendHatScreen& out,ImVec2 origin={}) noexcept;
     static void Draw(ImDrawList& draw,const FriendHatScreen& screen,const FriendHatConfig& config,

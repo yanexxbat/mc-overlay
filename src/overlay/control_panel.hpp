@@ -7,8 +7,7 @@ namespace mcov::control_panel {
 enum class Page { Combat, Visuals, Blocks, Hud, Stats, Settings };
 struct State {
     Page page = Page::Combat;
-    int theme = 0; // Amber Dark, Graphite, Light, Crimson
-    bool navCollapsed = false;
+    int theme = 0; // Classic violet; für Aufrufer mit Theme-Argument beibehalten.
     bool reduceMotion = false;
     bool positioned = false;
     bool dragging = false;
@@ -36,6 +35,9 @@ const char* ThemeName(int index);
 float Scale();
 bool MotionAllowed(const State& state);
 void Section(const char* label);
+// Gemeinsame Funktionsnavigation; lange Leisten scrollen statt Tabs abzuschneiden.
+int SubTabs(const char* id, const char* const* labels, int count, int selected,
+            bool selectNext = false);
 
 // Labels and controls occupy separate columns with stable per-row IDs.
 bool BeginRows(const char* id);

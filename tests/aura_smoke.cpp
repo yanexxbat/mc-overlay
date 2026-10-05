@@ -246,6 +246,14 @@ void FriendHatChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlend
     relations[0].relation=combat::Relation::Friend;
     FriendHatWorld initial,moved,crouched; FriendHatScreen normal,farther,large;
     Require(renderer.BuildWorld(entity,config,initial),"valid friend hat rejected");
+    auto local=entity; local.flags|=kEntityIsSelf;
+    Require(!FriendHatRenderer::IsFriend(local,relations),"Own body entered the automatic friend list");
+    Require(renderer.BuildWorld(local,config,moved),"Own interpolated body did not support a hat");
+    Require(FriendHatRenderer::LocalVisible(local,{0,1.62,0},false),"F5 camera hid the own hat");
+    Require(!FriendHatRenderer::LocalVisible(local,{0,1.62,5},false),"First-person camera received an own hat");
+    Require(FriendHatRenderer::LocalVisible(local,{0,1.62,5},true),"Explicit first-person hat switch had no effect");
+    local.pose=kPoseCrouching; local.headPitch=20;
+    Require(renderer.BuildWorld(local,config,crouched)&&crouched.tip.y<initial.tip.y,"Own hat ignored crouching/head pose");
     const auto camera=Camera();
     Require(FriendHatRenderer::Project(CameraProjection(camera,1280,720),initial,{0,.9,0},{1280,720},normal),
             "friend hat projection failed");
@@ -307,6 +315,22 @@ void FriendHatChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlend
     bool offsetVisible=false;
     for(int y=0;y<90;++y) for(int x=0;x<128;++x) offsetVisible|=restored.At(x,y)[3]>0;
     Require(offsetVisible,"friend hat mesh failed after the 16-bit vertex offset");
+    // Den eigenen Hut auch über den echten D3D11-Pfad prüfen; keine Freundeliste nötig.
+    scene.entities[0].flags|=kEntityIsSelf;
+    LocalHatConfig own;
+    auto& ownDraw=Frame();
+    renderer.DrawLocal(ownDraw,scene,CameraProjection(scene,128,128),own,colors.startColor,colors.endColor,
+        blend.Callbacks(),blend.GlowTexture(),{128,128});
+    Require(ownDraw.VtxBuffer.Size>0,"Own F5 hat generated no geometry");
+    ImGui::Render(); const auto ownPixels=Capture(device,context);
+    bool ownVisible=false;
+    for(std::size_t i=3;i<ownPixels.data.size();i+=4) ownVisible|=ownPixels.data[i]>0;
+    Require(ownVisible,"Own F5 hat generated no GPU pixels");
+    scene.camX=entity.x; scene.camY=entity.y+1.62; scene.camZ=entity.z;
+    auto& hiddenOwn=Frame();
+    renderer.DrawLocal(hiddenOwn,scene,CameraProjection(scene,128,128),own,colors.startColor,colors.endColor,
+        blend.Callbacks(),blend.GlowTexture(),{128,128});
+    Require(hiddenOwn.VtxBuffer.Size==0,"Own hat was drawn over first-person camera"); ImGui::Render();
 }
 void TargetCubeChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlendDX11& blend) {
     TargetCubeRenderer renderer; TargetCubeConfig config;

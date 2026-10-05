@@ -34,6 +34,10 @@
 #include "friend_hat_renderer.hpp"
 #include "target_cube_renderer.hpp"
 #include "item_icon_atlas_dx11.hpp"
+#include "keybinds.hpp"
+#include "hud_layout.hpp"
+#include "world_visuals.hpp"
+#include <filesystem>
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -43,22 +47,9 @@ struct ImDrawList;
 struct ImVec2;
 
 namespace mcov {
+std::string BindName(keys::Bind bind);
 
 // The always-on HUD widgets, independent of the ImGui menu.
-struct HudSettings {
-    bool equipment    = true;   // armour + hands, with durability bars
-    bool effects      = true;   // active status effects
-    bool coordinates  = true;   // XYZ, chunk, nether, facing
-    bool compass      = true;   // directional strip
-    bool performance  = false;  // fps / frametime / heap graphs
-    bool reachMarker  = true;   // crosshair indicator when a target is in reach
-
-    float scale       = 1.0f;
-    int   corner      = 0;      // 0 TL, 1 TR, 2 BL, 3 BR - anchor for the stacked panels
-
-    // Durability below this fraction turns the bar red and starts pulsing.
-    float durabilityWarn = 0.20f;
-};
 
 // Automatic attack when the crosshair target is in reach. Off by default and
 // gated behind an explicit hold key, because it injects real mouse input into
@@ -97,8 +88,6 @@ struct CombatSettings {
 };
 
 struct OverlaySettings {
-    int   toggleKey            = 0x2D; // VK_INSERT
-    int   panicKey             = 0x23; // VK_END - quits the overlay outright
     float fovTrim              = 0.0f; // manual FOV correction, degrees
     bool  clickThroughWhenIdle = true;
     bool  hideWhenUnfocused    = true;
@@ -143,22 +132,32 @@ private:
     void ApplyCaptureAffinity();
     void TrackTargetWindow();
     void PollHotkeys();
+    void ProcessKeyInput(const keys::Input& input,bool focused);
     void SetMenuVisible(bool visible);
+    void SetHudEditing(bool editing);
+    void DrawHudEditor();
+    void DrawKeybindSettings();
+    void DrawBind(keys::Action action,bool inlineRow=false);
+    bool ModuleEnabled(keys::Action action) const;
+    void SetModuleEnabled(keys::Action action,bool enabled);
+    bool HudEnabled(int module) const;
+    void SetHudEnabled(int module,bool enabled);
+    void SavePreferences();
+    void LoadPreferences();
 
     void DrawMenu();
     void ResetMenuPage(control_panel::Page page);
     void DrawEsp(const WorldSnapshot& snapshot);
     void DrawAura(const WorldSnapshot& snapshot, const CameraProjection& projection, float width, float height);
     void DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjection& projection,ImVec2 viewport);
-    void DrawWatermark(const WorldSnapshot& snapshot);
 
-    // HUD widgets. Each returns the height it consumed so they can stack.
+    // HUD-Widgets zeichnen lokal; Layout und Skalierung übernimmt DrawHud.
     void  DrawHud(const WorldSnapshot& snapshot);
     float DrawEquipmentPanel(const WorldSnapshot& snapshot, float x, float y);
     float DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y);
     float DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, float y);
     float DrawPerformancePanel(const WorldSnapshot& snapshot, float x, float y);
-    void  DrawCompassStrip(const WorldSnapshot& snapshot);
+    void  DrawCompassStrip(const WorldSnapshot& snapshot,float stripWidth);
     void  DrawReachMarker(const WorldSnapshot& snapshot);
     void  UpdateTriggerbot(const WorldSnapshot& snapshot);
     void  UpdateAimLock(const WorldSnapshot& snapshot);
@@ -173,6 +172,7 @@ private:
     void DrawVisualsTab();
     void DrawTargetAuraSettings();
     void DrawTargetMarkerSettings();
+    void DrawWorldVisualSettings(int section);
     void DrawStatsTab(const WorldSnapshot& snapshot);
     void DrawCombatTab();
     void DrawHudTab();
@@ -192,17 +192,39 @@ private:
     VisualSettings  visuals_{};
     AuraConfig auraConfig_{};
     AuraRenderer auraRenderer_{};
+    WorldVisualsConfig worldVisualsConfig_{};
+    WorldVisualsRenderer worldVisuals_{};
     TargetCubeRenderer targetCube_{};
     TargetCubeConfig targetCubeConfig_{};
     bool markerDetailsOpen_=false;
     AuraBlendDX11 auraBlend_{};
     FriendHatRenderer friendHats_{};
     FriendHatConfig friendHatConfig_{};
+    LocalHatConfig localHatConfig_{};
     ItemIconAtlasDX11 itemIcons_{};
     bool auraPrepared_ = false;
     control_panel::State menu_{};
     OverlaySettings settings_{};
     HudSettings     hud_{};
+    keys::Bindings bindings_=keys::Defaults();
+    keys::Engine keyEngine_{};
+    keys::Input keyInput_{},capturePrevious_{};
+    int captureAction_=-1;
+    int captureModifier_=0;
+    unsigned captureModifierMask_=0;
+    bool captureArmed_=false;
+    bool hudEditing_=false;
+    int hudSelected_=0;
+    std::array<HudRect,kHudModules> hudRects_{};
+    std::filesystem::path preferencesPath_{};
+    bool preferencesDirty_=false;
+    std::uint64_t preferenceSaveAt_=0;
+    std::string preferenceStatus_{};
+    int visualsSection_=0;
+    int blocksSection_=0;
+    int hudSection_=0;
+    int statsSection_=0;
+    int settingsSection_=0;
     CombatSettings   combat_{};
     CombatMenu       combatMenu_{};
     CombatReport    combatReport_{};
@@ -226,10 +248,6 @@ private:
     bool clickThrough_   = true;
     bool running_        = true;
     bool agentConnected_ = false;
-
-    // Edge detection for GetAsyncKeyState polling.
-    bool toggleKeyDown_ = false;
-    bool panicKeyDown_  = false;
 
     int windowX_ = 0, windowY_ = 0, windowW_ = 0, windowH_ = 0;
 

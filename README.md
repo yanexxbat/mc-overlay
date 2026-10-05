@@ -21,8 +21,7 @@ capture is not implemented.
 
 An active Kill Aura target automatically gets a glowing yellow/lime corner cube
 that follows its hitbox and smoothly alternates rotation direction. It also works
-with ESP and Aura orbs disabled. Configure it under **VISUALS → Target effects →
-Target marker**: size, colours, glow, opacity, animation and direction interval.
+with ESP and Aura orbs disabled. Configure it under **VISUALS → Target marker**: size, colours, glow, opacity, animation and direction interval.
 **Shape & timing** contains corner geometry, depth and fade. See [target cube](docs/target-cube.md).
 
 ---
@@ -140,9 +139,12 @@ skip the automatic load and do it from the Settings tab instead.
 
 ## HUD
 
-Always-on panels, independent of the INSERT menu. All toggleable under the
-**HUD** tab, and anchorable to any corner (panels report their own height, so
-hiding one closes the gap rather than leaving a hole).
+Independent HUD elements, individually enabled, moved and scaled under **HUD**.
+Use **Open HUD editor** or **F6**, drag elements, select them in the toolbar and
+adjust Enabled/Scale. **Esc**, **Done** or F6 finishes. Watermark, Active modules
+and Keybinds are configurable elements too. Empty/disabled elements preview in
+the editor; compact editor viewports show the selected element only. Positions,
+per-element scale and keybinds persist beside the executable. See [client UI](docs/client-ui.md).
 
 **Equipment** — the six slots (helmet/chest/legs/boots/main/off) with durability
 bars. `maxDamage == 0` means "has no durability" — a block, food, a totem — which
@@ -177,59 +179,46 @@ player's interaction range. So a non-null value means "in reach" *by the game's
 own definition* rather than by a reimplementation of its raycast that would
 drift out of agreement with the real hit registration.
 
-## Rendering: rounded flat UI
+## Rendering: classic client UI
 
-The overlay and injector use a matte, opaque Dear ImGui theme: background
-#121214, cards #1E1E24, hover #2A2A32, accent #5865F2, text #ECECEE.
-Window/frame/popup/grab/scrollbar rounding is 10/6/8/5/6 pixels.
+The overlay follows [the latest user reference](design/reference-classic-ui.png):
+a rectangular dark window, violet rules/filled sliders, compact fields, 13 px
+embedded pixel-aligned font and horizontal Combat/Visuals/Blocks/HUD/Stats/Settings
+tabs. Drag the title bar to move; Center restores placement. Small viewports
+scroll and stack controls. The injector retains the shared rounded flat theme.
 
-The common/flat_style.hpp/.cpp files own the theme, five-layer draw-list shadows,
-scrollable module cards and scoped style changes. See [the flat UI guide](docs/flat-ui.md)
-for C++ examples and the ownership rules for custom headers and buttons.
+**Settings → Keybinds** assigns keyboard/mouse keys, modifier chords and Toggle/Hold
+per module. A single modifier is captured on release. Esc cancels capture;
+Backspace/Delete clears a module bind. Duplicates are rejected. System defaults:
+INSERT/Menu, F6/HUD editor, END/Quit; all module binds initially unbound.
+Hold restores the previous module state on release/focus loss. Module hotkeys
+pause in menu/editor, and every bind is restricted to Minecraft/overlay focus.
 
-The current backend is **Win32 + Direct3D 11**. The new UI helpers use only ImGui
-and are also usable with OpenGL 3.3; this redesign retains the existing backend.
-The liquid-glass library, Desktop Duplication, blur and refraction passes are
-removed from both UI targets. Inter's existing embedded font assets remain in use.
+The HUD uses individual position/scale/visibility instead of a fixed panel stack.
+HUD settings and binds are saved atomically in **client-settings.ini** next to
+mcov_overlay.exe. Other module settings/friends retain their session behavior.
+Full usage and implementation: [client UI](docs/client-ui.md).
 
-The framebuffer outside UI panels stays transparent so the game remains visible.
-WS_EX_LAYERED and DwmExtendFrameIntoClientArea provide that compositing;
-panels and controls themselves are opaque. Capture exclusion is now an independent
-recording preference and defaults to off.
+The backend remains **Win32 + Direct3D 11** with Dear ImGui. Only pixels occupied
+by panels/effects are drawn; the surrounding framebuffer stays transparent.
+JNI/JVMTI remains in the separate agent, and all UI/HUD rendering consumes the
+published WorldSnapshot. This change adds no JNI or IPC fields. Styles and fonts
+restore after the menu/editor. Shared flat helpers: [flat UI](docs/flat-ui.md).
 
-JNI/JVMTI sampling remains in the separate agent DLL. Rendering consumes the
-published WorldSnapshot through shared memory; the redesign adds no JNI work.
-The overlay menu reproduces the user's screenshot, saved in
-[design/reference-ui.png](design/reference-ui.png). Its native implementation
-lives in `src/overlay/control_panel.hpp/.cpp`: separate dark main panel and
-right navigation, two compact setting columns, square gold checkboxes, thin
-gold sliders, small dropdowns and subtle clipped circular linework. The polished
-menu measures 860 x 477 at normal desktop sizes, about 16% smaller than the
-original implementation. Inter is 14 px, with larger checkboxes and slider
-knobs. Narrow viewports stack settings with scrolling and retain readable text.
-
-Drag the small grip along the top edge to move both panels together. Position
-lasts for the session, including when closing and reopening the menu. Dragging
-tracks the pointer directly and clamps the menu inside the game viewport.
-Appearance -> Center menu restores central placement.
-
-COMBAT opens the combat modules and settings, VISUALS entity rendering, LOOT block
-ESP, and HUD equipment and overlays. The three small icons open player stats,
-appearance/menu actions, and overlay/agent settings. Appearance includes the
-four existing palettes, compact navigation, reduced motion, recentering, page
-reset, connection status and menu closing. Font Awesome icons are embedded as
-an executable resource.
-Aim/trigger activation keys and target filtering are bound to CombatSettings.
-Combat has three tabs: **Kill Aura**, **Other modules** and **Friends**.
+Combat has five function tabs: **Kill Aura**, **Aim Assist**, **Triggerbot**,
+**Auto Totem** and **Friends**. Every main page uses the same sub-tab navigation;
+long tab bars have scroll arrows. Visuals separates each effect, HUD provides a
+tab per element, Blocks separates scanning/types/tracers, and Stats separates
+player/client/entities. Settings has Overlay, Focus, Keybinds and Agent.
 Enable **Enable Kill Aura**, close the menu and use F5. It aims and attacks
 the nearest valid living hitbox in reach, including behind the camera, and
-switches when another eligible entity is closer. Players and mobs are included
+keeps that lock until death or loss of sight/reach. Players and mobs are included
 by default; friends and occluded entities are skipped. The basic controls are
-target type, reach and smoothing. Rotation always keeps the camera independent.
+activation, target type and reach. Rotation always keeps the camera independent.
 There is no preset step or selection-mode chooser. See [camera behavior and hooks](docs/silent-camera.md).
-Technical controls are under the collapsed **Advanced settings** section;
-the debug HUD is off by default. Other modules contains Aim Assist, Triggerbot
-and Auto Totem; Aim Assist and Triggerbot visibly pause while Kill Aura is enabled.
+Optional live state is under the collapsed **Diagnostics** section;
+the debug HUD is off by default. Aim Assist, Triggerbot and Auto Totem each
+have their own tab; Aim Assist and Triggerbot visibly pause while Kill Aura is enabled.
 Friends manages UUID exclusions and automatically marks those players with a
 translucent conical hat. Its soft violet/turquoise glow uses the Target Aura
 colors; it also works with Target Aura and ESP disabled. Removing the friend
@@ -241,20 +230,20 @@ the wire protocol is now IPC v14. Settings and friends remain session-local.
 All six original pages
 remain accessible. The injector retains its existing flat interface.
 
-The menu uses the existing Win32/D3D11 backend and pinned ImGui version.
-Its palette and menu fonts are scoped to the menu, leaving the HUD intact.
-Hover, press and toggle feedback use shared, interruptible 120-160 ms ease-out
-transitions. Mouse-selected pages fade gently into place; shortcut opening and
-keyboard page changes are immediate. Native Windows animation preferences and
-the Reduced motion option suppress motion.
+Visuals has **Trails**, **Hit particles**, **Ambient particles**, **Hit bubbles**,
+**Kill effect** and **BreadCrumbs**, inspired by ThunderHack-Recode. Enable effects
+in their function tabs; they start disabled and unbound. Every particle style has
+Aura-style soft glow and an intensity control. Colours follow Target Aura or can
+be edited separately. **China hat** enables a transparent glowing hat on your own
+sampled head, on in F5 by default. Restart Minecraft and reattach the updated
+agent for own head geometry. [Controls and snapshot limitations](docs/world-visuals.md).
 
-Optional -DMCOV_BUILD_UI_CHECKS=ON enables headless `flat_ui` and `control_panel`
-checks for style ownership, real settings binding, navigation input and small
-viewports. The latter renders the actual menu with D3D11 WARP to PNG files in
-`build/ui-preview` without opening a window or connecting to Minecraft.
-`reference-size.png` uses the supplied image's 752 x 427 viewport; `combat.png`
-shows the desktop version. The check also exercises menu dragging, position
-retention, bounds, reduced motion, the real aim-cone slider and embedded icons.
+Optional -DMCOV_BUILD_UI_CHECKS=ON enables headless flat_ui, client_controls,
+world_visuals,
+control_panel and aura_rendering checks. These verify style ownership, actual
+settings input, key capture/conflicts, toggle/hold/focus, preference roundtrip,
+HUD dragging and small viewports. D3D11 WARP renders classic-*.png and
+modular-hud*.png under build/ui-preview without opening or attaching Minecraft.
 
 ## Target aura
 
@@ -430,7 +419,7 @@ The tell is that it only crashes **in-world**. With the cursor captured
 (`GLFW_CURSOR_DISABLED`) the focus handler does real work; in menus it does
 almost nothing, so the menu opens fine and the whole thing looks like it works.
 
-`Settings → Focus mode` now picks the strategy:
+`Settings → Focus → Focus mode` now picks the strategy:
 
 | Mode | Behaviour |
 |---|---|

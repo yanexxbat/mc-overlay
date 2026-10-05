@@ -22,25 +22,12 @@ template<class Draw> void Columns(const char* id,Draw draw) {
 void Header(const char* text) { panel::Section(text); }
 }
 CombatMenu::Section CombatMenu::DrawNavigation() {
-    constexpr const char* labels[]={"Kill Aura","Other modules","Friends"};
-    constexpr Section pages[]={Section::KillAura,Section::Modules,Section::Friends};
-    style::StyleScope colors;
-    const auto requested=section_==Section::Modules || section_==Section::Friends ? section_ : Section::KillAura;
+    constexpr const char* labels[]={"Kill Aura","Aim Assist","Triggerbot","Auto Totem","Friends"};
+    const auto requested=section_==Section::Debug ? Section::KillAura : section_;
     const float start=ImGui::GetCursorPosY();
-    colors.Color(ImGuiCol_TabSelected,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgActive));
-    colors.Color(ImGuiCol_TabHovered,ImGui::GetStyleColorVec4(ImGuiCol_FrameBgHovered));
-    colors.Color(ImGuiCol_TabSelectedOverline,ImGui::GetStyleColorVec4(ImGuiCol_CheckMark));
-    if(ImGui::BeginTabBar("combat_sections",ImGuiTabBarFlags_FittingPolicyScroll)) {
-        for(int i=0;i<IM_ARRAYSIZE(labels);++i) {
-            const auto flags=selectNext_ && requested==pages[i] ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
-            if(ImGui::BeginTabItem(labels[i],nullptr,flags)) {
-                if(pages[i]!=Section::KillAura || section_==Section::Modules || section_==Section::Friends) section_=pages[i];
-                ImGui::EndTabItem();
-            }
-        }
-        ImGui::EndTabBar(); selectNext_=false;
-    }
-    ImGui::Dummy(ImVec2(0,5*panel::Scale()));
+    const auto selected=static_cast<Section>(panel::SubTabs("combat_sections",labels,IM_ARRAYSIZE(labels),static_cast<int>(requested),selectNext_));
+    if(selected!=Section::KillAura || section_!=Section::Debug) section_=selected;
+    selectNext_=false;
     navigationHeight_=ImGui::GetCursorPosY()-start;
     return section_;
 }

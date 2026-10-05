@@ -47,7 +47,7 @@ FriendHatRenderer::FriendHatRenderer() noexcept {
     }
 }
 void FriendHatRenderer::Prepare(ImDrawList& draw) {
-    constexpr int hats=static_cast<int>(combat::kRelationCapacity);
+    constexpr int hats=static_cast<int>(combat::kRelationCapacity)+1;
     draw.VtxBuffer.reserve(draw.VtxBuffer.Size+hats*1536);
     draw.IdxBuffer.reserve(draw.IdxBuffer.Size+hats*4096);
     draw.CmdBuffer.reserve(draw.CmdBuffer.Size+hats*6);
@@ -60,7 +60,7 @@ bool FriendHatRenderer::IsFriend(const EntitySnapshot& e,const combat::Relations
     return false;
 }
 bool FriendHatRenderer::BuildWorld(const EntitySnapshot& e,const FriendHatConfig& c,FriendHatWorld& out) const noexcept {
-    if(!(e.flags&kEntityIsPlayer) || !(e.flags&kEntityIsLiving) || (e.flags&kEntityIsSelf) ||
+    if(!(e.flags&kEntityIsPlayer) || !(e.flags&kEntityIsLiving) ||
        !std::isfinite(e.health) || e.health<=0 || !std::isfinite(e.width) || e.width<=0 ||
        !std::isfinite(e.height) || e.height<=0 || !std::isfinite(e.yaw) || !std::isfinite(e.headPitch)) return false;
     const double model=e.modelHeight>0?e.modelHeight:e.height;
@@ -161,6 +161,27 @@ void FriendHatRenderer::DrawFriends(ImDrawList& draw,const WorldSnapshot& snapsh
         FriendHatWorld world{}; FriendHatScreen screen{};
         if(BuildWorld(*friends[i],config,world) && Project(projection,world,{snapshot.camX,snapshot.camY,snapshot.camZ},viewport,screen,origin))
             Draw(draw,screen,config,start,end,blend,texture);
+    }
+}
+bool FriendHatRenderer::LocalVisible(const EntitySnapshot& e,WorldPoint camera,bool firstPerson) noexcept {
+    if(!(e.flags&kEntityIsSelf)||!Finite(camera)||e.health<=0||!std::isfinite(e.health)) return false;
+    if(firstPerson) return true;
+    const auto head=BuildHumanoidRig(e).joints[0];
+    // Keine Kameramodus-Abfrage im Renderer. Kleine Eye-/Bob-Abstände bleiben ausgeblendet.
+    return Finite(head)&&std::hypot(head.x-camera.x,head.y-camera.y,head.z-camera.z)>.8;
+}
+void FriendHatRenderer::DrawLocal(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
+                                  const LocalHatConfig& config,ImVec4 start,ImVec4 end,AuraBlend blend,
+                                  ImTextureID texture,ImVec2 viewport,ImVec2 origin) const {
+    if(!config.enabled) return;
+    const WorldPoint camera{snapshot.camX,snapshot.camY,snapshot.camZ};
+    for(std::uint32_t i=0;i<std::min(snapshot.entityCount,kMaxEntities);++i) {
+        const auto& e=snapshot.entities[i];
+        if(!(e.flags&kEntityIsSelf)) continue;
+        FriendHatWorld world{}; FriendHatScreen screen{};
+        if(LocalVisible(e,camera,config.firstPerson)&&BuildWorld(e,config.shape,world)&&Project(projection,world,camera,viewport,screen,origin))
+            Draw(draw,screen,config.shape,config.auraColours?start:config.start,config.auraColours?end:config.end,blend,texture);
+        return;
     }
 }
 } // namespace mcov

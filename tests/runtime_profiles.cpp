@@ -339,6 +339,10 @@ void TestEntityDetails(JNIEnv* env,const Bindings& b,jobject loader,jobject clie
     SampleEntities(env,b,client,nullptr,geometry,state); Healthy(env);
     Require(geometry.entityCount==1 && geometry.entities[0].uuid==second,
             "geometry IPC snapshot did not carry the player's real UUID");
+    SampleEntities(env,b,client,entity,geometry,state); Healthy(env);
+    Require(geometry.entityCount==1 && (geometry.entities[0].flags&mcov::kEntityIsSelf) &&
+            geometry.entities[0].rigKind==mcov::kRigHumanoid,
+            "own body was omitted, duplicated or lost its sampled head geometry");
     mcov::WorldSnapshot snapshot{}; snapshot.entityCount=1; snapshot.hasTarget=1; snapshot.targetEntityId=42;
     snapshot.entities[0].entityId=42; snapshot.entities[0].flags=mcov::kEntityIsLiving|mcov::kEntityIsPlayer;
     snapshot.entities[0].distance=5;

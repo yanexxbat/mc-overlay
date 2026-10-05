@@ -18,6 +18,7 @@ void ApplyFlatTheme(ImGuiStyle& style);
 bool LoadFonts(float uiSize = 17.0f);
 ImFont* MenuFont(bool bold = false);
 ImFont* MenuIconFont();
+ImFont* ClassicMenuFont();
 
 // Screen-space drawing; renderer independent, no capture, textures or JNI.
 // Draw on the parent draw list before child contents to preserve clipping and
