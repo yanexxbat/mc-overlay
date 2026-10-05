@@ -605,7 +605,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
-    if (!entitiesEnabled && !blocks_.enabled && !auraConfig_.enabled &&
+    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
@@ -630,6 +630,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
             auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),
             {width,height},ImGui::GetMainViewport()->Pos);
     DrawBlockEsp(snapshot, projection, width, height);
+    DrawChunkFinder(snapshot,projection);
     if (!entitiesEnabled) return;
 
     EspRenderer::Draw(*ImGui::GetBackgroundDrawList(),snapshot,projection,visuals_,
@@ -1185,13 +1186,13 @@ void Overlay::DrawMenu() {
 
 void Overlay::ResetMenuPage(panel::Page page) {
     switch (page) {
-        case panel::Page::Combat: combat_=CombatSettings{}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
+        case panel::Page::Combat: combat_=CombatSettings{}; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
             worldVisualsConfig_=WorldVisualsConfig{}; worldVisuals_.Reset();
             localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset(); break;
-        case panel::Page::Blocks: blocks_=BlockEspSettings{}; break;
+        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; break;
         case panel::Page::Hud: hud_=HudSettings{}; preferencesDirty_=true; break;
         case panel::Page::Stats: break;
         case panel::Page::Settings:

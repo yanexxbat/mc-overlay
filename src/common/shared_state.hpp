@@ -281,6 +281,7 @@ static_assert(std::is_trivially_copyable_v<WorldSnapshot>);
 // the same compiler for the same ABI and these types are always lock-free
 // (a lock-based atomic would keep its mutex in per-process memory).
 // ---------------------------------------------------------------------------
+enum class ScanState : std::uint32_t { Idle, Scanning, Ready, MissingBindings };
 struct SharedBlock {
     std::uint32_t magic;
     std::uint32_t version;
@@ -297,7 +298,8 @@ struct SharedBlock {
     std::atomic<std::uint32_t> scanMask;       // bit per BlockKind; 0 = disabled
     std::atomic<std::uint32_t> scanRadius;     // blocks
     std::atomic<std::uint32_t> scanIntervalMs;
-    std::atomic<std::uint32_t> _scanPad;
+    std::atomic<std::uint32_t> scanState;
+    std::atomic<std::uint32_t> scanProgress; // 0..100, Agent -> Overlay.
 
     SharedMailbox<CombatRequest> combatRequest; // Overlay -> Client-Tick, eigener Writer.
     SharedMailbox<CombatReport> combatReport;   // Client-Tick -> Overlay, eigener Writer.

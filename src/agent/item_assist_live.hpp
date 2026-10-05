@@ -119,6 +119,13 @@ public:
         items::Request request; if(!channel_->itemRequest.Read(request)) return;
         const auto now=GetTickCount64();
         if(checkForeground) { DWORD pid=0; GetWindowThreadProcessId(GetForegroundWindow(),&pid); request.inputAllowed=request.inputAllowed&&pid==GetCurrentProcessId(); }
+        // Deaktivierte Module verursachen keine Inventarabfragen. Ein ausstehender
+        // Slot-Restore muss beim Loslassen einmal im Client-Tick abgeschlossen werden.
+        if(!request.totem.enabled&&!request.crystal.enabled&&!request.anchor.enabled&&!controller_.HasRestore()) {
+            auto report=controller_.GetReport(); report.sampledAtMs=now;
+            report.totem=report.crystal=report.anchor=items::Status::Off;
+            channel_->itemReport.Publish(report); return;
+        }
         try {
             jvm::LocalFrame frame(env,128); if(!frame.ok()) throw std::runtime_error("local frame");
             if(now>=retry_&&(!totemReady_||!macroReady_||!anchorReady_)) { Bind(env); retry_=now+1000; }
@@ -153,7 +160,7 @@ public:
                     auto offhand=env->CallObjectMethod(player,b_.mGetEquipped,b_.slotConstants[kSlotOffHand]); Check(env);
                     f.offhand=Item(env,offhand);
                 }
-                if(macroReady_) {
+                if(macroReady_&&((request.crystal.enabled&&request.crystalHeld)||(request.anchor.enabled&&request.anchorHeld))) {
                     auto target=b_.fTargetedEntity?env->GetObjectField(client,b_.fTargetedEntity):nullptr; Check(env);
                     if(target&&env->IsInstanceOf(target,crystal_)) f.target=items::Target::Crystal;
                     else {
@@ -173,8 +180,8 @@ public:
                                     if(anchorReady_) { auto value=env->CallObjectMethod(state,stateValue_,charge_); Check(env); f.charges=value?env->CallIntMethod(value,integer_):-1; Check(env); }
                                 } else if(block) f.target=items::Target::OtherBlock;
                                 if(anchorReady_) {
-                                    if(dim_) { auto d=env->CallObjectMethod(level,dim_); Check(env); f.anchorWorks=d&&env->CallBooleanMethod(d,anchorWorks_)==JNI_TRUE; Check(env); }
-                                    else { auto e=env->CallObjectMethod(level,environment_); Check(env); auto v=e&&position?env->CallObjectMethod(e,environmentValue_,environmentAnchor_,position):nullptr; Check(env); f.anchorWorks=v&&env->CallBooleanMethod(v,boolean_)==JNI_TRUE; Check(env); }
+                                    if(dim_&&anchorWorks_) { auto d=env->CallObjectMethod(level,dim_); Check(env); f.anchorWorks=!d||env->CallBooleanMethod(d,anchorWorks_)==JNI_TRUE; Check(env); }
+                                    else { auto e=env->CallObjectMethod(level,environment_); Check(env); auto v=e&&position?env->CallObjectMethod(e,environmentValue_,environmentAnchor_,position):nullptr; Check(env); f.anchorWorks=!v||env->CallBooleanMethod(v,boolean_)==JNI_TRUE; Check(env); }
                                 }
                             }
                         }
@@ -186,8 +193,10 @@ public:
             if(action.operation!=items::Operation::None) {
                 auto inventory=env->GetObjectField(player,b_.fInventory); Check(env);
                 auto manager=env->GetObjectField(client,b_.fInteractionMgr); Check(env);
+                if(!inventory||!manager) throw std::runtime_error("inventory / interaction manager unavailable");
                 if(action.operation==items::Operation::SwapTotem) {
                     auto menu=env->GetObjectField(player,b_.fScreenHandler); Check(env);
+                    if(!menu) throw std::runtime_error("inventory menu unavailable");
                     const auto id=env->GetIntField(menu,b_.fSyncId); Check(env);
                     env->CallVoidMethod(manager,b_.mClickSlot,id,items::ContainerSlot(action.slot),40,b_.swapAction,player); Check(env);
                 } else if(action.operation==items::Operation::RestoreSlot) {

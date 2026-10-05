@@ -154,6 +154,7 @@ add_executable(mcov_overlay
     src/overlay/overlay_input.cpp
     src/overlay/overlay_hud.cpp
     src/overlay/overlay_world_visuals.cpp
+    src/overlay/overlay_utilities.cpp
     src/overlay/esp_renderer.cpp
     src/overlay/item_icon_atlas_dx11.cpp
     src/overlay/control_panel.cpp
@@ -325,6 +326,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_world_visuals.cpp
+    src/overlay/overlay_utilities.cpp
         src/overlay/combat_menu.cpp
         src/overlay/item_icon_atlas_dx11.cpp
         src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
