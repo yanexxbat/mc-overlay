@@ -104,7 +104,8 @@ public:
         const bool macroAllowed=allowed&&!f.screen&&f.ownMenu&&f.cursorEmpty&&!r.combatActive;
         const bool armed=crystal?r.crystal.enabled:anchor?r.anchor.enabled:false;
         const bool manualSlot=Active()&&lastSelected_>=0&&f.selected!=lastSelected_;
-        if(!armed || !f.useDown || !macroAllowed || !f.siteValid || manualSlot) {
+        const bool restorePending=!Active()&&HasRestore();
+        if(restorePending || !armed || !f.useDown || !macroAllowed || !f.siteValid || manualSlot) {
             if(crystal&&r.crystal.enabled) report_.crystal=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             if(anchor&&r.anchor.enabled) report_.anchor=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             cycle_=Item::Empty; waiting_=Operation::None; confirmUntil_=0;
