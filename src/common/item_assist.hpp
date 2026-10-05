@@ -42,7 +42,7 @@ struct Report {
 };
 struct Frame {
     bool world=false,alive=false,paused=false,screen=false,ownMenu=false,cursorEmpty=true;
-    bool totemSupported=false,macroSupported=false,anchorWorks=false;
+    bool totemSupported=false,macroSupported=false,anchorSupported=false,anchorWorks=false;
     std::array<Item,36> inventory{};
     Item offhand=Item::Empty;
     int selected=0,charges=0;
@@ -99,7 +99,7 @@ public:
             original_=lastSelected_=-1; nextMacro_=0; return {};
         }
         auto& status=anchor?report_.anchor:report_.crystal;
-        if(!f.macroSupported) { status=Status::Unsupported; return {}; }
+        if(!f.macroSupported||anchor&&!f.anchorSupported) { status=Status::Unsupported; return {}; }
         if(anchor&&f.anchorWorks) { status=Status::AnchorSafeDimension; return {}; }
         Action action;
         if(crystal&&f.target==Target::Crystal) action={Operation::AttackCrystal,f.selected,false};
@@ -108,7 +108,8 @@ public:
             int slot=-1;
             if(f.charges==0) slot=Find(f,Item::Glowstone,9);
             else {
-                for(int i=0;i<9;++i) if(f.inventory[i]!=Item::Glowstone&&f.inventory[i]!=Item::Crystal) { slot=i; break; }
+                for(int i=0;i<9;++i) if(f.inventory[i]!=Item::Glowstone&&f.inventory[i]!=Item::Crystal&&f.inventory[i]!=Item::Empty) { slot=i; break; }
+                if(slot<0&&f.offhand!=Item::Glowstone) slot=Find(f,Item::Empty,9);
             }
             action={Operation::Use,slot,true};
         } else if(anchor&&f.target==Target::OtherBlock) action={Operation::Use,Find(f,Item::Anchor,9),true};
