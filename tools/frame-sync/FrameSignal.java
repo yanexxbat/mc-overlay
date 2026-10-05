@@ -2,6 +2,13 @@ package mcov;
 
 /** Bootstrap-visible frame signals and the explicitly armed client-tick bridge. */
 public final class FrameSignal {
+    public static volatile boolean macroEnabled;
+    private static native boolean nativeMacroUse(Object client);
+    public static boolean macroUse(Object client) {
+        if (!macroEnabled) return false;
+        try { return nativeMacroUse(client); }
+        catch (Throwable error) { macroEnabled=false; return false; }
+    }
     private static final double ENTITY_TURN_SCALE = 0.15; // Vanilla Entity.turn, nach Maussensitivität.
     // Kamera und Mouse-Look bleiben in Java: keine JNI-Abfrage pro Kameraframe.
     // Das Combat-Modell behält seine echte Rotation für normales Movement/Rendern.

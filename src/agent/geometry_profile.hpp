@@ -39,5 +39,12 @@ struct GeometryProfile {
     Member useItem, selectedSlot, inventoryMenu, carriedStack, hitResult, hitType, blockHitPos;
     Member stateValue, axisProperty, anchorCharge, dimensionType, anchorWorks;
     Member environment, environmentValue, environmentAnchor;
+    const char* keyMappingClass;
+    const char* blockPosClass;
+    const char* directionClass;
+    const char* resultClass;
+    Member useKey, keyDown, posX, posY, posZ, blockPosCtor, blockHitCtor, vecCtor;
+    Member hitDirection, stepX, stepY, stepZ, upDirection, useOn, consumesAction, replaceable;
+    Member blockReach, oldBlockReach;
 };
 } // namespace mcov::mappings

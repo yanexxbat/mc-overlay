@@ -20,6 +20,10 @@ def geometry_schema(version):
         'dimensionTypeClass': 'net/minecraft/world/level/dimension/DimensionType',
         'environmentClass': 'net/minecraft/world/attribute/EnvironmentAttributeSystem' if modern else '',
         'environmentAttrsClass': 'net/minecraft/world/attribute/EnvironmentAttributes' if modern else '',
+        'keyMappingClass': 'net/minecraft/client/KeyMapping',
+        'blockPosClass': 'net/minecraft/core/BlockPos',
+        'directionClass': 'net/minecraft/core/Direction',
+        'resultClass': 'net/minecraft/world/InteractionResult',
     }
     entity = 'net/minecraft/world/entity/Entity'
     living = 'net/minecraft/world/entity/LivingEntity'
@@ -64,6 +68,23 @@ def geometry_schema(version):
     add('clientTick', client, 'tick', '()V', 'methods')
     add('clientPaused', client, 'isPaused', '()Z', 'methods')
     add('useItem',client,'startUseItem','()V','methods')
+    add('useKey','net/minecraft/client/Options','keyUse','L'+classes['keyMappingClass']+';')
+    add('keyDown',classes['keyMappingClass'],'isDown','()Z','methods')
+    for axis in 'XYZ':
+        add('pos'+axis,classes['blockPosClass'],'get'+axis,'()I','methods')
+        add('step'+axis,classes['directionClass'],'getStep'+axis,'()I','methods')
+    add('blockPosCtor',classes['blockPosClass'],'<init>','(III)V','methods')
+    add('vecCtor','net/minecraft/world/phys/Vec3','<init>','(DDD)V','methods')
+    add('blockHitCtor',classes['blockHitClass'],'<init>','(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/core/Direction;Lnet/minecraft/core/BlockPos;Z)V','methods')
+    add('hitDirection',classes['blockHitClass'],'getDirection','()L'+classes['directionClass']+';','methods')
+    add('upDirection',classes['directionClass'],'UP','L'+classes['directionClass']+';',static=True)
+    add('useOn','net/minecraft/client/multiplayer/MultiPlayerGameMode','useItemOn','(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/phys/BlockHitResult;)L'+classes['resultClass']+';','methods')
+    add('consumesAction',classes['resultClass'],'consumesAction','()Z','methods')
+    add('replaceable','net/minecraft/world/level/block/state/BlockState','canBeReplaced','()Z','methods')
+    if version == '1.20.1':
+        add('oldBlockReach','net/minecraft/client/multiplayer/MultiPlayerGameMode','getPickRange','()F','methods')
+    else:
+        add('blockReach',player,'blockInteractionRange','()D','methods')
     add('selectedSlot','net/minecraft/world/entity/player/Inventory','selected','I')
     add('inventoryMenu',player,'inventoryMenu','Lnet/minecraft/world/inventory/InventoryMenu;')
     add('carriedStack','net/minecraft/world/inventory/AbstractContainerMenu','getCarried','()Lnet/minecraft/world/item/ItemStack;','methods')

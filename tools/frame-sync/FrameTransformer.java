@@ -11,6 +11,7 @@ import jdk.internal.org.objectweb.asm.ClassWriter;
 import jdk.internal.org.objectweb.asm.FieldVisitor;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.org.objectweb.asm.Opcodes;
+import jdk.internal.org.objectweb.asm.Label;
 
 final class FrameTransformer implements ClassFileTransformer {
     private final Instrumentation inst;
@@ -55,7 +56,16 @@ final class FrameTransformer implements ClassFileTransformer {
                     return new MethodVisitor(Opcodes.ASM8, next) {
                         @Override public void visitCode() {
                             super.visitCode();
-                            if (role == 1 || role == 2) super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "begin", "()V", false);
+                            if (role == 5) {
+                                // Nur übernommene Macro-Platzierungen unterdrücken Vanilla-Use.
+                                Label vanilla=new Label();
+                                super.visitVarInsn(Opcodes.ALOAD,0);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","macroUse","(Ljava/lang/Object;)Z",false);
+                                super.visitJumpInsn(Opcodes.IFEQ,vanilla);
+                                super.visitInsn(Opcodes.RETURN);
+                                super.visitLabel(vanilla);
+                                super.visitFrame(Opcodes.F_SAME,0,null,0,null);
+                            } else if (role == 1 || role == 2) super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "begin", "()V", false);
                             else if (role == 4) {
                                 turnBits[0] |= FrameProfiles.turnMask(name,method,descriptor);
                                 super.visitVarInsn(Opcodes.ALOAD,0); super.visitVarInsn(Opcodes.DLOAD,1);
