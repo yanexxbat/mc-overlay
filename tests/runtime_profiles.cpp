@@ -306,7 +306,7 @@ void TestEntityDetails(JNIEnv* env,const Bindings& b,jobject loader,jobject clie
     SetStatic(env,connectionClass,"testPlayerInfo",(std::string("L")+set.classes.playerInfo+";").c_str(),info);
     SetStatic(env,b.clsLevel,"testEntity",(std::string("L")+set.classes.entity+";").c_str(),entity);
     SetStatic(env,b.clsLiving,"testEquipment",std::strchr(set.methodGetEquipped.signature,')')+1,stack);
-    SetStatic(env,b.clsItemStack,"testItem",set.methodStackGetItem.signature+2,item);
+    env->SetObjectField(stack,env->GetFieldID(b.clsItemStack,"testItem",set.methodStackGetItem.signature+2),item); Healthy(env);
     for (auto slot:b.slotConstants) Require(slot!=nullptr,"equipment enum singleton was not mapped");
     const auto data=SampleDetails(env,b,entity,connection); Healthy(env);
     Require(data.ping==87 && data.armorValue==18,"per-player ping or armor value incorrect");

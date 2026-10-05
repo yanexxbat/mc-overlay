@@ -58,7 +58,30 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
                 code += b'\xb5' + u2(cp.ref(9,name,'testUuid','Ljava/util/UUID;'))
             if ('testPitch','F') in fields:
                 code += b'\x2a\x13' + u2(cp.number('F',10)) + b'\xb5' + u2(cp.ref(9,name,'testPitch','F'))
+            if ('testTranslation','Ljava/lang/String;') in fields:
+                code += b'\x2a\x13' + u2(cp.string('item.minecraft.diamond_helmet'))
+                code += b'\xb5' + u2(cp.ref(9,name,'testTranslation','Ljava/lang/String;'))
             code += b'\xb1'
+        elif special and special[0] == 'inventory_get':
+            stack=special[1]
+            code=b'\x2a\xb4'+u2(cp.ref(9,name,'testStacks','Ljava/util/List;'))+b'\x1b'
+            code+=b'\xb9'+u2(cp.ref(11,'java/util/List','get','(I)Ljava/lang/Object;'))+b'\x02\x00'
+            code+=b'\xc0'+u2(cp.cls(stack))+b'\xb0'
+        elif special and special[0] == 'inventory_size':
+            code=b'\x2a\xb4'+u2(cp.ref(9,name,'testStacks','Ljava/util/List;'))
+            code+=b'\xb9'+u2(cp.ref(11,'java/util/List','size','()I'))+b'\x01\x00\xac'
+        elif special and special[0] == 'swap':
+            player,inventory,inv_field,inv_desc,living,stack_desc=special[1:]
+            code=b'\x19\x05\xb4'+u2(cp.ref(9,player,inv_field,inv_desc))
+            code+=b'\xb4'+u2(cp.ref(9,inventory,'testStacks','Ljava/util/List;'))+b'\x1c'
+            code+=b'\xb9'+u2(cp.ref(11,'java/util/List','get','(I)Ljava/lang/Object;'))+b'\x02\x00'
+            code+=b'\xc0'+u2(cp.cls(stack_desc[1:-1]))+b'\xb3'+u2(cp.ref(9,living,'testEquipment',stack_desc))
+            for field,load in [('testSwapId',b'\x1b'),('testSwapSlot',b'\x1c'),('testSwapButton',b'\x1d')]:
+                code+=load+b'\xb3'+u2(cp.ref(9,name,field,'I'))
+            code+=b'\xb2'+u2(cp.ref(9,name,'testSwaps','I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,'testSwaps','I'))+b'\xb1'
+        elif special and special[0] == 'increment':
+            field=special[1]
+            code=b'\xb2'+u2(cp.ref(9,name,field,'I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,field,'I'))+b'\xb1'
         elif special and special[0] == 'field':
             result = special[2][0]
             code = b'\xb2' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae', 'I': b'\xac', 'Z': b'\xac', 'J': b'\xad'}.get(result, b'\xb0')
@@ -88,7 +111,8 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
         elif special and special[0] == 'statics':
             code = b''
             for field, field_desc in special[1]:
-                code += b'\xbb' + u2(cp.cls(name)) + b'\x59\xb7' + u2(cp.ref(10, name, '<init>', '()V'))
+                target=field_desc[1:-1]
+                code += b'\xbb' + u2(cp.cls(target)) + b'\x59\xb7' + u2(cp.ref(10, target, '<init>', '()V'))
                 code += b'\xb3' + u2(cp.ref(9, name, field, field_desc))
             code += b'\xb1'
         elif special and special[0] == 'string':
@@ -228,8 +252,7 @@ def generate(profiles_path, output):
                                   ('methodConnection', 'testConnection', 'client'),
                                   ('methodPlayerInfo', 'testPlayerInfo', 'connection'),
                                   ('methodEntityById', 'testEntity', 'clientLevel'),
-                                  ('methodGetEquipped', 'testEquipment', 'livingEntity'),
-                                  ('methodStackGetItem', 'testItem', 'itemStack')]:
+                                  ('methodGetEquipped', 'testEquipment', 'livingEntity')]:
             member = profile['members'][key]
             desc = member[1].split(')')[1]
             owner = profile['classes'][role]
@@ -290,7 +313,7 @@ def generate(profiles_path, output):
                            ('methodItemGetMaxDamage',100),('methodItemGetCount',3),('methodItemIsDamageable',1)]:
             member=profile['members'][key]
             cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)
-        for key, text in [('methodItemTransKey','item.minecraft.diamond_helmet'),('methodComponentToString','Diamond Helmet')]:
+        for key, text in [('methodComponentToString','Diamond Helmet')]:
             member=profile['members'][key]
             cls(owner_spec[key])['specials'][tuple(member)] = ('string', text)
         member=profile['members']['methodItemGetName']
@@ -298,6 +321,42 @@ def generate(profiles_path, output):
         for key, value in [('methodRealFov', 82.5), ('methodGetYaw', 29.25), ('methodGetPitch', -11.5)]:
             member = profile['members'][key]
             cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)
+        # Zustandsabhängige Inventar- und Block-Fixtures für echte JNI-Aktionen.
+        for key,backing,role,desc in [('methodStackGetItem','testItem','itemStack','L'+core['item']+';'),
+                                    ('methodItemIsEmpty','testEmpty','itemStack','Z'),
+                                    ('methodItemTransKey','testTranslation','item','Ljava/lang/String;')]:
+            member=profile['members'][key]; owner=core[role]
+            add(owner,'fields',backing,desc,False)
+            cls(owner)['specials'][tuple(member)]=('instance_field',backing,desc)
+        inventory=core['playerInv']; add(inventory,'fields','testStacks','Ljava/util/List;')
+        cls(inventory)['specials'][tuple(profile['members']['methodInvGetStack'])]=('inventory_get',core['itemStack'])
+        cls(inventory)['specials'][tuple(profile['members']['methodInvSize'])]=('inventory_size',)
+        menu_desc=profile['members']['fieldScreenHandler'][1]
+        own_desc=geometry['members']['inventoryMenu'][1]
+        cls(own_desc[1:-1])['parent_name']=menu_desc[1:-1]
+        cls(geometry['classes']['crystalClass'])['parent_name']=core['entity']
+        cls(geometry['classes']['blockHitClass'])['parent_name']=geometry['classes']['hitClass']
+        property_name=geometry['members']['stateValue'][1][2:geometry['members']['stateValue'][1].index(';')]
+        for key in ('axisProperty','anchorCharge'):
+            member=geometry['members'][key]; owner=geometry['owners'][key]
+            cls(member[1][1:-1])['parent_name']=property_name
+            add(owner,'methods','<clinit>','()V',True)
+            cls(owner)['specials'][('<clinit>','()V')]=('statics',[tuple(member)])
+        add(core['slotAction'],'methods','<clinit>','()V',True)
+        cls(core['slotAction'])['specials'][('<clinit>','()V')]=('statics',[tuple(profile['members']['fieldSwapAction'])])
+        swap_owner=owner_spec['methodClickSlot']; stack_desc=profile['members']['methodGetEquipped'][1].split(')')[1]
+        for field in ('testSwaps','testSwapId','testSwapSlot','testSwapButton'): add(swap_owner,'fields',field,'I',True)
+        cls(swap_owner)['specials'][tuple(profile['members']['methodClickSlot'])]=('swap',core['player'],inventory,*profile['members']['fieldInventory'],core['livingEntity'],stack_desc)
+        for key,backing in [('carriedStack','testCarried'),('stateValue','testStateValue'),
+                            ('dimensionType','testDimension'),('environment','testEnvironment'),('environmentValue','testAttribute')]:
+            if key not in geometry['members']: continue
+            member=geometry['members'][key]; owner=geometry['owners'][key]; desc=member[1].split(')')[1]
+            add(owner,'fields',backing,desc,True); cls(owner)['specials'][tuple(member)]=('field',backing,desc)
+        if 'environmentAnchor' in geometry['members']:
+            member=geometry['members']['environmentAnchor']; owner=geometry['owners']['environmentAnchor']
+            add(owner,'methods','<clinit>','()V',True); cls(owner)['specials'][('<clinit>','()V')]=('statics',[tuple(member)])
+        member=geometry['members']['useItem']; add(core['client'],'fields','testUses','I',True)
+        cls(core['client'])['specials'][tuple(member)]=('increment','testUses')
         if profile['gui_class']:
             add(profile['classes']['client'], 'fields', *profile['client_gui'])
         for suffix in ('', '-field-camera'):

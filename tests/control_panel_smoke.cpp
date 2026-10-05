@@ -510,7 +510,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections"};
-        constexpr int sectionCounts[]={5,17,3,10,3,4};
+        constexpr int sectionCounts[]={7,17,4,10,3,4};
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
