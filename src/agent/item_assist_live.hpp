@@ -62,7 +62,7 @@ template<class B> class InventoryAssist final {
         boolean_=jvm::TryMethod(env,boolean,"booleanValue","()Z",false);
         enumName_=jvm::TryMethod(env,enumeration,"name","()Ljava/lang/String;",false);
         totemReady_=totemReady_&&ownMenu_&&carried_&&b_.mItemIsEmpty&&b_.mGetEquipped&&b_.slotConstants[kSlotOffHand]&&paused_;
-        macroReady_=totemReady_&&selected_&&use_&&hit_&&type_&&blockHit_&&crystal_&&blockPos_&&enumName_&&attack_&&swing_&&hand_;
+        macroReady_=totemReady_&&selected_&&use_&&hit_&&type_&&blockHit_&&crystal_&&blockPos_&&enumName_&&attack_&&swing_&&hand_&&b_.mGetBlockState&&b_.mGetBlock&&b_.mBlockTransKey;
         anchorReady_=macroReady_&&charge_&&integer_&&stateValue_&&((dim_&&anchorWorks_)||(environment_&&environmentValue_&&environmentAnchor_&&boolean_));
     }
     static void Check(JNIEnv* env) {

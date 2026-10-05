@@ -35,6 +35,7 @@
 #include "entity_identity_cache.hpp"
 #include "../common/equipment_icons.hpp"
 #include "combat_live.hpp"
+#include "item_assist_live.hpp"
 
 using namespace mcov;
 
@@ -50,7 +51,7 @@ std::atomic<bool> g_stop{false};
 std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
 mcov::agent::MinecraftCombat g_combat;
-void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client) { g_combat.Tick(env,client); }
+void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
 
 void SetStatus(AgentStatus status) {
     if (auto* block = g_channel.block()) {
@@ -1212,21 +1213,8 @@ struct BlockScanner {
 };
 
 // ---------------------------------------------------------------------------
-// Auto totem
-//
-// THREADING: this is the only feature that writes to the client. clickSlot
-// mutates the ScreenHandler and sends a packet, and we call it from the sampler
-// thread rather than Minecraft's. The strictly correct route is to schedule the
-// call onto the client thread with MinecraftClient.execute(Runnable), which
-// needs a Java Runnable instance - and creating one from JNI means defining a
-// class at runtime from embedded bytecode.
-//
-// Guards that make the direct call defensible in the meantime:
-//   * only when no screen is open (currentScreen == null), so nothing is
-//     iterating the handler's slots for rendering while we mutate them,
-//   * throttled, so a desync cannot turn into a click storm,
-//   * only when the offhand actually lacks a totem and one exists in the pack.
-// ---------------------------------------------------------------------------
+// Inventaraktionen werden ausschließlich im instrumentierten Client-Tick ausgeführt.
+// Fehlende optionale Handles werden nach dem Weltbeitritt erneut gebunden.
 // Resolves the two pieces that are usually not loaded yet at bind time.
 //
 // ClientPlayerInteractionManager and SlotActionType only get class-loaded once
@@ -1234,7 +1222,6 @@ struct BlockScanner {
 // menu. Binding them once at startup therefore fails permanently. Retrying here
 // is cheap because the caller is throttled to a few times per second.
 bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
-    if (b.mClickSlot && b.swapAction) return true;
     if (!b.set) return false;
 
     const mappings::MappingSet& set = *b.set;
@@ -1260,112 +1247,29 @@ bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
         }
     }
 
-    if (b.mClickSlot && b.swapAction) {
-        MCOV_LOG_INFO("auto totem: clickSlot and SWAP bound (resolved after joining a world)");
+    if (!b.clsPlayerInv) b.clsPlayerInv=SoftClass(env,(prefix+"playerinv").c_str(),set.classes.playerInv);
+    if (!b.clsItem) b.clsItem=SoftClass(env,(prefix+"item").c_str(),set.classes.item);
+    if (!b.fInventory) b.fInventory=jvm::TryField(env,b.clsPlayer,set.fieldInventory.name,set.fieldInventory.signature,false);
+    if (!b.fScreenHandler) b.fScreenHandler=jvm::TryField(env,b.clsPlayer,set.fieldScreenHandler.name,set.fieldScreenHandler.signature,false);
+    if (!b.mInvSize) b.mInvSize=jvm::TryMethod(env,b.clsPlayerInv,set.methodInvSize.name,set.methodInvSize.signature,false);
+    if (!b.mInvGetStack) b.mInvGetStack=jvm::TryMethod(env,b.clsPlayerInv,set.methodInvGetStack.name,set.methodInvGetStack.signature,false);
+    if (!b.mStackGetItem) b.mStackGetItem=jvm::TryMethod(env,b.clsItemStack,set.methodStackGetItem.name,set.methodStackGetItem.signature,false);
+    if (!b.mItemTransKey) b.mItemTransKey=jvm::TryMethod(env,b.clsItem,set.methodItemTransKey.name,set.methodItemTransKey.signature,false);
+    if (!b.fSyncId) {
+        const std::string desc=set.fieldScreenHandler.signature;
+        auto cls=SoftClass(env,(prefix+"menu").c_str(),desc.substr(1,desc.size()-2).c_str());
+        b.fSyncId=jvm::TryField(env,cls,set.fieldSyncId.name,set.fieldSyncId.signature,false);
+    }
+    if (b.mClickSlot && b.swapAction && b.fInventory && b.fScreenHandler && b.fSyncId && b.mInvSize && b.mInvGetStack && b.mStackGetItem && b.mItemTransKey) {
         return true;
     }
     return false;
 }
 
-bool TryAutoTotem(JNIEnv* env, Bindings& b, jobject client, jobject player,
-                  const WorldSnapshot& snap) {
-    if (!EnsureTotemBindings(env, b)) return false;
-    if (!b.mClickSlot || !b.swapAction || !b.fInteractionMgr || !b.fInventory || !b.fSyncId ||
-        !b.mInvGetStack || !b.mInvSize || !b.mStackGetItem || !b.mItemTransKey) {
-        return false;
-    }
-
-    // Offhand already holding a totem? Checked against the *translation key* of
-    // the actual offhand stack, not the display name we sampled - the display
-    // name is localised, so a German client ("Totem der Unsterblichkeit") or any
-    // other language would not match a hardcoded "Totem".
-    if (b.mGetEquipped && b.slotConstants[kSlotOffHand] && b.mStackGetItem && b.mItemTransKey) {
-        jvm::LocalFrame offFrame(env, 8);
-        jobject offStack = env->CallObjectMethod(player, b.mGetEquipped, b.slotConstants[kSlotOffHand]);
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        else if (offStack) {
-            jobject offItem = env->CallObjectMethod(offStack, b.mStackGetItem);
-            if (env->ExceptionCheck()) env->ExceptionClear();
-            else if (offItem) {
-                auto key = static_cast<jstring>(env->CallObjectMethod(offItem, b.mItemTransKey));
-                if (env->ExceptionCheck()) env->ExceptionClear();
-                else if (key &&
-                         jvm::JStringToUtf8(env, key).find("totem_of_undying") != std::string::npos) {
-                    return false;   // already holding one
-                }
-            }
-        }
-    }
-    (void)snap;
-
-    jvm::LocalFrame frame(env, 24);
-
-    // A GUI being open means the client thread may be walking these slots.
-    if (!b.fCurrentScreen || (*b.profile->guiClass && !b.fGui)) return false;
-    jobject screenOwner = b.fGui ? env->GetObjectField(client, b.fGui) : client;
-    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-    if (!screenOwner) return false;
-    jobject screen = env->GetObjectField(screenOwner, b.fCurrentScreen);
-    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-    if (screen) return false;
-
-    jobject inventory = env->GetObjectField(player, b.fInventory);
-    if (!inventory) return false;
-
-    const jint size = env->CallIntMethod(inventory, b.mInvSize);
-    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-
-    int found = -1;
-    for (jint i = 0; i < size && i < 36; ++i) {     // main inventory + hotbar only
-        jvm::LocalFrame slotFrame(env, 8);
-
-        jobject stack = env->CallObjectMethod(inventory, b.mInvGetStack, i);
-        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
-        if (!stack) continue;
-
-        if (b.mItemIsEmpty) {
-            const jboolean empty = env->CallBooleanMethod(stack, b.mItemIsEmpty);
-            if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
-            if (empty == JNI_TRUE) continue;
-        }
-
-        jobject item = env->CallObjectMethod(stack, b.mStackGetItem);
-        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
-        if (!item) continue;
-
-        auto key = static_cast<jstring>(env->CallObjectMethod(item, b.mItemTransKey));
-        if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
-        if (!key) continue;
-
-        // Translation key, so this does not depend on the client's language.
-        if (jvm::JStringToUtf8(env, key).find("totem_of_undying") != std::string::npos) {
-            found = static_cast<int>(i);
-            break;
-        }
-    }
-    if (found < 0) return false;
-
-    jobject manager = env->GetObjectField(client, b.fInteractionMgr);
-    if (!manager) return false;
-
-    jobject handler = b.fScreenHandler ? env->GetObjectField(player, b.fScreenHandler) : nullptr;
-    if (!handler) return false;
-
-    const jint syncId = env->GetIntField(handler, b.fSyncId);
-    if (env->ExceptionCheck()) { env->ExceptionClear(); return false; }
-
-    // PlayerInventory index -> player ScreenHandler slot id:
-    //   0-8   hotbar        -> 36-44
-    //   9-35  main          -> 9-35 (unchanged)
-    const int slotId = (found < 9) ? (36 + found) : found;
-
-    // Button 40 with SWAP is the offhand swap.
-    env->CallVoidMethod(manager, b.mClickSlot, syncId, slotId, 40, b.swapAction, player);
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        return false;
-    }
-    return true;
+mcov::agent::InventoryAssist<Bindings> g_inventory;
+void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client) {
+    g_combat.Tick(env,client);
+    g_inventory.Tick(env,client);
 }
 
 void SampleWorldMeta(JNIEnv* env, const Bindings& b, jobject client, WorldSnapshot& snap) {
@@ -1436,8 +1340,6 @@ void SamplerThread() {
     static BlockSnapshot cachedBlocks[kMaxBlocks];
     std::uint32_t        lastBlocks    = 0;
     std::uint64_t        nextScanTick  = 0;
-    std::uint64_t        nextTotemTick  = 0;
-    bool                 totemAnnounced = false;
     bool                 syncAttempted = false;
     std::uint64_t        acceptedEpoch = 0;
     std::uint64_t        nextHudTick = 0;
@@ -1505,6 +1407,9 @@ void SamplerThread() {
             syncAttempted = true;
             if (g_frameSync.Install(env)) {
                 MCOV_LOG_INFO("frame synchronization active: %s; mixed render/tick snapshots are rejected", bindings.set->id);
+                if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick)))
+                    MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
+                else MCOV_LOG_WARN("inventory client-tick bridge unavailable");
                 if(g_combat.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick)))
                     MCOV_LOG_INFO("combat client-tick bridge active: %s",bindings.set->id);
                 else MCOV_LOG_WARN("combat bridge unavailable; ESP and HUD remain active");
@@ -1619,27 +1524,6 @@ void SamplerThread() {
                     }
                 }
 
-                // Auto totem, throttled hard: it writes to the client, so a
-                // failed swap must never turn into a click storm.
-                if (auto* block = g_channel.block()) {
-                    const std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
-                    if (flags & kCtrlAutoTotem) {
-                        const std::uint64_t now = ::GetTickCount64();
-                        if (now >= nextTotemTick) {
-                            if (!totemAnnounced) {
-                                MCOV_LOG_INFO("auto totem: enabled by the overlay, watching the offhand");
-                                totemAnnounced = true;
-                            }
-                            if (TryAutoTotem(env, bindings, client, player, snapshot)) {
-                                MCOV_LOG_INFO("auto totem: swapped a totem into the offhand");
-                            }
-                            nextTotemTick = now + 400;
-                        }
-                    } else {
-                        totemAnnounced = false;
-                    }
-                }
-
                 SetStatus(AgentStatus::Running);
             } else {
                 // In a menu / not in a world yet.
@@ -1667,6 +1551,7 @@ void SamplerThread() {
 
     SetStatus(AgentStatus::Detaching);
     g_combat.Close(env);
+    g_inventory.Close(env);
     g_frameSync.Close(env);
 
     // Release global refs while we still hold a valid env and are still attached.

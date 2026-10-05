@@ -112,7 +112,7 @@ public:
                 if(slot<0&&f.offhand!=Item::Glowstone) slot=Find(f,Item::Empty,9);
             }
             action={Operation::Use,slot,true};
-        } else if(anchor&&f.target==Target::OtherBlock) action={Operation::Use,Find(f,Item::Anchor,9),true};
+        } else if(anchor&&(f.target==Target::OtherBlock||f.target==Target::CrystalBase)) action={Operation::Use,Find(f,Item::Anchor,9),true};
         else { status=Status::WaitingTarget; return {}; }
         if(action.slot<0) { status=Status::MissingItem; return {}; }
         status=Status::Pending;
