@@ -384,7 +384,8 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     env->SetObjectField(block,blockKey,env->NewStringUTF("block.minecraft.obsidian")); Healthy(env);
     env->CallObjectMethod(list,replace,2,stack("item.minecraft.end_crystal")); Healthy(env);
     request.crystalHeld=true; report=tick();
-    Require(report.crystalActions==2&&env->GetIntField(inventory,selected)==2,"crystal base placement did not select crystal and call Use"); Healthy(env);
+    const auto placementDiagnostic=std::string("crystal base placement: ")+Text(report.crystal)+", actions="+std::to_string(report.crystalActions)+", slot="+std::to_string(env->GetIntField(inventory,selected)); Healthy(env);
+    Require(report.crystalActions==2&&env->GetIntField(inventory,selected)==2,placementDiagnostic.c_str()); Healthy(env);
     request.crystalHeld=false; tick();
     Require(env->GetIntField(inventory,selected)==7,"crystal placement release did not restore hotbar slot"); Healthy(env);
     request.crystal.enabled=false; request.anchor.enabled=request.anchorHeld=true; request.anchor.intervalMs=100;

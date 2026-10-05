@@ -94,8 +94,9 @@ public:
             if(crystal) report_.crystal=crystal&&anchor?Status::Conflict:Status::Paused;
             if(anchor) report_.anchor=crystal&&anchor?Status::Conflict:Status::Paused;
             if(original_>=0&&f.ownMenu&&f.cursorEmpty&&!f.paused) {
-                const int original=original_; original_=-1;
-                if(f.selected==lastSelected_) return {Operation::RestoreSlot,original};
+                const int original=original_,expected=lastSelected_;
+                original_=lastSelected_=-1; nextMacro_=0;
+                if(f.selected==expected) return {Operation::RestoreSlot,original};
             }
             original_=lastSelected_=-1; nextMacro_=0; return {};
         }

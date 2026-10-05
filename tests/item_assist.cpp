@@ -30,6 +30,8 @@ int main() try {
     r.sentAtMs=2150; Check(c.Tick(r,f,2150).operation==Operation::AttackCrystal,"crosshair crystal must be broken");
     r.crystalHeld=false; a=c.Tick(r,f,2200);
     Check(a.operation==Operation::RestoreSlot&&a.slot==7,"release must restore old slot");
+    r.crystalHeld=true; r.sentAtMs=2220; f.selected=7; f.target=Target::CrystalBase;
+    Check(c.Tick(r,f,2220).operation==Operation::Use,"release/restore must clear the previous hold session's timer");
     c.Reset(); r.crystalHeld=true; r.sentAtMs=2300; f.target=Target::CrystalBase; f.selected=7; c.Tick(r,f,2300);
     f.selected=5; r.crystalHeld=false;
     Check(c.Tick(r,f,2350).operation==Operation::None,"manual slot change must not be overwritten on release");
