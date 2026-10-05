@@ -79,8 +79,8 @@ public:
     Action Tick(const Request& r,const Frame& f,std::uint64_t now) {
         report_.sampledAtMs=now;
         report_.totem=r.totem.enabled?Status::Ready:Status::Off;
-        report_.crystal=r.crystal.enabled?Status::WaitingBind:Status::Off;
-        report_.anchor=r.anchor.enabled?Status::WaitingBind:Status::Off;
+        report_.crystal=r.crystal.enabled?(f.macroSupported?Status::WaitingBind:Status::Unsupported):Status::Off;
+        report_.anchor=r.anchor.enabled?(f.anchorSupported?Status::WaitingBind:Status::Unsupported):Status::Off;
         const Item kind=Active()?cycle_:f.cycle;
         const bool crystal=kind==Item::Crystal,anchor=kind==Item::Anchor;
         const bool live=f.world&&f.alive;

@@ -273,7 +273,9 @@ public:
             f.selected=env->GetIntField(inventory,selected_); Check(env); if(f.selected<0||f.selected>=9) return false;
             if(site_.kind!=items::Item::Empty) {
                 const bool armed=site_.kind==items::Item::Crystal?r.crystal.enabled:r.anchor.enabled;
-                return armed&&f.selected==site_.selected&&AimMatches(env,client);
+                // Wegsehen beendet den Ablauf im Tick. Bis zum Slot-Restore darf
+                // Vanilla das automatisch ausgewählte Glowstone nicht verwenden.
+                return armed&&f.selected==site_.selected;
             }
             auto stack=env->CallObjectMethod(inventory,b_.mInvGetStack,f.selected); Check(env);
             const auto kind=Item(env,stack);
@@ -354,7 +356,7 @@ public:
                     }
                 }
                 manager=env->GetObjectField(client,b_.fInteractionMgr); Check(env);
-                if(macroActive&&macroReady_&&manager&&f.useDown&&!f.screen&&!f.paused&&items::Lease(request,now)) target=Observe(env,client,level,player,manager,f);
+                if(macroActive&&macroReady_&&manager&&f.selected==site_.selected&&f.useDown&&!f.screen&&!f.paused&&items::Lease(request,now)) target=Observe(env,client,level,player,manager,f);
                 else f.cycle=site_.kind;
             }
             const auto action=controller_.Tick(request,f,now);

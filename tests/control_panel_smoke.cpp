@@ -637,7 +637,8 @@ int main(int argc,char** argv) {
         macroInput[0x43]=true; mcov::OverlayUiCheck::Input(overlay,macroInput);
         Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).inputAllowed&&!mcov::OverlayUiCheck::ItemRequest(overlay,false).inputAllowed,"macro focus lease incorrect");
         macroInput={}; mcov::OverlayUiCheck::Input(overlay,macroInput);
-        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).crystal.enabled,"module key release disarmed checkbox state");
+        Require(!mcov::OverlayUiCheck::ItemRequest(overlay,true).crystal.enabled,"macro toggle was replayed on release");
+        mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
         mcov::OverlayUiCheck::Binds(overlay)=mcov::keys::Defaults();
         mcov::OverlayUiCheck::ItemStatus(overlay);
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
