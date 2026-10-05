@@ -18,6 +18,7 @@ jobject NewObject(JNIEnv* env,jclass klass);
 jclass LoadClass(JNIEnv* env,jobject loader,const char* name);
 void SetStatic(JNIEnv* env,jclass owner,const char* name,const char* desc,jobject value);
 mcov::agent::MinecraftCombat* testCombat=nullptr;
+mcov::agent::InventoryAssist<Bindings>* testInventory=nullptr;
 DWORD combatCallbackThread=0;
 bool combatAfterVanillaTick=false;
 void JNICALL TestCombatTick(JNIEnv* env,jclass,jobject client) {
@@ -28,6 +29,7 @@ void JNICALL TestCombatTick(JNIEnv* env,jclass,jobject client) {
     if(env->ExceptionCheck()) env->ExceptionClear();
     env->DeleteLocalRef(owner);
     if(testCombat) testCombat->Tick(env,client,false);
+    if(testInventory) testInventory->Tick(env,client,false);
 }
 void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client) {
     const auto& set=*b.set; const auto& g=*b.profile->geometry;
@@ -284,6 +286,92 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
             "missing silent hooks allowed visible rotation/attacks");
     unsupported.Close(env); testCombat=nullptr;
     std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
+}
+void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) {
+    using namespace mcov::items;
+    const auto& set=*b.set; const auto& g=*b.profile->geometry;
+    auto channel=std::make_unique<mcov::SharedBlock>();
+    auto field=[&](jclass owner,const char* name,const char* desc,bool stat=false) {
+        auto id=jvm::TryField(env,owner,name,desc,stat); Require(id!=nullptr,"inventory fixture field missing"); return id;
+    };
+    auto stack=[&](const char* key) {
+        auto value=NewObject(env,b.clsItemStack);
+        if(!key) env->SetBooleanField(value,field(b.clsItemStack,"testEmpty","Z"),JNI_TRUE);
+        else {
+            auto item=NewObject(env,b.clsItem);
+            env->SetObjectField(item,field(b.clsItem,"testTranslation","Ljava/lang/String;"),env->NewStringUTF(key));
+            Healthy(env);
+            env->SetObjectField(value,field(b.clsItemStack,"testItem",set.methodStackGetItem.signature+2),item);
+        }
+        Healthy(env); return value;
+    };
+    auto player=NewObject(env,LoadClass(env,loader,set.classes.localPlayer));
+    auto level=NewObject(env,b.clsLevel),manager=NewObject(env,b.clsInteractionMgr),inventory=NewObject(env,b.clsPlayerInv);
+    env->SetObjectField(client,b.fPlayer,player); env->SetObjectField(client,b.fLevel,level);
+    env->SetObjectField(client,b.fInteractionMgr,manager); env->SetObjectField(player,b.fInventory,inventory); Healthy(env);
+    auto ownClass=LoadClass(env,loader,std::string(g.inventoryMenu.signature).substr(1,std::strlen(g.inventoryMenu.signature)-2).c_str());
+    auto own=NewObject(env,ownClass);
+    env->SetObjectField(player,field(b.clsPlayer,g.inventoryMenu.name,g.inventoryMenu.signature),own);
+    env->SetObjectField(player,b.fScreenHandler,own); env->SetIntField(own,b.fSyncId,7); Healthy(env);
+    env->SetFloatField(player,field(b.clsLiving,"testHealth","F"),20);
+    env->SetStaticBooleanField(b.client.minecraftClass,field(b.client.minecraftClass,"testPaused","Z",true),JNI_FALSE);
+    jobject screenOwner=b.fGui?env->GetObjectField(client,b.fGui):client;
+    env->SetObjectField(screenOwner,b.fCurrentScreen,nullptr); Healthy(env);
+    auto empty=stack(nullptr),totem=stack("item.minecraft.totem_of_undying");
+    auto listClass=env->FindClass("java/util/ArrayList");
+    auto list=NewObject(env,listClass);
+    auto add=env->GetMethodID(listClass,"add","(Ljava/lang/Object;)Z");
+    auto replace=env->GetMethodID(listClass,"set","(ILjava/lang/Object;)Ljava/lang/Object;");
+    for(int i=0;i<36;++i) { env->CallBooleanMethod(list,add,i==10?totem:empty); Healthy(env); }
+    env->SetObjectField(inventory,field(b.clsPlayerInv,"testStacks","Ljava/util/List;"),list); Healthy(env);
+    const auto equipmentDesc=std::strchr(set.methodGetEquipped.signature,')')+1;
+    SetStatic(env,b.clsLiving,"testEquipment",equipmentDesc,empty);
+    auto menuClass=LoadClass(env,loader,std::string(set.fieldScreenHandler.signature).substr(1,std::strlen(set.fieldScreenHandler.signature)-2).c_str());
+    SetStatic(env,menuClass,"testCarried",equipmentDesc,nullptr);
+    env->SetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testSwaps","I",true),0); Healthy(env);
+    auto late=b; late.mInvGetStack=nullptr; late.mInvSize=nullptr;
+    mcov::agent::InventoryAssist<Bindings> bridge;
+    Require(bridge.Install(env,late,channel.get(),reinterpret_cast<void*>(&TestCombatTick)),"inventory client tick hook did not install");
+    testInventory=&bridge;
+    Request request; request.inputAllowed=true; request.totem.enabled=true;
+    auto tick=[&] {
+        request.sentAtMs=GetTickCount64(); channel->itemRequest.Publish(request);
+        env->CallVoidMethod(client,jvm::TryMethod(env,b.client.minecraftClass,g.clientTick.name,g.clientTick.signature,false)); Healthy(env);
+        Report report; Require(channel->itemReport.Read(report)&&report.sampledAtMs,"inventory report missing"); return report;
+    };
+    auto report=tick();
+    Require(report.swaps==1&&report.totem==Status::Pending,"Auto Totem did not execute through client tick after late inventory bindings");
+    Require(env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testSwapId","I",true))==7&&
+            env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testSwapSlot","I",true))==10&&
+            env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testSwapButton","I",true))==40,"wrong container/source/offhand button"); Healthy(env);
+    report=tick(); Require(report.swaps==1&&report.totem==Status::HoldingTotem,"equipped totem was swapped repeatedly");
+    SetStatic(env,b.clsLiving,"testEquipment",equipmentDesc,empty);
+    SetStatic(env,menuClass,"testCarried",equipmentDesc,totem);
+    report=tick(); Require(report.swaps==1&&report.totem==Status::InventoryBusy,"carried stack did not stop inventory swap");
+    SetStatic(env,menuClass,"testCarried",equipmentDesc,nullptr);
+    auto otherMenu=NewObject(env,menuClass); env->SetObjectField(player,b.fScreenHandler,otherMenu); Healthy(env);
+    report=tick(); Require(report.swaps==1&&report.totem==Status::InventoryBusy,"external container allowed inventory swap");
+    env->SetObjectField(player,b.fScreenHandler,own); Healthy(env);
+    env->CallObjectMethod(list,replace,10,empty); Healthy(env);
+    report=tick(); Require(report.totem==Status::NoTotem,"missing totem was not reported");
+    request.totem.enabled=false; request.crystal.enabled=true;
+    auto crystal=NewObject(env,LoadClass(env,loader,g.crystalClass));
+    env->SetObjectField(client,b.fTargetedEntity,crystal); Healthy(env);
+    auto selected=field(b.clsPlayerInv,g.selectedSlot.name,g.selectedSlot.signature); env->SetIntField(inventory,selected,7); Healthy(env);
+    report=tick(); Require(report.crystal==Status::WaitingBind&&report.crystalActions==0,"armed macro attacked without held bind");
+    request.crystalHeld=true; const int before=env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testAttacks","I",true)); Healthy(env);
+    report=tick(); Require(report.crystal==Status::Pending&&report.crystalActions==1,"crosshair crystal macro did not attack with held bind");
+    Require(env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testAttacks","I",true))==before+1,"crystal macro did not use native attack"); Healthy(env);
+    request.crystalHeld=false; report=tick(); Require(report.crystalActions==1,"released macro still attacked");
+    Require(combatCallbackThread==GetCurrentThreadId()&&combatAfterVanillaTick,"inventory action did not run after vanilla client tick");
+    bridge.Close(env); testInventory=nullptr;
+    Require(EnsureChunkBindings(env,b),"deepslate axis property did not bind");
+    auto state=NewObject(env,b.clsBlockState);
+    SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("x"));
+    Require(IsRotatedDeepslate(env,b,state),"horizontal deepslate axis JNI read failed");
+    SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("y"));
+    Require(!IsRotatedDeepslate(env,b,state),"vertical deepslate axis became a hint"); Healthy(env);
+    std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, hold crystal, deepslate axis)"<<std::endl;
 }
 void TestDetailsCache() {
     mcov::EntityDetailsCache cache;
@@ -551,12 +639,14 @@ void TestProfile(JNIEnv* env, const mcov::mappings::RuntimeProfile& profile,
     TestEntityDetails(env,bindings,loader,client);
     TestFrameSynchronization(env,bindings,loader,client,camera);
     TestLiveCombat(env,bindings,loader,client);
+    TestInventoryAssist(env,bindings,loader,client);
     bindings.mCamPos = nullptr;
     snapshot = {};
     SampleCamera(env, bindings, client, snapshot); Healthy(env);
     Require(snapshot.camY == 73.0f && snapshot.fovDeg == 82.5f, "camera field fallback failed");
     for (auto slot : bindings.slotConstants) if (slot) env->DeleteGlobalRef(slot);
     if (bindings.swapAction) env->DeleteGlobalRef(bindings.swapAction);
+    if (bindings.axisProperty) env->DeleteGlobalRef(bindings.axisProperty);
     bindings.geometry.Release(env);
     runtime.ReleaseCachedRefs(env);
     std::cout << "PASS " << set.id << suffix << '\n';
