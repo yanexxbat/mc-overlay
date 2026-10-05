@@ -76,6 +76,7 @@ public:
     const Report& GetReport() const { return report_; }
     bool HasRestore() const { return original_>=0; }
     bool Active() const { return cycle_!=Item::Empty; }
+    Item Cycle() const { return cycle_; }
     Action Tick(const Request& r,const Frame& f,std::uint64_t now) {
         report_.sampledAtMs=now;
         report_.totem=r.totem.enabled?Status::Ready:Status::Off;

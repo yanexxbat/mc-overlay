@@ -259,7 +259,10 @@ public:
     }
     // Nur echte Use-Versuche mit dem passenden ausgewählten Item übernehmen.
     bool CaptureUse(JNIEnv* env,jobject client,bool checkForeground=true) noexcept {
-        const std::scoped_lock lock(mutex_);
+        // Mod-Callbacks dürfen aus useItemOn erneut Use aufrufen. Kein rekursives
+        // Warten auf unseren eigenen Tick-Mutex; diese Interaktion bleibt Vanilla.
+        const std::unique_lock lock(mutex_,std::try_to_lock);
+        if(!lock.owns_lock()) return false;
         if(!ready_||!channel_||!macroReady_) return false;
         items::Request r; if(!channel_->itemRequest.Read(r)) return false;
         Foreground(r,checkForeground);
