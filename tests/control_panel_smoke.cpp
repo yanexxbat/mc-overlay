@@ -56,6 +56,17 @@ struct OverlayUiCheck {
     static void UpdateWorld(Overlay& o,const WorldSnapshot& s,double now) {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
+    static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
+    static items::MacroConfig& Crystal(Overlay& o) { return o.crystalMacro_; }
+    static items::Request ItemRequest(const Overlay& o,bool allowed) { return o.BuildItemRequest(1000,allowed,false); }
+    static void ChunkTab(Overlay& o) { o.blocksSection_=3; }
+    static void ItemStatus(Overlay& o) { o.itemReport_.totem=items::Status::HoldingTotem; o.itemReport_.crystal=items::Status::WaitingBind; o.itemReport_.anchor=items::Status::WaitingBind; }
+    static int DrawChunk(Overlay& o,const WorldSnapshot& s) {
+        const auto size=ImGui::GetIO().DisplaySize;
+        const CameraProjection projection(s,size.x,size.y);
+        auto* draw=ImGui::GetBackgroundDrawList(); const int before=draw->VtxBuffer.Size;
+        o.DrawChunkFinder(s,projection); return draw->VtxBuffer.Size-before;
+    }
     static keys::Bindings& Binds(Overlay& o) { return o.bindings_; }
     static int Capture(const Overlay& o) { return o.captureAction_; }
     static void Capture(Overlay& o,keys::Action a) { o.captureAction_=keys::Index(a); o.captureArmed_=true; o.menuVisible_=true; o.capturePrevious_={}; }
@@ -617,6 +628,46 @@ int main(int argc,char** argv) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
         };
+        // Produktionseinstellungen und physische Hold-Lease, ohne echte Eingabe/JVM.
+        mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
+        auto& macroBinds=mcov::OverlayUiCheck::Binds(overlay);
+        macroBinds[mcov::keys::Index(mcov::keys::Action::CrystalMacro)]={0x43,0,mcov::keys::Mode::Toggle};
+        mcov::keys::Input macroInput{}; mcov::OverlayUiCheck::Input(overlay,macroInput);
+        Require(!mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld,"armed macro bypassed physical key");
+        macroInput[0x43]=true; mcov::OverlayUiCheck::Input(overlay,macroInput);
+        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld&&!mcov::OverlayUiCheck::ItemRequest(overlay,false).crystalHeld,"macro hold/focus lease incorrect");
+        macroInput={}; mcov::OverlayUiCheck::Input(overlay,macroInput);
+        Require(!mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld,"release did not stop macro request");
+        mcov::OverlayUiCheck::Binds(overlay)=mcov::keys::Defaults();
+        mcov::OverlayUiCheck::ItemStatus(overlay);
+        for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+            const auto suffix=size.x<500?"-small.png":".png";
+            for(int section:{3,5,6}) {
+                editor.Select(static_cast<mcov::CombatMenu::Section>(section));
+                mcov::OverlayUiCheck::Center(overlay);
+                for(int i=0;i<20;++i) Draw(overlay,Page::Combat,0,size);
+                SaveFrame(device.Get(),context.Get(),output/(std::string("item-settings-")+std::to_string(section)+suffix));
+                auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y);
+                Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
+            }
+            mcov::OverlayUiCheck::ChunkTab(overlay); mcov::OverlayUiCheck::Center(overlay);
+            for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
+            SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
+        }
+        auto& finder=mcov::OverlayUiCheck::Chunk(overlay); finder.enabled=true; finder.minHints=2; finder.labels=false;
+        mcov::WorldSnapshot chunkScene{}; chunkScene.camY=2; chunkScene.camZ=-4; chunkScene.fovDeg=70; chunkScene.nearPlane=.05f; chunkScene.farPlane=1024;
+        chunkScene.blockCount=3;
+        chunkScene.blocks[0]={0,0,4,mcov::kBlockRotatedDeepslate,{}};
+        chunkScene.blocks[1]={1,0,4,mcov::kBlockRotatedDeepslate,{}};
+        chunkScene.blocks[2]={2,0,4,mcov::kBlockDiamond,{}};
+        auto chunkFrame=[&] {
+            io.DisplaySize={1280,800}; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            const int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene); ImGui::Render(); return vertices;
+        };
+        Require(chunkFrame()>0,"qualified deepslate chunk did not render");
+        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-blocks.png");
+        finder.minHints=3; Require(chunkFrame()==0,"chunk threshold counted ordinary ores");
+        finder={};
         auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
         aura.pulseAmplitude=0;
         mcov::OverlayUiCheck::ReduceMotion(overlay,true);
