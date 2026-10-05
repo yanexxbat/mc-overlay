@@ -364,14 +364,71 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     Require(env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testAttacks","I",true))==before+1,"crystal macro did not use native attack"); Healthy(env);
     request.crystalHeld=false; report=tick(); Require(report.crystalActions==1,"released macro still attacked");
     Require(combatCallbackThread==GetCurrentThreadId()&&combatAfterVanillaTick,"inventory action did not run after vanilla client tick");
+    // Tatsächliche JNI-Crosshair-/Property-Kette für Platzierung und Anchor-Stufen.
+    auto hitClass=LoadClass(env,loader,g.blockHitClass),hit=NewObject(env,hitClass);
+    auto hitOwner=LoadClass(env,loader,g.hitClass);
+    const auto typeDesc=std::strchr(g.hitType.signature,')')+1;
+    auto typeClass=LoadClass(env,loader,std::string(typeDesc).substr(1,std::strlen(typeDesc)-2).c_str());
+    SetStatic(env,hitOwner,"testHitType",typeDesc,NewObject(env,typeClass));
+    const auto posDesc=std::strchr(g.blockHitPos.signature,')')+1;
+    auto posClass=LoadClass(env,loader,std::string(posDesc).substr(1,std::strlen(posDesc)-2).c_str());
+    SetStatic(env,hitClass,"testBlockPos",posDesc,NewObject(env,posClass));
+    env->SetObjectField(client,b.fTargetedEntity,nullptr);
+    env->SetObjectField(client,field(b.client.minecraftClass,g.hitResult.name,g.hitResult.signature),hit); Healthy(env);
+    auto state=NewObject(env,b.clsBlockState),block=NewObject(env,b.clsBlock);
+    SetStatic(env,b.clsLevel,"testBlockState",std::strchr(set.methodGetBlockState.signature,')')+1,state);
+    SetStatic(env,b.clsBlockState,"testBlock",std::strchr(set.methodStateGetBlock.signature,')')+1,block);
+    auto blockKey=field(b.clsBlock,"testBlockKey","Ljava/lang/String;");
+    env->SetObjectField(block,blockKey,env->NewStringUTF("block.minecraft.obsidian")); Healthy(env);
+    env->CallObjectMethod(list,replace,2,stack("item.minecraft.end_crystal")); Healthy(env);
+    request.crystalHeld=true; report=tick();
+    Require(report.crystalActions==2&&env->GetIntField(inventory,selected)==2,"crystal base placement did not select crystal and call Use"); Healthy(env);
+    request.crystalHeld=false; tick();
+    Require(env->GetIntField(inventory,selected)==7,"crystal placement release did not restore hotbar slot"); Healthy(env);
+    request.crystal.enabled=false; request.anchor.enabled=request.anchorHeld=true; request.anchor.intervalMs=100;
+    env->CallObjectMethod(list,replace,1,stack("block.minecraft.respawn_anchor")); Healthy(env);
+    env->CallObjectMethod(list,replace,3,stack("block.minecraft.glowstone")); Healthy(env);
+    env->CallObjectMethod(list,replace,4,stack("item.minecraft.stick")); Healthy(env);
+    if(g.dimensionType.name&&*g.dimensionType.name) {
+        const auto desc=std::strchr(g.dimensionType.signature,')')+1;
+        auto dimension=NewObject(env,LoadClass(env,loader,g.dimensionTypeClass));
+        SetStatic(env,b.clsLevel,"testDimension",desc,dimension);
+    } else {
+        auto environmentClass=LoadClass(env,loader,g.environmentClass);
+        SetStatic(env,b.clsLevel,"testEnvironment",std::strchr(g.environment.signature,')')+1,NewObject(env,environmentClass));
+        auto boolean=env->FindClass("java/lang/Boolean");
+        auto value=env->CallStaticObjectMethod(boolean,env->GetStaticMethodID(boolean,"valueOf","(Z)Ljava/lang/Boolean;"),JNI_FALSE); Healthy(env);
+        SetStatic(env,environmentClass,"testAttribute","Ljava/lang/Object;",value);
+    }
+    env->SetObjectField(block,blockKey,env->NewStringUTF("block.minecraft.stone")); Healthy(env);
+    report=tick(); Require(report.anchorActions==1&&env->GetIntField(inventory,selected)==1,"anchor placement JNI path failed"); Healthy(env);
+    env->SetObjectField(block,blockKey,env->NewStringUTF("block.minecraft.respawn_anchor")); Healthy(env);
+    auto integer=env->FindClass("java/lang/Integer"); auto box=env->GetStaticMethodID(integer,"valueOf","(I)Ljava/lang/Integer;");
+    auto charge=[&](int n) { auto value=env->CallStaticObjectMethod(integer,box,n); Healthy(env); SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",value); };
+    charge(0); Sleep(110); report=tick();
+    Require(report.anchorActions==2&&env->GetIntField(inventory,selected)==3,"anchor charging JNI path failed"); Healthy(env);
+    charge(1); Sleep(110); report=tick();
+    Require(report.anchorActions==3&&env->GetIntField(inventory,selected)!=3,"anchor detonation JNI path failed"); Healthy(env);
+    const int uses=env->GetStaticIntField(b.client.minecraftClass,field(b.client.minecraftClass,"testUses","I",true)); Healthy(env);
+    Require(uses==4,"normal Use method was not called once per crystal/anchor step");
+    if(g.dimensionType.name&&*g.dimensionType.name) {
+        auto dimensionClass=LoadClass(env,loader,g.dimensionTypeClass);
+        auto dimension=env->GetStaticObjectField(b.clsLevel,field(b.clsLevel,"testDimension",std::strchr(g.dimensionType.signature,')')+1,true)); Healthy(env);
+        env->SetBooleanField(dimension,field(dimensionClass,"testAnchorWorks","Z"),JNI_TRUE); Healthy(env);
+    } else {
+        auto boolean=env->FindClass("java/lang/Boolean");
+        auto value=env->CallStaticObjectMethod(boolean,env->GetStaticMethodID(boolean,"valueOf","(Z)Ljava/lang/Boolean;"),JNI_TRUE); Healthy(env);
+        SetStatic(env,LoadClass(env,loader,g.environmentClass),"testAttribute","Ljava/lang/Object;",value);
+    }
+    report=tick(); Require(report.anchor==Status::AnchorSafeDimension&&report.anchorActions==3,"native dimension rule did not block anchor");
+    request.anchorHeld=false; report=tick(); Require(env->GetIntField(inventory,selected)==7,"anchor release did not restore original slot"); Healthy(env);
     bridge.Close(env); testInventory=nullptr;
     Require(EnsureChunkBindings(env,b),"deepslate axis property did not bind");
-    auto state=NewObject(env,b.clsBlockState);
     SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("x"));
     Require(IsRotatedDeepslate(env,b,state),"horizontal deepslate axis JNI read failed");
     SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("y"));
     Require(!IsRotatedDeepslate(env,b,state),"vertical deepslate axis became a hint"); Healthy(env);
-    std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, hold crystal, deepslate axis)"<<std::endl;
+    std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, hold crystal, anchor stages/dimension, deepslate axis)"<<std::endl;
 }
 void TestDetailsCache() {
     mcov::EntityDetailsCache cache;
