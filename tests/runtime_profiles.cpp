@@ -430,6 +430,17 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     Require(IsRotatedDeepslate(env,b,state),"horizontal deepslate axis JNI read failed");
     SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("y"));
     Require(!IsRotatedDeepslate(env,b,state),"vertical deepslate axis became a hint"); Healthy(env);
+    env->SetObjectField(block,blockKey,env->NewStringUTF("block.minecraft.deepslate")); Healthy(env);
+    BlockKindCache cache; BlockScanner scanner; mcov::WorldSnapshot center{}; center.posY=64;
+    SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("x"));
+    scanner.Begin(4,1u<<mcov::kBlockRotatedDeepslate,center);
+    for(int step=0;step<1000&&scanner.running;++step) scanner.Step(env,b,client,cache,1);
+    Require(!scanner.running&&scanner.accum.size()==729,"resumable scanner lost horizontal deepslate results");
+    SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("y"));
+    scanner.Begin(4,1u<<mcov::kBlockRotatedDeepslate,center);
+    for(int step=0;step<1000&&scanner.running;++step) scanner.Step(env,b,client,cache,1);
+    Require(!scanner.running&&scanner.accum.empty(),"scanner retained vertical deepslate hints");
+    cache.Release(env); Healthy(env);
     std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, hold crystal, anchor stages/dimension, deepslate axis)"<<std::endl;
 }
 void TestDetailsCache() {

@@ -1553,7 +1553,7 @@ void SamplerThread() {
                     }
                     ScanState state=ScanState::Idle;
                     if(mask&&level) {
-                        const bool bindingsReady=bindings.mGetBlockState&&bindings.mGetBlock&&bindings.mMutableSet&&bindings.mMutableCtor&&
+                        const bool bindingsReady=bindings.mGetBlockState&&bindings.mGetBlock&&bindings.mBlockTransKey&&bindings.mMutableSet&&bindings.mMutableCtor&&
                             (!(mask&(1u<<kBlockRotatedDeepslate))||EnsureChunkBindings(env,bindings));
                         if(!bindingsReady) state=ScanState::MissingBindings;
                         else {
