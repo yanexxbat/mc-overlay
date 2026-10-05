@@ -1145,11 +1145,8 @@ void SampleHeap(JNIEnv* env, const Bindings& b, WorldSnapshot& snap) {
 // walked with a single reusable BlockPos.Mutable, and every local ref is freed
 // immediately rather than relying on a frame, because 36k live refs would
 // overflow the local reference table long before the frame popped.
-// Resumable scanner. Doing the whole cube in one call meant ~36k JNI calls in a
-// single burst at radius 16, which stalls the sampler AND contends with the
-// client thread for Minecraft's chunk storage - the game itself stutters. This
-// walks one horizontal slice per step instead, so the work is spread over many
-// sampler iterations and each one stays sub-millisecond.
+// Ein fortsetzbarer Zellen-Cursor begrenzt jeden Durchlauf zeitlich. Die Deadline
+// wird alle 32 Zellen geprüft; ein einzelner Spielaufruf kann das Budget überziehen.
 struct BlockScanner {
     int           radius  = 0;
     int           baseX   = 0, baseY = 0, baseZ = 0;
@@ -1181,6 +1178,7 @@ struct BlockScanner {
         }
 
         jvm::LocalFrame frame(env, 16);
+        if(!frame.ok()) { running=false; return true; }
 
         jobject level = env->GetObjectField(client, b.fLevel);
         if (!level) { running = false; return true; }
@@ -1201,8 +1199,9 @@ struct BlockScanner {
                     nextDy=cell/(span*span);
                     if((cell&31)==0&&::GetTickCount64()>=deadline) { --nextCell; break; }
                     if(y < -64 || y >= 320) continue;
-                    env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
+                    auto moved=env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
                     if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+                    if(moved) env->DeleteLocalRef(moved);
 
                     jobject state = env->CallObjectMethod(level, b.mGetBlockState, cursor);
                     if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }

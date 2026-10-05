@@ -288,6 +288,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
 }
 void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) {
+    jvm::LocalFrame testFrame(env,192); Require(testFrame.ok(),"inventory test local frame failed");
     using namespace mcov::items;
     const auto& set=*b.set; const auto& g=*b.profile->geometry;
     auto channel=std::make_unique<mcov::SharedBlock>();
@@ -365,7 +366,8 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     request.crystalHeld=false; report=tick(); Require(report.crystalActions==1,"released macro still attacked");
     Require(combatCallbackThread==GetCurrentThreadId()&&combatAfterVanillaTick,"inventory action did not run after vanilla client tick");
     // Tatsächliche JNI-Crosshair-/Property-Kette für Platzierung und Anchor-Stufen.
-    auto hitClass=LoadClass(env,loader,g.blockHitClass),hit=NewObject(env,hitClass);
+    auto hitClass=LoadClass(env,loader,g.blockHitClass);
+    auto hit=NewObject(env,hitClass);
     auto hitOwner=LoadClass(env,loader,g.hitClass);
     const auto typeDesc=std::strchr(g.hitType.signature,')')+1;
     auto typeClass=LoadClass(env,loader,std::string(typeDesc).substr(1,std::strlen(typeDesc)-2).c_str());

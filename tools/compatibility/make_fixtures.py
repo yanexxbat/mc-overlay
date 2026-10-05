@@ -214,6 +214,7 @@ def generate(profiles_path, output):
             kind, static = geometry['kinds'][key]
             add(geometry['owners'][key], kind, name, desc, static)
         core = profile['classes']
+        cls(core['blockPosMut'])['parent_name']=core['blockPos']
         cls(core['livingEntity'])['parent_name'] = core['entity']
         cls(core['player'])['parent_name'] = core['livingEntity']
         avatar_owner = geometry['classes']['avatarOwnerClass']
