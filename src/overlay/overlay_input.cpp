@@ -139,7 +139,6 @@ void Overlay::DrawKeybindSettings() {
             ImGui::TableSetColumnIndex(1); DrawBind(a);
             ImGui::TableSetColumnIndex(2);
             if(keys::System(a)) ImGui::TextDisabled("Toggle");
-            else if(keys::HoldOnly(a)) ImGui::TextDisabled("Hold only");
             else { int mode=int(bindings_[i].mode); const char* modes[]={"Toggle","Hold"}; ImGui::SetNextItemWidth(-1);
                 if(ImGui::Combo("##mode",&mode,modes,2)) { bindings_[i].mode=static_cast<keys::Mode>(mode); preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
             }
@@ -174,7 +173,7 @@ void Overlay::LoadPreferences() {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
-               (i>1||k>0)) bindings_[i]={k,mods,i<=2?keys::Mode::Toggle:keys::HoldOnly(static_cast<keys::Action>(i))?keys::Mode::Hold:static_cast<keys::Mode>(mode)};
+               (i>1||k>0)) bindings_[i]={k,mods,i<=2?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }
         } else if(tag=="place") { int i,placed; float x,y,scale;

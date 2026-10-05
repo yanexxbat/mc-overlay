@@ -9,9 +9,7 @@ items::Request Overlay::BuildItemRequest(std::uint64_t now,bool inputAllowed,boo
     items::Request r;
     r.sentAtMs=now; r.inputAllowed=inputAllowed; r.combatActive=combatActive;
     r.totem=combat_.autoTotem; r.crystal=crystalMacro_; r.anchor=anchorMacro_;
-    // Ein aktivierter Schalter allein löst niemals ein Macro aus.
-    r.crystalHeld=inputAllowed&&keys::Matches(bindings_[keys::Index(keys::Action::CrystalMacro)],keyInput_);
-    r.anchorHeld=inputAllowed&&keys::Matches(bindings_[keys::Index(keys::Action::AnchorMacro)],keyInput_);
+    // Minecraft liest seine eigene, eventuell umbelegte Place/Use-Taste im Client-Tick.
     return r;
 }
 
@@ -28,9 +26,11 @@ void Overlay::DrawItemAssistSettings(int section) {
             int retry=static_cast<int>(combat_.autoTotem.retryMs);
             if(panel::SliderIntRow("Retry interval",&retry,50,500,"%d ms")) combat_.autoTotem.retryMs=retry;
         } else {
-            panel::ValueRow("Activation","Hold assigned key");
+            panel::ValueRow("Activation","Hold Minecraft Place / Use");
             int interval=static_cast<int>(macro.intervalMs);
             if(panel::SliderIntRow("Action interval",&interval,100,500,"%d ms")) macro.intervalMs=interval;
+            int confirmation=static_cast<int>(macro.confirmationMs);
+            if(panel::SliderIntRow("World confirmation timeout",&confirmation,100,2000,"%d ms")) macro.confirmationMs=confirmation;
             panel::CheckRow("Restore previous slot",&macro.restoreSlot);
         }
         const auto count=totem?itemReport_.swaps:anchor?itemReport_.anchorActions:itemReport_.crystalActions;
@@ -40,13 +40,11 @@ void Overlay::DrawItemAssistSettings(int section) {
     }
     panel::Section("Live status");
     ImGui::TextWrapped("%s",items::Text(status));
-    if(!totem&&!bindings_[keys::Index(action)].key)
-        ImGui::TextWrapped("Assign a key above or under Settings > Keybinds. This macro always uses Hold mode.");
     panel::Section("How to use");
     if(totem) ImGui::TextWrapped("Put a totem in the hotbar or main inventory. It moves to the offhand when needed. Chest screens and items held by the cursor pause swapping.");
-    else if(anchor) ImGui::TextWrapped("Keep an anchor, glowstone and a non-glowstone item in the hotbar. Hold the key while aiming at the placement block, then at the anchor. The macro places, charges and detonates through normal game interactions. It pauses in dimensions where anchors work for respawning.");
-    else ImGui::TextWrapped("Keep end crystals in the hotbar. Hold the key while aiming at obsidian or bedrock to place; aim at an end crystal to break it. Keep the crosshair on each next target.");
-    if(!totem) ImGui::TextWrapped("Close the menu and focus Minecraft. Kill Aura pauses these macros. Avoid binding a macro to Minecraft's Use or Attack button.");
+    else if(anchor) ImGui::TextWrapped("Enable the macro, select an anchor and hold Minecraft's Place / Use key on a placement block or anchor. It repeatedly places, charges and detonates at the saved position. Keep glowstone and a non-glowstone item in the hotbar. Respawn dimensions pause detonation.");
+    else ImGui::TextWrapped("Enable the macro, select end crystals and hold Minecraft's Place / Use key on obsidian or bedrock. It repeatedly places and breaks the crystal at that position; no re-aiming between steps is needed.");
+    if(!totem) ImGui::TextWrapped("Release Place / Use to stop. A manual slot change, looking away, menus or focus loss also stops the cycle. The optional module keybind arms the macro; it does not replace Minecraft's Use key. Kill Aura pauses macros.");
 }
 
 void Overlay::DrawChunkFinderSettings() {

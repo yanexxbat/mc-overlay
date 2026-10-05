@@ -19,11 +19,9 @@ using Bindings=std::array<Bind,kCount>;
 using Input=std::array<bool,256>;
 inline constexpr int Index(Action a) { return static_cast<int>(a); }
 inline constexpr bool System(Action a) { return Index(a)<=Index(Action::HudEditor); }
-inline constexpr bool HoldOnly(Action a) { return a==Action::CrystalMacro||a==Action::AnchorMacro; }
 inline Bindings Defaults() {
     Bindings b{}; b[Index(Action::Menu)].key=0x2D; b[Index(Action::Quit)].key=0x23;
     b[Index(Action::HudEditor)].key=0x75;
-    b[Index(Action::CrystalMacro)].mode=b[Index(Action::AnchorMacro)].mode=Mode::Hold;
     return b; // INSERT, END, F6; Modul-Tasten bleiben ungebunden.
 }
 inline unsigned Modifiers(const Input& in) {
@@ -51,7 +49,7 @@ public:
                 Read read,Write write,Invoke invoke) {
         for(int i=0;i<kCount;++i) {
             const auto a=static_cast<Action>(i); const bool active=Matches(binds[i],input);
-            const auto mode=HoldOnly(a)?Mode::Hold:binds[i].mode;
+            const auto mode=binds[i].mode;
             if(!initialized_) { down_[i]=active; continue; }
             const bool allowed=focused&&!capturing&&(System(a)||modulesAllowed);
             if(holding_[i]&&(!active||!allowed||mode!=Mode::Hold)) {
