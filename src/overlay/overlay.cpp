@@ -1097,6 +1097,7 @@ void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
 
     for (std::uint32_t i = 0; i < snapshot.entityCount && i < kMaxEntities; ++i) {
         const EntitySnapshot& e = snapshot.entities[i];
+        if (e.flags & kEntityIsSelf) continue;
         if (e.distance > combat_.aimRange) continue;
         if (combat_.aimPlayersOnly && !(e.flags & kEntityIsPlayer)) continue;
         if (!(e.flags & kEntityIsLiving)) continue;
