@@ -6,6 +6,7 @@
 // stale agent DLL will happily scribble a mismatched layout into the mapping.
 #pragma once
 #include "combat_bridge_state.hpp"
+#include "item_assist.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -15,7 +16,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 14;
+inline constexpr std::uint32_t kSharedVersion = 15;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -36,6 +37,7 @@ enum BlockKind : std::uint8_t {
     kBlockQuartz,
     kBlockChest,
     kBlockSpawner,
+    kBlockRotatedDeepslate,
     kBlockKindCount,
 };
 
@@ -53,6 +55,7 @@ inline const char* BlockKindKey(std::uint8_t kind) {
         case kBlockQuartz:        return "quartz_ore";
         case kBlockChest:         return "chest";
         case kBlockSpawner:       return "spawner";
+        case kBlockRotatedDeepslate:return "deepslate";
         default:                  return "";
     }
 }
@@ -71,6 +74,7 @@ inline const char* BlockKindLabel(std::uint8_t kind) {
         case kBlockQuartz:        return "Nether quartz";
         case kBlockChest:         return "Chests";
         case kBlockSpawner:       return "Spawners";
+        case kBlockRotatedDeepslate:return "Rotated deepslate";
         default:                  return "?";
     }
 }
@@ -297,6 +301,8 @@ struct SharedBlock {
 
     SharedMailbox<CombatRequest> combatRequest; // Overlay -> Client-Tick, eigener Writer.
     SharedMailbox<CombatReport> combatReport;   // Client-Tick -> Overlay, eigener Writer.
+    SharedMailbox<items::Request> itemRequest;
+    SharedMailbox<items::Report> itemReport;
     WorldSnapshot snapshot;
 };
 
