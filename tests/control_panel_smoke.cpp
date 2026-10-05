@@ -628,16 +628,16 @@ int main(int argc,char** argv) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
         };
-        // Produktionseinstellungen und physische Hold-Lease, ohne echte Eingabe/JVM.
+        // Das Overlay überträgt Bereitschaft/Fokus; Place/Use liest Minecraft selbst.
         mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
         auto& macroBinds=mcov::OverlayUiCheck::Binds(overlay);
         macroBinds[mcov::keys::Index(mcov::keys::Action::CrystalMacro)]={0x43,0,mcov::keys::Mode::Toggle};
         mcov::keys::Input macroInput{}; mcov::OverlayUiCheck::Input(overlay,macroInput);
-        Require(!mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld,"armed macro bypassed physical key");
+        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).crystal.enabled,"macro checkbox did not arm request");
         macroInput[0x43]=true; mcov::OverlayUiCheck::Input(overlay,macroInput);
-        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld&&!mcov::OverlayUiCheck::ItemRequest(overlay,false).crystalHeld,"macro hold/focus lease incorrect");
+        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).inputAllowed&&!mcov::OverlayUiCheck::ItemRequest(overlay,false).inputAllowed,"macro focus lease incorrect");
         macroInput={}; mcov::OverlayUiCheck::Input(overlay,macroInput);
-        Require(!mcov::OverlayUiCheck::ItemRequest(overlay,true).crystalHeld,"release did not stop macro request");
+        Require(mcov::OverlayUiCheck::ItemRequest(overlay,true).crystal.enabled,"module key release disarmed checkbox state");
         mcov::OverlayUiCheck::Binds(overlay)=mcov::keys::Defaults();
         mcov::OverlayUiCheck::ItemStatus(overlay);
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
