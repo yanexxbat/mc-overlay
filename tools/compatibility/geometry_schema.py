@@ -13,6 +13,11 @@ def geometry_schema(version):
         'avatarStateClass': 'net/minecraft/client/entity/ClientAvatarState' if modern else '',
         'handClass': 'net/minecraft/world/InteractionHand',
         'hitClass': 'net/minecraft/world/phys/HitResult',
+        'crystalClass': 'net/minecraft/world/entity/boss/enderdragon/EndCrystal',
+        'blockHitClass': 'net/minecraft/world/phys/BlockHitResult',
+        'pillarClass': 'net/minecraft/world/level/block/RotatedPillarBlock',
+        'anchorClass': 'net/minecraft/world/level/block/RespawnAnchorBlock',
+        'dimensionTypeClass': 'net/minecraft/world/level/dimension/DimensionType',
     }
     entity = 'net/minecraft/world/entity/Entity'
     living = 'net/minecraft/world/entity/LivingEntity'
@@ -56,6 +61,18 @@ def geometry_schema(version):
     add('runFrame', client, 'runTick', '(Z)V', 'methods')
     add('clientTick', client, 'tick', '()V', 'methods')
     add('clientPaused', client, 'isPaused', '()Z', 'methods')
+    add('useItem',client,'startUseItem','()V','methods')
+    add('selectedSlot','net/minecraft/world/entity/player/Inventory','selected','I')
+    add('inventoryMenu',player,'inventoryMenu','Lnet/minecraft/world/inventory/InventoryMenu;')
+    add('carriedStack','net/minecraft/world/inventory/AbstractContainerMenu','getCarried','()Lnet/minecraft/world/item/ItemStack;','methods')
+    add('hitResult',client,'hitResult','L'+classes['hitClass']+';')
+    add('hitType',classes['hitClass'],'getType','()Lnet/minecraft/world/phys/HitResult$Type;','methods')
+    add('blockHitPos',classes['blockHitClass'],'getBlockPos','()Lnet/minecraft/core/BlockPos;','methods')
+    add('stateValue','net/minecraft/world/level/block/state/BlockState','getValue','(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;','methods')
+    add('axisProperty',classes['pillarClass'],'AXIS','Lnet/minecraft/world/level/block/state/properties/EnumProperty;',static=True)
+    add('anchorCharge',classes['anchorClass'],'CHARGE','Lnet/minecraft/world/level/block/state/properties/IntegerProperty;',static=True)
+    add('dimensionType','net/minecraft/world/level/Level','dimensionType','()L'+classes['dimensionTypeClass']+';','methods')
+    add('anchorWorks',classes['dimensionTypeClass'],'respawnAnchorWorks','()Z','methods')
     add('setYaw', entity, 'setYRot', '(F)V', 'methods')
     add('setPitch', entity, 'setXRot', '(F)V', 'methods')
     add('eyePosition', entity, 'getEyePosition', '()Lnet/minecraft/world/phys/Vec3;', 'methods')

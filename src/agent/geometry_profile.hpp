@@ -29,5 +29,12 @@ struct GeometryProfile {
     Member attackCooldown, attackReach, farReach, attackEntity, swingHand;
     Member mainHand, pickBlocks, hitLocation, entityAlive;
     Member turn, viewYaw, viewPitch, yawOld;
+    const char* crystalClass;
+    const char* blockHitClass;
+    const char* pillarClass;
+    const char* anchorClass;
+    const char* dimensionTypeClass;
+    Member useItem, selectedSlot, inventoryMenu, carriedStack, hitResult, hitType, blockHitPos;
+    Member stateValue, axisProperty, anchorCharge, dimensionType, anchorWorks;
 };
 } // namespace mcov::mappings
