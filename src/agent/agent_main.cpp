@@ -34,6 +34,7 @@
 #include "entity_details_cache.hpp"
 #include "entity_identity_cache.hpp"
 #include "../common/equipment_icons.hpp"
+#include "../common/chunk_hints.hpp"
 #include "combat_live.hpp"
 #include "item_assist_live.hpp"
 
@@ -213,6 +214,8 @@ struct Bindings {
     jmethodID mInvGetStack = nullptr, mInvSize = nullptr;
     jmethodID mStackGetItem = nullptr, mItemTransKey = nullptr, mClickSlot = nullptr;
     jobject   swapAction = nullptr;   // global ref to SlotActionType.SWAP
+    jmethodID mStateValue=nullptr;
+    jobject axisProperty=nullptr;
 };
 
 // Block identity -> kind, resolved once per distinct Block instance.
@@ -242,6 +245,7 @@ struct BlockKindCache {
                 const std::string text = jvm::JStringToUtf8(env, key);
                 env->DeleteLocalRef(key);
                 for (std::uint8_t i = 0; i < kBlockKindCount; ++i) {
+                    if(i==kBlockRotatedDeepslate && text!="block.minecraft.deepslate") continue;
                     if (text.find(BlockKindKey(i)) != std::string::npos) {
                         kind = static_cast<std::int8_t>(i);
                         break;
@@ -757,6 +761,31 @@ void SampleLocalPlayer(JNIEnv* env, const Bindings& b, jobject player, WorldSnap
 
     // Der echte Ping wird im langsamen Entity-Details-Pass aktualisiert.
 }
+bool EnsureChunkBindings(JNIEnv* env,Bindings& b) {
+    if(b.mStateValue&&b.axisProperty) return true;
+    const auto& g=*b.profile->geometry;
+    if(!b.mStateValue) b.mStateValue=jvm::TryMethod(env,b.clsBlockState,g.stateValue.name,g.stateValue.signature,false);
+    if(!b.axisProperty) {
+        const std::string key=std::string(b.set->id)+".axis";
+        auto cls=SoftClass(env,key.c_str(),g.pillarClass);
+        const auto id=jvm::TryField(env,cls,g.axisProperty.name,g.axisProperty.signature,true);
+        if(id) {
+            auto local=env->GetStaticObjectField(cls,id);
+            if(!env->ExceptionCheck()&&local) { b.axisProperty=env->NewGlobalRef(local); env->DeleteLocalRef(local); }
+            if(env->ExceptionCheck()) env->ExceptionClear();
+        }
+    }
+    return b.mStateValue&&b.axisProperty;
+}
+bool IsRotatedDeepslate(JNIEnv* env,const Bindings& b,jobject state) {
+    if(!b.mStateValue||!b.axisProperty) return false;
+    jvm::LocalFrame frame(env,8);
+    auto value=env->CallObjectMethod(state,b.mStateValue,b.axisProperty);
+    if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    auto text=value?static_cast<jstring>(env->CallObjectMethod(value,b.mObjToString)):nullptr;
+    if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
+    return RotatedDeepslate("block.minecraft.deepslate",jvm::JStringToUtf8(env,text));
+}
 
 struct EntityDetailsState {
     EntityDetailsCache cache;
@@ -1124,7 +1153,8 @@ void SampleHeap(JNIEnv* env, const Bindings& b, WorldSnapshot& snap) {
 struct BlockScanner {
     int           radius  = 0;
     int           baseX   = 0, baseY = 0, baseZ = 0;
-    int           nextDy  = 0;      // slice cursor, 0 .. 2*radius
+    int           nextDy  = 0; nextCell=0;      // Legacy-Feld für bestehende Diagnosen.
+    int           nextCell = 0;
     std::uint32_t mask    = 0;
     bool          running = false;
 
@@ -1136,7 +1166,7 @@ struct BlockScanner {
         baseX   = static_cast<int>(std::floor(snap.posX));
         baseY   = static_cast<int>(std::floor(snap.posY));
         baseZ   = static_cast<int>(std::floor(snap.posZ));
-        nextDy  = 0;
+        nextDy  = 0; nextCell=0;
         running = true;
         accum.clear();
     }
@@ -1160,15 +1190,16 @@ struct BlockScanner {
 
         const int span = 2 * radius + 1;
 
-        for (int slice = 0; slice < sliceBudget && nextDy < span; ++slice, ++nextDy) {
-            const int y = baseY - radius + nextDy;
-            if (y < -64 || y > 320) continue;   // outside any 1.21 world height
-
-            for (int dx = 0; dx < span && accum.size() < kMaxBlocks; ++dx) {
-                for (int dz = 0; dz < span && accum.size() < kMaxBlocks; ++dz) {
-                    const int x = baseX - radius + dx;
-                    const int z = baseZ - radius + dz;
-
+        const auto deadline=::GetTickCount64()+std::max(1,sliceBudget);
+        const int cells=span*span*span;
+        while(nextCell<cells&&accum.size()<kMaxBlocks) {
+                    const int cell=nextCell++;
+                    const int x=baseX-radius+cell%span;
+                    const int z=baseZ-radius+(cell/span)%span;
+                    const int y=baseY-radius+cell/(span*span);
+                    nextDy=cell/(span*span);
+                    if((cell&31)==0&&::GetTickCount64()>=deadline) { --nextCell; break; }
+                    if(y < -64 || y >= 320) continue;
                     env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
                     if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
 
@@ -1182,15 +1213,14 @@ struct BlockScanner {
                     // one pointer comparison, so going straight to getBlock is
                     // a third fewer calls across solid terrain.
                     jobject block = env->CallObjectMethod(state, b.mGetBlock);
-                    env->DeleteLocalRef(state);
-                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
-                    if (!block) continue;
-
-                    const std::int8_t kind = cache.Lookup(env, b, block);
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); env->DeleteLocalRef(state); continue; }
+                    if (!block) { env->DeleteLocalRef(state); continue; }
+                    const std::int8_t kind=cache.Lookup(env,b,block);
                     env->DeleteLocalRef(block);
-
-                    if (kind < 0) continue;
-                    if (!(mask & (1u << static_cast<std::uint32_t>(kind)))) continue;
+                    bool selected=kind>=0&&(mask&(1u<<static_cast<std::uint32_t>(kind)));
+                    if(selected&&kind==kBlockRotatedDeepslate) selected=IsRotatedDeepslate(env,b,state);
+                    env->DeleteLocalRef(state);
+                    if(!selected) continue;
 
                     BlockSnapshot record{};
                     record.x    = static_cast<float>(x);
@@ -1198,13 +1228,11 @@ struct BlockScanner {
                     record.z    = static_cast<float>(z);
                     record.kind = static_cast<std::uint8_t>(kind);
                     accum.push_back(record);
-                }
-            }
         }
 
         env->DeleteLocalRef(cursor);
 
-        if (nextDy >= span || accum.size() >= kMaxBlocks) {
+        if (nextCell >= cells || accum.size() >= kMaxBlocks) {
             running = false;
             return true;
         }
@@ -1247,6 +1275,13 @@ bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
         }
     }
 
+    if (!b.mGetEquipped) b.mGetEquipped=jvm::TryMethod(env,b.clsLiving,set.methodGetEquipped.name,set.methodGetEquipped.signature,false);
+    if (!b.slotConstants[kSlotOffHand]) {
+        if(!b.clsEquipSlot) b.clsEquipSlot=SoftClass(env,(prefix+"equip").c_str(),set.classes.equipSlot);
+        const auto id=jvm::TryField(env,b.clsEquipSlot,set.slotOffHand.name,set.slotOffHand.signature,true);
+        if(id) { auto value=env->GetStaticObjectField(b.clsEquipSlot,id); if(value) { b.slotConstants[kSlotOffHand]=env->NewGlobalRef(value); env->DeleteLocalRef(value); } }
+        if(env->ExceptionCheck()) env->ExceptionClear();
+    }
     if (!b.clsPlayerInv) b.clsPlayerInv=SoftClass(env,(prefix+"playerinv").c_str(),set.classes.playerInv);
     if (!b.clsItem) b.clsItem=SoftClass(env,(prefix+"item").c_str(),set.classes.item);
     if (!b.fInventory) b.fInventory=jvm::TryField(env,b.clsPlayer,set.fieldInventory.name,set.fieldInventory.signature,false);
@@ -1561,6 +1596,7 @@ void SamplerThread() {
     }
     blockCache.Release(env);
     entityDetails.Clear(env);
+    if (bindings.axisProperty) { env->DeleteGlobalRef(bindings.axisProperty); bindings.axisProperty=nullptr; }
     if (bindings.swapAction) { env->DeleteGlobalRef(bindings.swapAction); bindings.swapAction = nullptr; }
     bindings.geometry.Release(env);
     jvm::Runtime::Instance().ReleaseCachedRefs(env);

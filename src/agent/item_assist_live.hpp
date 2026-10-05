@@ -90,6 +90,7 @@ public:
         if(!channel||!bindings.profile->geometry) return false;
         b_=bindings; channel_=channel;
         b_.swapAction=bindings.swapAction?env->NewGlobalRef(bindings.swapAction):nullptr;
+        for(int i=0;i<kSlotCount;++i) b_.slotConstants[i]=bindings.slotConstants[i]?env->NewGlobalRef(bindings.slotConstants[i]):nullptr;
         jvm::LocalFrame frame(env,64); Bind(env);
         auto signal=env->FindClass("mcov/FrameSignal");
         if(env->ExceptionCheck()) { env->ExceptionClear(); return false; }
@@ -107,6 +108,7 @@ public:
         if(signal_&&enabled_) env->SetStaticBooleanField(signal_,enabled_,JNI_FALSE);
         if(env->ExceptionCheck()) env->ExceptionClear();
         for(auto* ref:{&hand_,&charge_,&environmentAnchor_,&b_.swapAction}) if(*ref) { env->DeleteGlobalRef(*ref); *ref=nullptr; }
+        for(auto& ref:b_.slotConstants) if(ref) { env->DeleteGlobalRef(ref); ref=nullptr; }
         if(world_) env->DeleteWeakGlobalRef(world_); if(player_) env->DeleteWeakGlobalRef(player_);
         world_=player_=nullptr;
         if(signal_) env->DeleteGlobalRef(signal_); signal_=nullptr; channel_=nullptr; controller_.Reset();
