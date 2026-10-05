@@ -178,6 +178,8 @@ def read_profiles(path):
         geometry_classes, _, definitions, partial = geometry_schema(version)
         class_map = {canonical: result[-1]['classes'][role] for role, canonical in core_classes.items()}
         class_map.update({canonical: classes[role] for role, canonical in geometry_classes.items() if canonical})
+        class_map['net/minecraft/world/inventory/AbstractContainerMenu']=result[-1]['members']['fieldScreenHandler'][1][1:-1]
+        class_map['net/minecraft/world/level/Level']=result[-1]['classes']['clientLevel']
         result[-1]['geometry'] = dict(classes=classes, humanoids=humanoids, members=members,
             owners={key: class_map[definition[0]] for key, definition in definitions.items()},
             kinds={key: definition[3:] for key, definition in definitions.items()}, partial_source=partial)

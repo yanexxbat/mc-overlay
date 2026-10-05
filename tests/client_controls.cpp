@@ -28,6 +28,11 @@ int main() {
         frame(false); Require(!modules[index],"focus loss did not restore hold state");
         input={}; frame(); modules[index]=true; input[0x4B]=input[0x11]=true; frame(); input={}; frame();
         Require(modules[index],"hold destroyed previously enabled state");
+        const int crystal=keys::Index(keys::Action::CrystalMacro);
+        bindings[crystal]={0x43,0,keys::Mode::Toggle}; // Veraltete Präferenz darf Hold nicht umgehen.
+        input={}; frame(); input[0x43]=true; frame();
+        Require(modules[crystal],"hold-only macro did not activate");
+        input={}; frame(); Require(!modules[crystal],"toggle preference bypassed hold-only macro");
         input[0x2D]=true; frame(); frame(); Require(invocations==1,"system hotkey repeated");
         input={}; frame(); input[0x2D]=true; frame(false); Require(invocations==1,"outside application triggered system key");
         auto duplicate=bindings; duplicate[keys::Index(keys::Action::Skeleton)]=bindings[index];
