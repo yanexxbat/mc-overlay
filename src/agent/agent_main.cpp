@@ -53,6 +53,7 @@ std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
 mcov::agent::MinecraftCombat g_combat;
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
+jboolean JNICALL OnMacroUse(JNIEnv* env,jclass,jobject client);
 
 void SetStatus(AgentStatus status) {
     if (auto* block = g_channel.block()) {
@@ -1315,6 +1316,7 @@ bool EnsureTotemBindings(JNIEnv* env, Bindings& b) {
 }
 
 mcov::agent::InventoryAssist<Bindings> g_inventory;
+jboolean JNICALL OnMacroUse(JNIEnv* env,jclass,jobject client) { return g_inventory.CaptureUse(env,client)?JNI_TRUE:JNI_FALSE; }
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client) {
     g_combat.Tick(env,client);
     g_inventory.Tick(env,client);
@@ -1456,7 +1458,7 @@ void SamplerThread() {
             syncAttempted = true;
             if (g_frameSync.Install(env)) {
                 MCOV_LOG_INFO("frame synchronization active: %s; mixed render/tick snapshots are rejected", bindings.set->id);
-                if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick)))
+                if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
                     MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
                 else MCOV_LOG_WARN("inventory client-tick bridge unavailable");
                 if(g_combat.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick)))
