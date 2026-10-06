@@ -1,4 +1,5 @@
 #include "overlay.hpp"
+#include "../common/client_paths.hpp"
 #include "../combat/debug_hud.hpp"
 
 #include <algorithm>
@@ -239,7 +240,7 @@ void Overlay::ApplyCaptureAffinity() {
 bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
     ImGui_ImplWin32_EnableDpiAwareness();
     target_ = target;
-    preferencesPath_=std::filesystem::path(ExecutableDirectory())/L"client-settings.ini";
+    preferencesPath_=ClientDataDirectory()/L"client-settings.ini";
     LoadPreferences();
 
     if (!GetClientRectOnScreen(target_.window, windowX_, windowY_, windowW_, windowH_)) {

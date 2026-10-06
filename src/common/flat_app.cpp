@@ -43,7 +43,7 @@ LRESULT WINAPI FlatAppWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
             ::ScreenToClient(hwnd, &pt);
             if (pt.y >= 0 && pt.y < FlatApp::kTitleBarHeight &&
-                !ImGui::GetIO().WantCaptureMouse &&
+                (!ImGui::GetCurrentContext()||!ImGui::GetIO().WantCaptureMouse) &&
                 (!app || app->PointIsDraggable(pt.x, pt.y))) {
                 return HTCAPTION;
             }
@@ -88,11 +88,13 @@ bool FlatApp::CreateAppWindow(const wchar_t* title, std::string* error) {
     wc.lpszClassName = kClassName;
     ::RegisterClassExW(&wc);
 
-    // Centre on the primary monitor.
-    const int screenW = ::GetSystemMetrics(SM_CXSCREEN);
-    const int screenH = ::GetSystemMetrics(SM_CYSCREEN);
-    const int x       = (screenW - width_) / 2;
-    const int y       = (screenH - height_) / 2;
+    // Innerhalb der Arbeitsflaeche bleiben, auch bei hoher Windows-Skalierung.
+    RECT work{0,0,::GetSystemMetrics(SM_CXSCREEN),::GetSystemMetrics(SM_CYSCREEN)};
+    ::SystemParametersInfoW(SPI_GETWORKAREA,0,&work,0);
+    width_=std::min(width_,int(work.right-work.left)-24);
+    height_=std::min(height_,int(work.bottom-work.top)-24);
+    const int x=work.left+(work.right-work.left-width_)/2;
+    const int y=work.top+(work.bottom-work.top-height_)/2;
 
     hwnd_ = ::CreateWindowExW(WS_EX_LAYERED | WS_EX_APPWINDOW,
                               kClassName, title, WS_POPUP,
@@ -163,6 +165,7 @@ void FlatApp::CleanupRenderTarget() {
 }
 
 bool FlatApp::Initialize(const wchar_t* title, int width, int height, std::string* error) {
+    ImGui_ImplWin32_EnableDpiAwareness();
     width_  = width;
     height_ = height;
 
@@ -185,9 +188,9 @@ bool FlatApp::Initialize(const wchar_t* title, int width, int height, std::strin
 }
 
 void FlatApp::Shutdown() {
-    if (device_) {
-        ImGui_ImplDX11_Shutdown();
-        ImGui_ImplWin32_Shutdown();
+    if (ImGui::GetCurrentContext()) {
+        if(ImGui::GetIO().BackendRendererUserData) ImGui_ImplDX11_Shutdown();
+        if(ImGui::GetIO().BackendPlatformUserData) ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
     }
     CleanupRenderTarget();
@@ -239,6 +242,7 @@ void FlatApp::Run(std::function<void()> draw) {
             if (msg.message == WM_QUIT) closing_ = true;
         }
         if (closing_) break;
+        if(::IsIconic(static_cast<HWND>(hwnd_))) { ::MsgWaitForMultipleObjects(0,nullptr,FALSE,100,QS_ALLINPUT); continue; }
         RenderFrame();
     }
 }

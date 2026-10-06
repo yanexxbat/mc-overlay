@@ -4,6 +4,11 @@ C++20 / Dear ImGui overlay with a JNI/JVMTI agent supplying live game state.
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**, including Forge's
 version-specific member names. See [compatibility and verification](docs/compatibility.md).
 
+**Start here:** open `build/client/mcov.exe`, select Minecraft and click
+**Client starten**. This single portable file contains the overlay, native agent
+and Java helpers. The launcher uses the same dark/violet controls as the client.
+See [launcher and portable package](docs/launcher.md) for runtime requirements and diagnostics.
+
 The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includes
 deterministic selection/rotation/cooldown/sync tests and an executable simulator
 (`build/bin/mcov_combat_demo.exe`). Kill Aura executes player rotation and normal
@@ -115,10 +120,11 @@ Or directly:
 cmake -S . -B build -A x64 -DMCOV_JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.11.10-hotspot"
 ```
 
-Artifacts land in `build/bin/`: `mcov_overlay.exe`, `mcov_injector.exe`,
-`mcov_agent.dll`, `tools/AgentLoader.class`, `tools/frame-sync-agent.jar` and
-`tools/frame-signal.jar`. **Keep the complete folder together** — the loader
-installs both frame helpers before starting the native sampler.
+The distributable is **`build/client/mcov.exe`**. Copy this file alone to another
+folder or machine. MSVC runtime libraries are linked statically; the Java runtime
+is supplied separately. Developer artifacts remain in `build/bin/`:
+`mcov_overlay.exe`, `mcov_injector.exe`, `mcov_agent.dll` and `tools/`.
+Running these developer binaries directly requires keeping that folder together.
 
 Loading into a game requires an attach JDK matching the **running Java major**:
 normally 25 for 26.2, 21 for the 1.21 releases and 17 for 1.20.1. The loader
@@ -128,12 +134,18 @@ skips wrong-major candidates; `MCOV_JDK_HOME` can point to a custom installation
 
 ## Run
 
-1. Start Minecraft and get into a world.
-2. Run `mcov_overlay.exe`.
-3. Press **INSERT** for the menu, **END** to quit.
+1. Start Minecraft; the main menu is sufficient.
+2. Open **`build/client/mcov.exe`**.
+3. Select your Minecraft instance and click **Client starten**.
+4. Switch to Minecraft. **INSERT** opens the menu, **F6** opens the HUD editor,
+   and **END** quits the overlay. These default bindings can be changed.
 
-The overlay finds the game, loads the agent, and connects. Pass `--no-agent` to
-skip the automatic load and do it from the Settings tab instead.
+The launcher prepares its embedded files in `%LOCALAPPDATA%\mcov\runtime`,
+loads the agent when needed and opens the overlay for the selected PID.
+The window remains responsive during connection. Existing client instances are
+reused. **Diagnose** contains details and logs; a missing JDK can be selected
+with **JDK-Ordner auswaehlen**. Closing the launcher leaves Minecraft and the
+overlay running. Developer runs of `mcov_overlay.exe` still support `--no-agent`.
 
 ---
 
@@ -144,7 +156,9 @@ Use **Open HUD editor** or **F6**, drag elements, select them in the toolbar and
 adjust Enabled/Scale. **Esc**, **Done** or F6 finishes. Watermark, Active modules
 and Keybinds are configurable elements too. Empty/disabled elements preview in
 the editor; compact editor viewports show the selected element only. Positions,
-per-element scale and keybinds persist beside the executable. See [client UI](docs/client-ui.md).
+per-element scale and keybinds persist in `%LOCALAPPDATA%\mcov\client-settings.ini`
+for the portable client (beside the executable for direct developer runs).
+See [client UI](docs/client-ui.md).
 
 **Equipment** — the six slots (helmet/chest/legs/boots/main/off) with durability
 bars. `maxDamage == 0` means "has no durability" — a block, food, a totem — which

@@ -22,6 +22,8 @@ camera/entity projection stability.
 - Keep the simplified Kill Aura workflow and always independent camera behavior.
 - Renderers consume snapshots; UI/HUD changes add no render-thread JNI.
 - Keep one canonical build directory and existing version/Forge compatibility.
+- Ship one portable mcov.exe containing the client payload; the launcher matches
+  the classic client UI and handles selection, connection and overlay startup.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Support keyboard/mouse bindings, toggle/hold operation, movable/scalable HUD elements.

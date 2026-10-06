@@ -4,6 +4,7 @@
 #include "common/flat_style.hpp"
 #include "common/equipment_icons.hpp"
 #include "overlay/menu_motion.hpp"
+#include "injector/launcher_ui.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
 #include <windows.h>
@@ -494,6 +495,49 @@ void TargetCubePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     mcov::OverlayUiCheck::StopCube(overlay); v=saved;
 }
 }
+void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    mcov::launcher::View view;
+    auto frame=[&](ImVec2 size) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
+        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto& ctx=*ImGui::GetCurrentContext(); const auto before=ImGui::GetStyle();
+        const int colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size,fonts=ctx.FontStack.Size;
+        auto actions=mcov::launcher::Render(view,size);
+        Require(ctx.ColorStack.Size==colors&&ctx.StyleVarStack.Size==vars&&ctx.CurrentWindowStack.Size==windows&&ctx.FontStack.Size==fonts,"Launcher leaked ImGui state");
+        for(int i=0;i<ImGuiCol_COUNT;++i)
+            Require(std::memcmp(&before.Colors[i],&ImGui::GetStyle().Colors[i],sizeof(ImVec4))==0,"Launcher changed global palette");
+        ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"Empty launcher");
+        return actions;
+    };
+    auto screenshot=[&](const char* name,ImVec2 size) {
+        frame(size); frame(size); SaveFrame(device,context,output/name);
+    };
+    screenshot("launcher-empty.png",{640,520});
+    view.instances={{1234,"Minecraft* 1.21.11","Java 21",false,false},
+                    {5678,"Minecraft 26.2 - Sehr langer Fenstertitel mit Profil und Server","Java 25",true,true}};
+    view.selected=0;
+    screenshot("launcher-ready.png",{640,520});
+    screenshot("launcher-small.png",{480,380});
+    view.busy=true; view.phase="Agent verbinden und Live-Daten pruefen...";
+    screenshot("launcher-busy.png",{640,520});
+    view.busy=false; view.error=view.needsJdk=true;
+    view.status="Ein passendes JDK 21 fehlt. Waehle deinen JDK-Ordner aus und starte erneut.";
+    screenshot("launcher-error.png",{640,520});
+    view.tab=1; view.diagnostic="Verbindung zu PID 1234 konnte nicht vorbereitet werden.";
+    view.log="[INFO] Minecraft gefunden\n[WARN] Ein passendes JDK 21 fehlt.";
+    screenshot("launcher-diagnose.png",{480,380});
+    // Echte Eingabe prueft den einzigen Start-Button; der Test startet keinen Prozess.
+    view.tab=0; view.error=view.needsJdk=false;
+    frame({640,520}); auto* content=Child("/launcher_content");
+    ImGui::SetScrollY(content,0); frame({640,520}); frame({640,520});
+    const ImVec2 point{320,content->Pos.y+208};
+    auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame({640,520});
+    io.AddMouseButtonEvent(0,true); frame({640,520}); io.AddMouseButtonEvent(0,false);
+    Require(frame({640,520}).start,"Launcher start button did not respond");
+    view.busy=true; io.AddMouseButtonEvent(0,true); frame({640,520}); io.AddMouseButtonEvent(0,false);
+    Require(!frame({640,520}).start,"Launcher allowed duplicate starts while connecting");
+    io.AddMousePosEvent(-100,-100);
+}
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     _set_error_mode(_OUT_TO_STDERR);
@@ -694,6 +738,7 @@ int main(int argc,char** argv) {
         aura.pulseAmplitude=.035f;
         for (int i=0;i<16;++i) auraFrame();
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
+        LauncherChecks(device.Get(),context.Get(),output);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
         std::cout<<"PASS control panel: classic menu, 6 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura\n";
         return 0;

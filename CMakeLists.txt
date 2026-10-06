@@ -18,6 +18,10 @@ configure_file(src/common/menu_fonts.rc.in "${CMAKE_CURRENT_BINARY_DIR}/menu_fon
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+if(MSVC)
+    # Portable EXEs und DLL: keine separat zu installierenden VC-Runtime-Dateien.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # Der Combat-Kern hat keine JNI-/Win32-Abhängigkeiten. Der konkrete Demo-Transport
 # simuliert Spiel-Cooldown, Raycast und Silent-Kamera; keine Live-Netzwerkbindung.
@@ -196,9 +200,12 @@ set_target_properties(mcov_overlay PROPERTIES OUTPUT_NAME "mcov_overlay")
 # Independent of mcov_overlay: it reuses process.cpp for JVM discovery and the
 # attach helper, and common/flat_app.cpp for the window + ImGui frame loop.
 # ---------------------------------------------------------------------------
-add_executable(mcov_injector
+add_executable(mcov_injector WIN32
     "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
     src/injector/injector_main.cpp
+    src/injector/launcher_ui.cpp
+    src/injector/portable_package.cpp
+    src/overlay/control_panel.cpp
     src/common/flat_style.cpp
     src/common/flat_app.cpp
     src/overlay/process.cpp
@@ -220,7 +227,7 @@ target_link_libraries(mcov_injector PRIVATE
     user32
     gdi32
     shell32
-    dwmapi)
+    dwmapi ole32 uuid bcrypt)
 
 # ---------------------------------------------------------------------------
 # mcov_agent - the in-JVM library
@@ -300,6 +307,32 @@ endif()
 message(STATUS "mcov: overlay -> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/mcov_overlay.exe")
 message(STATUS "mcov: agent   -> ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/mcov_agent.dll")
 
+# Ein distributierbares EXE; alle separaten Artefakte bleiben Entwickler-Ausgaben.
+set(MCOV_PORTABLE_RC "${CMAKE_BINARY_DIR}/portable_payload.rc")
+set(MCOV_PORTABLE_HEADER "${CMAKE_BINARY_DIR}/portable_manifest.hpp")
+add_custom_command(OUTPUT "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
+    COMMAND ${CMAKE_COMMAND}
+        "-DOVERLAY=$<TARGET_FILE:mcov_overlay>" "-DAGENT=$<TARGET_FILE:mcov_agent>"
+        "-DLOADER=${MCOV_TOOLS_DIR}/AgentLoader.class" "-DFRAME=${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        "-DSIGNAL=${MCOV_TOOLS_DIR}/frame-signal.jar"
+        "-DOUTPUT_RC=${MCOV_PORTABLE_RC}" "-DOUTPUT_HEADER=${MCOV_PORTABLE_HEADER}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/package_client.cmake"
+    DEPENDS mcov_overlay mcov_agent mcov_agent_loader mcov_frame_agent
+        "$<TARGET_FILE:mcov_overlay>" "$<TARGET_FILE:mcov_agent>"
+        "${MCOV_TOOLS_DIR}/AgentLoader.class" "${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        "${MCOV_TOOLS_DIR}/frame-signal.jar" tools/package_client.cmake
+    COMMENT "Embedding the complete portable client" VERBATIM)
+add_executable(mcov WIN32 "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
+    "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+    src/injector/injector_main.cpp src/injector/launcher_ui.cpp src/injector/portable_package.cpp
+    src/overlay/control_panel.cpp src/common/flat_app.cpp src/common/flat_style.cpp
+    src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
+target_include_directories(mcov PRIVATE src third_party/glass "${CMAKE_BINARY_DIR}")
+target_compile_definitions(mcov PRIVATE MCOV_BUNDLED=1 MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
+target_link_libraries(mcov PRIVATE mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
+set_target_properties(mcov PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
+message(STATUS "mcov: open ${CMAKE_BINARY_DIR}/client/mcov.exe (single-file client)")
+
 # Optional headless checks for UI ownership, clipping and input. No JVM needed.
 option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
 if(MCOV_BUILD_UI_CHECKS)
@@ -327,6 +360,7 @@ if(MCOV_BUILD_UI_CHECKS)
     add_executable(mcov_control_panel_check
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/control_panel_smoke.cpp
+        src/injector/launcher_ui.cpp
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_world_visuals.cpp
@@ -372,6 +406,9 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32)
     add_dependencies(mcov_compat_check mcov_compat_fixtures mcov_frame_agent)
     add_test(NAME runtime_profiles COMMAND mcov_compat_check "${MCOV_JDK_ROOT}" "${CMAKE_BINARY_DIR}/compat-fixtures")
+    add_test(NAME portable_client COMMAND ${Python3_EXECUTABLE}
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/portable_client.py" "$<TARGET_FILE:mcov>"
+        "$<TARGET_FILE_DIR:mcov_overlay>" "${CMAKE_BINARY_DIR}/portable-check")
     set_tests_properties(runtime_profiles PROPERTIES TIMEOUT 120)
     set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
     add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class

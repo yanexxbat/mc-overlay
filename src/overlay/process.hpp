@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <stop_token>
 
 namespace mcov {
 
@@ -63,7 +64,7 @@ private:
 // title looks like Minecraft. Window-first (rather than process-first) because
 // it is the only approach that reliably picks the *game* out of a machine that
 // may also be running Gradle daemons, launchers and IDEs on the same JVM binary.
-bool FindMinecraftProcess(TargetProcess& out, std::string* error);
+bool FindMinecraftProcess(TargetProcess& out, std::string* error, std::uint32_t requiredPid=0);
 
 // Re-derives javaHome / jvmDllPath from an image path. Exposed for testing and
 // for the case where the user points at a JDK by hand.
@@ -126,7 +127,7 @@ bool LaunchAgentLoader(const TargetProcess& target,
                        const std::wstring&  classDir,
                        const std::wstring&  agentDll,
                        std::uint32_t*       exitCode,
-                       std::string*         error);
+                       std::string*         error, std::stop_token stop={});
 
 std::wstring ExecutableDirectory();
 

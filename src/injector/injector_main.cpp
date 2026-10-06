@@ -1,382 +1,284 @@
-// injector_main.cpp - standalone flat GUI for loading the agent into a JVM.
-//
-// The overlay can already load the agent on startup; this exists for the cases
-// where that is not what you want: picking a specific JVM out of several,
-// attaching to an already-running session, seeing exactly why an attach failed,
-// or pointing at a different agent DLL.
-//
-// It performs the same JVMTI attach the overlay does - VirtualMachine.attach()
-// via AgentLoader - not code injection. The name "injector" is the familiar one,
-// but nothing here writes into another process's memory.
-#include "imgui.h"
-
+// Ein Startpunkt: Paket vorbereiten, gewaehlte JVM verbinden und Overlay starten.
 #include <windows.h>
-
-#include <string>
-#include <vector>
-
+#include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
+#include <tlhelp32.h>
+#include <wrl/client.h>
+#include <atomic>
+#include <future>
+#include <filesystem>
+#include <fstream>
+#include <chrono>
+#include <thread>
+#include <stdexcept>
+#include "launcher_ui.hpp"
+#include "portable_package.hpp"
 #include "../common/flat_app.hpp"
-#include "../common/flat_style.hpp"
+#include "../common/client_paths.hpp"
+#include "../common/win_handle.hpp"
 #include "../common/ipc.hpp"
 #include "../common/log.hpp"
+#include "../overlay/java_runtime.hpp"
 #include "../overlay/process.hpp"
 
 using namespace mcov;
-
 namespace {
-
-std::string Narrow(const std::wstring& wide) {
-    if (wide.empty()) return {};
-    const int size = ::WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
-                                           nullptr, 0, nullptr, nullptr);
-    if (size <= 0) return {};
-    std::string out(static_cast<std::size_t>(size), '\0');
-    ::WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
-                          out.data(), size, nullptr, nullptr);
-    return out;
+std::string Utf8(const std::wstring& value) {
+    if(value.empty()) return {};
+    const int n=WideCharToMultiByte(CP_UTF8,0,value.data(),int(value.size()),nullptr,0,nullptr,nullptr);
+    std::string result(n,'\0'); WideCharToMultiByte(CP_UTF8,0,value.data(),int(value.size()),result.data(),n,nullptr,nullptr); return result;
 }
-
-// Shortens a long path to "...\tail" so it occupies one line instead of three
-// and cannot squeeze the rest of the layout off the window.
-std::string Elide(const std::string& text, std::size_t maxLen = 58) {
-    if (text.size() <= maxLen) return text;
-    return "..." + text.substr(text.size() - (maxLen - 3));
+std::wstring Wide(const std::string& value) {
+    if(value.empty()) return {};
+    const int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,value.data(),int(value.size()),nullptr,0);
+    std::wstring result(n,L'\0'); if(n) MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,value.data(),int(value.size()),result.data(),n); return result;
 }
-
-struct AppState {
-    std::vector<JvmProcess>  processes;
-    int                      selected = -1;
-    std::vector<std::string> log;
-    std::wstring             agentDll;
-    std::wstring             toolsDir;
-    std::wstring             attachJava;
-    std::string              attachDiagnostic;
-
-    // Last result, shown as a banner. The log alone was not enough: it lived at
-    // the bottom of the window where it could be pushed out of view entirely,
-    // so a successful attach looked like nothing had happened.
-    std::string status;
-    bool        statusIsError = false;
-
-    void Log(std::string line) {
-        // Mirror into the file log too, so a failure is still diagnosable after
-        // the window is closed.
-        MCOV_LOG_INFO("%s", line.c_str());
-        log.push_back(std::move(line));
-        if (log.size() > 200) log.erase(log.begin());
+std::filesystem::path Storage() {
+#ifdef MCOV_BUNDLED
+    PWSTR path=nullptr;
+    if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&path))) throw std::runtime_error("Der lokale Datenordner ist nicht verfuegbar.");
+    const auto root=std::filesystem::path(path)/L"mcov"; CoTaskMemFree(path); return root;
+#else
+    return ExecutableDirectory();
+#endif
+}
+bool ClientRunning(std::uint32_t pid) {
+    WinHandle handle(OpenMutexW(SYNCHRONIZE,FALSE,OverlayMutexName(pid).c_str())); return bool(handle);
+}
+std::filesystem::path AgentPath(std::uint32_t pid) {
+    WinHandle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,pid));
+    if(!snapshot) return {};
+    MODULEENTRY32W entry{}; entry.dwSize=sizeof(entry);
+    if(Module32FirstW(snapshot.get(),&entry)) do {
+        if(_wcsicmp(entry.szModule,L"mcov_agent.dll")==0) return entry.szExePath;
+    } while(Module32NextW(snapshot.get(),&entry));
+    return {};
+}
+enum class Phase { Idle, Package, Runtime, Attach, Agent, Overlay };
+const char* PhaseText(Phase phase) {
+    switch(phase) {
+        case Phase::Package:return "Client-Dateien werden vorbereitet...";
+        case Phase::Runtime:return "Minecraft und Java werden geprueft...";
+        case Phase::Attach:return "Verbindung mit Minecraft wird hergestellt...";
+        case Phase::Agent:return "Minecraft-Verbindung wird geprueft...";
+        case Phase::Overlay:return "Menue und HUD werden gestartet...";
+        default:return "Bereit";
     }
-
-    // Reader onto the injected agent's shared block, so the injector can show
-    // that the agent is actually alive rather than just "the attach returned 0".
+}
+struct Result {
+    bool success=false,needsJdk=false;
+    std::string status,detail;
+    std::uint32_t pid{};
+    std::filesystem::path agentLog;
+    WinHandle overlay;
+};
+void Cancel(std::stop_token stop) { if(stop.stop_requested()) throw std::runtime_error("Verbindung abgebrochen."); }
+// Erst ein fortschreitender Heartbeat bestaetigt, dass ein vorhandener Agent lebt.
+bool LiveAgent(std::uint32_t pid,std::stop_token stop,std::uint64_t timeout,bool existing) {
     SharedChannel probe;
-    std::uint32_t probePid = 0;
-
-    void SyncProbe() {
-        if (selected < 0 || selected >= static_cast<int>(processes.size())) return;
-        const std::uint32_t pid = processes[selected].pid;
-        if (pid == probePid && probe.valid()) return;
-        probe.Close();
-        probePid = probe.OpenReader(pid, nullptr) ? pid : 0;
-    }
-
-    void Refresh() {
-        const std::uint32_t previous = (selected >= 0 && selected < static_cast<int>(processes.size()))
-                                           ? processes[selected].pid : 0;
-        processes = EnumerateJvmProcesses();
-        selected  = processes.empty() ? -1 : 0;
-        for (int i = 0; i < static_cast<int>(processes.size()); ++i) {
-            if (processes[i].pid == previous) { selected = i; break; }
+    const auto until=GetTickCount64()+timeout;
+    bool seen=false; std::uint32_t first=0;
+    do {
+        Cancel(stop);
+        if(!probe.valid()) probe.OpenReader(pid,nullptr);
+        if(const auto* block=probe.block()) {
+            const auto state=static_cast<AgentStatus>(block->status.load(std::memory_order_acquire));
+            if(state==AgentStatus::MappingsFailed) throw std::runtime_error("Minecraft-Version oder Mappings werden nicht erkannt. Details stehen im Agent-Protokoll.");
+            const auto heartbeat=block->heartbeat.load(std::memory_order_acquire);
+            if(!seen) { first=heartbeat; seen=true; }
+            else if(heartbeat!=first&&state!=AgentStatus::Booting&&state!=AgentStatus::ResolvingMappings&&state!=AgentStatus::Detaching) return true;
+        } else if(existing) return false;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    } while(GetTickCount64()<until);
+    return false;
+}
+Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<Phase>& phase,std::stop_token stop) {
+    Result result; result.pid=pid;
+    try {
+        phase=Phase::Package; Cancel(stop);
+        const auto runtime=launcher::PreparePackage(root);
+        phase=Phase::Runtime; Cancel(stop);
+        TargetProcess target; std::string detail;
+        if(!FindMinecraftProcess(target,&detail,pid)) { result.detail=detail; throw std::runtime_error("Diese Minecraft-Instanz ist nicht mehr verfuegbar. Liste aktualisieren und erneut waehlen."); }
+        if(ClientRunning(pid)) { result.success=true; result.status="Der Client laeuft bereits. Zu Minecraft wechseln und das Menue oeffnen."; return result; }
+        const auto loaded=AgentPath(pid);
+        result.agentLog=(loaded.empty()?runtime:loaded.parent_path())/L"mcov_agent.log";
+        if(!loaded.empty()) {
+            if(!LiveAgent(pid,stop,2200,true)) throw std::runtime_error("Ein alter oder gestoppter Agent ist geladen. Minecraft vollstaendig beenden und erneut starten.");
+            result.detail="Vorhandene Minecraft-Verbindung wiederverwendet.\n";
+        } else {
+            const auto java=FindAttachCapableJava(target,&detail);
+            if(java.empty()) {
+                result.needsJdk=true; result.detail=detail;
+                throw std::runtime_error("Passendes JDK "+std::to_string(ReadJavaMajor(target.javaHome))+" fehlt. Den Ordner einer vollstaendigen JDK-Installation auswaehlen.");
+            }
+            result.detail="Minecraft PID "+std::to_string(pid)+"\nJava: "+Utf8(java)+"\n";
+            phase=Phase::Attach; Cancel(stop);
+            std::uint32_t code=0; std::string failure;
+            if(!LaunchAgentLoader(target,(runtime/L"tools").wstring(),(runtime/L"mcov_agent.dll").wstring(),&code,&failure,stop)) {
+                result.detail+=failure; throw std::runtime_error("Verbindung fehlgeschlagen. Diagnose zeigt den Grund; danach erneut versuchen.");
+            }
+            phase=Phase::Agent;
+            if(!LiveAgent(pid,stop,10000,false)) throw std::runtime_error("Minecraft antwortet nicht auf den Client. Minecraft neu starten und erneut verbinden.");
         }
+        phase=Phase::Overlay; Cancel(stop);
+        const auto executable=runtime/L"mcov_overlay.exe";
+        const auto eventName=L"Local\\mcov_ready_"+std::to_wstring(pid)+L"_"+std::to_wstring(GetCurrentProcessId());
+        WinHandle ready(CreateEventW(nullptr,TRUE,FALSE,eventName.c_str()));
+        if(!ready) throw std::runtime_error("Client-Start konnte nicht vorbereitet werden.");
+        std::wstring command=L"\""+executable.wstring()+L"\" --no-agent --pid "+std::to_wstring(pid)+L" --ready-event "+eventName;
+        STARTUPINFOW startup{}; startup.cb=sizeof(startup); startup.dwFlags=STARTF_USESHOWWINDOW; startup.wShowWindow=SW_HIDE;
+        PROCESS_INFORMATION process{};
+        if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,runtime.c_str(),&startup,&process))
+            throw std::runtime_error("Client konnte nicht gestartet werden. Fehler "+std::to_string(GetLastError())+".");
+        WinHandle thread(process.hThread); result.overlay=WinHandle(process.hProcess);
+        HANDLE handles[]={ready.get(),result.overlay.get()};
+        const auto until=GetTickCount64()+10000;
+        while(true) {
+            // Einen schon gestarteten Client bei Abbruch offen lassen.
+            Cancel(stop);
+            const auto signaled=WaitForMultipleObjects(2,handles,FALSE,100);
+            if(signaled==WAIT_OBJECT_0) break;
+            if(signaled==WAIT_OBJECT_0+1) {
+                DWORD code=0; GetExitCodeProcess(result.overlay.get(),&code);
+                result.detail+="Overlay exit code "+std::to_string(code)+"\n";
+                throw std::runtime_error("Das Overlay konnte nicht oeffnen. Das Overlay-Protokoll unter Diagnose pruefen.");
+            }
+            if(signaled==WAIT_FAILED||GetTickCount64()>=until) throw std::runtime_error("Der Client-Start dauert zu lange. Diagnose pruefen und erneut versuchen.");
+        }
+        result.success=true; result.status="Client gestartet. Zu Minecraft wechseln; INSERT oeffnet das Menue (Standard).";
+        result.detail+="Client bereit.\nRuntime: "+Utf8(runtime.wstring());
+    } catch(const std::exception& e) { result.status=e.what(); }
+    MCOV_LOG_INFO("%s\n%s",result.status.c_str(),result.detail.c_str()); return result;
+}
+std::string LogTail(const std::filesystem::path& path) {
+    std::ifstream file(path,std::ios::binary);
+    if(!file) return {};
+    file.seekg(0,std::ios::end); const auto size=file.tellg();
+    if(size>65536) file.seekg(size-std::streamoff(65536)); else file.seekg(0);
+    std::string text((std::istreambuf_iterator<char>(file)),{}); return text;
+}
+std::filesystem::path ChooseJdk(HWND owner) {
+    Microsoft::WRL::ComPtr<IFileDialog> dialog;
+    if(FAILED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog)))) return {};
+    DWORD flags=0; dialog->GetOptions(&flags); dialog->SetOptions(flags|FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST);
+    dialog->SetTitle(L"JDK-Ordner mit bin und release auswaehlen");
+    if(FAILED(dialog->Show(owner))) return {};
+    Microsoft::WRL::ComPtr<IShellItem> item; if(FAILED(dialog->GetResult(&item))) return {};
+    PWSTR path=nullptr; if(FAILED(item->GetDisplayName(SIGDN_FILESYSPATH,&path))) return {};
+    std::filesystem::path result(path); CoTaskMemFree(path); return result;
+}
+struct AppState {
+    launcher::View view;
+    std::vector<JvmProcess> processes;
+    std::atomic<Phase> phase=Phase::Idle;
+    std::stop_source stop;
+    std::future<Result> job;
+    std::uint64_t refreshAt=0,logsAt=0;
+    std::filesystem::path agentLog;
+    ~AppState() { stop.request_stop(); if(job.valid()) job.wait(); }
+    void Refresh() {
+        const auto previous=view.selected>=0&&view.selected<int(view.instances.size())?view.instances[view.selected].pid:0;
+        processes.clear(); view.instances.clear();
+        for(auto& p:EnumerateJvmProcesses()) if(p.looksLikeMinecraft&&p.window) {
+            const auto major=ReadJavaMajor(p.javaHome);
+            view.instances.push_back({p.pid,Utf8(p.windowTitle),major?"Java "+std::to_string(major):"Java-Version unbekannt",p.alreadyInjected,ClientRunning(p.pid)});
+            processes.push_back(std::move(p));
+        }
+        view.selected=view.instances.empty()?-1:0;
+        for(int i=0;i<int(view.instances.size());++i) if(view.instances[i].pid==previous) view.selected=i;
+        refreshAt=GetTickCount64()+3000;
     }
 };
-
-const char* AgentStatusText(AgentStatus status) {
-    switch (status) {
-        case AgentStatus::Booting:           return "booting";
-        case AgentStatus::ResolvingMappings: return "resolving mappings";
-        case AgentStatus::Running:           return "running";
-        case AgentStatus::NoClientInstance:  return "no world loaded";
-        case AgentStatus::MappingsFailed:    return "mapping lookup failed";
-        case AgentStatus::Detaching:         return "detaching";
-        case AgentStatus::WaitingForFrame:   return "waiting for camera frame";
-    }
-    return "unknown";
 }
-
-// Starts the overlay. --no-agent because whatever we are looking at is already
-// injected; without it the overlay would attach a second time on startup.
-bool LaunchOverlay(const std::wstring& exeDir, std::string* error) {
-    const std::wstring exe = exeDir + L"\\mcov_overlay.exe";
-    if (::GetFileAttributesW(exe.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        if (error) *error = "mcov_overlay.exe not found next to the injector";
-        return false;
+int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
+    int count=0; auto args=CommandLineToArgvW(GetCommandLineW(),&count);
+    if(args&&count==3&&std::wstring(args[1])==L"--verify-package") {
+        try { launcher::PreparePackage(args[2]); LocalFree(args); return 0; }
+        catch(...) { LocalFree(args); return 1; }
     }
-
-    std::wstring commandLine = L"\"" + exe + L"\" --no-agent";
-    std::vector<wchar_t> mutableCommandLine(commandLine.begin(), commandLine.end());
-    mutableCommandLine.push_back(L'\0');
-
-    STARTUPINFOW        startup{};
-    PROCESS_INFORMATION info{};
-    startup.cb = sizeof(startup);
-
-    if (!::CreateProcessW(nullptr, mutableCommandLine.data(), nullptr, nullptr, FALSE,
-                          0, nullptr, exeDir.c_str(), &startup, &info)) {
-        if (error) *error = "CreateProcessW for the overlay failed";
-        return false;
+    if(args) LocalFree(args);
+    WinHandle singleton(CreateMutexW(nullptr,FALSE,L"Local\\mcov_launcher"));
+    if(!singleton) return 1;
+    if(GetLastError()==ERROR_ALREADY_EXISTS) {
+        if(auto existing=FindWindowW(L"mcov_flat_app",L"mcov - Client")) { ShowWindow(existing,SW_RESTORE); SetForegroundWindow(existing); }
+        return 0;
     }
-    ::CloseHandle(info.hThread);
-    ::CloseHandle(info.hProcess);
-    return true;
-}
-
-void DrawTitleBar(FlatApp& app, AppState& state) {
-    ImDrawList* draw = ImGui::GetForegroundDrawList();
-    const float w    = static_cast<float>(app.width());
-
-    draw->AddText(ImVec2(32, 29), style::kText, "mcov  agent injector");
-
-    const char* hint = "drag here to move";
-    const ImVec2 hintSize = ImGui::CalcTextSize(hint);
-    draw->AddText(ImVec2(w * 0.5f - hintSize.x * 0.5f, 29), style::kMuted, hint);
-
-    // Close button. Drawn on a draw list rather than as an ImGui widget, so it
-    // has to be excluded from the caption hit-test by hand - otherwise Windows
-    // treats the click as the start of a window drag and it never reaches us.
-    const ImVec2 closeMin(w - 56.0f, 26.0f);
-    const ImVec2 closeMax(w - 32.0f, 50.0f);
-    app.SetNoDragRect(closeMin.x, closeMin.y, closeMax.x, closeMax.y);
-
-    const ImVec2 mouse   = ImGui::GetIO().MousePos;
-    const bool   hovered = mouse.x >= closeMin.x && mouse.x <= closeMax.x &&
-                           mouse.y >= closeMin.y && mouse.y <= closeMax.y;
-
-    draw->AddRectFilled(closeMin, closeMax,
-                        hovered ? style::kHover : style::kPanel, 6.0f);
-
-    // Draw the glyph as two strokes; the bundled font has no reliable ASCII 'X'
-    // at this size once Inter is the default.
-    const float pad = 8.0f;
-    const ImU32 ink = style::kText;
-    draw->AddLine(ImVec2(closeMin.x + pad, closeMin.y + pad),
-                  ImVec2(closeMax.x - pad, closeMax.y - pad), ink, 1.6f);
-    draw->AddLine(ImVec2(closeMax.x - pad, closeMin.y + pad),
-                  ImVec2(closeMin.x + pad, closeMax.y - pad), ink, 1.6f);
-
-    if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) app.RequestClose();
-}
-
-void DoInject(AppState& state) {
-    if (state.selected < 0 || state.selected >= static_cast<int>(state.processes.size())) return;
-    const JvmProcess& target = state.processes[state.selected];
-
-    TargetProcess t;
-    t.pid       = target.pid;
-    t.window    = target.window;
-    t.imagePath = target.imagePath;
-    t.javaHome  = target.javaHome;
-    t.javaExe   = target.javaHome + L"\\bin\\java.exe";
-    DeriveJavaPaths(t);
-
-    state.Log("Attaching to pid " + std::to_string(target.pid) + " ...");
-
-    std::uint32_t exitCode = 0;
-    std::string   error;
-    if (LaunchAgentLoader(t, state.toolsDir, state.agentDll, &exitCode, &error)) {
-        state.Log("OK - Agent_OnAttach returned successfully.");
-        state.status        = "Injected into pid " + std::to_string(target.pid);
-        state.statusIsError = false;
-    } else {
-        state.Log("FAILED: " + error);
-        state.status        = error;
-        state.statusIsError = true;
-    }
-    state.Refresh();
-}
-
-} // namespace
-
-int main() {
-    const std::wstring exeDir = ExecutableDirectory();
-    mcov::log::Init("injector", exeDir + L"\\mcov_injector.log", /*alsoConsole=*/true);
-
-    AppState state;
-    state.agentDll = exeDir + L"\\mcov_agent.dll";
-    state.toolsDir = exeDir + L"\\tools";
-    state.Refresh();
-
-    // Resolve the attach-capable JDK once so the UI can report it up front
-    // rather than only failing at attach time.
-    TargetProcess probe;
-    if (!state.processes.empty()) {
-        probe.javaHome = state.processes[0].javaHome;
-        probe.pid      = state.processes[0].pid;
-    }
-    state.attachJava = FindAttachCapableJava(probe, &state.attachDiagnostic);
-
-    FlatApp app;
-    std::string error;
-    if (!app.Initialize(L"mcov injector", 720, 560, &error)) {
-        MCOV_LOG_ERROR("init failed: %s", error.c_str());
-        return 1;
-    }
-
-    app.Run([&] {
-        const float w = static_cast<float>(app.width());
-        const float h = static_cast<float>(app.height());
-
-        // Opaque shell; the transparent margin leaves room for the shadow.
-        app.Panel(16.0f, 16.0f, w - 16.0f, h - 16.0f);
-        DrawTitleBar(app, state);
-
-        ImGui::SetNextWindowPos(ImVec2(16, static_cast<float>(FlatApp::kTitleBarHeight)));
-        ImGui::SetNextWindowSize(ImVec2(w - 32, h - FlatApp::kTitleBarHeight - 16));
-        ImGui::Begin("##injector", nullptr,
-                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
-                     ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings);
-
-        // --- attach runtime -------------------------------------------------
-        if (state.attachJava.empty()) {
-            style::StyleScope warning;
-            warning.Color(ImGuiCol_Text, ImVec4(0.95f, 0.5f, 0.4f, 1.0f));
-            ImGui::TextWrapped("No JDK with attach support found.");
-            ImGui::TextWrapped("%s", state.attachDiagnostic.c_str());
-        } else {
-            ImGui::TextDisabled("Attach runtime");
-            const std::string jdk = Narrow(state.attachJava);
-            ImGui::TextUnformatted(Elide(jdk).c_str());
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", jdk.c_str());
+    CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
+    int exit=0;
+    try {
+        const auto root=Storage(); std::filesystem::create_directories(root);
+        SetEnvironmentVariableW(L"MCOV_DATA_DIR",root.c_str());
+        const auto jdkFile=root/L"launcher-jdk.txt";
+        if(auto saved=LogTail(jdkFile); !saved.empty()) SetEnvironmentVariableW(L"MCOV_JDK_HOME",Wide(saved).c_str());
+        log::Init("client",(root/L"mcov_client.log").wstring(),false);
+#ifdef MCOV_BUNDLED
+        // Bestehende lokale Binds/HUD beim ersten Start uebernehmen, nie ersetzen.
+        const auto executableDir=std::filesystem::path(ExecutableDirectory());
+        const auto savedSettings=root/L"client-settings.ini";
+        std::error_code settingsError;
+        if(!std::filesystem::exists(savedSettings,settingsError)) {
+            auto legacy=executableDir/L"client-settings.ini";
+            if(!std::filesystem::exists(legacy,settingsError)&&executableDir.filename()==L"client")
+                legacy=executableDir.parent_path()/L"bin"/L"client-settings.ini";
+            if(std::filesystem::is_regular_file(legacy,settingsError)) {
+                std::filesystem::copy_file(legacy,savedSettings,std::filesystem::copy_options::none,settingsError);
+                if(settingsError) MCOV_LOG_WARN("Existing keybind/HUD settings could not be imported: %s",settingsError.message().c_str());
+            }
         }
-        ImGui::Separator();
-
-        // --- process list ---------------------------------------------------
-        ImGui::TextDisabled("Running JVMs");
-        ImGui::SameLine(ImGui::GetWindowWidth() - 110.0f);
-        if (ImGui::Button("Refresh", ImVec2(90, 0))) state.Refresh();
-
+#endif
         {
-            style::FlatPanel panel("##procs", ImVec2(0, 182));
-            if (panel.visible()) {
-                if (state.processes.empty()) {
-                    ImGui::TextDisabled("No java.exe / javaw.exe running as this user.");
-                }
-                for (int i = 0; i < static_cast<int>(state.processes.size()); ++i) {
-                    const JvmProcess& p = state.processes[i];
-
-                    char label[320];
-                    std::snprintf(label, sizeof(label), "%s  pid %u##p%d",
-                                  p.windowTitle.empty() ? "(no window)" : Narrow(p.windowTitle).c_str(),
-                                  p.pid, i);
-
-                    if (ImGui::Selectable(label, state.selected == i)) state.selected = i;
-
-                    ImGui::SameLine();
-                    if (p.alreadyInjected) {
-                        ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.50f, 1.0f), "[injected]");
-                    } else if (p.looksLikeMinecraft) {
-                        ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.00f, 1.0f), "[minecraft]");
-                    } else {
-                        ImGui::TextDisabled("[jvm]");
+            AppState state; state.Refresh(); FlatApp app; std::string failure;
+            if(!app.Initialize(L"mcov - Client",640,520,&failure)) throw std::runtime_error(failure);
+            app.Run([&] {
+                const auto now=GetTickCount64();
+                if(state.view.busy&&state.job.valid()&&state.job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
+                    auto result=state.job.get(); state.view.busy=false; state.view.error=!result.success; state.view.needsJdk=result.needsJdk;
+                    state.view.status=result.status; state.view.diagnostic=result.detail; state.agentLog=result.agentLog; state.Refresh();
+                    if(result.success&&GetForegroundWindow()==app.hwnd()) {
+                        ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
+                        for(const auto& p:state.processes) if(p.pid==result.pid) SetForegroundWindow(static_cast<HWND>(p.window));
                     }
                 }
-            }
-        }
-
-        // --- selection detail ------------------------------------------------
-        if (state.selected >= 0 && state.selected < static_cast<int>(state.processes.size())) {
-            const JvmProcess& p = state.processes[state.selected];
-            const std::string image = Narrow(p.imagePath);
-            ImGui::TextDisabled("Runtime");
-            ImGui::TextUnformatted(Elide(image).c_str());
-            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", image.c_str());
-
-            const bool isJdk = ::GetFileAttributesW((p.javaHome + L"\\bin\\attach.dll").c_str())
-                               != INVALID_FILE_ATTRIBUTES;
-            if (!isJdk) ImGui::TextDisabled("JRE - helper runs on the JDK above (expected).");
-        }
-
-        ImGui::Separator();
-        ImGui::TextDisabled("Agent");
-        const std::string agent = Narrow(state.agentDll);
-        ImGui::TextUnformatted(Elide(agent).c_str());
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", agent.c_str());
-
-        const bool canInject = state.selected >= 0 && !state.attachJava.empty();
-        ImGui::BeginDisabled(!canInject);
-        if (style::AccentButton("Inject agent", ImVec2(-1, 38))) DoInject(state);
-        ImGui::EndDisabled();
-
-        // Result banner, right under the button where it cannot be missed.
-        if (!state.status.empty()) {
-            style::StyleScope banner;
-            banner.Color(ImGuiCol_Text,
-                                  state.statusIsError ? ImVec4(0.96f, 0.48f, 0.40f, 1.0f)
-                                                      : ImVec4(0.40f, 0.88f, 0.52f, 1.0f));
-            ImGui::TextWrapped("%s", state.status.c_str());
-        }
-
-        // --- live agent state -------------------------------------------------
-        // The agent draws nothing by itself: it samples the client and writes to
-        // shared memory. Reading that back here is the only way to show, in the
-        // injector, that a successful attach actually did something.
-        state.SyncProbe();
-        if (const SharedBlock* block = state.probe.block()) {
-            const auto status    = static_cast<AgentStatus>(block->status.load(std::memory_order_acquire));
-            const auto heartbeat = block->heartbeat.load(std::memory_order_acquire);
-
-            ImGui::Separator();
-            ImGui::TextDisabled("Agent state");
-            ImGui::TextColored(ImVec4(0.40f, 0.88f, 0.52f, 1.0f), "%s", AgentStatusText(status));
-            ImGui::SameLine();
-            ImGui::TextDisabled("| heartbeat %u", heartbeat);
-
-            WorldSnapshot snapshot{};
-            if (TryReadSnapshot(block, snapshot) && snapshot.frameIndex > 0) {
-                ImGui::Text("%.1f  %.1f  %.1f    %u entities",
-                            snapshot.posX, snapshot.posY, snapshot.posZ, snapshot.entityCount);
-            }
-        } else if (!state.status.empty() && !state.statusIsError) {
-            ImGui::TextDisabled("Agent attached but no shared block yet - give it a moment.");
-        }
-
-        // The agent is invisible on its own; the overlay is what draws.
-        if (ImGui::Button("Launch overlay", ImVec2(-1, 32))) {
-            std::string launchError;
-            if (LaunchOverlay(exeDir, &launchError)) {
-                state.Log("Overlay started (--no-agent).");
-                state.status        = "Overlay launched - press INSERT in Minecraft";
-                state.statusIsError = false;
-            } else {
-                state.Log("FAILED: " + launchError);
-                state.status        = launchError;
-                state.statusIsError = true;
-            }
-        }
-        ImGui::TextDisabled("Injecting only loads the agent, which draws nothing.\n"
-                            "The overlay is the process that renders ESP and HUD.");
-
-        // --- log --------------------------------------------------------------
-        // Fixed height: with ImVec2(0,0) this child took whatever was left, and
-        // the content above could squeeze it to nothing - which made a
-        // successful attach look like a dead button.
-        ImGui::TextDisabled("Log");
-        {
-            style::FlatPanel panel("##log", ImVec2(0, 162));
-            if (panel.visible()) {
-                for (const std::string& line : state.log) {
-                    const bool bad = line.rfind("FAILED", 0) == 0;
-                    style::StyleScope lineStyle;
-                    if (bad) lineStyle.Color(ImGuiCol_Text, ImVec4(0.95f, 0.5f, 0.4f, 1.0f));
-                    ImGui::TextWrapped("%s", line.c_str());
+                if(!state.view.busy&&now>=state.refreshAt) state.Refresh();
+                if(state.view.tab==1&&now>=state.logsAt) {
+                    state.view.log=LogTail(root/L"mcov_client.log")+"\n"+LogTail(root/L"mcov_overlay.log")+"\n"+LogTail(state.agentLog); state.logsAt=now+1000;
                 }
-                if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f) ImGui::SetScrollHereY(1.0f);
-            }
-        }
-
-        ImGui::End();
-    });
-
-    app.Shutdown();
-    mcov::log::Shutdown();
-    return 0;
+                state.view.phase=PhaseText(state.phase.load());
+                const auto a=launcher::Render(state.view,{float(app.width()),float(app.height())});
+                app.SetNoDragRect(float(app.width()-74),22,float(app.width()-20),44);
+                if(a.close) { state.stop.request_stop(); app.RequestClose(); }
+                if(a.minimize) ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
+                if(a.refresh&&!state.view.busy) state.Refresh();
+                if(a.openLogs) ShellExecuteW(static_cast<HWND>(app.hwnd()),L"open",root.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+                if(a.chooseJdk&&!state.view.busy) {
+                    const auto chosen=ChooseJdk(static_cast<HWND>(app.hwnd()));
+                    if(!chosen.empty()) {
+                        if(IsX64Java(chosen)&&ReadJavaMajor(chosen)>=17&&
+                           std::filesystem::exists(chosen/L"bin"/L"java.exe")&&
+                           std::filesystem::exists(chosen/L"bin"/L"javac.exe")&&
+                           std::filesystem::exists(chosen/L"bin"/L"attach.dll")) {
+                            SetEnvironmentVariableW(L"MCOV_JDK_HOME",chosen.c_str());
+                            std::ofstream saved(jdkFile,std::ios::binary|std::ios::trunc); saved<<Utf8(chosen.wstring());
+                            state.view.needsJdk=state.view.error=false; state.view.status="JDK gespeichert. Client starten, um die Verbindung erneut zu pruefen.";
+                        } else state.view.status="Dieser Ordner ist kein vollstaendiges Windows-x64-JDK. Den JDK-Hauptordner mit bin und release auswaehlen.";
+                    }
+                }
+                if(a.start&&!state.view.busy&&state.view.selected>=0&&state.view.selected<int(state.processes.size())) {
+                    const auto target=state.processes[state.view.selected];
+                    if(ClientRunning(target.pid)) SetForegroundWindow(static_cast<HWND>(target.window));
+                    else {
+                        state.view.busy=true; state.view.error=state.view.needsJdk=false; state.stop=std::stop_source{};
+                        const auto token=state.stop.get_token();
+                        state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token); });
+                    }
+                }
+            });
+        } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.
+        log::Shutdown();
+    } catch(const std::exception& e) {
+        MessageBoxW(nullptr,Wide(e.what()).c_str(),L"mcov konnte nicht starten",MB_OK|MB_ICONERROR); log::Shutdown(); exit=1;
+    }
+    CoUninitialize(); return exit;
 }

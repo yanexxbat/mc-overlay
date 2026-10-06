@@ -15,6 +15,9 @@
 #include <cstdio>
 #include <string>
 #include <thread>
+#include <charconv>
+#include "common/client_paths.hpp"
+#include "common/win_handle.hpp"
 
 #include "common/log.hpp"
 #include "overlay/overlay.hpp"
@@ -44,7 +47,19 @@ int main(int argc, char** argv) {
     const bool skipAutoLoad = ParseFlag(argc, argv, "--no-agent");
 
     const std::wstring executableDirectory = mcov::ExecutableDirectory();
-    mcov::log::Init("overlay", executableDirectory + L"\\mcov_overlay.log", /*alsoConsole=*/true);
+    mcov::log::Init("overlay", (mcov::ClientDataDirectory()/L"mcov_overlay.log").wstring(), /*alsoConsole=*/true);
+    std::uint32_t requiredPid=0; std::wstring readyEvent;
+    for(int i=1;i<argc;++i) {
+        const std::string flag=argv[i];
+        if(flag=="--pid") {
+            if(++i>=argc) return 64;
+            const std::string value=argv[i]; const auto parsed=std::from_chars(value.data(),value.data()+value.size(),requiredPid);
+            if(parsed.ec!=std::errc{}||parsed.ptr!=value.data()+value.size()||!requiredPid) return 64;
+        } else if(flag=="--ready-event") {
+            if(++i>=argc) return 64;
+            const std::string value=argv[i]; readyEvent.assign(value.begin(),value.end());
+        }
+    }
     PrintBanner();
 
     // --- 1. locate the target -------------------------------------------------
@@ -52,7 +67,8 @@ int main(int argc, char** argv) {
     std::string         error;
 
     for (int attempt = 0; attempt < 30; ++attempt) {
-        if (mcov::FindMinecraftProcess(target, &error)) break;
+        if (mcov::FindMinecraftProcess(target, &error,requiredPid)) break;
+        if(requiredPid) break; // Keine andere JVM waehlen, wenn die Auswahl beendet wurde.
         if (attempt == 0) std::printf("  waiting for Minecraft... (%s)\n", error.c_str());
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
@@ -62,6 +78,8 @@ int main(int argc, char** argv) {
         MCOV_LOG_ERROR("giving up: %s", error.c_str());
         return 1;
     }
+    mcov::WinHandle instance(CreateMutexW(nullptr,FALSE,mcov::OverlayMutexName(target.pid).c_str()));
+    if(!instance||GetLastError()==ERROR_ALREADY_EXISTS) return 3;
 
     std::printf("  target : pid %u  (%ls)\n", target.pid, target.windowTitle.c_str());
     std::printf("  runtime: %ls\n", target.javaHome.empty() ? L"<unknown>" : target.javaHome.c_str());
@@ -101,6 +119,10 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "  [!] overlay init failed: %s\n", error.c_str());
         MCOV_LOG_ERROR("overlay init failed: %s", error.c_str());
         return 2;
+    }
+    if(!readyEvent.empty()) {
+        mcov::WinHandle ready(OpenEventW(EVENT_MODIFY_STATE,FALSE,readyEvent.c_str()));
+        if(ready) SetEvent(ready.get());
     }
 
     std::printf("  overlay running - press INSERT for the menu\n\n");

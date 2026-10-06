@@ -263,4 +263,4 @@ foreach ($helperName in @('AgentLoader.class', 'frame-sync-agent.jar', 'frame-si
     }
 }
 
-Write-Host "`nRun:  $binDir\mcov_overlay.exe" -ForegroundColor Cyan
+Write-Host "`nOpen:  $BuildDir\client\mcov.exe  (portable client - only this file is needed)" -ForegroundColor Cyan

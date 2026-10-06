@@ -84,8 +84,9 @@ Triggerbot senden dann keine Eingaben.
 
 ## Speicherung und Technik
 
-`build/bin/client-settings.ini` enthält Binds und HUD-Konfiguration; der genaue
-Pfad liegt immer neben der gestarteten Overlay-EXE. Änderungen werden verzögert
+`%LOCALAPPDATA%\mcov\client-settings.ini` enthält Binds und HUD-Konfiguration
+beim Start über die portable `mcov.exe`. Direkte Entwickler-Starts verwenden
+weiterhin `build/bin/client-settings.ini` neben der Overlay-EXE. Änderungen werden verzögert
 gespeichert, bestätigte Binds und das Beenden des Editors sofort. Eine temporäre
 Datei wird nach vollständigem Schreiben ersetzt. Fehler stehen im Keybind-Editor;
 ungültige/fehlende Werte fallen auf Defaults zurück. **Reset keybinds** stellt die

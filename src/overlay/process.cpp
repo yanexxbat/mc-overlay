@@ -53,6 +53,7 @@ bool FileExists(const std::wstring& path) {
 struct ScanContext {
     TargetProcess best;
     int           bestScore = 0;
+    std::uint32_t requiredPid=0;
 };
 
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM param) {
@@ -68,6 +69,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM param) {
     DWORD pid = 0;
     ::GetWindowThreadProcessId(hwnd, &pid);
     if (pid == 0 || pid == ::GetCurrentProcessId()) return TRUE;
+    if(context->requiredPid&&pid!=context->requiredPid) return TRUE;
 
     // PROCESS_QUERY_LIMITED_INFORMATION is the minimum right that still allows
     // QueryFullProcessImageNameW, and crucially it is granted between processes
@@ -263,8 +265,9 @@ bool DeriveJavaPaths(TargetProcess& target) {
     return false;
 }
 
-bool FindMinecraftProcess(TargetProcess& out, std::string* error) {
+bool FindMinecraftProcess(TargetProcess& out, std::string* error,std::uint32_t requiredPid) {
     ScanContext context;
+    context.requiredPid=requiredPid;
     ::EnumWindows(&EnumWindowsProc, reinterpret_cast<LPARAM>(&context));
 
     if (context.bestScore == 0) {
@@ -496,7 +499,7 @@ bool LaunchAgentLoader(const TargetProcess& target,
                        const std::wstring&  classDir,
                        const std::wstring&  agentDll,
                        std::uint32_t*       exitCode,
-                       std::string*         error) {
+                       std::string*         error,std::stop_token stop) {
     if (!FileExists(agentDll)) {
         if (error) *error = "mcov_agent.dll not found; build the agent target first";
         return false;
@@ -567,10 +570,19 @@ bool LaunchAgentLoader(const TargetProcess& target,
         return false;
     }
 
-    ::WaitForSingleObject(info.hProcess, 30000);
+    const auto deadline=GetTickCount64()+30000;
+    bool interrupted=false;
+    while(::WaitForSingleObject(info.hProcess,100)==WAIT_TIMEOUT) {
+        if(stop.stop_requested()||GetTickCount64()>=deadline) {
+            // Nur unseren eigenen Helper beenden; niemals die Minecraft-JVM.
+            interrupted=true; ::TerminateProcess(info.hProcess,ERROR_CANCELLED);
+            ::WaitForSingleObject(info.hProcess,1000); break;
+        }
+    }
 
     DWORD code = 0;
     ::GetExitCodeProcess(info.hProcess, &code);
+    if(interrupted) code=ERROR_CANCELLED;
     if (exitCode) *exitCode = code;
 
     ::CloseHandle(info.hThread);

@@ -9,13 +9,13 @@ A single rectangular 600 x 650 px window, constrained to the game viewport,
 has a compact draggable title bar and six horizontal tabs: Combat, Visuals,
 Blocks, HUD, Stats, Settings. Background #242424, fields #191919, black borders,
 violet #AE69D1, text #ECECEC and muted #B6AFBE. Pixel-aligned embedded ImGui
-ProggyClean is 13 px in menu/HUD; the existing Inter fonts remain for ESP and
-shared injector helpers. No decorative rings, glossy highlights or rounded
+ProggyClean is 13 px in menu/HUD and launcher; the existing Inter fonts remain for ESP.
+No decorative rings, glossy highlights or rounded
 floating navigation. Sliders fill their full width in violet with centered
 numbers; labels sit above fields. Module groups use fine borders and violet
 section rules. Two columns fit above 500 px content width; narrower menus stack
 and scroll. Tab selection and input update immediately. Styles/fonts restore
-before the rest of the frame. The shared injector flat theme is preserved.
+before the rest of the frame. The launcher now shares the same scoped classic theme.
 
 Every main page has a consistent, horizontally scrolling function tab bar.
 Visuals separates Box ESP, Skeleton, Name tags, Health bars, Distance labels,
@@ -36,7 +36,8 @@ outlines, empty/disabled previews, drag hit areas and a toolbar with selection,
 visibility, scale and reset. Below 640 x 480 it isolates the selected element.
 Coordinates are normalized within the viewport travel and clamped on resize;
 free layouts may overlap intentionally. HUD placements/scale/visibility and binds
-save beside the overlay executable in client-settings.ini. Other feature settings
+save in %LOCALAPPDATA%/mcov/client-settings.ini for the portable client, or beside
+the overlay executable for direct developer runs. Other feature settings
 and UUID relations retain their existing session behavior. Renderers consume
 coherent snapshots; no new JNI calls, native hooks or IPC fields.
 
