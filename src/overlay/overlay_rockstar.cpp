@@ -56,6 +56,7 @@ void Overlay::PlayModuleSound(bool enabled,bool hit) {
     PlaySoundW(reinterpret_cast<LPCWSTR>(tones[type*3+volume].wav.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
 }
 void Overlay::Panic() {
+    keyEngine_.DiscardHoldRestoration();
     for(int i=3;i<keys::kCount;++i) if(!keys::System(static_cast<keys::Action>(i))) SetModuleEnabled(static_cast<keys::Action>(i),false);
     visuals_.boxEsp=visuals_.skeleton=visuals_.tracers=visuals_.nameTags=visuals_.healthBars=visuals_.distanceText=visuals_.targetInfo=false;
     auraConfig_.enabled=targetCubeConfig_.enabled=localHatConfig_.enabled=false;
@@ -97,7 +98,12 @@ void Overlay::DrawRockstarSettings(Feature feature) {
             const char* modes[]={"Players","All living entities"}; dirty|=panel::ComboRow("Subjects",&c.mode,modes,2);
             dirty|=panel::SliderRow("Distance",&c.range,4,256,"%.0f m"); dirty|=panel::SliderRow("Stroke",&c.size,.5f,4,"%.1f px");
         } else if(feature==Feature::Wings||feature==Feature::Halo||feature==Feature::JumpCircles) {
-            dirty|=panel::SliderRow("Size",&c.size,.2f,3,"%.2f x"); dirty|=panel::SliderRow("Animation speed",&c.speed,0,4,"%.2f");
+            dirty|=panel::SliderRow("Size",&c.size,.2f,3,"%.2f x");
+            if(feature==Feature::Wings) dirty|=panel::SliderRow("Animation speed",&c.speed,0,4,"%.2f");
+        } else if(feature==Feature::DamageMarkers) {
+            dirty|=panel::SliderRow("Text size",&c.size,.5f,2,"%.2f x"); dirty|=panel::SliderRow("Rise speed",&c.speed,0,4,"%.2f");
+        } else if(feature==Feature::DamageInfo) {
+            dirty|=panel::SliderRow("Edge size",&c.size,.2f,4,"%.2f x");
         } else if(feature==Feature::Arrows) {
             dirty|=panel::SliderRow("Distance",&c.range,4,256,"%.0f m"); dirty|=panel::SliderRow("Arrow size",&c.size,4,20,"%.0f px");
         } else if(feature==Feature::DetectPlayer||feature==Feature::ChestEsp) dirty|=panel::SliderRow("Range",&c.range,8,128,"%.0f m");

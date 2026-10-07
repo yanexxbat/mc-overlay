@@ -250,7 +250,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
         auto* tabs=ctx.TabBars.GetByKey(Child("/content_")->GetID("visual_sections"));
         Require(tabs&&tabs->Tabs.Size==17,"Visuals did not expose all function tabs"); return tabs;
     };
-    SelectSubTab(overlay,Page::Visuals,"visual_sections",8,17);
+    SelectSubTab(overlay,Page::Visuals,"visual_sections",8,26);
     auto* content=Child("/content_");
     const auto markerId=bar()->Tabs[8].ID;
     auto click=[&](ImVec2 p) {
@@ -341,7 +341,7 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     bool* enabled[]={&config.trails.enabled,&config.hits.enabled,&config.ambient.enabled,&config.bubbles.enabled,
         &config.kills.enabled,&config.crumbs.enabled,&hat.enabled};
     for(int section=9;section<=15;++section) {
-        SelectSubTab(overlay,Page::Visuals,"visual_sections",section,17);
+        SelectSubTab(overlay,Page::Visuals,"visual_sections",section,26);
         const char* names[]={"trail_settings","hit_particle_settings","ambient_particle_settings","hit_bubble_settings",
             "kill_effect_settings","breadcrumb_settings","local_hat_settings"};
         auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID(names[section-9]));
@@ -695,7 +695,7 @@ int main(int argc,char** argv) {
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            SelectSubTab(overlay,Page::Blocks,"block_sections",3,4,size); mcov::OverlayUiCheck::Center(overlay);
+            SelectSubTab(overlay,Page::Blocks,"block_sections",3,7,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
@@ -740,7 +740,7 @@ int main(int argc,char** argv) {
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
         LauncherChecks(device.Get(),context.Get(),output);
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: classic menu, 6 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura\n";
+        std::cout<<"PASS control panel: classic menu, 7 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura/Rockstar pack\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

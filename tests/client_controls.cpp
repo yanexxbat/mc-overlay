@@ -28,6 +28,8 @@ int main() {
         frame(false); Require(!modules[index],"focus loss did not restore hold state");
         input={}; frame(); modules[index]=true; input[0x4B]=input[0x11]=true; frame(); input={}; frame();
         Require(modules[index],"hold destroyed previously enabled state");
+        input[0x4B]=input[0x11]=true; frame(); engine.DiscardHoldRestoration(); modules[index]=false;
+        input={}; frame(); Require(!modules[index],"Panic was undone when a held module key was released");
         const int crystal=keys::Index(keys::Action::CrystalMacro);
         bindings[crystal]={0x43,0,keys::Mode::Toggle}; // Modul-Keybind schaltet nur die Bereitschaft.
         input={}; frame(); input[0x43]=true; frame();
