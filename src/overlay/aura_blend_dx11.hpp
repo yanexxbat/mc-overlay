@@ -16,9 +16,13 @@ public:
     void Shutdown() noexcept;
     AuraBlend Callbacks() const noexcept;
     ImTextureID GlowTexture() const noexcept;
+    ImTextureID RingTexture() const noexcept;
+    ImTextureID FeatherTexture() const noexcept;
 private:
     static void Apply(const ImDrawList*, const ImDrawCmd* command);
     ID3D11BlendState* state_{};
     ID3D11ShaderResourceView* glowTexture_{};
+    ID3D11ShaderResourceView* ringTexture_{};
+    ID3D11ShaderResourceView* featherTexture_{};
 };
 } // namespace mcov

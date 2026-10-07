@@ -76,6 +76,8 @@ public:
         if (!valid_||!Finite(c)||c.w<near_) return false;
         out=Pixel(c); return std::isfinite(out.x)&&std::isfinite(out.y);
     }
+    float Depth(WorldPoint p) const { return valid_?Clip(p).w:std::numeric_limits<float>::quiet_NaN(); }
+    float NearPlane() const { return near_; }
     // Kreisförmiges Billboard: Perspektivskalierung am unveränderten Weltanker.
     // Die Länge der View-Projection-Zeile bleibt auch bei View-Bobbing stabil.
     bool Billboard(WorldPoint center, float worldRadius, ScreenPoint& out, float& pixelRadius) const {

@@ -2,12 +2,15 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits>
+#include <memory>
 using namespace mcov;
 using namespace mcov::rockstar;
 void Require(bool v,const char* why) { if(!v) throw std::runtime_error(why); }
 int main() {
     try {
         Config c; for(auto& o:c.modules) Require(!o.enabled,"new modules must default off");
+        Require(soft::RingDensity(0,0)<.0001f&&soft::RingDensity(.68f,0)>.4f&&soft::RingDensity(1,0)<.001f,"soft ring lost its clear center or transparent edge");
+        Require(soft::FeatherDensity(0,0)>.3f&&soft::FeatherDensity(0,1)==0,"feather mask has a hard rectangular edge");
         c[Feature::JumpCircles].enabled=c[Feature::DeathCoordinates].enabled=c[Feature::DamageMarkers].enabled=c[Feature::HitSounds].enabled=true;
         c[Feature::GlowEsp].size=std::numeric_limits<float>::quiet_NaN(); c[Feature::Wings].opacity=99; c.Clamp();
         Require(std::isfinite(c[Feature::GlowEsp].size)&&c[Feature::Wings].opacity==1,"invalid config was not bounded");
@@ -37,11 +40,19 @@ int main() {
         for(auto& o:c.modules) o.enabled=true; c.Clamp();
         s.posX=0; CopyField(s.dimension,"Overworld"); s.frameIndex++; e.health=20; pack.Update(s,11,c,42);
         ImGui::NewFrame(); auto* draw=ImGui::GetBackgroundDrawList(); const CameraProjection projection(s,640,480);
-        pack.DrawWorld(*draw,s,projection,c,{},42,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},{},0,true);
+        pack.DrawWorld(*draw,s,projection,c,{},42,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},{},{},true);
         pack.DrawScreen(*draw,s,projection,c,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},11);
         for(int i=int(HudModule::Radar);i<kHudModules;++i) pack.DrawHud(*draw,static_cast<HudModule>(i),s,c,{}, {232,200},11);
         ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"feature pack rendered nothing");
         for(auto* list:ImGui::GetDrawData()->CmdLists) for(const auto& vertex:list->VtxBuffer) Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"nonfinite feature geometry");
+        ImGui::NewFrame(); draw=ImGui::GetBackgroundDrawList();
+        auto clipScene=std::make_unique<WorldSnapshot>(s); clipScene->camY=.2; clipScene->yawDeg=clipScene->pitchDeg=0;
+        const CameraProjection nearProjection(*clipScene,640,480);
+        const std::array<WorldPoint,4> ground={WorldPoint{-.5,0,-1},{.5,0,-1},{.5,0,1},{-.5,0,1}};
+        const auto textureDepth=draw->_TextureIdStack.Size,clipDepth=draw->_ClipRectStack.Size;
+        Require(soft::WorldQuad(*draw,nearProjection,ground,ImTextureID(1),{.4f,1,.6f,1},{.4f,1,.6f,1}),"near-plane clipping removed the visible part of a ground ring");
+        for(const auto& v:draw->VtxBuffer) Require(v.pos.x>=0&&v.pos.x<=640.01f&&v.pos.y>=0&&v.pos.y<=480.01f&&v.uv.x>=0&&v.uv.x<=1&&v.uv.y>=0&&v.uv.y<=1,"clipped texture geometry escaped viewport or UV bounds");
+        Require(draw->_TextureIdStack.Size==textureDepth&&draw->_ClipRectStack.Size==clipDepth,"soft texture clipping leaked drawing state"); ImGui::Render();
         // Ein bereits erfasster Spieler muss auch beim spaeteren Eintritt in die Reichweite melden.
         Pack nearby; e.distance=50; s.frameIndex=90; nearby.Update(s,14,c,42);
         const auto noticeVertices=[&](double time) {

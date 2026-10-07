@@ -4,6 +4,9 @@ Open `build/client/mcov.exe`. Select an already running Minecraft window and
 click **Client starten**. The launcher automatically connects and starts the
 overlay for that exact instance. Starting again switches back to Minecraft.
 Only this EXE needs to be copied; all native and Java helpers are embedded.
+The ready-to-share `build/mcov-client.zip` contains exactly `mcov.exe` and the
+optional German `START.txt` guide, with no build directories or separate dependencies.
+Both files are also available in `build/client/`. Extract the ZIP before starting.
 
 ## Runtime requirements
 
@@ -51,7 +54,8 @@ different game process when the selected instance disappears.
 
 ## Verification
 
-`portable_client` copies only the EXE into an otherwise empty folder, verifies
+`portable_client` verifies that the share ZIP contains exactly two root files and
+the current executable, then copies its EXE into an otherwise empty folder. It verifies
 the GUI subsystem and exact embedded payloads, tests paths with spaces/Unicode,
 idempotent extraction, concurrent corruption repair, and early rejection of
 invalid overlay PIDs. `control_panel` renders the actual launcher offscreen at

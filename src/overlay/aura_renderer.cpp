@@ -1,4 +1,5 @@
 #include "aura_renderer.hpp"
+#include "depth_tags.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numbers>
@@ -28,8 +29,10 @@ void Sprite(ImDrawList& draw, ImTextureID texture, const AuraScreenSample& point
     if (!std::isfinite(radius) || radius <= 0 || point.center.x+radius<lo.x || point.center.x-radius>hi.x ||
         point.center.y+radius<lo.y || point.center.y-radius>hi.y) return;
     color.w = std::clamp(color.w * alpha, 0.f, 1.f);
+    const int first=draw.VtxBuffer.Size;
     draw.AddImage(texture, {point.center.x-radius,point.center.y-radius},
                   {point.center.x+radius,point.center.y+radius}, {0,0}, {1,1}, ImGui::ColorConvertFloat4ToU32(color));
+    depth::Tag(draw,first,point.depth);
 }
 class DrawScope final {
     ImDrawList& draw_;

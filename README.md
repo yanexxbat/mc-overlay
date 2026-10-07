@@ -129,7 +129,9 @@ Or directly:
 cmake -S . -B build -A x64 -DMCOV_JAVA_HOME="C:/Program Files/Eclipse Adoptium/jdk-21.0.11.10-hotspot"
 ```
 
-The distributable is **`build/client/mcov.exe`**. Copy this file alone to another
+The ready-to-use folder is **`build/client/`**, containing only **mcov.exe** and
+the optional **START.txt** guide. To share it, send **`build/mcov-client.zip`**;
+extract the ZIP and double-click mcov.exe. The EXE can also be copied alone to another
 folder or machine. MSVC runtime libraries are linked statically; the Java runtime
 is supplied separately. Developer artifacts remain in `build/bin/`:
 `mcov_overlay.exe`, `mcov_injector.exe`, `mcov_agent.dll` and `tools/`.

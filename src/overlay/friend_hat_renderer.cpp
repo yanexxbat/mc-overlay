@@ -1,4 +1,5 @@
 #include "friend_hat_renderer.hpp"
+#include "soft_glow.hpp"
 #include <numbers>
 
 namespace mcov {
@@ -25,11 +26,13 @@ void Triangle(ImDrawList& draw,ImVec2 a,ImVec2 b,ImVec2 c,ImU32 ca,ImU32 cb,ImU3
     const auto uv=ImGui::GetFontTexUvWhitePixel();
     draw.PrimWriteVtx(a,uv,ca); draw.PrimWriteVtx(b,uv,cb); draw.PrimWriteVtx(c,uv,cc);
 }
-void Sprite(ImDrawList& draw,ImTextureID texture,ImVec2 center,float radius,ImVec4 color,float alpha) {
+void Sprite(ImDrawList& draw,ImTextureID texture,ImVec2 center,float radius,ImVec4 color,float alpha,float distance) {
     const auto lo=draw.GetClipRectMin(),hi=draw.GetClipRectMax();
     if(radius<=0 || center.x+radius<lo.x || center.x-radius>hi.x || center.y+radius<lo.y || center.y-radius>hi.y) return;
+    const int first=draw.VtxBuffer.Size;
     draw.AddImage(texture,{center.x-radius,center.y-radius},{center.x+radius,center.y+radius},
                   {0,0},{1,1},Tint(color,alpha));
+    depth::Tag(draw,first,distance);
 }
 class GlowScope final {
     ImDrawList& draw_;
@@ -99,12 +102,14 @@ bool FriendHatRenderer::Project(const CameraProjection& projection,const FriendH
     ScreenPoint tip{};
     if(!projection.Billboard(world.tip,world.glowRadius,tip,out.tipGlowRadius)) return false;
     out.tip={tip.x+origin.x,tip.y+origin.y};
+    out.tipDepth=projection.Depth(world.tip);
     float left=tip.x,right=tip.x,top=tip.y,bottom=tip.y;
     for(int i=0;i<kFriendHatSegments;++i) {
         ScreenPoint p{};
         // Ein Kegel an der Near Plane wird vollständig übersprungen statt riesige Dreiecke zu erzeugen.
         if(!projection.Billboard(world.brim[i],world.glowRadius,p,out.glowRadius[i])) return false;
         out.brim[i]={p.x+origin.x,p.y+origin.y};
+        out.brimDepth[i]=projection.Depth(world.brim[i]);
         left=std::min(left,p.x); right=std::max(right,p.x); top=std::min(top,p.y); bottom=std::max(bottom,p.y);
         const auto& next=world.brim[(i+1)%kFriendHatSegments];
         const auto& a=world.brim[i];
@@ -131,19 +136,26 @@ void FriendHatRenderer::Draw(ImDrawList& draw,const FriendHatScreen& s,const Fri
     const auto apex=Mix(start,ImVec4(1,1,1,1),.55f);
     for(int i:order) {
         const int j=(i+1)%kFriendHatSegments;
+        const int first=draw.VtxBuffer.Size;
         Triangle(draw,s.tip,s.brim[i],s.brim[j],Tint(apex,opacity*.8f),Tint(colors[i],opacity),Tint(colors[j],opacity));
+        if(s.tipDepth>0) depth::Vertex(draw,first,1.f/s.tipDepth);
+        if(s.brimDepth[i]>0) depth::Vertex(draw,first+1,1.f/s.brimDepth[i]);
+        if(s.brimDepth[j]>0) depth::Vertex(draw,first+2,1.f/s.brimDepth[j]);
     }
     if(!texture || glow<=0) return;
     GlowScope scope(draw,blend);
     for(int i=0;i<kFriendHatSegments;++i) {
-        Sprite(draw,texture,s.brim[i],s.glowRadius[i]*2,colors[i],glow*.025f);
-        Sprite(draw,texture,s.brim[i],s.glowRadius[i],colors[i],glow*.11f);
+        Sprite(draw,texture,s.brim[i],s.glowRadius[i]*2,colors[i],glow*.025f,s.brimDepth[i]);
+        Sprite(draw,texture,s.brim[i],s.glowRadius[i],colors[i],glow*.11f,s.brimDepth[i]);
     }
-    Sprite(draw,texture,s.tip,s.tipGlowRadius*2,start,glow*.12f);
-    Sprite(draw,texture,s.tip,s.tipGlowRadius*.7f,apex,glow*.45f);
+    Sprite(draw,texture,s.tip,s.tipGlowRadius*2,start,glow*.12f,s.tipDepth);
+    Sprite(draw,texture,s.tip,s.tipGlowRadius*.7f,apex,glow*.45f,s.tipDepth);
+    // Nur eine weiche Lichtkante am Rand, keine sichtbaren Kegel-Speichen.
+    soft::TextureScope textureScope(draw,texture);
     for(int i=0;i<kFriendHatSegments;++i) {
-        draw.AddLine(s.brim[i],s.brim[(i+1)%kFriendHatSegments],Tint(Mix(colors[i],ImVec4(1,1,1,1),.35f),glow*.8f),1.25f);
-        if(i%8==0) draw.AddLine(s.tip,s.brim[i],Tint(colors[i],glow*.13f),1.f);
+        auto color=colors[i]; color.w*=glow;
+        soft::Stroke(draw,s.brim[i],s.brim[(i+1)%kFriendHatSegments],
+            std::clamp(s.glowRadius[i]*.25f,.8f,2.f),color,glow,texture,s.brimDepth[i],s.brimDepth[(i+1)%kFriendHatSegments]);
     }
 }
 void FriendHatRenderer::DrawFriends(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,

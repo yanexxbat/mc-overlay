@@ -27,12 +27,13 @@ public final class FrameSynchronizer {
         // Resolve the profile table before registering a transformer that uses
         // it, otherwise loading that table recursively re-enters transform().
         FrameProfiles.isTarget("");
+        DepthProfiles.isTarget("");
         FrameTransformer transformer = new FrameTransformer(inst, signal);
         inst.addTransformer(transformer, true);
         try {
             ArrayList<Class<?>> loaded = new ArrayList<>();
             for (Class<?> type : inst.getAllLoadedClasses()) {
-                if (FrameProfiles.isTarget(type.getName().replace('.', '/'))) {
+                if (FrameProfiles.isTarget(type.getName().replace('.', '/')) || DepthProfiles.isTarget(type.getName().replace('.', '/'))) {
                     if (!inst.isModifiableClass(type)) throw new IllegalStateException("Cannot mark " + type.getName());
                     loaded.add(type);
                 }

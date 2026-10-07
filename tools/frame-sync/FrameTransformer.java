@@ -21,7 +21,7 @@ final class FrameTransformer implements ClassFileTransformer {
     FrameTransformer(Instrumentation inst, Class<?> signals) { this.inst = inst; this.signals=signals; this.signalModule = signals.getModule(); }
     @Override public byte[] transform(Module module, ClassLoader loader, String name, Class<?> previous,
                                       ProtectionDomain domain, byte[] original) {
-        if (!FrameProfiles.isTarget(name)) return null;
+        if (!FrameProfiles.isTarget(name) && !DepthProfiles.isTarget(name)) return null;
         try {
             ClassReader reader = new ClassReader(original);
             boolean[] recognized = {false};
@@ -32,6 +32,7 @@ final class FrameTransformer implements ClassFileTransformer {
                 }
                 @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
                     recognized[0] |= FrameProfiles.marker(name, method, descriptor, (access & Opcodes.ACC_STATIC) != 0);
+                    if((access & Opcodes.ACC_STATIC)==0) recognized[0] |= DepthProfiles.marker(name,method,descriptor);
                     return null;
                 }
             }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
@@ -51,7 +52,9 @@ final class FrameTransformer implements ClassFileTransformer {
                 @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
                     MethodVisitor next = super.visitMethod(access, method, descriptor, signature, exceptions);
                     int role = FrameProfiles.role(name, method, descriptor);
-                    if (role == 0 && FrameProfiles.cameraMask(name)==0) return next;
+                    boolean depthReturn=DepthProfiles.worldReturn(name,method,descriptor);
+                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthReturn) return next;
+                    if(depthReturn) changed[0]=true;
                     if (role != 0) changed[0] = true;
                     return new MethodVisitor(Opcodes.ASM8, next) {
                         @Override public void visitCode() {
@@ -77,6 +80,12 @@ final class FrameTransformer implements ClassFileTransformer {
                             }
                         }
                         @Override public void visitMethodInsn(int opcode,String owner,String callee,String desc,boolean iface) {
+                            // Der Welt-Depth wird vor dem Hand-/GUI-Pass geloescht.
+                            // Den bestehenden Operand-Stack unveraendert lassen.
+                            if(depthReturn && owner.equals("com/mojang/blaze3d/systems/CommandEncoder") && callee.equals("clearDepthTexture") && desc.equals("(Lcom/mojang/blaze3d/textures/GpuTexture;D)V")) {
+                                super.visitVarInsn(Opcodes.ALOAD,0);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","depthReady","(Ljava/lang/Object;)V",false);
+                            }
                             final int axis=FrameProfiles.cameraAxis(name,owner,callee,desc);
                             if(axis!=0 && opcode!=Opcodes.INVOKESTATIC) {
                                 // receiver/partial werden vor dem Getter dupliziert; keine neuen Locals/Branches.

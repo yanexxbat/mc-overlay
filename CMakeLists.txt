@@ -170,6 +170,7 @@ add_executable(mcov_overlay
     src/overlay/world_visuals.cpp
     src/overlay/rockstar_features.cpp
     src/overlay/aura_blend_dx11.cpp
+    src/overlay/depth_renderer.cpp
     src/overlay/process.cpp
     src/common/ipc.cpp
     src/common/log.cpp)
@@ -242,7 +243,7 @@ add_library(mcov_agent SHARED
     src/common/log.cpp)
 
 target_include_directories(mcov_agent PRIVATE src ${JNI_INCLUDE_DIRS})
-target_link_libraries(mcov_agent PRIVATE mcov_settings)
+target_link_libraries(mcov_agent PRIVATE mcov_settings opengl32)
 
 set_target_properties(mcov_agent PROPERTIES
     OUTPUT_NAME "mcov_agent"
@@ -279,7 +280,7 @@ if(Java_JAVAC_EXECUTABLE)
     set(MCOV_FRAME_CLASSES ${CMAKE_BINARY_DIR}/frame-sync-classes)
     set(MCOV_SIGNAL_CLASSES ${CMAKE_BINARY_DIR}/frame-signal-classes)
     set(MCOV_FRAME_SOURCES
-        tools/frame-sync/FrameSynchronizer.java tools/frame-sync/FrameTransformer.java tools/frame-sync/FrameProfiles.java)
+        tools/frame-sync/FrameSynchronizer.java tools/frame-sync/FrameTransformer.java tools/frame-sync/FrameProfiles.java tools/frame-sync/DepthProfiles.java)
     list(TRANSFORM MCOV_FRAME_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
     add_custom_command(
         OUTPUT ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar
@@ -336,6 +337,17 @@ target_link_libraries(mcov PRIVATE mcov_settings imgui user32 gdi32 shell32 dwma
 set_target_properties(mcov PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
 message(STATUS "mcov: open ${CMAKE_BINARY_DIR}/client/mcov.exe (single-file client)")
 
+# Fertiger Ordner mit zwei Dateien und eine ZIP fuer die Weitergabe.
+set(MCOV_CLIENT_ARCHIVE "${CMAKE_BINARY_DIR}/mcov-client.zip")
+add_custom_command(OUTPUT "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/START.txt"
+    COMMAND ${CMAKE_COMMAND} "-DCLIENT_EXE=$<TARGET_FILE:mcov>"
+        "-DGUIDE=${CMAKE_CURRENT_SOURCE_DIR}/docs/client-start.txt"
+        "-DARCHIVE=${MCOV_CLIENT_ARCHIVE}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/distribute_client.cmake"
+    DEPENDS mcov "$<TARGET_FILE:mcov>" docs/client-start.txt tools/distribute_client.cmake
+    COMMENT "Packaging mcov.exe and the optional start guide" VERBATIM)
+add_custom_target(mcov_distribution ALL DEPENDS "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/START.txt")
+
 # Optional headless checks for UI ownership, clipping and input. No JVM needed.
 option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
 if(MCOV_BUILD_UI_CHECKS)
@@ -375,7 +387,7 @@ if(MCOV_BUILD_UI_CHECKS)
     src/overlay/overlay_utilities.cpp
         src/overlay/combat_menu.cpp
         src/overlay/item_icon_atlas_dx11.cpp
-        src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
+        src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp src/overlay/depth_renderer.cpp
         src/overlay/friend_hat_renderer.cpp
         src/overlay/target_cube_renderer.cpp
         src/overlay/world_visuals.cpp
@@ -390,6 +402,10 @@ if(MCOV_BUILD_UI_CHECKS)
     target_include_directories(mcov_aura_check PRIVATE src)
     target_link_libraries(mcov_aura_check PRIVATE mcov_settings imgui)
     add_test(NAME aura_rendering COMMAND mcov_aura_check)
+    add_executable(mcov_depth_check tests/depth_rendering.cpp src/overlay/depth_renderer.cpp)
+    target_include_directories(mcov_depth_check PRIVATE src)
+    target_link_libraries(mcov_depth_check PRIVATE mcov_settings imgui)
+    add_test(NAME depth_rendering COMMAND mcov_depth_check)
     set_tests_properties(aura_rendering PROPERTIES TIMEOUT 30)
 endif()
 
@@ -411,27 +427,31 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     add_executable(mcov_compat_check tests/runtime_profiles.cpp src/agent/jvm_interface.cpp
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_compat_check PRIVATE src ${JNI_INCLUDE_DIRS})
-    target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32)
+    target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32 opengl32)
     add_dependencies(mcov_compat_check mcov_compat_fixtures mcov_frame_agent)
     add_test(NAME runtime_profiles COMMAND mcov_compat_check "${MCOV_JDK_ROOT}" "${CMAKE_BINARY_DIR}/compat-fixtures")
     add_test(NAME portable_client COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/portable_client.py" "$<TARGET_FILE:mcov>"
-        "$<TARGET_FILE_DIR:mcov_overlay>" "${CMAKE_BINARY_DIR}/portable-check")
+        "$<TARGET_FILE_DIR:mcov_overlay>" "${CMAKE_BINARY_DIR}/portable-check" "${MCOV_CLIENT_ARCHIVE}")
     set_tests_properties(runtime_profiles PROPERTIES TIMEOUT 120)
     set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
     add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
             ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class
+            ${MCOV_FRAME_TEST_DIR}/mcov/sync/DepthHookCheck.class
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_TEST_DIR}
-        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_FRAME_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
+            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED -d ${MCOV_FRAME_TEST_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncAttachCheck.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/DepthHookCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameProfiles.java
-        DEPENDS mcov_frame_agent tests/FrameSyncCheck.java tests/FrameSyncAttachCheck.java
-            tools/frame-sync/FrameProfiles.java tools/frame-sync/FrameSignal.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/DepthProfiles.java
+        DEPENDS mcov_frame_agent tests/FrameSyncCheck.java tests/FrameSyncAttachCheck.java tests/DepthHookCheck.java
+            tools/frame-sync/FrameProfiles.java tools/frame-sync/DepthProfiles.java tools/frame-sync/FrameSignal.java
         VERBATIM)
     add_custom_target(mcov_frame_check ALL DEPENDS ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class)
+            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class ${MCOV_FRAME_TEST_DIR}/mcov/sync/DepthHookCheck.class)
     add_dependencies(mcov_frame_check mcov_compat_fixtures)
     add_test(NAME frame_sync COMMAND ${Java_JAVA_EXECUTABLE} "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
         -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
@@ -439,6 +459,10 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     add_test(NAME frame_attach COMMAND ${Java_JAVA_EXECUTABLE} -Djdk.attach.allowAttachSelf=true
         -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
         mcov.sync.FrameSyncAttachCheck "${CMAKE_BINARY_DIR}/compat-fixtures" "${MCOV_TOOLS_DIR}/frame-sync-agent.jar")
+    add_test(NAME depth_hook COMMAND ${Java_JAVA_EXECUTABLE}
+        --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
+        "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar" mcov.sync.DepthHookCheck)
 endif()
 
 option(MCOV_BUILD_ESP_CHECKS "Build camera projection and world-space rig checks" OFF)

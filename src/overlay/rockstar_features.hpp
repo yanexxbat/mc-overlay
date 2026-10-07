@@ -1,5 +1,6 @@
 #pragma once
 #include "world_visuals.hpp"
+#include "soft_glow.hpp"
 #include "keybinds.hpp"
 #include "hud_layout.hpp"
 #include "../combat/target_selector.hpp"
@@ -56,9 +57,9 @@ public:
     bool TakeHitSound() { return std::exchange(hitSound_,false); }
     void DrawWorld(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const Config& c,
                    const combat::Relations& friends,std::uint32_t target,ImVec2 viewport,
-                   ImVec4 start,ImVec4 end,AuraBlend blend,ImTextureID glow,bool reduced=false) const;
+                   ImVec4 start,ImVec4 end,AuraBlend blend,soft::Textures textures,bool reduced=false) const;
     void DrawScreen(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& projection,const Config& c,ImVec2 viewport,
-                    ImVec4 start,ImVec4 end,double now) const;
+                    ImVec4 start,ImVec4 end,double now,AuraBlend blend={},soft::Textures textures={}) const;
     void DrawHud(ImDrawList& draw,HudModule kind,const WorldSnapshot& s,const Config& c,
                  const combat::Relations& friends,ImVec2 size,double now) const;
     static const char* DisplayName(const char* name,bool protect,bool player);

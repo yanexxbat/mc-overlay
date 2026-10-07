@@ -264,3 +264,4 @@ foreach ($helperName in @('AgentLoader.class', 'frame-sync-agent.jar', 'frame-si
 }
 
 Write-Host "`nOpen:  $BuildDir\client\mcov.exe  (portable client - only this file is needed)" -ForegroundColor Cyan
+Write-Host "Share: $BuildDir\mcov-client.zip  (mcov.exe + optional START.txt)" -ForegroundColor Cyan

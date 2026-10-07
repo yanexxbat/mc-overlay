@@ -1,4 +1,5 @@
 #include "target_cube_renderer.hpp"
+#include "depth_tags.hpp"
 #include "menu_motion.hpp"
 #include "imgui_internal.h"
 #include <numbers>
@@ -88,6 +89,7 @@ bool TargetCubeRenderer::Project(const CameraProjection& projection,const Target
         // An der Near Plane vollständig aussetzen statt riesige Glow-Quads zu erzeugen.
         if(!projection.Point(world.corners[i][j],p)) return false;
         out.corners[i][j]={p.x+origin.x,p.y+origin.y};
+        if(j==0) out.depth[i]=projection.Depth(world.corners[i][j]);
         left=std::min(left,p.x); right=std::max(right,p.x); top=std::min(top,p.y); bottom=std::max(bottom,p.y);
     }
     const float margin=out.stroke*4;
@@ -101,8 +103,8 @@ void TargetCubeRenderer::Draw(ImDrawList& draw,const TargetCubeScreen& screen,co
     for(const auto& path:screen.corners) for(auto p:path) if(!std::isfinite(p.x)||!std::isfinite(p.y)) return;
     // Dezente hintere Ecken und Tiefenlinien halten die Würfelform lesbar.
     if(c.showDepth) {
-        for(int i=4;i<8;++i) draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.lime,alpha*.13f),0,screen.stroke*.6f);
-        for(int i=0;i<4;++i) draw.AddLine(screen.corners[i][5],screen.corners[i+4][5],Tint(c.lime,alpha*.12f),screen.stroke*.45f);
+        for(int i=4;i<8;++i) { const int first=draw.VtxBuffer.Size; draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.lime,alpha*.13f),0,screen.stroke*.6f); depth::Tag(draw,first,screen.depth[i]); }
+        for(int i=0;i<4;++i) { const int first=draw.VtxBuffer.Size; draw.AddLine(screen.corners[i][5],screen.corners[i+4][5],Tint(c.lime,alpha*.12f),screen.stroke*.45f); depth::Tag(draw,first,(screen.depth[i]+screen.depth[i+4])*.5f); }
     }
     if(texture && glow>0) {
         GlowScope scope(draw,blend,texture);
@@ -122,19 +124,23 @@ void TargetCubeRenderer::Draw(ImDrawList& draw,const TargetCubeScreen& screen,co
                 for(int layer=0;layer<2;++layer) {
                     const float radius=screen.stroke*(layer?2.2f:4.f);
                     if(p.x+radius<lo.x || p.x-radius>hi.x || p.y+radius<lo.y || p.y-radius>hi.y) continue;
+                    const int first=draw.VtxBuffer.Size;
                     draw.AddImage(texture,{p.x-radius,p.y-radius},{p.x+radius,p.y+radius},{0,0},{1,1},Tint(color,alpha*glow*(layer?.065f:.018f)));
+                    depth::Tag(draw,first,screen.depth[corner]);
                 }
             }
         }
     }
     // Solider Kern mit gewöhnlichem Alpha-Blending nach dem Glow-Callback.
     for(int i=0;i<4;++i) {
+        const int first=draw.VtxBuffer.Size;
         draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(i==3?c.yellow:c.lime,alpha*.95f),0,screen.stroke);
         draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.yellow,alpha*.7f),0,screen.stroke*.42f);
         for(auto end:{screen.corners[i].front(),screen.corners[i].back()}) {
             draw.AddCircleFilled(end,screen.stroke*.5f,Tint(i==3?c.yellow:c.lime,alpha*.95f),16);
             draw.AddCircleFilled(end,screen.stroke*.21f,Tint(c.yellow,alpha*.7f),16);
         }
+        depth::Tag(draw,first,screen.depth[i]);
     }
 }
 } // namespace mcov

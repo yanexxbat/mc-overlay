@@ -49,6 +49,7 @@ struct AuraScreenSample {
     ImVec2 center{};
     float radius{};
     bool visible{};
+    float depth{};
 };
 struct AuraScreenFog {
     std::array<std::array<AuraScreenSample, kAuraTrailSamples>, kAuraMaxOrbs> trails{};

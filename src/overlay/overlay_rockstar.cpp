@@ -10,8 +10,8 @@ namespace {
 namespace panel=control_panel;
 using rockstar::Feature;
 constexpr std::array<const char*,rockstar::kCount> descriptions={
-    "Expanding glow rings follow observed upward movement at your feet. Teleports are excluded; stairs and knockback can also trigger a ring.",
-    "Glowing feather wings follow sampled player shoulders. Your own wings are visible in F5; other players also get wings.",
+    "Soft layered rings and light dust expand at your feet. Teleports are excluded; stairs and knockback can also trigger a ring.",
+    "Soft filled feather wings follow sampled player shoulders. Your own wings are visible in F5; other players also get wings.",
     "A glowing halo follows player heads. Your own halo hides near the first-person camera.",
     "Soft glowing outlines use the sampled hitboxes. Friends use green outlines.",
     "Floating numbers show observed health loss. Other players and environmental damage also count.",
@@ -79,7 +79,7 @@ void Overlay::UpdateRockstar() {
     if(panicActive_&&(visuals_.healthBars||visuals_.distanceText||visuals_.tracers||visuals_.targetInfo)) panicActive_=false;
     rockstarPack_.Input(keyInput_,IsForegroundWindowOwnedBy(target_.pid)&&!menuVisible_&&!hudEditing_&&captureAction_<0,now);
     if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); return; }
-    const auto& s=lastSnapshot_;
+    const auto& s=depthFresh_?depthFrame_->world:lastSnapshot_;
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:s.hasTarget?s.targetEntityId:0;
     const auto oldDeath=std::find_if(rockstarPack_.Markers().begin(),rockstarPack_.Markers().end(),[](const auto& m){return m.used&&m.death;});
@@ -110,7 +110,7 @@ void Overlay::DrawRockstarSettings(Feature feature) {
             dirty|=panel::SliderRow("Distance",&c.range,4,256,"%.0f m"); dirty|=panel::SliderRow("Stroke",&c.size,.5f,4,"%.1f px");
         } else if(feature==Feature::Wings||feature==Feature::Halo||feature==Feature::JumpCircles) {
             dirty|=panel::SliderRow("Size",&c.size,.2f,3,"%.2f x");
-            if(feature==Feature::Wings) dirty|=panel::SliderRow("Animation speed",&c.speed,0,4,"%.2f");
+            if(feature==Feature::Wings||feature==Feature::JumpCircles) dirty|=panel::SliderRow("Animation speed",&c.speed,0,4,"%.2f");
         } else if(feature==Feature::DamageMarkers) {
             dirty|=panel::SliderRow("Text size",&c.size,.5f,2,"%.2f x"); dirty|=panel::SliderRow("Rise speed",&c.speed,0,4,"%.2f");
         } else if(feature==Feature::DamageInfo) {

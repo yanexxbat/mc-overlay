@@ -6,15 +6,22 @@ import struct
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
-exe, binaries, destination = map(Path, sys.argv[1:])
+exe, binaries, destination, archive = map(Path, sys.argv[1:])
 destination.mkdir(parents=True, exist_ok=True)
 destination = Path(tempfile.mkdtemp(prefix='run-', dir=destination))
+with zipfile.ZipFile(archive) as package:
+    assert sorted(package.namelist()) == ['START.txt', 'mcov.exe'], 'share ZIP must contain exactly two root files'
+    assert package.read('mcov.exe') == exe.read_bytes(), 'share ZIP contains an outdated executable'
+    assert 'INSERT' in package.read('START.txt').decode('utf-8'), 'start guide is missing controls'
+    shared = destination / 'Entpackter Client'
+    package.extractall(shared)
 alone = destination / 'Nur eine Datei - Prüfung'
 alone.mkdir(parents=True, exist_ok=True)
 portable = alone / 'mcov.exe'
-shutil.copyfile(exe, portable)
+shutil.copyfile(shared / 'mcov.exe', portable)
 assert list(alone.iterdir()) == [portable], 'portable folder has extra dependencies'
 image = portable.read_bytes()
 pe = struct.unpack_from('<I', image, 0x3c)[0]
@@ -28,6 +35,7 @@ def prepare():
     assert result.returncode == 0, 'standalone resource extraction failed'
 
 prepare()
+assert list(alone.iterdir()) == [portable], 'standalone start left helper files next to the EXE'
 payloads = ['mcov_overlay.exe', 'mcov_agent.dll', 'tools/AgentLoader.class',
             'tools/frame-sync-agent.jar', 'tools/frame-signal.jar']
 versions = list((cache / 'runtime').iterdir())
@@ -49,4 +57,4 @@ for invalid in ['0', 'not-a-pid', '4294967296']:
                             timeout=10, creationflags=subprocess.CREATE_NO_WINDOW,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert result.returncode == 64, 'invalid PID must stop before any game discovery or attachment'
-print('PASS portable GUI: standalone file, exact payloads, Unicode/spaces, idempotency, corruption repair and concurrent extraction')
+print('PASS portable GUI: two-file ZIP, current EXE, standalone file, exact payloads, Unicode/spaces, idempotency, corruption repair and concurrent extraction')

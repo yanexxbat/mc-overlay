@@ -7,28 +7,15 @@
 
 namespace mcov::rockstar {
 namespace {
-constexpr double tau=2*std::numbers::pi,rad=std::numbers::pi/180;
+constexpr double rad=std::numbers::pi/180;
 float Safe(float v,float lo,float hi,float fallback=1) { return std::clamp(std::isfinite(v)?v:fallback,lo,hi); }
 bool Finite(WorldPoint p) { return std::isfinite(p.x)&&std::isfinite(p.y)&&std::isfinite(p.z); }
 double Distance(WorldPoint a,WorldPoint b) { return std::hypot(std::hypot(a.x-b.x,a.z-b.z),a.y-b.y); }
 ImVec4 Mix(ImVec4 a,ImVec4 b,float t) { return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,a.z+(b.z-a.z)*t,a.w+(b.w-a.w)*t}; }
 ImU32 Ink(ImVec4 c,float alpha=1) { c.w*=std::clamp(alpha,0.f,1.f); return ImGui::ColorConvertFloat4ToU32(c); }
 bool Player(const EntitySnapshot& e) { return (e.flags&kEntityIsPlayer)&&!(e.flags&kEntityIsSelf)&&e.health>0&&Finite({e.x,e.y,e.z}); }
-void GlowLine(ImDrawList& d,ImVec2 a,ImVec2 b,ImVec4 color,float width,float glow) {
-    // Begrenzte weiche Schichten; der Aufrufer setzt den vorhandenen additiven Blend-State.
-    if(glow>0) for(int layer=3;layer>=1;--layer) d.AddLine(a,b,Ink(color,.045f*glow),width+layer*3);
-    d.AddLine(a,b,Ink(color),width); d.AddLine(a,b,Ink({1,1,1,color.w},.45f),std::max(.5f,width*.35f));
-}
-void WorldLine(ImDrawList& d,const CameraProjection& p,WorldPoint a,WorldPoint b,ImVec4 color,float width,float glow) {
-    ScreenPoint sa,sb; if(p.Segment(a,b,sa,sb)) GlowLine(d,{sa.x,sa.y},{sb.x,sb.y},color,width,glow);
-}
-void DrawRing(ImDrawList& d,const CameraProjection& p,WorldPoint center,double radius,ImVec4 a,ImVec4 b,float width,float glow) {
-    constexpr int segments=64;
-    for(int i=0;i<segments;++i) {
-        const double first=tau*i/segments,next=tau*(i+1)/segments;
-        WorldLine(d,p,{center.x+std::cos(first)*radius,center.y,center.z+std::sin(first)*radius},
-            {center.x+std::cos(next)*radius,center.y,center.z+std::sin(next)*radius},Mix(a,b,float(i)/segments),width,glow);
-    }
+void WorldLine(ImDrawList& d,const CameraProjection& p,WorldPoint a,WorldPoint b,ImVec4 color,float width,float glow,ImTextureID texture) {
+    ScreenPoint sa,sb; if(p.Segment(a,b,sa,sb)) soft::Stroke(d,{sa.x,sa.y},{sb.x,sb.y},width,color,glow,texture);
 }
 void LineText(ImDrawList& d,float y,const char* text,ImU32 color=IM_COL32(236,236,238,255)) { d.AddText({8,y},color,text); }
 }
@@ -138,22 +125,37 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
 }
 void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& p,const Config& config,
         const combat::Relations& friends,std::uint32_t target,ImVec2 viewport,ImVec4 auraA,ImVec4 auraB,
-        AuraBlend blend,ImTextureID glow,bool reduced) const {
-    (void)glow; (void)viewport;
+        AuraBlend blend,soft::Textures textures,bool reduced) const {
+    (void)viewport;
     bool worldEffects=false;
     for(const auto f:{Feature::JumpCircles,Feature::Wings,Feature::Halo,Feature::GlowEsp,Feature::TargetCircle,Feature::ChestEsp,Feature::BeaconRadius,Feature::ChunkBorders}) worldEffects|=config.Enabled(f);
     if(!worldEffects) return;
     // Getrennte Commands kapseln additives Blending; danach wird der ImGui-State restauriert.
-    struct BlendScope { ImDrawList& d; ~BlendScope(){ d.AddCallback(ImDrawCallback_ResetRenderState,nullptr); } } scope{d};
-    if(blend.begin) d.AddCallback(blend.begin,blend.data);
+    soft::BlendScope blendScope(d,blend); soft::TextureScope glowScope(d,textures.glow);
     auto palette=[&](const Options& o,float alpha=1) {
         auto a=o.auraColours?auraA:o.start,b=o.auraColours?auraB:o.end; a.w*=o.opacity*alpha; b.w*=o.opacity*alpha;
         return std::pair{a,b};
     };
     const auto& jump=config[Feature::JumpCircles];
+    int visibleRings=0;
     if(jump.enabled) for(const auto& r:rings_) {
         const float t=static_cast<float>((now_-r.born)/jump.lifetime);
-        if(t>=0&&t<1) { const auto [a,b]=palette(jump,1-t); DrawRing(d,p,r.p,jump.size*(reduced?1:.15f+.85f*t),a,b,2,jump.glow); }
+        if(t<0||t>=1||visibleRings++>=8) continue;
+        // Schneller weicher Eintritt, ruhiges Wachstum und langsames Auslaufen.
+        const float enter=std::clamp(t/.08f,0.f,1.f),fade=enter*std::pow(std::cos(t*std::numbers::pi_v<float>*.5f),1.5f);
+        const auto [a,b]=palette(jump,fade);
+        const double radius=jump.size*(reduced?1:.45+.75*(1-std::pow(1-t,3))),rotation=reduced?0:(now_-r.born)*jump.speed*.4;
+        auto center=r.p; center.y+=.035; soft::Ring(d,p,center,radius,rotation,a,b,textures,jump.glow);
+        // Deterministische Lichtstaub-Punkte, keine neuen Pools oder Zufalls-Allokationen.
+        for(int i=0;i<24;++i) {
+            const double angle=i*2.399963229728653+rotation,spread=.75+.6*double((i*7)%23)/23;
+            const WorldPoint point{center.x+std::cos(angle)*radius*spread,center.y+.025+(reduced?0:t*.12*(i%3)),center.z+std::sin(angle)*radius*spread};
+            ScreenPoint screen; float size;
+            if(p.Billboard(point,.012f*jump.size,screen,size)&&size<16) {
+                auto color=Mix(a,b,float(i%7)/6); color.w*=.25f+.35f*float(std::sin(angle*3+t*8)*.5+.5);
+                soft::Orb(d,textures.glow,{screen.x,screen.y},std::clamp(size,.5f,4.f),color,jump.glow,p.Depth(point));
+            }
+        }
     }
     int cosmetics=0;
     for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
@@ -166,25 +168,20 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
             ScreenRect box;
             if(p.Bounds(bounds,box)) {
                 auto [a,b]=palette(esp); if(friendEntity) a=b={.2f,1,.6f,esp.opacity};
-                for(int layer=4;layer>=1;--layer) d.AddRect({box.left,box.top},{box.right,box.bottom},Ink(a,.035f*esp.glow),7,0,esp.size+layer*3);
-                const int first=d.VtxBuffer.Size;
-                d.AddRect({box.left,box.top},{box.right,box.bottom},Ink(a),7,0,esp.size);
-                for(int i=first;i<d.VtxBuffer.Size;++i) {
-                    auto& v=d.VtxBuffer[i]; auto color=Mix(a,b,std::clamp((v.pos.y-box.top)/std::max(1.f,box.bottom-box.top),0.f,1.f));
-                    color.w=float((v.col>>IM_COL32_A_SHIFT)&255)/255; v.col=Ink(color);
-                }
+                soft::Outline(d,{box.left,box.top},{box.right,box.bottom},8,esp.size,a,b,esp.glow,textures.glow);
             }
         }
         const auto& circle=config[Feature::TargetCircle];
         if(circle.enabled&&!self&&target&&e.entityId==target) {
             const auto [a,b]=palette(circle); const double spin=reduced?0:now_*circle.speed;
             const double y=bounds.min.y+(circle.mode==1?(bounds.max.y-bounds.min.y)*(.5+.5*std::sin(spin)):.04);
-            DrawRing(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,a,b,2,circle.glow);
+            soft::Ring(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,spin*.2,a,b,textures,circle.glow);
         }
         if((!config.Enabled(Feature::Wings)&&!config.Enabled(Feature::Halo))||!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&(e.distance>64||cosmetics++>=32))) continue;
         const auto rig=BuildHumanoidRig(e);
         const auto& halo=config[Feature::Halo];
-        if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05; DrawRing(d,p,head,e.width*.6*halo.size,a,b,2,halo.glow); }
+        if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05;
+            soft::Ring(d,p,head,e.width*.6*halo.size,reduced?0:now_*.12,a,b,textures,halo.glow); }
         const auto& wings=config[Feature::Wings];
         if(wings.enabled) {
             const auto [a,b]=palette(wings); const double yaw=e.yaw*rad;
@@ -193,11 +190,19 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
                 if(e.pose==kPoseSwimming||e.pose==kPoseGliding) std::swap(y,z);
                 return WorldPoint{base.x+x*std::cos(yaw)-z*std::sin(yaw),base.y+y,base.z+x*std::sin(yaw)+z*std::cos(yaw)};
             };
-            for(int side:{-1,1}) for(int feather=0;feather<9;++feather) {
-                const double t=double(feather)/8,span=wings.size*e.height*.85;
-                const auto end=point(side*span*(.3+.7*t),span*(.6-.95*t),-.15-span*(.15+pulse)*t);
-                WorldLine(d,p,point(side*.1,-t*.15,-.08),end,Mix(a,b,float(t)),2,wings.glow);
-                if(feather) WorldLine(d,p,point(side*span*(.3+.7*(t-.125)),span*(.6-.95*(t-.125)),-.15-span*(.15+pulse)*(t-.125)),end,b,1,wings.glow);
+            soft::TextureScope featherScope(d,textures.feather);
+            for(int side:{-1,1}) for(int feather=0;feather<8;++feather) {
+                const double t=double(feather)/7,span=wings.size*e.height*.72;
+                const double x=side*span*(.4+.6*t),y=span*(.7-1.05*t),z=-.16-span*(.18+pulse)*t;
+                const double dx=x-side*.1,dy=y+t*.10,length=std::hypot(dx,dy),width=span*.20;
+                const double nx=-dy/length*width,ny=dx/length*width;
+                auto ca=Mix(a,b,float(t)),cb=soft::Mix(ca,{1,1,1,ca.w},.45f); ca.w*=.7f; cb.w*=.8f;
+                const std::array<WorldPoint,4> quad={point(side*.1+nx,-t*.10+ny,-.10),point(x+nx,y+ny,z),point(x-nx,y-ny,z),point(side*.1-nx,-t*.10-ny,-.10)};
+                soft::WorldQuad(d,p,quad,textures.feather,ca,cb);
+                if(wings.glow>0) { auto mist=ca; mist.w*=.18f*wings.glow;
+                    const std::array<WorldPoint,4> fog={point(side*.1+nx*2,-t*.10+ny*2,-.10),point(x+nx*2,y+ny*2,z),point(x-nx*2,y-ny*2,z),point(side*.1-nx*2,-t*.10-ny*2,-.10)};
+                    soft::WorldQuad(d,p,fog,textures.feather,mist,mist);
+                }
             }
         }
     }
@@ -208,27 +213,24 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         for(int x=cx-radius;x<=cx+radius;++x) for(int z=cz-radius;z<=cz+radius;++z) {
             const double lowX=x*16.,lowZ=z*16.,y=std::floor(s.posY);
             const WorldPoint points[]={{lowX,y,lowZ},{lowX+16,y,lowZ},{lowX+16,y,lowZ+16},{lowX,y,lowZ+16}};
-            for(int i=0;i<4;++i) { WorldLine(d,p,points[i],points[(i+1)%4],a,1,borders.glow); auto top=points[i]; top.y+=16; WorldLine(d,p,points[i],top,b,1,borders.glow); }
+            for(int i=0;i<4;++i) { WorldLine(d,p,points[i],points[(i+1)%4],a,1,borders.glow,textures.glow); auto top=points[i]; top.y+=16; WorldLine(d,p,points[i],top,b,1,borders.glow,textures.glow); }
         }
     }
     const auto& beacon=config[Feature::BeaconRadius];
     if(beacon.enabled) for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) if(block.kind==kBlockBeacon) {
         if(Distance({block.x,block.y,block.z},{s.posX,s.posY,s.posZ})>beacon.range) continue;
-        const auto [a,b]=palette(beacon); DrawRing(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,a,b,1,beacon.glow);
-        WorldLine(d,p,{block.x+.5,block.y+1,block.z+.5},{block.x+.5,block.y+32,block.z+.5},b,2,beacon.glow);
+        const auto [a,b]=palette(beacon); soft::Ring(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,reduced?0:now_*.08,a,b,textures,beacon.glow);
+        WorldLine(d,p,{block.x+.5,block.y+1,block.z+.5},{block.x+.5,block.y+32,block.z+.5},b,2,beacon.glow,textures.glow);
     }
     const auto& storage=config[Feature::ChestEsp];
     if(storage.enabled) for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) if(block.kind==kBlockChest||block.kind>=kBlockShulker) {
         if(Distance({block.x,block.y,block.z},{s.posX,s.posY,s.posZ})>storage.range) continue;
         ScreenRect box; if(p.Bounds({{block.x,block.y,block.z},{block.x+1,block.y+1,block.z+1}},box)) {
-            const auto [a,b]=palette(storage); GlowLine(d,{box.left,box.top},{box.right,box.top},a,2,storage.glow);
-            GlowLine(d,{box.right,box.top},{box.right,box.bottom},b,2,storage.glow);
-            GlowLine(d,{box.right,box.bottom},{box.left,box.bottom},a,2,storage.glow);
-            GlowLine(d,{box.left,box.bottom},{box.left,box.top},b,2,storage.glow);
+            const auto [a,b]=palette(storage); soft::Outline(d,{box.left,box.top},{box.right,box.bottom},6,1.5f,a,b,storage.glow,textures.glow);
         }
     }
 }
-void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& projection,const Config& c,ImVec2 size,ImVec4 a,ImVec4 b,double now) const {
+void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& projection,const Config& c,ImVec2 size,ImVec4 a,ImVec4 b,double now,AuraBlend blend,soft::Textures textures) const {
     const auto& hurt=c[Feature::DamageInfo];
     const float fade=std::clamp(1-float((now-hurtAt_)/hurt.lifetime),0.f,1.f)*hurt.opacity;
     if(hurt.enabled&&fade>0) {
@@ -252,18 +254,22 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
             d.AddText(ImGui::GetFont(),fontSize,pos,Ink(color),text);
         }
     }
+    {
+    soft::BlendScope blendScope(d,blend); soft::TextureScope textureScope(d,textures.glow);
     const auto& cross=c[Feature::Crosshair];
     if(cross.enabled) {
         const ImVec2 center{size.x*.5f,size.y*.5f}; auto color=cross.auraColours?(s.hasTarget?b:a):cross.start; color.w*=cross.opacity;
         const float gap=cross.range+(cross.mode==3?std::min(stats_.speed*1.5f,12.f):0),length=cross.size,width=std::max(.7f,cross.speed);
         if(cross.mode==1) {
-            for(int layer=3;layer>=1;--layer) d.AddCircle(center,gap+length,Ink(color,.06f*cross.glow),40,width+layer*2);
-            d.AddCircle(center,gap+length,Ink(color),40,width);
+            for(int i=0;i<48;++i) {
+                const double first=i*2*std::numbers::pi/48,next=(i+1)*2*std::numbers::pi/48;
+                soft::Stroke(d,{center.x+float(std::cos(first))*(gap+length),center.y+float(std::sin(first))*(gap+length)},
+                    {center.x+float(std::cos(next))*(gap+length),center.y+float(std::sin(next))*(gap+length)},width,color,cross.glow,textures.glow);
+            }
         } else if(cross.mode==2) {
-            for(int layer=3;layer>=1;--layer) d.AddCircleFilled(center,std::max(1.f,length*.3f)+layer,Ink(color,.06f*cross.glow),16);
-            d.AddCircleFilled(center,std::max(1.f,length*.3f),Ink(color),16);
+            soft::Orb(d,textures.glow,center,std::max(1.f,length*.3f),color,cross.glow);
         }
-        else for(int side:{-1,1}) { GlowLine(d,{center.x+side*gap,center.y},{center.x+side*(gap+length),center.y},color,width,cross.glow); GlowLine(d,{center.x,center.y+side*gap},{center.x,center.y+side*(gap+length)},color,width,cross.glow); }
+        else for(int side:{-1,1}) { soft::Stroke(d,{center.x+side*gap,center.y},{center.x+side*(gap+length),center.y},width,color,cross.glow,textures.glow); soft::Stroke(d,{center.x,center.y+side*gap},{center.x,center.y+side*(gap+length)},width,color,cross.glow,textures.glow); }
     }
     const auto& arrows=c[Feature::Arrows];
     if(arrows.enabled) for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) if(Player(e)&&e.distance<=arrows.range) {
@@ -273,17 +279,20 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
         const float x=float(std::sin(bearing)),y=-float(std::cos(bearing)); const float rr=std::min(size.x,size.y)*.38f;
         const ImVec2 p{size.x*.5f+x*rr,size.y*.5f+y*rr}; auto color=arrows.auraColours?a:arrows.start; color.w*=arrows.opacity;
         const float w=arrows.size;
-        auto triangle=[&](float width,ImU32 ink) { d.AddTriangleFilled({p.x+x*width,p.y+y*width},{p.x-x*width*.7f+y*width*.6f,p.y-y*width*.7f-x*width*.6f},{p.x-x*width*.7f-y*width*.6f,p.y-y*width*.7f+x*width*.6f},ink); };
-        auto edge=arrows.auraColours?b:arrows.end; edge.w*=arrows.opacity;
-        for(int layer=3;layer>=1;--layer) triangle(w+layer*2,Ink(edge,.08f*arrows.glow));
-        triangle(w,Ink(color));
-        char text[20]; std::snprintf(text,sizeof(text),"%.0fm",e.distance); d.AddText({p.x-10,p.y+w+3},Ink(color),text);
+        const ImVec2 tip{p.x+x*w,p.y+y*w},left{p.x-x*w*.7f+y*w*.6f,p.y-y*w*.7f-x*w*.6f},right{p.x-x*w*.7f-y*w*.6f,p.y-y*w*.7f+x*w*.6f};
+        soft::Stroke(d,left,tip,1.5f,color,arrows.glow,textures.glow); soft::Stroke(d,tip,right,1.5f,color,arrows.glow,textures.glow);
+        char text[20]; std::snprintf(text,sizeof(text),"%.0fm",e.distance);
+        // Schrift verwendet den Font-Atlas und normale Transparenz, keine Gauß-UVs.
+        if(blend.begin) d.AddCallback(ImDrawCallback_ResetRenderState,nullptr);
+        { soft::TextureScope font(d,ImGui::GetIO().Fonts->TexID); d.AddText({p.x-10,p.y+w+3},Ink(color),text); }
+        if(blend.begin) d.AddCallback(blend.begin,blend.data);
+    }
     }
     for(const auto& m:markers_) if(m.used&&(m.death?c.Enabled(Feature::DeathCoordinates):c.Enabled(Feature::Waypoints))&&
             !std::memcmp(m.dimension.data(),s.dimension,kNameLen)&&!std::memcmp(m.server.data(),s.serverAddress,kAddrLen)) {
         ScreenPoint screen; if(!projection.Point({m.p.x,m.p.y+.8,m.p.z},screen)) continue;
         char text[96]; std::snprintf(text,sizeof(text),"%s | %.0f m",m.label.data(),Distance(m.p,{s.posX,s.posY,s.posZ}));
-        d.AddCircle({screen.x,screen.y},6,IM_COL32(174,105,209,255),16,2);
+        { soft::BlendScope glow(d,blend); soft::Orb(d,textures.glow,{screen.x,screen.y},5,{.68f,.41f,.82f,1}); }
         d.AddText({screen.x+10,screen.y-6},IM_COL32(236,236,238,255),text);
     }
 }

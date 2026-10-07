@@ -25,6 +25,8 @@ struct FriendHatWorld {
 };
 struct FriendHatScreen {
     ImVec2 tip{};
+    float tipDepth{};
+    std::array<float,kFriendHatSegments> brimDepth{};
     std::array<ImVec2,kFriendHatSegments> brim{};
     std::array<float,kFriendHatSegments> glowRadius{};
     std::array<double,kFriendHatSegments> depth{};

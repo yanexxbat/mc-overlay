@@ -1,4 +1,5 @@
 #include "world_visuals.hpp"
+#include "soft_glow.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -79,10 +80,9 @@ void Star(ImDrawList& draw,ImVec2 p,float size,float angle,ImVec4 colour,float a
         draw.AddConvexPolyFilled(points.data(),4,Colour(Mix(colour,{1,1,1,colour.w},.5f),alpha));
     }
 }
-void GlowLine(ImDrawList& draw,ImVec2 a,ImVec2 b,float width,ImVec4 colour,float alpha,float intensity=1) {
-    draw.AddLine(a,b,Colour(colour,alpha*.05f*intensity),width*7);
-    draw.AddLine(a,b,Colour(colour,alpha*.16f*intensity),width*3);
-    draw.AddLine(a,b,Colour(colour,alpha),width);
+void GlowLine(ImDrawList& draw,ImVec2 a,ImVec2 b,float width,ImVec4 colour,float alpha,float intensity,ImTextureID texture,float aDepth=0,float bDepth=0) {
+    soft::TextureScope scope(draw,texture); colour.w*=alpha;
+    soft::Stroke(draw,a,b,width,colour,intensity,texture,aDepth,bDepth);
 }
 // Der normale ImGui-Zustand wird auch nach leeren/geclippten Effekten wiederhergestellt.
 struct BlendScope {
@@ -307,8 +307,11 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
                 if(config.trails.shape==TrailShape::Dots) {
                     if(i%4&&i!=track.count) continue;
                     float radius;
-                    if(projection.Billboard({b.p.x,b.p.y+.25,b.p.z},Safe(config.trails.width,.035f,.01f,.15f)*1.5f,pb,radius)&&Visible(pb,radius*3,viewport))
+                    if(projection.Billboard({b.p.x,b.p.y+.25,b.p.z},Safe(config.trails.width,.035f,.01f,.15f)*1.5f,pb,radius)&&Visible(pb,radius*3,viewport)) {
+                        const int first=draw.VtxBuffer.Size;
                         Orb(draw,Pixel(pb,origin),std::clamp(radius,.5f,24.f),colour,alpha,glow,Safe(config.trails.glow,1,0,2));
+                        depth::Tag(draw,first,projection.Depth({b.p.x,b.p.y+.25,b.p.z}));
+                    }
                     continue;
                 }
                 if(config.trails.shape==TrailShape::Ribbon) {
@@ -322,6 +325,8 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
                         if(draw.VtxBuffer.Size>=first+4) {
                             draw.VtxBuffer[first+2].col=Colour(colour,alpha*.025f);
                             draw.VtxBuffer[first+3].col=Colour(colour,alpha*.025f);
+                            const WorldPoint vertices[]={lowA,lowB,{lowB.x,lowB.y+height,lowB.z},{lowA.x,lowA.y+height,lowA.z}};
+                            for(int v=0;v<4;++v) depth::Vertex(draw,first+v,1.f/projection.Depth(vertices[v]));
                         }
                     }
                 }
@@ -329,7 +334,7 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
                     ScreenPoint middle; float radius;
                     if(projection.Billboard({(lowA.x+lowB.x)*.5,(lowA.y+lowB.y)*.5,(lowA.z+lowB.z)*.5},
                         Safe(config.trails.width,.035f,.01f,.15f),middle,radius))
-                        GlowLine(draw,Pixel(pa,origin),Pixel(pb,origin),std::clamp(radius,1.f,12.f),colour,alpha,Safe(config.trails.glow,1,0,2));
+                        GlowLine(draw,Pixel(pa,origin),Pixel(pb,origin),std::clamp(radius,1.f,12.f),colour,alpha,Safe(config.trails.glow,1,0,2),glow,projection.Depth(lowA),projection.Depth(lowB));
                 }
             }
         }
@@ -337,8 +342,10 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
             ScreenPoint projected; float radius;
             if(!projection.Billboard(position,worldSize,projected,radius)||!Visible(projected,radius*4,viewport)) return;
             radius=std::clamp(radius,.4f,32.f);
+            const int first=draw.VtxBuffer.Size;
             if(star) Star(draw,Pixel(projected,origin),radius,reduceMotion ? p.phase : spin,colour,alpha,glow,intensity);
             else Orb(draw,Pixel(projected,origin),radius,colour,alpha,glow,intensity);
+            depth::Tag(draw,first,projection.Depth(position));
         };
         if(config.hits.enabled) for(const auto& p:hits_) if(p.valid) {
             const float age=float(now_-p.born),life=Safe(config.hits.lifetime,.9f,.2f,3);
@@ -385,6 +392,7 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
             if(!projection.Billboard(ring.p,width,unused,stroke)) continue;
             stroke=std::clamp(stroke,.7f,8.f);
             std::array<ImVec2,kRingSegments> points{};
+            std::array<float,kRingSegments> distances{};
             bool valid=true;
             for(int i=0;i<kRingSegments;++i) {
                 const auto v=circle_[i];
@@ -392,19 +400,23 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
                     ScreenPoint p;
                     if(!projection.Point({ring.p.x+v.x*radius,ring.p.y,ring.p.z+v.y*radius},p)) { valid=false; break; }
                     points[i]=Pixel(p,origin);
-                } else points[i]={center.x+origin.x+v.x*screenRadius,center.y+origin.y+v.y*screenRadius};
+                    distances[i]=projection.Depth({ring.p.x+v.x*radius,ring.p.y,ring.p.z+v.y*radius});
+                } else { points[i]={center.x+origin.x+v.x*screenRadius,center.y+origin.y+v.y*screenRadius}; distances[i]=projection.Depth(ring.p); }
             }
             if(!valid||screenRadius>std::max(viewport.x,viewport.y)) continue;
+            TextureScope ringTexture(draw,glow);
             for(int i=0;i<kRingSegments;++i) {
                 const auto colour=Palette(palette,start,end,.5f+.5f*std::sin(float(i)*6.2831853f/kRingSegments+ring.mix*6.2831853f));
-                GlowLine(draw,points[i],points[(i+1)%kRingSegments],stroke,colour,alpha*.75f,intensity);
+                GlowLine(draw,points[i],points[(i+1)%kRingSegments],stroke,colour,alpha*.75f,intensity,glow,distances[i],distances[(i+1)%kRingSegments]);
             }
             if(glow&&intensity>0) {
                 TextureScope texture(draw,glow);
                 for(int i=0;i<kRingSegments;++i) {
                     const auto colour=Palette(palette,start,end,.5f+.5f*std::sin(float(i)*6.2831853f/kRingSegments+ring.mix*6.2831853f));
                     // Überlappende Nebel-Sprites statt harter, breiter Polygonränder.
+                    const int first=draw.VtxBuffer.Size;
                     Sprite(draw,glow,points[i],stroke*6,colour,alpha*.09f*intensity);
+                    depth::Tag(draw,first,distances[i]);
                 }
             }
         }
@@ -413,9 +425,12 @@ void WorldVisualsRenderer::Draw(ImDrawList& draw,const CameraProjection& project
             const float age=float(now_-sample.born)/Safe(config.crumbs.lifetime,2,.3f,4);
             if(age<0||age>=1||Distance(sample.p,local_)>Safe(config.maxDistance,64,4,128)) continue;
             ScreenPoint p; float radius;
-            if(projection.Billboard(sample.p,Safe(config.crumbs.size,.06f,.02f,.15f),p,radius)&&Visible(p,radius*4,viewport))
+            if(projection.Billboard(sample.p,Safe(config.crumbs.size,.06f,.02f,.15f),p,radius)&&Visible(p,radius*4,viewport)) {
+                const int first=draw.VtxBuffer.Size;
                 Orb(draw,Pixel(p,origin),std::clamp(radius,.4f,20.f),Palette(config.crumbs.colours,start,end,age),
                     (1-age)*(1-age)*Safe(config.crumbs.opacity,.75f,0,1),glow,Safe(config.crumbs.glow,1,0,2));
+                depth::Tag(draw,first,projection.Depth(sample.p));
+            }
         }
     }
     draw.PopClipRect();

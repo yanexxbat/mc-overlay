@@ -37,6 +37,7 @@
 #include "../common/chunk_hints.hpp"
 #include "combat_live.hpp"
 #include "item_assist_live.hpp"
+#include "depth_capture.hpp"
 
 using namespace mcov;
 
@@ -51,6 +52,8 @@ std::thread       g_sampler;
 std::atomic<bool> g_stop{false};
 std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
+mcov::agent::DepthCapture g_depthCapture;
+void JNICALL OnDepthReady(JNIEnv* env,jclass,jobject renderer,jlong epoch) { g_depthCapture.Capture(env,renderer,static_cast<std::uint64_t>(epoch)); }
 mcov::agent::MinecraftCombat g_combat;
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
 jboolean JNICALL OnMacroUse(JNIEnv* env,jclass,jobject client);
@@ -1418,6 +1421,7 @@ void SamplerThread() {
         // A discarded geometry capture must not look like a dead connection.
         // Keep liveness separate while loading, paused or awaiting the camera.
         const auto loopNow = ::GetTickCount64();
+        g_depthCapture.RefreshRequest(env);
         if (loopNow >= nextHeartbeatTick) {
             if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
             nextHeartbeatTick = loopNow + 100;
@@ -1458,6 +1462,9 @@ void SamplerThread() {
             syncAttempted = true;
             if (g_frameSync.Install(env)) {
                 MCOV_LOG_INFO("frame synchronization active: %s; mixed render/tick snapshots are rejected", bindings.set->id);
+                if(g_depthCapture.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnDepthReady)))
+                    MCOV_LOG_INFO("OpenGL world-depth capture armed: %s",bindings.set->id);
+                else MCOV_LOG_INFO("world-depth capture not available for this renderer/profile");
                 if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
                     MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
                 else MCOV_LOG_WARN("inventory client-tick bridge unavailable");
@@ -1516,6 +1523,7 @@ void SamplerThread() {
                 waitingSinceTick = 0;
                 waitAnnounced = false;
                 candidate.frameIndex = ++frame;
+                candidate.renderEpoch = stamp.sequence;
                 snapshot = candidate;
                 SetStatus(AgentStatus::Running);
                 // Publish geometry BEFORE equipment, telemetry and block scanning.
@@ -1607,6 +1615,7 @@ void SamplerThread() {
 
     SetStatus(AgentStatus::Detaching);
     if(scanWorld) env->DeleteWeakGlobalRef(scanWorld);
+    g_depthCapture.Close(env);
     g_combat.Close(env);
     g_inventory.Close(env);
     g_frameSync.Close(env);

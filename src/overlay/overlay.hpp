@@ -32,6 +32,7 @@
 #include "combat_menu.hpp"
 #include "aura_renderer.hpp"
 #include "aura_blend_dx11.hpp"
+#include "depth_renderer.hpp"
 #include "friend_hat_renderer.hpp"
 #include "target_cube_renderer.hpp"
 #include "item_icon_atlas_dx11.hpp"
@@ -96,6 +97,7 @@ struct CombatSettings {
 };
 
 struct OverlaySettings {
+    bool occludeWorldEffects = true;
     float fovTrim              = 0.0f; // manual FOV correction, degrees
     bool  clickThroughWhenIdle = true;
     bool  hideWhenUnfocused    = true;
@@ -215,6 +217,11 @@ private:
     TargetCubeConfig targetCubeConfig_{};
     bool markerDetailsOpen_=false;
     AuraBlendDX11 auraBlend_{};
+    DepthChannel depthChannel_;
+    DepthRenderer depthRenderer_;
+    std::unique_ptr<DepthFrame> depthFrame_;
+    bool depthActive_{},depthFresh_{};
+    std::uint64_t depthConnectAt_{};
     FriendHatRenderer friendHats_{};
     FriendHatConfig friendHatConfig_{};
     LocalHatConfig localHatConfig_{};

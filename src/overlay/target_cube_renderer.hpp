@@ -27,6 +27,7 @@ struct TargetCubeWorld {
 };
 struct TargetCubeScreen {
     std::array<std::array<ImVec2,kCubeCornerPoints>,8> corners{};
+    std::array<float,8> depth{};
     float stroke{};
 };
 // Rein visuell: Zielbindung kommt vom Combat-Report, Geometrie vom aktuellen

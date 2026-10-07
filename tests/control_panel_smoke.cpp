@@ -421,6 +421,26 @@ void RockstarChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCont
     };
     render({1280,800}); SaveFrame(device,context,output/"rockstar-effects.png");
     render({480,360}); SaveFrame(device,context,output/"rockstar-effects-small.png");
+    // Eigene Bodenansicht: Der Ring muss auch ohne ESP/Wings ruhig und weich wirken.
+    config={}; config[Feature::JumpCircles].enabled=true; config[Feature::JumpCircles].auraColours=false;
+    config[Feature::JumpCircles].start={.38f,1,.62f,1}; config[Feature::JumpCircles].end={.68f,1,.8f,1};
+    scene.entityCount=0; scene.camX=0; scene.camY=2.1; scene.camZ=-2.8; scene.yawDeg=0; scene.pitchDeg=37;
+    scene.posX=scene.posZ=scene.posY=0; scene.health=20; pack.ResetWorld();
+    scene.frameIndex=10; pack.Update(scene,now,config,0); scene.posY=.2f; scene.frameIndex++; pack.Update(scene,now+.05,config,0);
+    const auto jumpPreview=[&](double age,const char* name) {
+        auto& io=ImGui::GetIO(); io.DisplaySize={900,600}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        const mcov::CameraProjection camera(scene,900,600); auto& draw=*ImGui::GetBackgroundDrawList();
+        for(int z=-5;z<6;++z) for(int x=-5;x<6;++x) {
+            const std::array<mcov::WorldPoint,4> corners={mcov::WorldPoint{double(x),0,double(z)},{double(x+1),0,double(z)},{double(x+1),0,double(z+1)},{double(x),0,double(z+1)}};
+            std::array<ImVec2,4> points{}; bool visible=true;
+            for(int i=0;i<4;++i) { mcov::ScreenPoint p; if(!camera.Point(corners[i],p)) {visible=false;break;} points[i]={p.x,p.y}; }
+            if(visible) draw.AddConvexPolyFilled(points.data(),4,(x+z)%2?IM_COL32(39,44,39,255):IM_COL32(46,51,46,255));
+        }
+        pack.Update(scene,now+.05+age,config,0);
+        mcov::OverlayUiCheck::DrawEsp(overlay,scene); ImGui::Render(); SaveFrame(device,context,output/name);
+    };
+    jumpPreview(.14,"jump-soft-enter.png"); jumpPreview(.45,"jump-soft-ring.png"); jumpPreview(.95,"jump-soft-fade.png");
+    for(int i=0;i<=int(Feature::Arrows);++i) config.modules[i].enabled=true;
     for(int index:{18,20,21,24,25}) {
         SelectSubTab(overlay,Page::Visuals,"visual_sections",index,26);
         SaveFrame(device,context,output/(std::string("rockstar-settings-")+std::to_string(index)+".png"));

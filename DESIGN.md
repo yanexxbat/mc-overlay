@@ -134,7 +134,14 @@ See docs/world-visuals.md for exact controls, bounds and external-depth limitati
 
 Preserve the classic menu; each new function gets the existing scrolling function
 tabs, compact rows and initially unbound keybind. New effects share Aura colours,
-use bounded pools and layered glow, and render before ESP/HUD. World and screen
+use bounded pools and layered glow, and render before ESP/HUD. Jump circles use
+soft concentric alpha masks with rotating wisps, light dust, gentle expansion and
+a cosine fade. Wings use filled feather masks rather than skeletal spokes; hats
+keep a translucent surface with a Gaussian brim and no visible ribs. Trails and
+helper outlines use textured Gaussian strokes. Generate masks once during GPU
+initialization, never in the frame loop. Clip and tessellate ground textures for
+stable projection in first person; cap visible jump rings at eight.
+World and screen
 positions reuse the same camera projection and FOV trim. Session metrics and
 damage/death feedback describe observations, not guaranteed attacker attribution.
 Panic clears transient effects and deactivates held modules without restoring their

@@ -28,8 +28,8 @@ werden in der Zahl 29 nicht doppelt gezählt.
 
 | Menü | Funktion | Verhalten / relevante Regler |
 |---|---|---|
-| Visuals | Jump circles | Expandierende, ausblendende Ringe an den Füßen bei beobachteter Aufwärtsbewegung. Größe, Lebensdauer, Glow, Farben. |
-| Visuals | Wings | Leuchtende Federflügel an den Schultern. Größe und Flügelschlag; eigener Spieler in F5, höchstens 32 weitere Spieler innerhalb 64 m. |
+| Visuals | Jump circles | Drei sanft drehende Nebel-/Lichtband-Schichten mit Lichtstaub an den Füßen. Weiches Wachstum und Ausblenden bei beobachteter Aufwärtsbewegung. Größe, Lebensdauer, Animation speed, Glow, Farben. |
+| Visuals | Wings | Gefüllte, weich auslaufende Lichtfedern an den Schultern. Größe und Flügelschlag; eigener Spieler in F5, höchstens 32 weitere Spieler innerhalb 64 m. |
 | Visuals | Halo / Nimb | Leuchtender Ring über Spieler-Köpfen; eigener Halo in F5. Größe, Glow, Farben. |
 | Visuals | Glow ESP | Abgerundete Hitbox-Umrisse mit weichen Schichten und Farbverlauf. Spieler oder alle lebenden Entitäten; Freunde grün. Distanz und Linienstärke. |
 | Visuals | Damage markers | Aufsteigende Zahlen bei beobachtetem HP-Verlust. Textgröße, Aufstieg, Lebensdauer und Farben. |
@@ -90,9 +90,22 @@ werden in der Zahl 29 nicht doppelt gezählt.
 `rockstar_features.hpp/.cpp` hält begrenzte Arrays für 256 HP-Beobachtungen,
 96 Schadensanzeigen, 32 Sprungringe, acht Nachrichten und 16 Wegpunkte. Weltgeometrie,
 Bildschirmgeometrie und HUD-Zeichnung sind getrennt. Alle Welt-/Screen-Effekte nutzen
-dieselbe Kamera-Projektion einschließlich FOV-Trim wie ESP. Glow-Linien verwenden
-mehrere Alpha-Schichten im bestehenden additiven D3D11-Blend-State; Text/HUD danach
-normales Alpha-Blending. Kein zusätzlicher Blur- oder Shader-Pass.
+dieselbe Kamera-Projektion einschließlich FOV-Trim wie ESP. `soft_glow.hpp` zeichnet
+Gauß-Streifen statt breiter Linien und verwendet einmalig erzeugte Alpha-Masken
+für Ringe und gefüllte Federn. Bodenringe bestehen aus kleinen Textur-Zellen;
+Near-Plane- und Viewport-Clipping erhalten den sichtbaren Teil eines nahen Rings.
+Höchstens acht Sprungringe mit je 24 Lichtstaub-Punkten werden gleichzeitig
+gezeichnet. China-Hats behalten ihren transparenten Kegel, mit weichem Lichtsaum
+ohne Speichen. Trails, Crosshair, Offscreen-Arrows und Lagerumrisse teilen den
+weichen Glow. Additives D3D11-Blending bleibt gekapselt; Text/HUD verwenden danach
+normales Alpha-Blending. Kein zusätzlicher Blur- oder Shader-Pass, keine neuen
+Texturen oder Effekt-Pools pro Frame. Reduced motion unterbindet Ringrotation,
+Wachstum, Staubaufstieg und Flügelschlag; das Ausblenden bleibt erhalten.
+
+Das weiche Visual-Update benötigt keinen neuen Agenten und verändert IPC 17 nicht.
+Bei bereits aktuellem Agenten genügt es, den bisherigen Client mit END zu beenden
+und die neue `build/client/mcov.exe` zu öffnen. Unter **Visuals → Jump circles**
+lassen sich Farben unabhängig von der Aura wählen, wenn **Aura colours** aus ist.
 
 `overlay_rockstar.cpp` integriert Einstellungen, Sounds, Panic und Ereignisse;
 `overlay_input.cpp` ordnet Keybinds zu und speichert Parameter. Der Render-Thread
@@ -102,6 +115,7 @@ die vorhandene Translation-Key-Tabelle des separaten Agent-Scanners.
 Die Prüfungen decken Snapshot-Deduplizierung, HP-Ereignisse, Respawn/Weltwechsel,
 Teleport-Ausschluss, CPS-Zeitfenster, Parametergrenzen, Panic mit Hold-Key,
 Mittelklick/Fokus, Speicherung samt Anführungszeichen im Wegpunktnamen und endliche
-Projektionsgeometrie ab. Die tatsächliche UI wird offscreen mit D3D11 gerendert,
+Projektionsgeometrie ab. Maskenkanten, transparente Ringmitte und Clipping inklusive
+UV-/Draw-State-Grenzen werden ebenfalls geprüft. Die tatsächliche UI wird offscreen mit D3D11 gerendert,
 inklusive aller Subtabs, Glow-Effekten, neuer HUD-Widgets und kleinen Viewports.
 Das ersetzt keinen Live-Test in Minecraft.

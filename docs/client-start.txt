@@ -1,0 +1,28 @@
+mcov - Schnellstart
+==================
+
+Du brauchst nur mcov.exe. Diese Anleitung ist optional.
+Den Ordner kannst du beliebig verschieben oder weitergeben.
+
+1. Minecraft Java Edition starten.
+2. mcov.exe doppelklicken.
+3. Dein Minecraft auswaehlen und auf "Client starten" klicken.
+4. Zu Minecraft wechseln. Bei Problemen mit Vollbild: Fenstermodus verwenden.
+
+INSERT  Menue oeffnen / schliessen
+F6      HUD bearbeiten
+END     Client beenden
+
+Wenn "JDK-Ordner auswaehlen" erscheint:
+Waehle einen installierten 64-Bit-JDK passend zu Minecrafts Java-Version.
+Ein JRE allein reicht zum Verbinden nicht. Der Client installiert Java nicht.
+
+Einstellungen, Logs und automatisch vorbereitete Hilfsdateien liegen unter:
+%LOCALAPPDATA%\mcov
+Neben mcov.exe musst du keine DLLs oder Tools ablegen.
+
+Update: Den alten Client mit END beenden, dann mcov.exe ersetzen.
+Falls der Client einen veralteten Agenten meldet, Minecraft neu starten.
+
+Beim Weitergeben genuegt mcov.exe oder die Datei mcov-client.zip.
+Die ZIP enthaelt nur mcov.exe und diese START.txt.

@@ -39,6 +39,7 @@ inline bool ProjectAuraFog(const CameraProjection& projection, const AuraWorldFo
         float radius=0;
         screen.visible=projection.Billboard({sample.x,sample.y,sample.z},sample.radius,center,radius) && radius>=.25f;
         if (screen.visible) {
+            screen.depth=projection.Depth({sample.x,sample.y,sample.z});
             screen.center={center.x+origin.x,center.y+origin.y};
             screen.radius=std::min(radius,limit);
             any=true;

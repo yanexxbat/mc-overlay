@@ -2,6 +2,13 @@ package mcov;
 
 /** Bootstrap-visible frame signals and the explicitly armed client-tick bridge. */
 public final class FrameSignal {
+    public static volatile boolean depthEnabled;
+    private static native void nativeDepthReady(Object renderer,long epoch);
+    public static void depthReady(Object renderer) {
+        if(!depthEnabled) return;
+        try { nativeDepthReady(renderer,epoch); }
+        catch(Throwable error) { depthEnabled=false; System.err.println("[mcov] depth capture disabled: "+error); }
+    }
     public static volatile boolean macroEnabled;
     private static native boolean nativeMacroUse(Object client);
     public static boolean macroUse(Object client) {

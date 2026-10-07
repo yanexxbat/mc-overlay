@@ -203,6 +203,11 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         return false;
     }
     CreateRenderTarget();
+    if(!depthRenderer_.Initialize(device_)) {
+        if(error) *error="could not create the world-depth renderer";
+        CleanupDeviceD3D(); return false;
+    }
+    depthFrame_=std::make_unique<DepthFrame>();
     return true;
 }
 
@@ -219,6 +224,8 @@ void Overlay::CleanupRenderTarget() {
 }
 
 void Overlay::CleanupDeviceD3D() {
+    if(auto* depth=depthChannel_.Block()) depth->requested.store(0,std::memory_order_release);
+    depthChannel_.Close(); depthRenderer_.Shutdown(); depthActive_=depthFresh_=false;
     itemIcons_.Shutdown();
     auraBlend_.Shutdown();
     auraRenderer_.Reset();
@@ -475,6 +482,18 @@ bool Overlay::RunFrame() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    const auto depthNow=GetTickCount64();
+    depthActive_=settings_.occludeWorldEffects&&haveSnapshot_&&agentConnected_&&!panicActive_&&
+        !std::strcmp(lastSnapshot_.gameVersion,"1.21.11");
+    if(depthActive_&&!depthChannel_.Block()&&depthNow>=depthConnectAt_) { depthChannel_.Open(target_.pid,false); depthConnectAt_=depthNow+1000; }
+    if(auto* block=depthChannel_.Block()) block->requested.store(depthActive_?1u:0u,std::memory_order_release);
+    depthFresh_=depthActive_&&depthFrame_&&depthChannel_.Read(*depthFrame_)&&depthFrame_->timeMs<=depthNow&&
+        depthNow-depthFrame_->timeMs<100&&depthFrame_->world.renderEpoch==depthFrame_->epoch&&
+        (!lastSnapshot_.dimension[0]||!depthFrame_->world.dimension[0]||!std::memcmp(lastSnapshot_.dimension,depthFrame_->world.dimension,kNameLen))&&
+        (!lastSnapshot_.serverAddress[0]||!depthFrame_->world.serverAddress[0]||!std::memcmp(lastSnapshot_.serverAddress,depthFrame_->world.serverAddress,kAddrLen));
+    depthRenderer_.Begin(*ImGui::GetBackgroundDrawList());
+    const auto& visualSnapshot=depthFresh_?depthFrame_->world:lastSnapshot_;
+
     if (!auraPrepared_) {
         AuraRenderer::Prepare(*ImGui::GetBackgroundDrawList());
         FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
@@ -496,7 +515,7 @@ bool Overlay::RunFrame() {
         const bool combatTarget=report.status==CombatBridgeStatus::Active&&report.debug.target&&
             report.sampledAtMs&&::GetTickCount64()-report.sampledAtMs<=kCombatLeaseMs&&combatEnabled;
         const auto target=combatEnabled ? (combatTarget?report.debug.target->id:0) : lastSnapshot_.hasTarget ? lastSnapshot_.targetEntityId : 0;
-        worldVisuals_.Update(lastSnapshot_,double(::GetTickCount64())/1000.,worldVisualsConfig_,target);
+        worldVisuals_.Update(visualSnapshot,double(::GetTickCount64())/1000.,worldVisualsConfig_,target);
     } else worldVisuals_.Reset();
 
     // Re-assert every frame so the agent always reflects the UI, even after it
@@ -514,7 +533,8 @@ bool Overlay::RunFrame() {
             combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
         }
         if (haveSnapshot_) {
-            DrawEsp(lastSnapshot_);
+            if(depthActive_) { depth::Scope scope(depthRenderer_.Tags()); DrawEsp(visualSnapshot); }
+            else DrawEsp(lastSnapshot_);
         }
         if(haveSnapshot_||hudEditing_) DrawHud(lastSnapshot_);
         if (menuVisible_) DrawMenu();
@@ -523,6 +543,10 @@ bool Overlay::RunFrame() {
     if(preferencesDirty_&&::GetTickCount64()>=preferenceSaveAt_) SavePreferences();
 
     ImGui::Render();
+    if(depthActive_&&!depthRenderer_.Finish(context_,*ImGui::GetDrawData(),depthFresh_?depthFrame_.get():nullptr)) {
+        // Bei GPU-Ausfall keine versehentlich ungeprueften Welt-Effekte ausgeben.
+        ImGui::GetBackgroundDrawList()->CmdBuffer.clear();
+    }
 
     if (backBuffer_) {
         context_->OMSetRenderTargets(1, &backBuffer_, nullptr);
@@ -624,13 +648,14 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const float height = static_cast<float>(windowH_);
     if (width < 1.0f || height < 1.0f) return;
 
-    const CameraProjection projection(snapshot, width, height, settings_.fovTrim);
+    const CameraProjection projection(snapshot, width, height, depthActive_?0:settings_.fovTrim);
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:snapshot.hasTarget?snapshot.targetEntityId:0;
     if(extraEffects) {
         rockstarPack_.DrawWorld(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,relations,target,{width,height},
-            auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),menu_.reduceMotion);
-        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000);
+            auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),{auraBlend_.GlowTexture(),auraBlend_.RingTexture(),auraBlend_.FeatherTexture()},menu_.reduceMotion);
+        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000,
+            auraBlend_.Callbacks(),{auraBlend_.GlowTexture(),auraBlend_.RingTexture(),auraBlend_.FeatherTexture()});
     }
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
         auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
@@ -1606,6 +1631,10 @@ void Overlay::DrawSettingsTab() {
                 ApplyExtendedStyles(!hudEditing_&&settings_.clickThroughWhenIdle);
             panel::CheckRow("Hide when game is unfocused",&settings_.hideWhenUnfocused);
             panel::CheckRow("VSync",&settings_.vsync);
+            if(panel::CheckRow("Occlude world effects",&settings_.occludeWorldEffects)) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+250; }
+            const auto* depth=depthChannel_.Block();
+            panel::ValueRow("World depth",depthFresh_?"Active":!std::strcmp(lastSnapshot_.gameVersion,"1.21.11")?
+                depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);
             if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
             ImGui::EndTable();
