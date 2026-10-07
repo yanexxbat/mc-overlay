@@ -83,11 +83,11 @@ void Overlay::UpdateRockstar() {
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:s.hasTarget?s.targetEntityId:0;
     const auto oldDeath=std::find_if(rockstarPack_.Markers().begin(),rockstarPack_.Markers().end(),[](const auto& m){return m.used&&m.death;});
-    const auto before=oldDeath==rockstarPack_.Markers().end()?WorldPoint{}:oldDeath->p;
+    const auto before=oldDeath==rockstarPack_.Markers().end()?rockstar::Marker{}:*oldDeath;
     const bool hadDeath=oldDeath!=rockstarPack_.Markers().end();
     rockstarPack_.Update(s,now,rockstarConfig_,target);
     const auto death=std::find_if(rockstarPack_.Markers().begin(),rockstarPack_.Markers().end(),[](const auto& m){return m.used&&m.death;});
-    if(death!=rockstarPack_.Markers().end()&&(!hadDeath||death->p.x!=before.x||death->p.y!=before.y||death->p.z!=before.z)) {
+    if(death!=rockstarPack_.Markers().end()&&(!hadDeath||death->p.x!=before.p.x||death->p.y!=before.p.y||death->p.z!=before.p.z||death->dimension!=before.dimension||death->server!=before.server)) {
         preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500;
     }
     if(rockstarPack_.TakeHitSound()) PlayModuleSound(true,true);

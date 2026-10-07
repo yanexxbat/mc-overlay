@@ -95,8 +95,21 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         else if(kind==HudModule::Watermark) start={16,8};
         else if(kind==HudModule::Modules) start={viewport.x-size.x-16,44};
         else if(kind==HudModule::Keybinds) start={viewport.x-size.x-16,viewport.y-size.y-16};
-        else if(i>=int(HudModule::Radar)) start={16+(i-int(HudModule::Radar))%3*250.f,viewport.y-size.y-20-(i-int(HudModule::Radar))/3*180.f};
+        else if(i>=int(HudModule::Radar)) start={264+(i-int(HudModule::Radar))%3*250.f,viewport.y-size.y-20-(i-int(HudModule::Radar))/3*180.f};
         auto& placement=hud_.layout[i]; const bool wasPlaced=placement.placed;
+        if(!wasPlaced&&i>=int(HudModule::Radar)) {
+            // Nur neue Startpositionen suchen; gespeicherte und bewusst ueberlappende Layouts bleiben erhalten.
+            bool found=false;
+            const float left=viewport.x>=1000?264.f:16.f;
+            for(int column=0;column<4&&!found;++column) for(float y=viewport.y-size.y-16;y>=44;y-=24) {
+                const ImVec2 candidate{left+column*250,y}; if(candidate.x+size.x>viewport.x-16) break;
+                bool overlap=false;
+                for(int previous=0;previous<i;++previous) { const auto& r=hudRects_[previous];
+                    if(r.max.x>r.min.x&&r.max.y>r.min.y&&candidate.x<r.max.x+8&&candidate.x+size.x+8>r.min.x&&candidate.y<r.max.y+8&&candidate.y+size.y+8>r.min.y) { overlap=true; break; }
+                }
+                if(!overlap) { start=candidate; found=true; break; }
+            }
+        }
         const auto rect=PlaceHud(placement,viewport,size,start); hudRects_[i]=rect;
         if(!wasPlaced) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
         // Bestehende Snapshot-Widgets zeichnen lokal; nur ihre eigenen Vertices

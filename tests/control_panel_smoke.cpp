@@ -743,6 +743,7 @@ int main(int argc,char** argv) {
         hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"rockstar-hud.png");
         hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"new HUD escaped a small viewport");
+        hudFrame({1280,800},false);
         extra={}; pack.ResetWorld();
         hud={}; binds=mcov::keys::Defaults(); io.AddMousePosEvent(-100,-100);
         EspChecks(overlay,device.Get(),context.Get(),output);

@@ -140,11 +140,14 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         const combat::Relations& friends,std::uint32_t target,ImVec2 viewport,ImVec4 auraA,ImVec4 auraB,
         AuraBlend blend,ImTextureID glow,bool reduced) const {
     (void)glow; (void)viewport;
+    bool worldEffects=false;
+    for(const auto f:{Feature::JumpCircles,Feature::Wings,Feature::Halo,Feature::GlowEsp,Feature::TargetCircle,Feature::ChestEsp,Feature::BeaconRadius,Feature::ChunkBorders}) worldEffects|=config.Enabled(f);
+    if(!worldEffects) return;
     // Getrennte Commands kapseln additives Blending; danach wird der ImGui-State restauriert.
     struct BlendScope { ImDrawList& d; ~BlendScope(){ d.AddCallback(ImDrawCallback_ResetRenderState,nullptr); } } scope{d};
     if(blend.begin) d.AddCallback(blend.begin,blend.data);
     auto palette=[&](const Options& o,float alpha=1) {
-        auto a=o.auraColours?auraA:o.start,b=o.auraColours?auraB:o.end; a.w=o.opacity*alpha; b.w=a.w;
+        auto a=o.auraColours?auraA:o.start,b=o.auraColours?auraB:o.end; a.w*=o.opacity*alpha; b.w*=o.opacity*alpha;
         return std::pair{a,b};
     };
     const auto& jump=config[Feature::JumpCircles];
@@ -178,7 +181,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
             const double y=bounds.min.y+(circle.mode==1?(bounds.max.y-bounds.min.y)*(.5+.5*std::sin(spin)):.04);
             DrawRing(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,a,b,2,circle.glow);
         }
-        if(!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&(e.distance>64||cosmetics++>=32))) continue;
+        if((!config.Enabled(Feature::Wings)&&!config.Enabled(Feature::Halo))||!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&(e.distance>64||cosmetics++>=32))) continue;
         const auto rig=BuildHumanoidRig(e);
         const auto& halo=config[Feature::Halo];
         if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05; DrawRing(d,p,head,e.width*.6*halo.size,a,b,2,halo.glow); }
@@ -242,7 +245,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
         if(projection.Point(point,screen)) {
             char text[24]; std::snprintf(text,sizeof(text),"-%.1f",hit.amount); const ImVec2 pos{screen.x,screen.y};
             auto color=Mix(markers.auraColours?a:markers.start,markers.auraColours?b:markers.end,age/markers.lifetime);
-            color.w=markers.opacity*(1-age/markers.lifetime);
+            color.w*=markers.opacity*(1-age/markers.lifetime);
             const float fontSize=ImGui::GetFontSize()*markers.size;
             for(int layer=2;layer>=1;--layer) for(const auto offset:{ImVec2{float(layer),0},ImVec2{-float(layer),0},ImVec2{0,float(layer)},ImVec2{0,-float(layer)}})
                 d.AddText(ImGui::GetFont(),fontSize,{pos.x+offset.x,pos.y+offset.y},Ink(color,.09f*markers.glow),text);
@@ -251,7 +254,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
     }
     const auto& cross=c[Feature::Crosshair];
     if(cross.enabled) {
-        const ImVec2 center{size.x*.5f,size.y*.5f}; auto color=cross.auraColours?(s.hasTarget?b:a):cross.start; color.w=cross.opacity;
+        const ImVec2 center{size.x*.5f,size.y*.5f}; auto color=cross.auraColours?(s.hasTarget?b:a):cross.start; color.w*=cross.opacity;
         const float gap=cross.range+(cross.mode==3?std::min(stats_.speed*1.5f,12.f):0),length=cross.size,width=std::max(.7f,cross.speed);
         if(cross.mode==1) {
             for(int layer=3;layer>=1;--layer) d.AddCircle(center,gap+length,Ink(color,.06f*cross.glow),40,width+layer*2);
@@ -268,10 +271,10 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
         if(projection.Point({e.x,e.y+e.height*.5,e.z},screen)&&screen.x>=0&&screen.x<=size.x&&screen.y>=0&&screen.y<=size.y) continue;
         const double bearing=std::atan2(-(e.x-s.camX),e.z-s.camZ)-s.yawDeg*rad;
         const float x=float(std::sin(bearing)),y=-float(std::cos(bearing)); const float rr=std::min(size.x,size.y)*.38f;
-        const ImVec2 p{size.x*.5f+x*rr,size.y*.5f+y*rr}; auto color=arrows.auraColours?a:arrows.start; color.w=arrows.opacity;
+        const ImVec2 p{size.x*.5f+x*rr,size.y*.5f+y*rr}; auto color=arrows.auraColours?a:arrows.start; color.w*=arrows.opacity;
         const float w=arrows.size;
         auto triangle=[&](float width,ImU32 ink) { d.AddTriangleFilled({p.x+x*width,p.y+y*width},{p.x-x*width*.7f+y*width*.6f,p.y-y*width*.7f-x*width*.6f},{p.x-x*width*.7f-y*width*.6f,p.y-y*width*.7f+x*width*.6f},ink); };
-        auto edge=arrows.auraColours?b:arrows.end; edge.w=color.w;
+        auto edge=arrows.auraColours?b:arrows.end; edge.w*=arrows.opacity;
         for(int layer=3;layer>=1;--layer) triangle(w+layer*2,Ink(edge,.08f*arrows.glow));
         triangle(w,Ink(color));
         char text[20]; std::snprintf(text,sizeof(text),"%.0fm",e.distance); d.AddText({p.x-10,p.y+w+3},Ink(color),text);
