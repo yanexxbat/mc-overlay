@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <cstdint>
 #include <type_traits>
+#include <cmath>
 
 namespace mcov::items {
 enum class Item : std::uint8_t { Empty, Other, Totem, Crystal, Anchor, Glowstone };
 enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crystal };
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
-    MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel };
+    MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel,
+    LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
@@ -27,11 +29,34 @@ inline const char* Text(Status s) {
         case Status::Conflict:return "Another macro cycle is active";
         case Status::AnchorSafeDimension:return "Anchors cannot explode in this dimension";
         case Status::OffhandFuel:return "Remove glowstone from offhand to detonate";
+        case Status::LowHealth:return "Paused - health below configured minimum";
+        case Status::NeedTotem:return "Paused - equip a totem in offhand";
+        case Status::OutOfRange:return "Saved position exceeds configured range";
+        case Status::ConfirmationTimeout:return "No world confirmation - release Use to reset";
     }
     return "Unavailable";
 }
 struct TotemConfig { bool enabled=false; std::uint32_t retryMs=100; };
-struct MacroConfig { bool enabled=false,restoreSlot=true; std::uint32_t intervalMs=150,confirmationMs=750; };
+struct MacroConfig {
+    bool enabled=false,restoreSlot=true;
+    std::uint32_t intervalMs=150,confirmationMs=750;
+    bool separateDelays=false,requireTotem=false,strictConfirmation=false,chargeWithOffhandFuel=false;
+    std::uint32_t placeMs=150,breakMs=150,chargeMs=150;
+    float maxRange=4.5f,minHealth=0.f;
+    // 0 = automatisch, 1..9 = bevorzugter Hotbar-Slot für die Detonation.
+    int detonationSlot=0;
+    void Clamp() {
+        intervalMs=std::clamp(intervalMs,100u,500u); confirmationMs=std::clamp(confirmationMs,100u,2000u);
+        placeMs=std::clamp(placeMs,50u,1000u); breakMs=std::clamp(breakMs,50u,1000u); chargeMs=std::clamp(chargeMs,50u,1000u);
+        maxRange=std::isfinite(maxRange)?std::clamp(maxRange,1.f,6.f):4.5f;
+        minHealth=std::isfinite(minHealth)?std::clamp(minHealth,0.f,20.f):0.f;
+        detonationSlot=std::clamp(detonationSlot,0,9);
+    }
+    void Conservative() {
+        separateDelays=strictConfirmation=true; placeMs=breakMs=250; chargeMs=200;
+        confirmationMs=1500; maxRange=3.f; minHealth=6.f;
+    }
+};
 struct Request {
     std::uint64_t sentAtMs{};
     bool inputAllowed=false,combatActive=false;
@@ -52,6 +77,8 @@ struct Frame {
     bool useDown=false,siteValid=false;
     Item cycle=Item::Empty;
     int crystalId=-1;
+    float health=20.f;
+    double distance=0;
 };
 enum class Operation { None, SwapTotem, PlaceCrystal, AttackCrystal, PlaceAnchor, ChargeAnchor, DetonateAnchor, RestoreSlot };
 struct Action { Operation operation=Operation::None; int slot=-1; bool anchor=false; };
@@ -60,19 +87,21 @@ inline int ContainerSlot(int inventorySlot) { return inventorySlot<9?inventorySl
 
 // Deterministische Entscheidung ohne JNI. Höchstens eine Inventar-/Spielaktion pro Tick.
 class Controller final {
-    std::uint64_t nextTotem_=0,nextMacro_=0;
+    std::uint64_t nextTotem_=0,lastActionAt_=0;
+    bool haveAction_=false;
     int original_=-1,lastSelected_=-1;
     Item cycle_=Item::Empty;
     Operation waiting_=Operation::None;
     std::uint64_t confirmUntil_=0;
     int attackedId_=-1;
+    int chargedBefore_=0;
     Report report_{};
     static int Find(const Frame& f,Item item,int count) {
         for(int i=0;i<count;++i) if(f.inventory[i]==item) return i;
         return -1;
     }
 public:
-    void Reset() { nextTotem_=nextMacro_=confirmUntil_=0; original_=lastSelected_=-1; cycle_=Item::Empty; waiting_=Operation::None; }
+    void Reset() { nextTotem_=lastActionAt_=confirmUntil_=0; haveAction_=false; original_=lastSelected_=-1; cycle_=Item::Empty; waiting_=Operation::None; }
     const Report& GetReport() const { return report_; }
     bool HasRestore() const { return original_>=0; }
     bool Active() const { return cycle_!=Item::Empty; }
@@ -103,35 +132,42 @@ public:
         }
         const bool macroAllowed=allowed&&!f.screen&&f.ownMenu&&f.cursorEmpty&&!r.combatActive;
         const bool armed=crystal?r.crystal.enabled:anchor?r.anchor.enabled:false;
+        auto config=anchor?r.anchor:r.crystal; config.Clamp();
         const bool manualSlot=Active()&&lastSelected_>=0&&f.selected!=lastSelected_;
         const bool restorePending=!Active()&&HasRestore();
         if(restorePending || !armed || !f.useDown || !macroAllowed || !f.siteValid || manualSlot) {
             if(crystal&&r.crystal.enabled) report_.crystal=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             if(anchor&&r.anchor.enabled) report_.anchor=!macroAllowed?Status::Paused:f.useDown?Status::WaitingTarget:Status::WaitingBind;
             cycle_=Item::Empty; waiting_=Operation::None; confirmUntil_=0;
-            nextMacro_=0;
+            haveAction_=false;
             // Ein offenes Container-/Pausemenü darf den Restore nicht verlieren.
             // Die Auswahl prüfen wir beim nächsten sicheren Tick erneut.
             if(original_>=0&&f.selected==lastSelected_&&(!f.ownMenu||!f.cursorEmpty||f.paused)) return {};
             if(original_>=0&&f.ownMenu&&f.cursorEmpty&&!f.paused) {
                 const int original=original_,expected=lastSelected_;
-                original_=lastSelected_=-1; nextMacro_=0;
+                original_=lastSelected_=-1;
                 if(f.selected==expected) return {Operation::RestoreSlot,original};
             }
-            original_=lastSelected_=-1; nextMacro_=0; return {};
+            original_=lastSelected_=-1; return {};
         }
         auto& status=anchor?report_.anchor:report_.crystal;
         if(!f.macroSupported||(anchor&&!f.anchorSupported)||f.selected<0||f.selected>=9) { status=Status::Unsupported; return {}; }
         if(anchor&&f.anchorWorks) { status=Status::AnchorSafeDimension; return {}; }
         cycle_=kind;
+        // Sicherheits-Gates pausieren den gespeicherten Ablauf, ohne einen
+        // zweiten Use durchzulassen oder die Bestätigung zu verwerfen.
+        if(!std::isfinite(f.health)||f.health<config.minHealth) { status=Status::LowHealth; return {}; }
+        if(config.requireTotem&&f.offhand!=Item::Totem) { status=Status::NeedTotem; return {}; }
+        if(!std::isfinite(f.distance)||f.distance<0||f.distance>config.maxRange) { status=Status::OutOfRange; return {}; }
         // Keine Folgeaktion, bevor die Welt die vorige Aktion bestätigt.
         if(waiting_!=Operation::None) {
             const bool confirmed=waiting_==Operation::PlaceCrystal?f.target==Target::Crystal:
                 waiting_==Operation::AttackCrystal?f.target!=Target::Crystal||f.crystalId!=attackedId_:
                 waiting_==Operation::PlaceAnchor?f.target==Target::Anchor:
-                waiting_==Operation::ChargeAnchor?f.target==Target::Anchor&&f.charges>0:
+                waiting_==Operation::ChargeAnchor?f.target==Target::Anchor&&f.charges>chargedBefore_:
                 f.target!=Target::Anchor;
             if(!confirmed&&now<confirmUntil_) { status=Status::Pending; return {}; }
+            if(!confirmed&&config.strictConfirmation) { status=Status::ConfirmationTimeout; return {}; }
             waiting_=Operation::None;
         }
         Action action;
@@ -140,24 +176,32 @@ public:
         else if(anchor&&f.target==Target::Anchor) {
             if(f.charges<0||f.charges>4) { status=Status::WaitingTarget; return {}; }
             // Vanilla priorisiert Glowstone in der Offhand, solange Ladungen frei sind.
-            if(f.charges>0&&f.charges<4&&f.offhand==Item::Glowstone) { status=Status::OffhandFuel; return {}; }
+            const bool fillWithOffhand=f.charges<4&&f.offhand==Item::Glowstone&&config.chargeWithOffhandFuel;
+            if(f.charges>0&&f.charges<4&&f.offhand==Item::Glowstone&&!fillWithOffhand) { status=Status::OffhandFuel; return {}; }
             int slot=-1;
-            if(f.charges==0) slot=Find(f,Item::Glowstone,9);
+            const bool charging=f.charges==0||fillWithOffhand;
+            if(charging) slot=Find(f,Item::Glowstone,9);
             else {
-                for(int i=0;i<9;++i) if(f.inventory[i]!=Item::Glowstone&&f.inventory[i]!=Item::Crystal&&f.inventory[i]!=Item::Empty) { slot=i; break; }
+                const auto usable=[&](int i) { return f.inventory[i]!=Item::Glowstone&&f.inventory[i]!=Item::Crystal; };
+                if(config.detonationSlot>0&&usable(config.detonationSlot-1)) slot=config.detonationSlot-1;
+                for(int i=0;slot<0&&i<9;++i) if(usable(i)&&f.inventory[i]!=Item::Empty) { slot=i; break; }
                 if(slot<0&&f.offhand!=Item::Glowstone) slot=Find(f,Item::Empty,9);
             }
-            action={f.charges==0?Operation::ChargeAnchor:Operation::DetonateAnchor,slot,true};
+            action={charging?Operation::ChargeAnchor:Operation::DetonateAnchor,slot,true};
         } else if(anchor&&f.target==Target::OtherBlock) action={Operation::PlaceAnchor,Find(f,Item::Anchor,9),true};
         else { status=Status::WaitingTarget; return {}; }
         if(action.slot<0) { status=Status::MissingItem; return {}; }
         status=Status::Pending;
-        if(now<nextMacro_) return {};
-        const auto& config=anchor?r.anchor:r.crystal;
+        const auto delay=!config.separateDelays?config.intervalMs:
+            action.operation==Operation::ChargeAnchor?config.chargeMs:
+            action.operation==Operation::AttackCrystal||action.operation==Operation::DetonateAnchor?config.breakMs:config.placeMs;
+        // Die Verzögerung gehört zur nächsten Aktion; Hot-Reload wirkt sofort.
+        if(haveAction_&&(now<lastActionAt_||now-lastActionAt_<delay)) return {};
         if(config.restoreSlot&&original_<0) original_=f.selected;
-        lastSelected_=action.slot; nextMacro_=now+std::clamp(config.intervalMs,100u,500u);
-        waiting_=action.operation; confirmUntil_=now+std::clamp(config.confirmationMs,100u,2000u);
+        lastSelected_=action.slot; lastActionAt_=now; haveAction_=true;
+        waiting_=action.operation; confirmUntil_=now+config.confirmationMs;
         attackedId_=f.crystalId;
+        chargedBefore_=f.charges;
         return action;
     }
     void Complete(Action action,bool success) {
