@@ -393,7 +393,7 @@ void RockstarChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCont
     scene.entities[1]=entity; scene.entities[1].entityId=43; scene.entities[1].uuid={3,4}; scene.entities[1].x=10; scene.entities[1].z=-4; scene.entities[1].distance=11;
     scene.entities[2]=entity; scene.entities[2].entityId=44; scene.entities[2].uuid={5,6}; scene.entities[2].x=-1.5; scene.entities[2].z=5; scene.entities[2].flags|=mcov::kEntityIsSelf;
     // Freund-Zuordnung wird durch echte Mittelklick-Flanken geaendert, nie durch gehaltene Buttons oder das Menue.
-    config[Feature::MiddleFriend].enabled=true; mcov::OverlayUiCheck::Snapshot(overlay,scene); Draw(overlay,Page::Misc,0);
+    config[Feature::MiddleFriend].enabled=true; mcov::OverlayUiCheck::Snapshot(overlay,scene); Draw(overlay,Page::Misc,0,{1280,800});
     mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input); input[VK_MBUTTON]=true; mcov::OverlayUiCheck::Input(overlay,input);
     Require(mcov::combat::Lookup(mcov::OverlayUiCheck::CombatEditor(overlay).Relations().Read(),entity.uuid)==mcov::combat::Relation::Friend,"Middle click did not add crosshair player as friend");
     mcov::OverlayUiCheck::Input(overlay,input);
@@ -733,6 +733,15 @@ int main(int argc,char** argv) {
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"HUD module escaped small viewport");
         SaveFrame(device.Get(),context.Get(),output/"modular-hud-small.png");
         hud.layout[2]={}; hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"modular-hud.png");
+        hud.extras.fill(true); extra[mcov::rockstar::Feature::Notifications].enabled=extra[mcov::rockstar::Feature::DetectPlayer].enabled=true;
+        mcov::keys::Input hudKeys{}; hudKeys[0x57]=hudKeys[1]=true; pack.Input(hudKeys,true,double(GetTickCount64())/1000);
+        pack.Notify("Wings enabled",double(GetTickCount64())/1000); pack.Notify("Waypoint saved",double(GetTickCount64())/1000);
+        hudScene.entityCount=1; auto& nearby=hudScene.entities[0]; nearby.entityId=50; nearby.uuid={1,50}; nearby.distance=12;
+        nearby.health=18; nearby.x=8; nearby.z=-280; nearby.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving; mcov::CopyField(nearby.name,"Nearby player");
+        hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"rockstar-hud.png");
+        hudFrame({480,360}); hudFrame({480,360});
+        for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"new HUD escaped a small viewport");
+        extra={}; pack.ResetWorld();
         hud={}; binds=mcov::keys::Defaults(); io.AddMousePosEvent(-100,-100);
         EspChecks(overlay,device.Get(),context.Get(),output);
         TargetCubePreview(overlay,device.Get(),context.Get(),output);
