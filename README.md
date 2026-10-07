@@ -9,6 +9,15 @@ version-specific member names. See [compatibility and verification](docs/compati
 and Java helpers. The launcher uses the same dark/violet controls as the client.
 See [launcher and portable package](docs/launcher.md) for runtime requirements and diagnostics.
 
+The [Rockstar-inspired feature package](docs/rockstar-features.md) adds **29 functions**:
+glowing wings/halo/ESP, jump and target rings, damage markers/vignette, crosshair,
+offscreen arrows, storage/beacon/chunk guides, sound feedback, middle-click friends,
+death coordinates/waypoints, privacy aliases, notifications and eight HUD widgets.
+Every new feature has its own tab and starts disabled with an unassigned keybind.
+The HUD now offers 19 movable/scalable elements. [Source-module coverage](docs/rockstar-catalog.md)
+lists all 122 reference modules and distinguishes implemented behavior from remaining work.
+Restart Minecraft before using this updated package: the agent/overlay now use **IPC v17**.
+
 The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includes
 deterministic selection/rotation/cooldown/sync tests and an executable simulator
 (`build/bin/mcov_combat_demo.exe`). Kill Aura executes player rotation and normal
@@ -197,9 +206,9 @@ drift out of agreement with the real hit registration.
 
 The overlay follows [the latest user reference](design/reference-classic-ui.png):
 a rectangular dark window, violet rules/filled sliders, compact fields, 13 px
-embedded pixel-aligned font and horizontal Combat/Visuals/Blocks/HUD/Stats/Settings
+embedded pixel-aligned font and horizontal Combat/Visuals/Blocks/HUD/Stats/Settings/Misc
 tabs. Drag the title bar to move; Center restores placement. Small viewports
-scroll and stack controls. The injector retains the shared rounded flat theme.
+scroll and stack controls. The injector shares the same classic controls.
 
 **Settings → Keybinds** assigns keyboard/mouse keys, modifier chords and Toggle/Hold
 per module. A single modifier is captured on release. Esc cancels capture;
@@ -209,8 +218,9 @@ Hold restores the previous module state on release/focus loss. Module hotkeys
 pause in menu/editor, and every bind is restricted to Minecraft/overlay focus.
 
 The HUD uses individual position/scale/visibility instead of a fixed panel stack.
-HUD settings and binds are saved atomically in **client-settings.ini** next to
-mcov_overlay.exe. Other module settings/friends retain their session behavior.
+HUD settings, binds, new Rockstar feature parameters and waypoints save atomically
+in **client-settings.ini** under `%LOCALAPPDATA%/mcov` for the portable client,
+or beside mcov_overlay.exe for developer runs. Existing module settings and friends retain their session behavior.
 Full usage and implementation: [client UI](docs/client-ui.md).
 
 The backend remains **Win32 + Direct3D 11** with Dear ImGui. Only pixels occupied
@@ -219,8 +229,9 @@ JNI/JVMTI remains in the separate agent, and all UI/HUD rendering consumes the
 published WorldSnapshot. This change adds no JNI or IPC fields. Styles and fonts
 restore after the menu/editor. Shared flat helpers: [flat UI](docs/flat-ui.md).
 
-Combat has five function tabs: **Kill Aura**, **Aim Assist**, **Triggerbot**,
-**Auto Totem** and **Friends**. Every main page uses the same sub-tab navigation;
+Combat has eight function tabs: **Kill Aura**, **Aim Assist**, **Triggerbot**,
+**Auto Totem**, **Friends**, **Crystal macro**, **Anchor macro** and **Hit sounds**.
+Every main page uses the same sub-tab navigation;
 long tab bars have scroll arrows. Visuals separates each effect, HUD provides a
 tab per element, Blocks separates scanning/types/tracers, and Stats separates
 player/client/entities. Settings has Overlay, Focus, Keybinds and Agent.
@@ -240,9 +251,9 @@ removes the hat. UUIDs are cached by Java object identity on the sampler; drawin
 adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v16. Settings and friends remain session-local.
-All six original pages
-remain accessible. The injector retains its existing flat interface.
+the wire protocol is now IPC v17. Existing settings and friends retain their
+session behavior; new feature settings and waypoints persist. All seven pages
+remain accessible, including the new Misc page.
 
 Visuals has **Trails**, **Hit particles**, **Ambient particles**, **Hit bubbles**,
 **Kill effect** and **BreadCrumbs**, inspired by ThunderHack-Recode. Enable effects

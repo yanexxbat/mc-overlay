@@ -84,7 +84,8 @@ Triggerbot senden dann keine Eingaben.
 
 ## Speicherung und Technik
 
-`%LOCALAPPDATA%\mcov\client-settings.ini` enthält Binds und HUD-Konfiguration
+`%LOCALAPPDATA%\mcov\client-settings.ini` enthält Binds, HUD-Konfiguration,
+Rockstar-Modulparameter und server-/dimensionsgebundene Wegpunkte
 beim Start über die portable `mcov.exe`. Direkte Entwickler-Starts verwenden
 weiterhin `build/bin/client-settings.ini` neben der Overlay-EXE. Änderungen werden verzögert
 gespeichert, bestätigte Binds und das Beenden des Editors sofort. Eine temporäre
@@ -96,7 +97,8 @@ und Freunde werden durch diese Datei nicht automatisch aktiviert oder gespeicher
 `keybinds.hpp` trennt Eingabe-Zustand von Win32 und Moduländerungen.
 `hud_layout.hpp` kapselt Platzierung und Grenzen. `overlay_input.cpp` bindet echte
 Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
-Der native Agent, JNI-Abfragen und IPC v14 bleiben unverändert.
+Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v17. JNI-Abfragen
+bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
 
 Geprüft: reale Menüeingaben, Tastenerfassung/Konflikte, Toggle/Hold/Fokus,
 Store-Änderung, Speichern/Laden, HUD-Ziehen und kleine Viewports. D3D11-WARP-

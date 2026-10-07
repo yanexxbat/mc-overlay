@@ -20,7 +20,8 @@ The launcher does not install Java.
 - `%LOCALAPPDATA%\mcov\runtime\<package hash>`: embedded overlay, agent and helpers.
   Extraction verifies SHA-256, skips valid files, repairs corrupt files and
   serializes concurrent preparation. The hash changes when packaged files change.
-- `%LOCALAPPDATA%\mcov\client-settings.ini`: saved keybinds and HUD layout.
+- `%LOCALAPPDATA%\mcov\client-settings.ini`: saved keybinds, HUD layout,
+  Rockstar feature parameters and server/dimension-scoped waypoints.
 - `%LOCALAPPDATA%\mcov\launcher-jdk.txt`: selected JDK path.
 - `%LOCALAPPDATA%\mcov\mcov_client.log` and `mcov_overlay.log`: launcher/overlay logs.
 - `mcov_agent.log` beside the loaded DLL: agent log, also included under Diagnose.

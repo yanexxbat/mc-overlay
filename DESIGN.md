@@ -6,8 +6,8 @@ floating-panel/rail menu. Preserve the actual mcov module behavior and names;
 the reference's game background and product title are not shipped assets.
 
 A single rectangular 600 x 650 px window, constrained to the game viewport,
-has a compact draggable title bar and six horizontal tabs: Combat, Visuals,
-Blocks, HUD, Stats, Settings. Background #242424, fields #191919, black borders,
+has a compact draggable title bar and seven horizontal tabs: Combat, Visuals,
+Blocks, HUD, Stats, Settings, Misc. Background #242424, fields #191919, black borders,
 violet #AE69D1, text #ECECEC and muted #B6AFBE. Pixel-aligned embedded ImGui
 ProggyClean is 13 px in menu/HUD and launcher; the existing Inter fonts remain for ESP.
 No decorative rings, glossy highlights or rounded
@@ -20,8 +20,12 @@ before the rest of the frame. The launcher now shares the same scoped classic th
 Every main page has a consistent, horizontally scrolling function tab bar.
 Visuals separates Box ESP, Skeleton, Name tags, Health bars, Distance labels,
 Tracers, Target info, Target aura, Target marker, Trails, Hit particles,
-Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat and Entity filters. Blocks has
-Block ESP, Block types and Tracers. HUD has Editor plus a tab per element, each
+Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat, Entity filters,
+Jump circles, Wings, Halo, Glow ESP, Damage markers, Damage vignette, Target circle,
+Crosshair and Offscreen arrows. Blocks has Block ESP, Block types, Tracers,
+Chunkfinder, Storage ESP, Beacon radius and Chunk borders. Misc has Middle click
+friend, Death coordinates, Detect players, Waypoints, Name protect, Module sounds,
+Notifications and Panic. HUD has Editor plus a tab per element, each
 with visibility, scale, position and individual layout reset. Stats separates
 Local player, Client and Entities. Settings has Overlay, Focus, Keybinds and Agent. Every module bind is initially None, explicitly
 chosen by the user; INSERT/Menu, F6/HUD editor and END/Quit remain defaults.
@@ -30,18 +34,20 @@ modifiers are captured on release. Conflicts, capture cancellation and clearing
 are visible. Binds act only with Minecraft/overlay focus and pause module changes
 while menu/editor/capture is open. Hold restores prior state on release/focus loss.
 
-HUD: nine independently enabled, positioned and scaled elements using dark
+HUD: nineteen independently enabled, positioned and scaled elements using dark
 rectangular fills, violet top rules and the same compact font. The editor adds
 outlines, empty/disabled previews, drag hit areas and a toolbar with selection,
 visibility, scale and reset. Below 640 x 480 it isolates the selected element.
 Coordinates are normalized within the viewport travel and clamped on resize;
 free layouts may overlap intentionally. HUD placements/scale/visibility and binds
 save in %LOCALAPPDATA%/mcov/client-settings.ini for the portable client, or beside
-the overlay executable for direct developer runs. Other feature settings
-and UUID relations retain their existing session behavior. Renderers consume
-coherent snapshots; no new JNI calls, native hooks or IPC fields.
+the overlay executable for direct developer runs. New Rockstar feature settings
+and world/server-scoped waypoints also persist; existing feature settings and UUID
+relations retain their session behavior. Renderers consume coherent snapshots;
+no render-thread JNI or new native hooks. IPC v17 appends scanner kind identifiers.
 
-Combat shows five tabs: Kill Aura, Aim Assist, Triggerbot, Auto Totem and Friends. Kill Aura exposes
+Combat shows eight tabs: Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends,
+Crystal macro, Anchor macro and Hit sounds. Kill Aura exposes
 activation, target type and reach, plus status and the last target.
 It acquires the nearest valid living hitbox all around the player, then keeps
 that target until death or loss of range/sight. Players and mobs are included
@@ -123,3 +129,14 @@ entity; no render-thread JNI, new hooks or IPC layout changes. Reduced motion
 keeps particle fades and removes drift, spin and ring growth. Glow uses the Aura's
 Gaussian halo, middle colour and bright core, with intensity controls per module.
 See docs/world-visuals.md for exact controls, bounds and external-depth limitations.
+
+## Rockstar-inspired expansion
+
+Preserve the classic menu; each new function gets the existing scrolling function
+tabs, compact rows and initially unbound keybind. New effects share Aura colours,
+use bounded pools and layered glow, and render before ESP/HUD. World and screen
+positions reuse the same camera projection and FOV trim. Session metrics and
+damage/death feedback describe observations, not guaranteed attacker attribution.
+Panic clears transient effects and deactivates held modules without restoring their
+old active state on release. Page resets affect only that page's new modules.
+See docs/rockstar-features.md and docs/rockstar-catalog.md for controls and coverage.
