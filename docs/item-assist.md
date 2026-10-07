@@ -41,6 +41,41 @@ ist 100–2.000 ms, standardmäßig 750 ms; erst danach darf eine unbeantwortete
 Aktion wiederholt werden. „Actions sent“ zählt erfolgreiche Spielinteraktionen,
 keine abschließende Serverbestätigung.
 
+### Erweiterte Crystal-/Anchor-Einstellungen
+
+Die beiden Untertabs speichern ihre Einstellungen automatisch. Module bleiben
+beim nächsten Clientstart ausgeschaltet; die bisherigen Keybinds gelten weiter.
+
+- **Separate action delays:** Place, Break/Detonate und beim Anchor Charge
+  jeweils 50–1.000 ms. Die Zeit zählt seit der letzten Aktion; die erste Aktion
+  startet sofort. Ohne diese Option bleibt der gemeinsame Abstand 100–500 ms.
+  Ausführung am Client-Tick: Zeiten unterhalb eines Ticks erhöhen die Tickrate nicht.
+- **Maximum range:** 1–6 Blöcke, Standard 4,5. Gemessen vom Spielerauge zum
+  gespeicherten Platzierungstreffer. Angriffe prüfen zusätzlich den Abstand
+  zur Crystal-Hitbox. Das Limit verkürzt nur die jeweilige Vanilla-Reichweite.
+- **Minimum health:** 0 deaktiviert den Check, sonst 1–20 HP. Verwendet aktuelle
+  Lebenspunkte ohne Absorptionsherzen. Ein unterschrittener Wert pausiert den
+  Ablauf; bei Erholung läuft er weiter. Dies ist keine Explosionsschadensberechnung.
+- **Require offhand totem:** pausiert bis ein Totem getragen wird. Auto Totem
+  kann es unabhängig davon aus dem Hauptinventar nachlegen.
+- **Strict world confirmation:** keine Wiederholung nach Timeout. Eine später
+  beobachtete Weltänderung setzt den Ablauf fort; Loslassen der Use-Taste
+  beendet ihn und setzt den Wartezustand zurück. Status nennt den Grund.
+- **Charge to 4 with offhand glowstone:** Anchor bei Glowstone in der Offhand
+  bis vier Ladungen laden, dann detonieren. Jede einzelne Erhöhung muss in der
+  Welt beobachtet werden. Glowstone in der Hotbar wird weiterhin benötigt.
+  Ohne diese Option bleibt die bisherige Offhand-Fuel-Pause erhalten.
+- **Detonation slot:** 0 automatisch, 1–9 bevorzugte Hotbarposition. Glowstone
+  und End Crystals sind ungeeignet und führen zur automatischen Alternativwahl.
+- **Server conservative:** setzt Place/Break auf 250 ms, Charge auf 200 ms,
+  Reichweite auf 3, Mindest-HP auf 6 und striktes Warten mit 1.500-ms-Timeout.
+  Weitere Einstellungen und der Modul-Schalter bleiben erhalten.
+
+Weltbestätigungen kommen aus dem Clientzustand, einschließlich möglicher
+Vanilla-Vorhersage. Sie sind keine separate Bestätigung des Servers. Das
+konservative Profil ist kein getesteter Anti-Cheat-Bypass und verspricht
+keine serverübergreifende Akzeptanz.
+
 **Blocks → Chunkfinder:** aktivieren, Radius und Mindestzahl der Hinweise pro Chunk
 wählen. Gesucht wird ausschließlich roher Deepslate mit horizontaler X/Z-Achse.
 Vertikaler, polierter und befallener Deepslate sowie Deepslate-Erze zählen nicht.
@@ -89,8 +124,11 @@ und Chunk-Grenzen ab. Isolierte JVM-Fixtures prüfen die nativen Swap-/Attack-
 Aufrufe, spät verfügbare Inventar-Bindings und die Achsen-Property. UI-Prüfungen
 rendern die Untertabs auf Desktop und 480×360. Ein Live-Test in Minecraft ist
 weiterhin erforderlich, insbesondere mit Mods, die Inventare/Interaktionen ändern.
+Zusätzliche Tests prüfen getrennte Aktionszeiten, native HP-/Totem-/Reichweiten-
+Gates für alle 22 Profile, verspätete Bestätigungen ohne Wiederholung, jede
+einzelne Anchor-Ladung, bevorzugte Detonations-Slots und Settings-Persistenz.
 
-**IPC v18:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
+**IPC v19:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
 Dateien erneut starten. Ein bereits geladener alter Agent kann nicht aktualisiert
 werden, indem nur das Overlay neu gestartet wird. Der einzige Build liegt unter
 `build`, die portable Startdatei liegt unter `build/client/mcov.exe`.

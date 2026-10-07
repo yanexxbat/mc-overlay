@@ -16,7 +16,7 @@ death coordinates/waypoints, privacy aliases, notifications and eight HUD widget
 Every new feature has its own tab and starts disabled with an unassigned keybind.
 The HUD now offers 19 movable/scalable elements. [Source-module coverage](docs/rockstar-catalog.md)
 lists all 122 reference modules and distinguishes implemented behavior from remaining work.
-Restart Minecraft before using this updated package: the agent/overlay now use **IPC v18**.
+Restart Minecraft before using this updated package: the agent/overlay now use **IPC v19**.
 
 **World-effect occlusion:** on 1.21.11 Fabric with normal OpenGL, **Settings → Overlay →
 Occlude world effects** hides aura orbs, trails, particles, rings, wings and hats behind
@@ -258,7 +258,7 @@ removes the hat. UUIDs are cached by Java object identity on the sampler; drawin
 adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v18. Existing settings and friends retain their
+the wire protocol is now IPC v19. Existing settings and friends retain their
 session behavior; new feature settings and waypoints persist. All seven pages
 remain accessible, including the new Misc page.
 

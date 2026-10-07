@@ -184,7 +184,7 @@ These are synthetic call-site tests, not a live Minecraft renderer test.
 See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v18 and a full Minecraft restart after upgrading.
+require IPC v19 and a full Minecraft restart after upgrading.
 
 ## Reproduce the checks
 
