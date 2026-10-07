@@ -5,6 +5,7 @@
 #include "../combat/target_selector.hpp"
 #include <array>
 #include <span>
+#include <utility>
 
 namespace mcov::rockstar {
 // Eigene C++-Implementierungen der passenden Verhaltensweisen; kein Java-Port im Render-Thread.

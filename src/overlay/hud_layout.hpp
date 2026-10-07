@@ -5,10 +5,12 @@
 #include <cmath>
 
 namespace mcov {
-enum class HudModule { Equipment, Effects, Coordinates, Performance, Compass, Reach, Watermark, Modules, Keybinds, Count };
+enum class HudModule { Equipment, Effects, Coordinates, Performance, Compass, Reach, Watermark, Modules, Keybinds,
+    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Notifications, Nearby, Count };
 inline constexpr int kHudModules=static_cast<int>(HudModule::Count);
 inline constexpr std::array<const char*,kHudModules> kHudNames={"Equipment","Status effects","Coordinates","Performance",
-    "Compass","Reach indicator","Watermark","Active modules","Keybinds"};
+    "Compass","Reach indicator","Watermark","Active modules","Keybinds","Radar","Keystrokes","Speedometer",
+    "Session statistics","Armor strip","Combat indicators","Clock","Click rate","Notifications","Nearby players"};
 struct HudPlacement {
     ImVec2 position{}; // Normalisiert im verfügbaren Weg, damit Auflösungswechsel die Anker erhalten.
     float scale=1;
@@ -33,6 +35,7 @@ inline void MoveHud(HudPlacement& p,HudRect rect,ImVec2 viewport,ImVec2 delta) {
 struct HudSettings {
     bool visible=true,equipment=true,effects=true,coordinates=true,compass=true,performance=false,reachMarker=true;
     bool modules=true,keybinds=true;
+    std::array<bool,10> extras{};
     float durabilityWarn=.2f;
     std::array<HudPlacement,kHudModules> layout{};
 };
