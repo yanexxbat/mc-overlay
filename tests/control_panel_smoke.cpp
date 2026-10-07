@@ -54,6 +54,12 @@ struct OverlayUiCheck {
     static HudSettings& Hud(Overlay& o) { return o.hud_; }
     static WorldVisualsConfig& WorldSettings(Overlay& o) { return o.worldVisualsConfig_; }
     static LocalHatConfig& HatSettings(Overlay& o) { return o.localHatConfig_; }
+    static rockstar::Config& Rockstar(Overlay& o) { return o.rockstarConfig_; }
+    static rockstar::Pack& Pack(Overlay& o) { return o.rockstarPack_; }
+    static void Snapshot(Overlay& o,const WorldSnapshot& s) { o.lastSnapshot_=s; o.haveSnapshot_=true; }
+    static bool Module(Overlay& o,keys::Action a) { return o.ModuleEnabled(a); }
+    static void SetModule(Overlay& o,keys::Action a,bool on) { o.SetModuleEnabled(a,on); }
+    static void Panic(Overlay& o) { o.Panic(); }
     static void UpdateWorld(Overlay& o,const WorldSnapshot& s,double now) {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
@@ -630,9 +636,26 @@ int main(int argc,char** argv) {
         const auto prefs=output/"client-preferences-test.ini"; mcov::OverlayUiCheck::PrefPath(overlay,prefs);
         binds[auraKey].mode=mcov::keys::Mode::Hold;
         auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
-        mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; mcov::OverlayUiCheck::Load(overlay);
+        auto& extra=mcov::OverlayUiCheck::Rockstar(overlay); auto& pack=mcov::OverlayUiCheck::Pack(overlay);
+        extra[mcov::rockstar::Feature::Wings].enabled=true; extra[mcov::rockstar::Feature::Wings].size=1.7f;
+        extra[mcov::rockstar::Feature::Wings].auraColours=false; extra[mcov::rockstar::Feature::Wings].end={.1f,.2f,.3f,.4f};
+        hud.extras[0]=true; binds[mcov::keys::Index(mcov::keys::Action::Wings)]={0x47,0,mcov::keys::Mode::Hold};
+        mcov::WorldSnapshot markerScene{}; markerScene.posX=-123; markerScene.posY=64; markerScene.posZ=29;
+        mcov::CopyField(markerScene.dimension,"Overworld"); mcov::CopyField(markerScene.serverAddress,"Local world");
+        Require(pack.AddMarker(markerScene,"Home \"one\""),"test waypoint could not be saved");
+        mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; extra={}; pack.ClearMarkers(); mcov::OverlayUiCheck::Load(overlay);
         Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
                 hud.layout[2].placed&&hud.layout[2].position.x==.4f&&hud.layout[2].scale==1.3f,"HUD/bind preferences did not survive save/load");
+        Require(extra[mcov::rockstar::Feature::Wings].enabled&&extra[mcov::rockstar::Feature::Wings].size==1.7f&&extra[mcov::rockstar::Feature::Wings].end.w==.4f&&hud.extras[0]&&
+                binds[mcov::keys::Index(mcov::keys::Action::Wings)].mode==mcov::keys::Mode::Hold&&pack.Markers()[0].p.x==-123&&std::string(pack.Markers()[0].label.data())=="Home \"one\"","new effects / HUD / quoted waypoint preferences did not survive save/load");
+        // Panic muss auch vorher aktive Hold-Module abschalten; Loslassen darf sie nicht wiederherstellen.
+        mcov::OverlayUiCheck::Input(overlay,{}); input={}; input[0x47]=true; mcov::OverlayUiCheck::Input(overlay,input);
+        mcov::OverlayUiCheck::Panic(overlay); input={}; mcov::OverlayUiCheck::Input(overlay,input);
+        for(int i=3;i<mcov::keys::kCount;++i) if(!mcov::keys::System(static_cast<mcov::keys::Action>(i)))
+            Require(!mcov::OverlayUiCheck::Module(overlay,static_cast<mcov::keys::Action>(i)),"Panic left a module enabled");
+        Require(pack.Markers()[0].used,"Panic erased a saved waypoint");
+        mcov::OverlayUiCheck::ResetVisuals(overlay); mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::Hud,true);
+        extra={}; pack.ClearMarkers();
         mcov::OverlayUiCheck::PrefPath(overlay,{}); std::filesystem::remove(prefs); binds=mcov::keys::Defaults(); hud={};
         for(auto size:{ImVec2(720,560),ImVec2(480,360)}) for(Page page:pages) { Draw(overlay,page,0,size); Draw(overlay,page,0,size); }
         SaveFrame(device.Get(),context.Get(),output/"classic-small.png");

@@ -506,8 +506,13 @@ bool Overlay::RunFrame() {
 
     if (shouldDraw) {
         if(combatMenu_.Store().Read().values.enabled && combatReport_.sampledAtMs &&
-           ::GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs)
-            combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),combatReport_.debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
+           ::GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs) {
+            auto debug=combatReport_.debug;
+            if(rockstarConfig_.Enabled(rockstar::Feature::NameProtect)&&debug.target) {
+                debug.target->name={}; std::copy_n("Target",7,debug.target->name.data());
+            }
+            combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
+        }
         if (haveSnapshot_) {
             DrawEsp(lastSnapshot_);
         }
@@ -1571,7 +1576,7 @@ void Overlay::DrawStatsTab(const WorldSnapshot& snapshot) {
                 ImGui::TableNextRow();
 
                 ImGui::TableSetColumnIndex(0);
-                ImGui::TextUnformatted(entity.name[0] ? entity.name : "<unnamed>");
+                ImGui::TextUnformatted(rockstar::Pack::DisplayName(entity.name[0] ? entity.name : "<unnamed>",rockstarConfig_.Enabled(rockstar::Feature::NameProtect),(entity.flags&kEntityIsPlayer)!=0));
 
                 ImGui::TableSetColumnIndex(1);
                 if (entity.flags & kEntityIsPlayer)       ImGui::TextColored(ImVec4(0.35f, 0.75f, 1.0f, 1.0f), "player");
