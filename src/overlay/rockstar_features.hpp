@@ -63,7 +63,7 @@ public:
                  const combat::Relations& friends,ImVec2 size,double now) const;
     static const char* DisplayName(const char* name,bool protect,bool player);
 private:
-    struct Track { bool used=false; std::uint32_t id=0; combat::Identity uuid{}; float health=0; double seen=0; };
+    struct Track { bool used=false; std::uint32_t id=0; combat::Identity uuid{}; float health=0; double seen=0; bool nearby=false; };
     struct Damage { WorldPoint p{}; float amount=0; double born=-1000; };
     struct Ring { WorldPoint p{}; double born=-1000; };
     struct Notice { std::array<char,112> text{}; double born=-1000; };

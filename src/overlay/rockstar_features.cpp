@@ -120,9 +120,6 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
             for(auto& t:tracks_) if(!t.used||now-t.seen>2) { track=&t; break; }
             if(!track) continue;
             *track={true,e.entityId,e.uuid,e.health,now};
-            if(initialized_&&c.Enabled(Feature::DetectPlayer)&&Player(e)&&e.distance<=c[Feature::DetectPlayer].range) {
-                char text[112]; std::snprintf(text,sizeof(text),"Nearby: %s (%.1f m)",DisplayName(e.name,c.Enabled(Feature::NameProtect),true),e.distance); Notify(text,now);
-            }
         } else if(now-track->seen<1&&e.health<track->health&&track->health>0) {
             const float amount=track->health-std::max(0.f,e.health); stats_.observedDamage+=amount;
             if(c.Enabled(Feature::DamageMarkers)) damage_[damageHead_++%kDamage]={{e.x,e.y+e.height+.1,e.z},amount,now};
@@ -131,7 +128,11 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
                 if(e.health<=0) ++stats_.targetDeaths;
             }
         }
-        track->health=e.health; track->seen=now;
+        const bool nearby=Player(e)&&e.distance<=c[Feature::DetectPlayer].range;
+        if(initialized_&&c.Enabled(Feature::DetectPlayer)&&nearby&&!track->nearby) {
+            char text[112]; std::snprintf(text,sizeof(text),"Nearby: %s (%.1f m)",DisplayName(e.name,c.Enabled(Feature::NameProtect),true),e.distance); Notify(text,now);
+        }
+        track->nearby=nearby; track->health=e.health; track->seen=now;
     }
     previous_=local; previousHealth_=s.health; sampled_=now; frame_=s.frameIndex; initialized_=true;
 }
