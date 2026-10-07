@@ -41,7 +41,7 @@ struct DepthCaptureCheck {
         capture.width_=reinterpret_cast<jfieldID>(1); capture.height_=reinterpret_cast<jfieldID>(2);
         return true;
     }
-    static void Release(DepthCapture& capture) { capture.ReleaseGl(); capture.world_=nullptr; }
+    static void Release(DepthCapture& capture) { capture.ReleaseGl(); }
 };
 }
 int main() {

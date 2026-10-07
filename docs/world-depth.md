@@ -58,3 +58,9 @@ DrawList sowie unabhängiges HUD. `depth_hook` lädt echte transformierte Byteco
 für Vanilla-, Fabric- und Mojmap-Namen und prüft den Callback vor dem Depth-Clear
 einschließlich unverändertem Operand-Stack. `control_panel` prüft die gespeicherte
 Option; die vorhandenen Frame-/JNI-Profiltests prüfen die übrige Integration.
+
+`depth_capture_gl` prueft den echten nativen OpenGL-Leseweg mit verstecktem
+WGL-Kontext, PBOs und Fences: Minecrafts DEPTH_COMPONENT32 sowie 32F/24/16,
+Float-Konvertierung, vertikale Umkehrung, spaeten Snapshot und wiederhergestellten
+GL-Zustand. JNI liefert in dieser Pruefung feste Ressourcen; Minecraft wird nicht
+gestartet oder veraendert. Ohne geeigneten GL-Treiber wird der Test als uebersprungen markiert.
