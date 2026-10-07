@@ -388,6 +388,7 @@ void Overlay::PollHotkeys() {
     else {
         for(const auto& bind:bindings_) read(bind.key);
         for(int key:{VK_SHIFT,VK_CONTROL,VK_MENU,VK_LSHIFT,VK_RSHIFT,VK_LCONTROL,VK_RCONTROL,VK_LMENU,VK_RMENU}) read(key);
+        for(int key:{0x57,0x41,0x53,0x44,VK_SPACE,VK_LBUTTON,VK_RBUTTON,VK_MBUTTON}) read(key);
         if(hudEditing_) read(VK_ESCAPE);
     }
     const bool focused=IsForegroundWindowOwnedBy(target_.pid)||::GetForegroundWindow()==static_cast<HWND>(hwnd_);
@@ -487,6 +488,7 @@ bool Overlay::RunFrame() {
         UpdateTriggerbot(lastSnapshot_);
         UpdateAimLock(lastSnapshot_);
     }
+    UpdateRockstar();
     const bool worldEffects=worldVisualsConfig_.Enabled();
     if(haveSnapshot_&&worldEffects&&agentConnected_&&heartbeatClock_.Alive(::GetTickCount64())) {
         const auto& report=combatReport_;
@@ -600,6 +602,8 @@ void Overlay::DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjectio
 }
 
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
+    if(panicActive_) return;
+    const bool extraEffects=std::any_of(rockstarConfig_.modules.begin(),rockstarConfig_.modules.end(),[](const auto& c){return c.enabled;});
     const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
                                  visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo;
     const auto relations=combatMenu_.Relations().Read();
@@ -608,7 +612,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     });
     if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
-        !haveFriends && !combatMenu_.Store().Read().values.enabled &&
+        !haveFriends && !extraEffects && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
 
     const float width  = static_cast<float>(windowW_);
@@ -616,6 +620,13 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     if (width < 1.0f || height < 1.0f) return;
 
     const CameraProjection projection(snapshot, width, height, settings_.fovTrim);
+    const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
+        combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:snapshot.hasTarget?snapshot.targetEntityId:0;
+    if(extraEffects) {
+        rockstarPack_.DrawWorld(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,relations,target,{width,height},
+            auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),menu_.reduceMotion);
+        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000);
+    }
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
         auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
 
@@ -634,7 +645,8 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     DrawChunkFinder(snapshot,projection);
     if (!entitiesEnabled) return;
 
-    EspRenderer::Draw(*ImGui::GetBackgroundDrawList(),snapshot,projection,visuals_,
+    auto visualConfig=visuals_; visualConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);
+    EspRenderer::Draw(*ImGui::GetBackgroundDrawList(),snapshot,projection,visualConfig,
                       {width,height},ImGui::GetMainViewport()->Pos,itemIcons_.Texture());
 }
 
@@ -936,10 +948,10 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
     char label[96];
     if (snapshot.targetMaxHealth > 0.0f) {
         std::snprintf(label, sizeof(label), "%s   %.0f/%.0f   %.1fm",
-                      snapshot.targetName, snapshot.targetHealth,
+                      rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true), snapshot.targetHealth,
                       snapshot.targetMaxHealth, snapshot.targetDistance);
     } else {
-        std::snprintf(label, sizeof(label), "%s   %.1fm", snapshot.targetName, snapshot.targetDistance);
+        std::snprintf(label, sizeof(label), "%s   %.1fm", rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true), snapshot.targetDistance);
     }
     const ImVec2 size = ImGui::CalcTextSize(label);
     DrawHudText(draw, cx - size.x * 0.5f, cy + radius + 8.0f, IM_COL32(200, 250, 215, 255), label);
@@ -993,10 +1005,12 @@ void Overlay::PushScanRequest() {
     SharedBlock* block = channel_.block();
     if (!block) return;
 
+    const bool storage=rockstarConfig_.Enabled(rockstar::Feature::ChestEsp),beacon=rockstarConfig_.Enabled(rockstar::Feature::BeaconRadius);
+    const std::uint32_t storageMask=(1u<<kBlockChest)|(1u<<kBlockShulker)|(1u<<kBlockBarrel)|(1u<<kBlockHopper)|(1u<<kBlockFurnace);
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
-        (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u);
-    const int radius=std::max(blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4);
-    const int interval=std::min(blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000);
+        (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u)|(storage?storageMask:0)|(beacon?1u<<kBlockBeacon:0);
+    const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,storage||beacon?24:4});
+    const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,storage||beacon?1000:3000});
     block->scanMask.store(mask, std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
@@ -1060,6 +1074,8 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
         IM_COL32(200, 160,  90, 255),  // chest
         IM_COL32(120, 200, 190, 255),  // spawner
         IM_COL32(120, 215, 255, 255),  // rotated deepslate
+        IM_COL32(110,255,220,255), IM_COL32(190,130,230,255), IM_COL32(200,160,90,255),
+        IM_COL32(170,170,180,255), IM_COL32(235,160,90,255),
     };
 
     for (std::uint32_t i = 0; i < snapshot.blockCount && i < kMaxBlocks; ++i) {
@@ -1179,6 +1195,7 @@ void Overlay::DrawMenu() {
             case panel::Page::Hud: self.DrawHudTab(); break;
             case panel::Page::Stats: self.DrawStatsTab(self.lastSnapshot_); break;
             case panel::Page::Settings: self.DrawSettingsTab(); break;
+            case panel::Page::Misc: self.DrawMiscTab(); break;
         }
     });
     if (actions.reset) ResetMenuPage(menu_.page);
@@ -1196,6 +1213,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; break;
         case panel::Page::Hud: hud_=HudSettings{}; preferencesDirty_=true; break;
         case panel::Page::Stats: break;
+        case panel::Page::Misc: rockstarConfig_=rockstar::Config{}; rockstarPack_.ResetWorld(); preferencesDirty_=true; break;
         case panel::Page::Settings:
             settings_=OverlaySettings{};
             preferencesDirty_=true;
@@ -1210,8 +1228,10 @@ void Overlay::ResetMenuPage(panel::Page page) {
 void Overlay::DrawVisualsTab() {
     constexpr const char* sections[]={"Box ESP","Skeleton","Name tags","Health bars","Distance labels",
         "Tracers","Target info","Target aura","Target marker","Trails","Hit particles","Ambient particles",
-        "Hit bubbles","Kill effect","BreadCrumbs","China hat","Entity filters"};
+        "Hit bubbles","Kill effect","BreadCrumbs","China hat","Entity filters","Jump circles","Wings","Halo / Nimb",
+        "Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows"};
     visualsSection_=panel::SubTabs("visual_sections",sections,IM_ARRAYSIZE(sections),visualsSection_);
+    if(visualsSection_>=17) { DrawRockstarSettings(static_cast<rockstar::Feature>(visualsSection_-17)); return; }
     // Jede Funktion besitzt ihre Regler; gemeinsame Entity-Filter bleiben an einer Stelle.
     switch(visualsSection_) {
         case 0:
@@ -1367,6 +1387,7 @@ void Overlay::DrawCombatTab() {
     if(section==CombatMenu::Section::AutoTotem) { DrawItemAssistSettings(0); return; }
     if(section==CombatMenu::Section::CrystalMacro) { DrawItemAssistSettings(1); return; }
     if(section==CombatMenu::Section::AnchorMacro) { DrawItemAssistSettings(2); return; }
+    if(section==CombatMenu::Section::HitSounds) { DrawRockstarSettings(rockstar::Feature::HitSounds); return; }
     const bool auraActive=combatMenu_.Store().Read().values.enabled;
     if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura is enabled.");
     ImGui::BeginDisabled(auraActive);
@@ -1416,9 +1437,10 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
+    if(blocksSection_>=4) { DrawRockstarSettings(static_cast<rockstar::Feature>(rockstar::Index(rockstar::Feature::ChestEsp)+blocksSection_-4)); return; }
     bool dirty=false;
     if(blocksSection_==0) {
         if(panel::BeginRows("block_scanning")) {
@@ -1450,8 +1472,8 @@ void Overlay::DrawBlocksTab() {
 }
 
 void Overlay::DrawHudTab() {
-    constexpr std::array<const char*,kHudModules+1> sections={"Editor","Equipment","Status effects","Coordinates",
-        "Performance","Compass","Reach indicator","Watermark","Active modules","Keybinds"};
+    const auto sections=[] { std::array<const char*,kHudModules+1> names{}; names[0]="Editor";
+        for(int i=0;i<kHudModules;++i) names[i+1]=kHudNames[i]; return names; }();
     hudSection_=panel::SubTabs("hud_sections",sections.data(),int(sections.size()),hudSection_);
     if(hudSection_>0) hudSelected_=hudSection_-1;
     if(ImGui::Button("Open HUD editor")) SetHudEditing(true);
@@ -1470,6 +1492,7 @@ void Overlay::DrawHudTab() {
         const int module=hudSection_-1; bool on=HudEnabled(module);
         if(panel::BeginRows("hud_element")) {
             if(panel::CheckRow("Show element",&on)) { SetHudEnabled(module,on); changed=true; }
+            if(module>=int(HudModule::Radar)&&module<=int(HudModule::Cps)) DrawBind(static_cast<keys::Action>(keys::Index(keys::Action::Radar)+module-int(HudModule::Radar)),true);
             auto& placement=hud_.layout[module];
             changed|=panel::SliderRow("Scale",&placement.scale,.65f,1.6f,"%.2f x");
             bool moved=panel::SliderRow("Horizontal position",&placement.position.x,0,1,"%.2f");
@@ -1497,7 +1520,7 @@ void Overlay::DrawStatsTab(const WorldSnapshot& snapshot) {
     }
 
     if(statsSection_==0) {
-        ImGui::Text("Name       %s", snapshot.username[0] ? snapshot.username : "-");
+        ImGui::Text("Name       %s", rockstar::Pack::DisplayName(snapshot.username[0] ? snapshot.username : "-",rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true));
         ImGui::Text("Position   %.1f, %.1f, %.1f", snapshot.posX, snapshot.posY, snapshot.posZ);
         ImGui::Text("Facing     yaw %.1f  pitch %.1f", snapshot.yawDeg, snapshot.pitchDeg);
         ImGui::Text("Dimension  %s", snapshot.dimension[0] ? snapshot.dimension : "-");
