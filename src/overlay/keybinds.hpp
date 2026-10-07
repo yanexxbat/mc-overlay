@@ -52,6 +52,8 @@ class Engine final {
     std::array<bool,kCount> down_{},holding_{},restore_{};
     bool initialized_=false;
 public:
+    // Panic darf beim Loslassen einer Hold-Taste keinen alten Aktiv-Zustand restaurieren.
+    void DiscardHoldRestoration() { for(int i=0;i<kCount;++i) if(holding_[i]) restore_[i]=false; }
     template<class Read,class Write,class Invoke>
     void Update(const Bindings& binds,const Input& input,bool focused,bool modulesAllowed,bool capturing,
                 Read read,Write write,Invoke invoke) {
