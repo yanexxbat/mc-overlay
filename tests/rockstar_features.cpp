@@ -42,6 +42,15 @@ int main() {
         for(int i=int(HudModule::Radar);i<kHudModules;++i) pack.DrawHud(*draw,static_cast<HudModule>(i),s,c,{}, {232,200},11);
         ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"feature pack rendered nothing");
         for(auto* list:ImGui::GetDrawData()->CmdLists) for(const auto& vertex:list->VtxBuffer) Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"nonfinite feature geometry");
+        // Ein bereits erfasster Spieler muss auch beim spaeteren Eintritt in die Reichweite melden.
+        Pack nearby; e.distance=50; s.frameIndex=90; nearby.Update(s,14,c,42);
+        const auto noticeVertices=[&](double time) {
+            ImGui::NewFrame(); auto* list=ImGui::GetBackgroundDrawList(); nearby.DrawHud(*list,HudModule::Notifications,s,c,{}, {232,145},time);
+            const int count=list->VtxBuffer.Size; ImGui::Render(); return count;
+        };
+        const int empty=noticeVertices(14); e.distance=16; s.frameIndex++; nearby.Update(s,14.1,c,42);
+        const int entered=noticeVertices(14.1); Require(entered>empty,"existing player entering detection range generated no notification");
+        s.frameIndex++; nearby.Update(s,14.2,c,42); Require(noticeVertices(14.2)==entered,"stationary nearby player generated repeated notifications");
         ImGui::DestroyContext(); std::cout<<"PASS Rockstar feature state, projection, persistence boundaries and HUD\n"; return 0;
     } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

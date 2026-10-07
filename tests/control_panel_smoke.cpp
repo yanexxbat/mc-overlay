@@ -14,6 +14,7 @@
 #include <cmath>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <crtdbg.h>
 
@@ -610,7 +611,8 @@ int main(int argc,char** argv) {
                 mcov::control_panel::motion::EaseOut(.2f)>.5f,"Feedback curve does not respond promptly");
         mcov::style::ApplyFlatTheme(ImGui::GetStyle());
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"Off-screen ImGui renderer failed");
-        mcov::Overlay overlay; mcov::OverlayUiCheck::Seed(overlay);
+        // Die erweiterte Fixture plus mehrere große Snapshots passen nicht auf den 1-MB-Teststack.
+        auto overlayStorage=std::make_unique<mcov::Overlay>(); auto& overlay=*overlayStorage; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
         auto frame=[&](Page page,bool preserve=false) { Draw(overlay,page,0,{1280,800},preserve); };
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
