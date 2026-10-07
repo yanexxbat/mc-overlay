@@ -421,6 +421,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     request.crystal.maxRange=1;
     use(); report=tick(); Require(report.crystal==Status::OutOfRange&&report.crystalActions==0,"native range limit ignored");
     request.crystal.maxRange=4.5f;
+    request.crystal.requireCrosshairHit=true;
     down(true); use(); report=tick();
     Require(report.crystalActions==1&&env->GetStaticIntField(b.clsInteractionMgr,siteUsesId)==1,"captured crystal placement did not run"); Healthy(env);
     Require(env->GetStaticIntField(b.client.minecraftClass,usesId)==0,"macro placement leaked into vanilla held Use"); Healthy(env);
@@ -440,12 +441,15 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     env->CallBooleanMethod(entities,add,crystal); Healthy(env);
     const int attacksBefore=env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testAttacks","I",true)); Healthy(env);
     use(); report=tick();
+    Require(report.crystalActions==1&&report.crystal==Status::CrosshairMismatch,"strict crosshair check attacked an unpicked crystal");
+    env->SetObjectField(client,b.fTargetedEntity,crystal); Healthy(env); use(); report=tick();
     Require(report.crystalActions==2&&env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testAttacks","I",true))==attacksBefore+1,"crystal at saved base not attacked without crosshair entity"); Healthy(env);
     Sleep(110); report=tick(); Require(report.crystalActions==2,"unconfirmed removal repeated attack");
-    env->CallVoidMethod(entities,clear); Healthy(env); report=tick();
+    env->CallVoidMethod(entities,clear); env->SetObjectField(client,b.fTargetedEntity,nullptr); Healthy(env); report=tick();
     Require(report.crystalActions==3,"removed crystal not replaced at saved base");
     down(false); report=tick(); Require(env->GetIntField(inventory,selected)==2&&report.crystalActions==3,"Use release failed to stop crystal cycle"); Healthy(env);
     Require(combatCallbackThread==GetCurrentThreadId()&&combatAfterVanillaTick,"macro actions not after vanilla client tick");
+    request.crystal.requireCrosshairHit=false;
 
     // Ablehnung durch das Spiel ist keine bestätigte Platzierung.
     down(true); env->SetStaticBooleanField(resultClass,field(resultClass,"testConsumes","Z",true),JNI_FALSE); Healthy(env);
@@ -459,6 +463,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     use(); Require(env->GetStaticIntField(b.client.minecraftClass,usesId)==vanillaBefore+1,"unrelated item use was intercepted"); Healthy(env);
 
     request.crystal.enabled=false; request.anchor.enabled=true; request.anchor.intervalMs=100;
+    request.anchor.requireCrosshairHit=true;
     env->CallObjectMethod(list,replace,1,stack("block.minecraft.respawn_anchor")); Healthy(env);
     env->CallObjectMethod(list,replace,3,stack("block.minecraft.glowstone")); Healthy(env);
     env->CallObjectMethod(list,replace,4,stack("item.minecraft.stick")); Healthy(env);
@@ -475,16 +480,19 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     auto charge=[&](int n) { auto value=env->CallStaticObjectMethod(integer,box,n); Healthy(env); SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",value); };
     env->SetIntField(inventory,selected,1); down(true); hitAt(0,64,0); report=tick(); use(); report=tick();
     Require(report.anchorActions==1,"anchor placement JNI path failed");
-    worldState(65,anchorState); charge(0); Sleep(110); use(); report=tick();
+    worldState(65,anchorState); charge(0); hitAt(0,65,0); Sleep(110); use(); report=tick();
     Require(report.anchorActions==2&&env->GetIntField(inventory,selected)==3,"anchor charge without changing crosshair failed"); Healthy(env);
     auto lastHit=env->GetStaticObjectField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testLastHit",("L"+std::string(g.blockHitClass)+";").c_str(),true)); Healthy(env);
+    auto actualHit=env->GetObjectField(client,field(b.client.minecraftClass,g.hitResult.name,g.hitResult.signature)); Healthy(env);
+    Require(env->IsSameObject(lastHit,actualHit),"strict anchor interaction did not preserve actual Minecraft hit/face");
     auto lastPos=env->CallObjectMethod(lastHit,jvm::TryMethod(env,hitClass,g.blockHitPos.name,g.blockHitPos.signature,false)); Healthy(env);
     Require(env->CallIntMethod(lastPos,jvm::TryMethod(env,posClass,g.posY.name,g.posY.signature,false))==65,"anchor interaction used placement support instead of saved anchor cell"); Healthy(env);
     charge(1); Sleep(110); use(); report=tick();
     Require(report.anchorActions==3&&env->GetIntField(inventory,selected)!=3,"anchor detonation without changing crosshair failed"); Healthy(env);
     Sleep(110); report=tick(); Require(report.anchorActions==3,"unconfirmed anchor removal repeated detonation");
-    worldState(65,air); report=tick(); Require(report.anchorActions==4,"exploded anchor not replaced automatically");
+    worldState(65,air); hitAt(0,64,0); report=tick(); Require(report.anchorActions==4,"exploded anchor not replaced automatically");
     down(false); report=tick(); Require(env->GetIntField(inventory,selected)==1,"anchor release did not restore selected anchor"); Healthy(env);
+    request.anchor.requireCrosshairHit=false;
 
     // Vorhandene Anchor werden geladen; in Respawn-Dimensionen bleiben normale Uses erhalten.
     worldState(65,anchorState); charge(0); hitAt(0,65,0); down(true); use(); report=tick();

@@ -31,7 +31,7 @@ void Overlay::DrawItemAssistSettings(int section) {
             ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
             if(ImGui::Button("Server conservative")) { macro.Conservative(); changed=true; }
             if(ImGui::IsItemHovered()) ImGui::SetTooltip("Short range, slower actions and strict world confirmation. Server acceptance is not guaranteed.");
-            ImGui::SameLine();
+            ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
             if(ImGui::Button("GrimAC conservative")) { macro.GrimConservative(); changed=true; }
             if(ImGui::IsItemHovered()) ImGui::SetTooltip("Also requires a real crosshair hit and uses Minecraft's clicked block face. Not a verified bypass.");
             changed|=panel::CheckRow("Separate action delays",&macro.separateDelays);

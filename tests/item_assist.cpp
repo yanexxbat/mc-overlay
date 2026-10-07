@@ -129,6 +129,18 @@ int main() try {
         sample.selected=7; sample.useDown=false; a=step(15500); Check(a.operation==Operation::RestoreSlot&&a.slot==3,"fuel cycle restore failed");
         cfg.anchor.Conservative(); Check(cfg.anchor.strictConfirmation&&cfg.anchor.maxRange==3&&cfg.anchor.breakMs==250,"conservative profile incomplete");
     }
+    {
+        Controller direct; Frame sample;
+        sample.world=sample.alive=sample.ownMenu=sample.macroSupported=sample.useDown=sample.siteValid=true;
+        sample.cycle=Item::Crystal; sample.target=Target::CrystalBase; sample.inventory[1]=Item::Crystal; sample.selected=1;
+        Request cfg; cfg.inputAllowed=true; cfg.crystal.enabled=true; cfg.crystal.GrimConservative();
+        const auto step=[&](std::uint64_t now) { cfg.sentAtMs=now; return direct.Tick(cfg,sample,now); };
+        Check(step(16000).operation==Operation::None&&direct.GetReport().crystal==Status::CrosshairMismatch,"Grim profile placed without actual block hit");
+        sample.crosshairSupport=true; a=step(16001); Check(a.operation==Operation::PlaceCrystal,"actual support hit did not permit placement"); direct.Complete(a,true);
+        sample.target=Target::Crystal; sample.crystalId=50;
+        Check(step(16251).operation==Operation::None&&direct.GetReport().crystal==Status::CrosshairMismatch,"Grim profile attacked crystal outside crosshair");
+        sample.crosshairCrystal=true; a=step(16252); Check(a.operation==Operation::AttackCrystal,"real crosshair crystal did not permit attack");
+    }
     Check(mcov::RotatedDeepslate("block.minecraft.deepslate","x")&&mcov::RotatedDeepslate("block.minecraft.deepslate","z"),"horizontal raw deepslate must be a hint");
     Check(!mcov::RotatedDeepslate("block.minecraft.deepslate","y")&&!mcov::RotatedDeepslate("block.minecraft.deepslate_diamond_ore","x")&&!mcov::RotatedDeepslate("block.minecraft.infested_deepslate","z"),"vertical deepslate and ores must not be hints");
     Check(mcov::ChunkCoordinate(-.1)==-1&&mcov::ChunkCoordinate(-16)==-1&&mcov::ChunkCoordinate(-17)==-2&&mcov::ChunkCoordinate(16)==1,"negative chunk coordinates must floor correctly");

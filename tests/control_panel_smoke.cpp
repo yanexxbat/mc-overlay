@@ -705,7 +705,7 @@ int main(int argc,char** argv) {
         const auto prefs=output/"client-preferences-test.ini"; mcov::OverlayUiCheck::PrefPath(overlay,prefs);
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=false;
         auto& savedCrystal=mcov::OverlayUiCheck::Crystal(overlay); auto& savedAnchor=mcov::OverlayUiCheck::Anchor(overlay);
-        savedCrystal.Conservative(); savedCrystal.requireTotem=true; savedCrystal.placeMs=350;
+        savedCrystal.GrimConservative(); savedCrystal.requireTotem=true; savedCrystal.placeMs=350;
         savedAnchor.chargeWithOffhandFuel=true; savedAnchor.detonationSlot=8; savedAnchor.minHealth=9;
         binds[auraKey].mode=mcov::keys::Mode::Hold;
         auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
@@ -721,7 +721,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=true;
         mcov::OverlayUiCheck::Load(overlay);
         Require(!mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects,"World depth preference did not survive save/load");
-        Require(savedCrystal.strictConfirmation&&savedCrystal.requireTotem&&savedCrystal.placeMs==350&&savedCrystal.maxRange==3&&
+        Require(savedCrystal.strictConfirmation&&savedCrystal.requireCrosshairHit&&savedCrystal.requireTotem&&savedCrystal.placeMs==350&&savedCrystal.maxRange==3&&
                 savedAnchor.chargeWithOffhandFuel&&savedAnchor.detonationSlot==8&&savedAnchor.minHealth==9&&!savedAnchor.enabled&&!savedCrystal.enabled,
                 "combat settings must persist without auto-enabling modules");
         Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
