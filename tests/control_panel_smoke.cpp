@@ -254,7 +254,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     mcov::OverlayUiCheck::Center(overlay); frame(); frame();
     auto bar=[&]() -> ImGuiTabBar* {
         auto* tabs=ctx.TabBars.GetByKey(Child("/content_")->GetID("visual_sections"));
-        Require(tabs&&tabs->Tabs.Size==17,"Visuals did not expose all function tabs"); return tabs;
+        Require(tabs&&tabs->Tabs.Size==26,"Visuals did not expose all function tabs"); return tabs;
     };
     SelectSubTab(overlay,Page::Visuals,"visual_sections",8,26);
     auto* content=Child("/content_");
