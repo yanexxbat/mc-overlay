@@ -560,12 +560,12 @@ int main(int argc,char** argv) {
         mcov::style::ApplyFlatTheme(ImGui::GetStyle());
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"Off-screen ImGui renderer failed");
         mcov::Overlay overlay; mcov::OverlayUiCheck::Seed(overlay);
-        const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings};
+        const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
         auto frame=[&](Page page,bool preserve=false) { Draw(overlay,page,0,{1280,800},preserve); };
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
-        constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections"};
-        constexpr int sectionCounts[]={7,17,4,10,3,4};
+        constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
+        constexpr int sectionCounts[]={8,26,7,20,3,4,8};
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
@@ -586,7 +586,7 @@ int main(int argc,char** argv) {
         click(checkbox); Require(!mcov::OverlayUiCheck::Box(overlay),"Classic checkbox did not update real ESP setting");
         mcov::OverlayUiCheck::ResetVisuals(overlay); Require(mcov::OverlayUiCheck::Box(overlay),"Visuals reset failed");
         auto* nav=Child("/navigation_");
-        const float width=nav->Size.x/6;
+        const float width=nav->Size.x/7;
         click({nav->Pos.x+width*.5f,nav->Pos.y+15});
         Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Top navigation did not select Combat");
         nav=Child("/navigation_"); click({nav->Pos.x+width*5.5f,nav->Pos.y+15},Page::Combat);

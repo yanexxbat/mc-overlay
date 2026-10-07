@@ -22,7 +22,7 @@ void GlowLine(ImDrawList& d,ImVec2 a,ImVec2 b,ImVec4 color,float width,float glo
 void WorldLine(ImDrawList& d,const CameraProjection& p,WorldPoint a,WorldPoint b,ImVec4 color,float width,float glow) {
     ScreenPoint sa,sb; if(p.Segment(a,b,sa,sb)) GlowLine(d,{sa.x,sa.y},{sb.x,sb.y},color,width,glow);
 }
-void Ring(ImDrawList& d,const CameraProjection& p,WorldPoint center,double radius,ImVec4 a,ImVec4 b,float width,float glow) {
+void DrawRing(ImDrawList& d,const CameraProjection& p,WorldPoint center,double radius,ImVec4 a,ImVec4 b,float width,float glow) {
     constexpr int segments=64;
     for(int i=0;i<segments;++i) {
         const double first=tau*i/segments,next=tau*(i+1)/segments;
@@ -146,7 +146,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
     const auto& jump=config[Feature::JumpCircles];
     if(jump.enabled) for(const auto& r:rings_) {
         const float t=static_cast<float>((now_-r.born)/jump.lifetime);
-        if(t>=0&&t<1) { const auto [a,b]=palette(jump,1-t); Ring(d,p,r.p,jump.size*(reduced?1:.15f+.85f*t),a,b,2,jump.glow); }
+        if(t>=0&&t<1) { const auto [a,b]=palette(jump,1-t); DrawRing(d,p,r.p,jump.size*(reduced?1:.15f+.85f*t),a,b,2,jump.glow); }
     }
     for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
         if(!(e.flags&kEntityIsLiving)||e.health<=0||!Finite({e.x,e.y,e.z})) continue;
@@ -166,12 +166,12 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         if(circle.enabled&&!self&&target&&e.entityId==target) {
             const auto [a,b]=palette(circle); const double spin=reduced?0:now_*circle.speed;
             const double y=bounds.min.y+(circle.mode==1?(bounds.max.y-bounds.min.y)*(.5+.5*std::sin(spin)):.04);
-            Ring(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,a,b,2,circle.glow);
+            DrawRing(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,a,b,2,circle.glow);
         }
         if(!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&e.distance>64)) continue;
         const auto rig=BuildHumanoidRig(e);
         const auto& halo=config[Feature::Halo];
-        if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05; Ring(d,p,head,e.width*.6*halo.size,a,b,2,halo.glow); }
+        if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05; DrawRing(d,p,head,e.width*.6*halo.size,a,b,2,halo.glow); }
         const auto& wings=config[Feature::Wings];
         if(wings.enabled) {
             const auto [a,b]=palette(wings); const double yaw=e.yaw*rad;
@@ -200,7 +200,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
     }
     const auto& beacon=config[Feature::BeaconRadius];
     if(beacon.enabled) for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) if(block.kind==kBlockBeacon) {
-        const auto [a,b]=palette(beacon); Ring(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,a,b,1,beacon.glow);
+        const auto [a,b]=palette(beacon); DrawRing(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,a,b,1,beacon.glow);
         WorldLine(d,p,{block.x+.5,block.y+1,block.z+.5},{block.x+.5,block.y+32,block.z+.5},b,2,beacon.glow);
     }
     const auto& storage=config[Feature::ChestEsp];
@@ -229,7 +229,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const Config& c,ImVec
     if(markers.enabled) for(const auto& hit:damage_) {
         const float age=float(now-hit.born); if(age<0||age>=markers.lifetime) continue;
         const auto point=WorldPoint{hit.p.x,hit.p.y+age*.5*markers.speed,hit.p.z}; ScreenPoint screen; float radius=0;
-        if(projection.Point(point,.03f,screen,radius)) {
+        if(projection.Point(point,screen)) {
             char text[24]; std::snprintf(text,sizeof(text),"-%.1f",hit.amount); const ImVec2 pos{screen.x,screen.y};
             auto color=markers.auraColours?a:markers.start; color.w=markers.opacity*(1-age/markers.lifetime);
             d.AddText({pos.x+1,pos.y+1},Ink({0,0,0,color.w}),text); d.AddText(pos,Ink(color),text);
@@ -246,7 +246,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const Config& c,ImVec
     const auto& arrows=c[Feature::Arrows];
     if(arrows.enabled) for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) if(Player(e)&&e.distance<=arrows.range) {
         ScreenPoint screen; float radius=0;
-        if(projection.Point({e.x,e.y+e.height*.5,e.z},.1f,screen,radius)&&screen.x>=0&&screen.x<=size.x&&screen.y>=0&&screen.y<=size.y) continue;
+        if(projection.Point({e.x,e.y+e.height*.5,e.z},screen)&&screen.x>=0&&screen.x<=size.x&&screen.y>=0&&screen.y<=size.y) continue;
         const double bearing=std::atan2(-(e.x-s.camX),e.z-s.camZ)-s.yawDeg*rad;
         const float x=float(std::sin(bearing)),y=-float(std::cos(bearing)); const float rr=std::min(size.x,size.y)*.38f;
         const ImVec2 p{size.x*.5f+x*rr,size.y*.5f+y*rr}; auto color=arrows.auraColours?a:arrows.start; color.w=arrows.opacity;
@@ -256,7 +256,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const Config& c,ImVec
     }
     for(const auto& m:markers_) if(m.used&&(m.death?c.Enabled(Feature::DeathCoordinates):c.Enabled(Feature::Waypoints))&&
             !std::memcmp(m.dimension.data(),s.dimension,kNameLen)&&!std::memcmp(m.server.data(),s.serverAddress,kAddrLen)) {
-        ScreenPoint screen; float radius=0; if(!projection.Point({m.p.x,m.p.y+.8,m.p.z},.05f,screen,radius)) continue;
+        ScreenPoint screen; if(!projection.Point({m.p.x,m.p.y+.8,m.p.z},screen)) continue;
         char text[96]; std::snprintf(text,sizeof(text),"%s | %.0f m",m.label.data(),Distance(m.p,{s.posX,s.posY,s.posZ}));
         d.AddCircle(screen.x>=0?ImVec2{screen.x,screen.y}:ImVec2{-100,-100},6,IM_COL32(174,105,209,255),16,2);
         d.AddText({screen.x+10,screen.y-6},IM_COL32(236,236,238,255),text);
