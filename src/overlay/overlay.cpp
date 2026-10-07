@@ -533,7 +533,10 @@ bool Overlay::RunFrame() {
         const bool combatTarget=report.status==CombatBridgeStatus::Active&&report.debug.target&&
             report.sampledAtMs&&::GetTickCount64()-report.sampledAtMs<=kCombatLeaseMs&&combatEnabled;
         const auto target=combatEnabled ? (combatTarget?report.debug.target->id:0) : lastSnapshot_.hasTarget ? lastSnapshot_.targetEntityId : 0;
-        worldVisuals_.Update(visualSnapshot,double(::GetTickCount64())/1000.,worldVisualsConfig_,target);
+        // Bei einer Depth-Luecke nicht erst neue Geometrie akzeptieren und im
+        // naechsten Frame auf einen aelteren GPU-Snapshot zurueckspringen.
+        if(!depthActive_||depthFresh_)
+            worldVisuals_.Update(visualSnapshot,double(::GetTickCount64())/1000.,worldVisualsConfig_,target);
     } else worldVisuals_.Reset();
 
     // Re-assert every frame so the agent always reflects the UI, even after it

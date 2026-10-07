@@ -9,7 +9,7 @@ Agent, Java-Helfer und Overlay verwenden jetzt IPC **18**.
 - **Active:** ein frischer Tiefenframe wird verwendet.
 - **Waiting:** passende Tiefendaten fehlen noch; Welt-Effekte bleiben ausgeblendet.
 - **Unavailable:** der aktuelle Renderer oder sein Tiefenformat ist inkompatibel.
-- **Idle:** es sind keine entsprechenden Effekte sichtbar oder die Option ist aus.
+- **Idle:** es sind keine entsprechenden Effekte sichtbar.
 - **Off:** die Option ist ausgeschaltet.
 
 Aura-Orbs und Schweife, Partikel, Trails, Sprung-/Zielringe, Wings, Halo,
