@@ -12,6 +12,7 @@
 namespace mcov::agent {
 // Nur Minecrafts OpenGL-Thread besitzt den Kontext. Der Sampler bindet lediglich JNI-IDs.
 class DepthCapture final {
+    friend struct DepthCaptureCheck;
     struct Gl {
         void (APIENTRY *genFbo)(GLsizei,GLuint*){};
         void (APIENTRY *deleteFbo)(GLsizei,const GLuint*){};
@@ -173,7 +174,12 @@ public:
         if(env->ExceptionCheck()) { env->ExceptionClear(); return; }
         if(id<=0||slot.width<1||slot.height<1||!std::isfinite(slot.farPlane)||slot.farPlane<=.05f) return;
         glBindTexture(GL_TEXTURE_2D,id); GLint internal{}; glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_INTERNAL_FORMAT,&internal);
-        if(internal!=0x8cac && internal!=0x81a6 && internal!=0x81a5) { Status(DepthStatus::Unsupported); return; }
+        // Vanilla 1.21.11 DEPTH32 verwendet GL_DEPTH_COMPONENT32 (0x81a7),
+        // nicht GL_DEPTH_COMPONENT32F. ReadPixels wandelt beide in Float um.
+        if(internal!=0x81a7 && internal!=0x8cac && internal!=0x81a6 && internal!=0x81a5) {
+            if(block->status.load()!=std::uint32_t(DepthStatus::Unsupported)) MCOV_LOG_WARN("unsupported world depth format: 0x%x",internal);
+            Status(DepthStatus::Unsupported); return;
+        }
         if(format_!=internal) {
             ReleaseGl(); format_=internal;
             gl_.genFbo(1,&source_); gl_.genFbo(1,&target_); glGenTextures(1,&texture_);
