@@ -483,12 +483,30 @@ bool Overlay::RunFrame() {
     ImGui::NewFrame();
 
     const auto depthNow=GetTickCount64();
-    depthActive_=settings_.occludeWorldEffects&&haveSnapshot_&&agentConnected_&&!panicActive_&&
+    const auto depthRelations=combatMenu_.Relations().Read();
+    const bool friendEffects=std::any_of(depthRelations.begin(),depthRelations.end(),[](const auto& r) {
+        return r.used&&r.relation==combat::Relation::Friend;
+    });
+    const bool ownHat=localHatConfig_.enabled&&std::any_of(lastSnapshot_.entities,
+        lastSnapshot_.entities+std::min(lastSnapshot_.entityCount,kMaxEntities),[&](const auto& e) {
+            return FriendHatRenderer::LocalVisible(e,{lastSnapshot_.camX,lastSnapshot_.camY,lastSnapshot_.camZ},localHatConfig_.firstPerson);
+        });
+    const bool targetEffects=lastSnapshot_.hasTarget||combatReport_.status==CombatBridgeStatus::Active||
+        auraRenderer_.Targets()[0].valid||auraRenderer_.Targets()[1].valid;
+    bool needsDepth=worldVisualsConfig_.Enabled()||friendEffects||ownHat||
+        (targetEffects&&(auraConfig_.enabled||targetCubeConfig_.enabled));
+    for(const auto f:{rockstar::Feature::JumpCircles,rockstar::Feature::Wings,rockstar::Feature::Halo,
+                     rockstar::Feature::TargetCircle,rockstar::Feature::BeaconRadius,rockstar::Feature::ChunkBorders})
+        needsDepth|=rockstarConfig_.Enabled(f);
+    depthActive_=needsDepth&&shouldDraw&&settings_.occludeWorldEffects&&haveSnapshot_&&agentConnected_&&!panicActive_&&
+        lastSnapshot_.entityCount>0&&
         !std::strcmp(lastSnapshot_.gameVersion,"1.21.11");
     if(depthActive_&&!depthChannel_.Block()&&depthNow>=depthConnectAt_) { depthChannel_.Open(target_.pid,false); depthConnectAt_=depthNow+1000; }
     if(auto* block=depthChannel_.Block()) block->requested.store(depthActive_?1u:0u,std::memory_order_release);
     depthFresh_=depthActive_&&depthFrame_&&depthChannel_.Read(*depthFrame_)&&depthFrame_->timeMs<=depthNow&&
         depthNow-depthFrame_->timeMs<100&&depthFrame_->world.renderEpoch==depthFrame_->epoch&&
+        depthFrame_->sourceWidth>0&&depthFrame_->sourceHeight>0&&windowW_>0&&windowH_>0&&
+        std::abs(float(depthFrame_->sourceWidth)/depthFrame_->sourceHeight-float(windowW_)/windowH_)<.01f&&
         (!lastSnapshot_.dimension[0]||!depthFrame_->world.dimension[0]||!std::memcmp(lastSnapshot_.dimension,depthFrame_->world.dimension,kNameLen))&&
         (!lastSnapshot_.serverAddress[0]||!depthFrame_->world.serverAddress[0]||!std::memcmp(lastSnapshot_.serverAddress,depthFrame_->world.serverAddress,kAddrLen));
     depthRenderer_.Begin(*ImGui::GetBackgroundDrawList());
@@ -1634,6 +1652,7 @@ void Overlay::DrawSettingsTab() {
             if(panel::CheckRow("Occlude world effects",&settings_.occludeWorldEffects)) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+250; }
             const auto* depth=depthChannel_.Block();
             panel::ValueRow("World depth",depthFresh_?"Active":!std::strcmp(lastSnapshot_.gameVersion,"1.21.11")?
+                !depthActive_?"Idle":
                 depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);
             if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();

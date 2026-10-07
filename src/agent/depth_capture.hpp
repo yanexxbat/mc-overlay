@@ -118,7 +118,9 @@ public:
         State state(gl_);
         // Kein Warten auf die GPU: drei PBOs und Fence-Poll mit Timeout 0.
         for(auto& s:slots_) if(s.fence) {
-            const auto done=gl_.wait(s.fence,0,0); if(done!=0x911a&&done!=0x911c) continue;
+            const auto done=gl_.wait(s.fence,0,0);
+            if(done==0x911d) { gl_.deleteSync(s.fence); s.fence=nullptr; Status(DepthStatus::Unsupported); continue; }
+            if(done!=0x911a&&done!=0x911c) continue;
             gl_.bindBuffer(Pack,s.pbo);
             const auto* data=static_cast<const float*>(gl_.map(Pack,0,Bytes,1));
             if(data) {

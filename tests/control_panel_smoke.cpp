@@ -53,6 +53,7 @@ struct OverlayUiCheck {
     static TargetCubeConfig& CubeSettings(Overlay& o) { return o.targetCubeConfig_; }
     static void MarkerDetails(Overlay& o,bool open) { o.markerDetailsOpen_=open; }
     static HudSettings& Hud(Overlay& o) { return o.hud_; }
+    static OverlaySettings& Settings(Overlay& o) { return o.settings_; }
     static WorldVisualsConfig& WorldSettings(Overlay& o) { return o.worldVisualsConfig_; }
     static LocalHatConfig& HatSettings(Overlay& o) { return o.localHatConfig_; }
     static rockstar::Config& Rockstar(Overlay& o) { return o.rockstarConfig_; }
@@ -701,6 +702,7 @@ int main(int argc,char** argv) {
         Require(binds[mcov::keys::Index(mcov::keys::Action::Skeleton)].key==0xA0,"Standalone modifier capture did not finish on release");
         mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::ResetCombat(overlay);
         const auto prefs=output/"client-preferences-test.ini"; mcov::OverlayUiCheck::PrefPath(overlay,prefs);
+        mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=false;
         binds[auraKey].mode=mcov::keys::Mode::Hold;
         auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
         auto& extra=mcov::OverlayUiCheck::Rockstar(overlay); auto& pack=mcov::OverlayUiCheck::Pack(overlay);
@@ -711,6 +713,7 @@ int main(int argc,char** argv) {
         mcov::CopyField(markerScene.dimension,"Overworld"); mcov::CopyField(markerScene.serverAddress,"Local world");
         Require(pack.AddMarker(markerScene,"Home \"one\""),"test waypoint could not be saved");
         mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; extra={}; pack.ClearMarkers(); mcov::OverlayUiCheck::Load(overlay);
+        Require(!mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects,"World depth preference did not survive save/load");
         Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
                 hud.layout[2].placed&&hud.layout[2].position.x==.4f&&hud.layout[2].scale==1.3f,"HUD/bind preferences did not survive save/load");
         Require(extra[mcov::rockstar::Feature::Wings].enabled&&extra[mcov::rockstar::Feature::Wings].size==1.7f&&extra[mcov::rockstar::Feature::Wings].end.w==.4f&&hud.extras[0]&&
