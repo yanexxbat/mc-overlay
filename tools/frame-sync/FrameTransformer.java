@@ -52,9 +52,8 @@ final class FrameTransformer implements ClassFileTransformer {
                 @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
                     MethodVisitor next = super.visitMethod(access, method, descriptor, signature, exceptions);
                     int role = FrameProfiles.role(name, method, descriptor);
-                    boolean depthReturn=DepthProfiles.worldReturn(name,method,descriptor);
-                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthReturn) return next;
-                    if(depthReturn) changed[0]=true;
+                    boolean depthPass=DepthProfiles.worldPass(name,method,descriptor);
+                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass) return next;
                     if (role != 0) changed[0] = true;
                     return new MethodVisitor(Opcodes.ASM8, next) {
                         @Override public void visitCode() {
@@ -82,7 +81,8 @@ final class FrameTransformer implements ClassFileTransformer {
                         @Override public void visitMethodInsn(int opcode,String owner,String callee,String desc,boolean iface) {
                             // Der Welt-Depth wird vor dem Hand-/GUI-Pass geloescht.
                             // Den bestehenden Operand-Stack unveraendert lassen.
-                            if(depthReturn && owner.equals("com/mojang/blaze3d/systems/CommandEncoder") && callee.equals("clearDepthTexture") && desc.equals("(Lcom/mojang/blaze3d/textures/GpuTexture;D)V")) {
+                            if(depthPass && owner.equals("com/mojang/blaze3d/systems/CommandEncoder") && callee.equals("clearDepthTexture") && desc.equals("(Lcom/mojang/blaze3d/textures/GpuTexture;D)V")) {
+                                changed[0]=true;
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","depthReady","(Ljava/lang/Object;)V",false);
                             }

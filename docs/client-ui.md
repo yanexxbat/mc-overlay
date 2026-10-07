@@ -97,7 +97,7 @@ und Freunde werden durch diese Datei nicht automatisch aktiviert oder gespeicher
 `keybinds.hpp` trennt Eingabe-Zustand von Win32 und Moduländerungen.
 `hud_layout.hpp` kapselt Platzierung und Grenzen. `overlay_input.cpp` bindet echte
 Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
-Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v17. JNI-Abfragen
+Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v18. JNI-Abfragen
 bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
 
 Geprüft: reale Menüeingaben, Tastenerfassung/Konflikte, Toggle/Hold/Fokus,

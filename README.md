@@ -258,7 +258,7 @@ removes the hat. UUIDs are cached by Java object identity on the sampler; drawin
 adds no JNI calls. Changes apply on the next
 client tick. Focus loss, either menu, world exit, shutdown or an expired 250 ms
 overlay lease cancels combat. Restart Minecraft after updating the DLL/helper:
-the wire protocol is now IPC v17. Existing settings and friends retain their
+the wire protocol is now IPC v18. Existing settings and friends retain their
 session behavior; new feature settings and waypoints persist. All seven pages
 remain accessible, including the new Misc page.
 

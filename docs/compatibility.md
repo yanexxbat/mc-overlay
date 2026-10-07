@@ -61,7 +61,7 @@ The renderer reads the shared POD snapshot and never calls JNI.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **13**; restart Minecraft and use the newly built
+Shared-memory version is now **18**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
 Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
@@ -184,7 +184,7 @@ These are synthetic call-site tests, not a live Minecraft renderer test.
 See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v17 and a full Minecraft restart after upgrading.
+require IPC v18 and a full Minecraft restart after upgrading.
 
 ## Reproduce the checks
 

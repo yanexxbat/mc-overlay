@@ -121,8 +121,9 @@ und Snapshots ohne neue Frames für 350 ms löschen den Effektzustand. Weltpunkt
 bleiben in double und verwenden die bestehende Kamera-Projektion. Ohne eigenen
 Entity-Record fallen Bodenspuren auf die bisherigen float-Positionsfelder zurück;
 ein eigener Hut wird in diesem Fall nicht gezeichnet. Es wurden keine JNI-Aufrufe
-im Renderer, Agent-Hooks oder IPC-Felder ergänzt. Das externe Fenster hat
-keinen Minecraft-Tiefenpuffer: Effekte sind nicht an Blockflächen verdeckt.
+im externen Renderer ergänzt. Der neue [Tiefenkanal](world-depth.md) liest auf
+Minecrafts GL-Thread den Welt-Depth und verdeckt Effekte unter 1.21.11 Fabric /
+normalem OpenGL; andere Versionen behalten das bisherige Verhalten.
 
 **Reduced motion** stoppt den dekorativen Drift, die Sternrotation und das Ringwachstum; Partikel
 blenden weiterhin aus. Trails folgen weiterhin der tatsächlichen Bewegung.

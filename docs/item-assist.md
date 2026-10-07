@@ -90,7 +90,7 @@ Aufrufe, spät verfügbare Inventar-Bindings und die Achsen-Property. UI-Prüfun
 rendern die Untertabs auf Desktop und 480×360. Ein Live-Test in Minecraft ist
 weiterhin erforderlich, insbesondere mit Mods, die Inventare/Interaktionen ändern.
 
-**IPC v17:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
+**IPC v18:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
 Dateien erneut starten. Ein bereits geladener alter Agent kann nicht aktualisiert
 werden, indem nur das Overlay neu gestartet wird. Der einzige Build liegt unter
 `build`, die portable Startdatei liegt unter `build/client/mcov.exe`.

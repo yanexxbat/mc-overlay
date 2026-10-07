@@ -9,7 +9,7 @@ Die vollständige Zuordnung steht in [rockstar-catalog.md](rockstar-catalog.md).
 ## Start und Bedienung
 
 1. Minecraft vollständig beenden und neu starten, falls die bisherige DLL noch geladen ist.
-   Die Scanner-Typen erfordern jetzt IPC-Version 17. Ein bereits geladener alter Agent
+   Die Scanner-Typen erfordern jetzt IPC-Version 18. Ein bereits geladener alter Agent
    lässt sich nicht durch das erneute Öffnen des Clients austauschen.
 2. `build/client/mcov.exe` öffnen, Minecraft auswählen, **Client starten**.
 3. Mit **INSERT** das Menü öffnen. Die neuen Funktionen sind zunächst ausgeschaltet

@@ -25,7 +25,7 @@ Wiederverwendete Entity-IDs werden per Objektidentität erkannt; Weltwechsel und
 Shutdown geben die Referenzen frei. Das Rendering führt keine JNI-Aufrufe aus.
 UUIDs fehlen bei erfolgloser Auflösung; solche Entities erhalten keinen Hut.
 Arrays und Kreisgeometrie haben feste Kapazitäten; ImGui-Buffers werden einmal
-vorgewärmt. Das neue Snapshot-Layout benötigt IPC v14 und aktualisierte Agent-,
+vorgewärmt. Das neue Snapshot-Layout benötigt IPC v18 und aktualisierte Agent-,
 Injector- und Overlay-Binaries. Minecraft nach dem Update vollständig neu starten.
 
 Prüfungen: UUID-Cache und Snapshot-Publikation in allen JNI-Profil-Fixtures;
