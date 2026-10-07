@@ -410,6 +410,17 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     env->CallObjectMethod(list,replace,2,stack("item.minecraft.end_crystal")); Healthy(env);
     env->SetIntField(inventory,selected,2); down(false);
     report=tick(); Require(report.crystal==Status::WaitingBind&&report.crystalActions==0,"armed macro ran without Minecraft Use");
+    // Dieselben Schutz-Gates müssen im echten JNI-Hook alle Profile schützen.
+    request.crystal.requireTotem=true;
+    down(true); use(); report=tick();
+    Require(report.crystal==Status::NeedTotem&&report.crystalActions==0&&env->GetStaticIntField(b.client.minecraftClass,usesId)==0,"totem guard leaked macro/Vanilla use"); Healthy(env);
+    request.crystal.requireTotem=false; request.crystal.minHealth=6;
+    env->SetFloatField(player,field(b.clsLiving,"testHealth","F"),5); Healthy(env);
+    use(); report=tick(); Require(report.crystal==Status::LowHealth&&report.crystalActions==0,"native health guard ignored");
+    env->SetFloatField(player,field(b.clsLiving,"testHealth","F"),20); Healthy(env);
+    request.crystal.maxRange=1;
+    use(); report=tick(); Require(report.crystal==Status::OutOfRange&&report.crystalActions==0,"native range limit ignored");
+    request.crystal.maxRange=4.5f;
     down(true); use(); report=tick();
     Require(report.crystalActions==1&&env->GetStaticIntField(b.clsInteractionMgr,siteUsesId)==1,"captured crystal placement did not run"); Healthy(env);
     Require(env->GetStaticIntField(b.client.minecraftClass,usesId)==0,"macro placement leaked into vanilla held Use"); Healthy(env);

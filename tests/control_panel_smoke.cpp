@@ -67,6 +67,7 @@ struct OverlayUiCheck {
     }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
     static items::MacroConfig& Crystal(Overlay& o) { return o.crystalMacro_; }
+    static items::MacroConfig& Anchor(Overlay& o) { return o.anchorMacro_; }
     static items::Request ItemRequest(const Overlay& o,bool allowed) { return o.BuildItemRequest(1000,allowed,false); }
     static void ChunkTab(Overlay& o) { o.blocksSection_=3; }
     static void ItemStatus(Overlay& o) { o.itemReport_.totem=items::Status::HoldingTotem; o.itemReport_.crystal=items::Status::WaitingBind; o.itemReport_.anchor=items::Status::WaitingBind; }
@@ -703,6 +704,9 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::ResetCombat(overlay);
         const auto prefs=output/"client-preferences-test.ini"; mcov::OverlayUiCheck::PrefPath(overlay,prefs);
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=false;
+        auto& savedCrystal=mcov::OverlayUiCheck::Crystal(overlay); auto& savedAnchor=mcov::OverlayUiCheck::Anchor(overlay);
+        savedCrystal.Conservative(); savedCrystal.requireTotem=true; savedCrystal.placeMs=350;
+        savedAnchor.chargeWithOffhandFuel=true; savedAnchor.detonationSlot=8; savedAnchor.minHealth=9;
         binds[auraKey].mode=mcov::keys::Mode::Hold;
         auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
         auto& extra=mcov::OverlayUiCheck::Rockstar(overlay); auto& pack=mcov::OverlayUiCheck::Pack(overlay);
@@ -713,9 +717,13 @@ int main(int argc,char** argv) {
         mcov::CopyField(markerScene.dimension,"Overworld"); mcov::CopyField(markerScene.serverAddress,"Local world");
         Require(pack.AddMarker(markerScene,"Home \"one\""),"test waypoint could not be saved");
         mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; extra={}; pack.ClearMarkers();
+        savedCrystal={}; savedAnchor={};
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=true;
         mcov::OverlayUiCheck::Load(overlay);
         Require(!mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects,"World depth preference did not survive save/load");
+        Require(savedCrystal.strictConfirmation&&savedCrystal.requireTotem&&savedCrystal.placeMs==350&&savedCrystal.maxRange==3&&
+                savedAnchor.chargeWithOffhandFuel&&savedAnchor.detonationSlot==8&&savedAnchor.minHealth==9&&!savedAnchor.enabled&&!savedCrystal.enabled,
+                "combat settings must persist without auto-enabling modules");
         Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
                 hud.layout[2].placed&&hud.layout[2].position.x==.4f&&hud.layout[2].scale==1.3f,"HUD/bind preferences did not survive save/load");
         Require(extra[mcov::rockstar::Feature::Wings].enabled&&extra[mcov::rockstar::Feature::Wings].size==1.7f&&extra[mcov::rockstar::Feature::Wings].end.w==.4f&&hud.extras[0]&&
@@ -729,6 +737,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::ResetVisuals(overlay); mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::Hud,true);
         extra={}; pack.ClearMarkers();
         mcov::OverlayUiCheck::PrefPath(overlay,{}); std::filesystem::remove(prefs); binds=mcov::keys::Defaults(); hud={};
+        savedCrystal={}; savedAnchor={};
         for(auto size:{ImVec2(720,560),ImVec2(480,360)}) for(Page page:pages) { Draw(overlay,page,0,size); Draw(overlay,page,0,size); }
         SaveFrame(device.Get(),context.Get(),output/"classic-small.png");
         MarkerMenuChecks(overlay,device.Get(),context.Get(),output);

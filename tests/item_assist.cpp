@@ -3,6 +3,7 @@
 #include "../src/overlay/keybinds.hpp"
 #include <iostream>
 #include <stdexcept>
+#include <limits>
 
 using namespace mcov::items;
 void Check(bool value,const char* message) { if(!value) throw std::runtime_error(message); }
@@ -83,6 +84,51 @@ int main() try {
     c.Reset(); f.selected=1; r.sentAtMs=7200; a=c.Tick(r,f,7200); c.Complete(a,true); f.selected=a.slot; f.paused=true;
     c.Tick(r,f,7250); f.selected=6; f.paused=false;
     Check(c.Tick(r,f,7300).operation==Operation::None&&!c.HasRestore(),"manual choice during pause must cancel pending restore");
+    // Unabhängige Zeiten, Schutz und verspätete Weltbestätigungen.
+    {
+        Controller timed; Frame sample;
+        sample.world=sample.alive=sample.ownMenu=sample.macroSupported=sample.useDown=sample.siteValid=true;
+        sample.cycle=Item::Crystal; sample.inventory[2]=Item::Crystal; sample.selected=2;
+        sample.target=Target::CrystalBase; sample.health=20; sample.distance=2;
+        Request cfg; cfg.inputAllowed=true; cfg.crystal.enabled=true; cfg.crystal.separateDelays=true;
+        cfg.crystal.placeMs=300; cfg.crystal.breakMs=50; cfg.crystal.minHealth=6; cfg.crystal.requireTotem=true;
+        const auto step=[&](std::uint64_t now) { cfg.sentAtMs=now; return timed.Tick(cfg,sample,now); };
+        Check(step(10000).operation==Operation::None&&timed.GetReport().crystal==Status::NeedTotem,"missing offhand totem did not pause");
+        sample.offhand=Item::Totem; sample.health=5;
+        Check(step(10001).operation==Operation::None&&timed.GetReport().crystal==Status::LowHealth,"low health did not pause");
+        sample.health=20; sample.distance=5;
+        Check(step(10002).operation==Operation::None&&timed.GetReport().crystal==Status::OutOfRange,"custom range ignored");
+        sample.distance=2; a=step(10010); Check(a.operation==Operation::PlaceCrystal,"safety recovery must resume site"); timed.Complete(a,true);
+        sample.target=Target::Crystal; sample.crystalId=17;
+        Check(step(10059).operation==Operation::None,"break delay ran early");
+        a=step(10060); Check(a.operation==Operation::AttackCrystal,"independent break delay ignored"); timed.Complete(a,true);
+        sample.target=Target::CrystalBase;
+        Check(step(10359).operation==Operation::None,"place delay ran early");
+        a=step(10360); Check(a.operation==Operation::PlaceCrystal,"independent place delay ignored"); timed.Complete(a,true);
+        cfg.crystal.strictConfirmation=true; cfg.crystal.confirmationMs=100;
+        Check(step(11110).operation==Operation::None&&timed.GetReport().crystal==Status::ConfirmationTimeout,"strict timeout retransmitted placement");
+        Check(step(14000).operation==Operation::None,"strict confirmation must continue suppressing retry");
+        sample.target=Target::Crystal; sample.crystalId=18;
+        a=step(14001); Check(a.operation==Operation::AttackCrystal,"late confirmation must resume without reset"); timed.Complete(a,true);
+        sample.useDown=false; a=step(14002); Check(a.operation==Operation::RestoreSlot&&!timed.Active(),"release must restore after strict wait");
+        cfg.crystal.maxRange=std::numeric_limits<float>::quiet_NaN(); cfg.crystal.placeMs=0; cfg.crystal.detonationSlot=99; cfg.crystal.Clamp();
+        Check(cfg.crystal.maxRange==4.5f&&cfg.crystal.placeMs==50&&cfg.crystal.detonationSlot==9,"invalid config not sanitized");
+    }
+    {
+        Controller fuel; Frame sample;
+        sample.world=sample.alive=sample.ownMenu=sample.macroSupported=sample.anchorSupported=sample.useDown=sample.siteValid=true;
+        sample.cycle=Item::Anchor; sample.target=Target::Anchor; sample.selected=3; sample.charges=1;
+        sample.inventory[3]=Item::Glowstone; sample.inventory[7]=Item::Other; sample.offhand=Item::Glowstone;
+        Request cfg; cfg.inputAllowed=true; cfg.anchor.enabled=true; cfg.anchor.chargeWithOffhandFuel=true; cfg.anchor.detonationSlot=8;
+        const auto step=[&](std::uint64_t now) { cfg.sentAtMs=now; return fuel.Tick(cfg,sample,now); };
+        a=step(15000); Check(a.operation==Operation::ChargeAnchor,"offhand fuel must charge before detonation"); fuel.Complete(a,true);
+        Check(step(15150).operation==Operation::None,"unchanged positive charge must not confirm another charge");
+        sample.charges=2; a=step(15150); Check(a.operation==Operation::ChargeAnchor,"second charge ignored"); fuel.Complete(a,true);
+        sample.charges=3; a=step(15300); Check(a.operation==Operation::ChargeAnchor,"third charge ignored"); fuel.Complete(a,true);
+        sample.charges=4; a=step(15450); Check(a.operation==Operation::DetonateAnchor&&a.slot==7,"full anchor did not use preferred detonation slot"); fuel.Complete(a,true);
+        sample.selected=7; sample.useDown=false; a=step(15500); Check(a.operation==Operation::RestoreSlot&&a.slot==3,"fuel cycle restore failed");
+        cfg.anchor.Conservative(); Check(cfg.anchor.strictConfirmation&&cfg.anchor.maxRange==3&&cfg.anchor.breakMs==250,"conservative profile incomplete");
+    }
     Check(mcov::RotatedDeepslate("block.minecraft.deepslate","x")&&mcov::RotatedDeepslate("block.minecraft.deepslate","z"),"horizontal raw deepslate must be a hint");
     Check(!mcov::RotatedDeepslate("block.minecraft.deepslate","y")&&!mcov::RotatedDeepslate("block.minecraft.deepslate_diamond_ore","x")&&!mcov::RotatedDeepslate("block.minecraft.infested_deepslate","z"),"vertical deepslate and ores must not be hints");
     Check(mcov::ChunkCoordinate(-.1)==-1&&mcov::ChunkCoordinate(-16)==-1&&mcov::ChunkCoordinate(-17)==-2&&mcov::ChunkCoordinate(16)==1,"negative chunk coordinates must floor correctly");
