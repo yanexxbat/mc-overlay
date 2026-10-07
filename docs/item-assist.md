@@ -70,6 +70,18 @@ beim nächsten Clientstart ausgeschaltet; die bisherigen Keybinds gelten weiter.
 - **Server conservative:** setzt Place/Break auf 250 ms, Charge auf 200 ms,
   Reichweite auf 3, Mindest-HP auf 6 und striktes Warten mit 1.500-ms-Timeout.
   Weitere Einstellungen und der Modul-Schalter bleiben erhalten.
+- **GrimAC conservative:** setzt zusätzlich **Require real crosshair hit**.
+  Crystal-Angriffe benötigen die tatsächlich von Minecraft gepickte Entität;
+  Place benötigt den gespeicherten Untergrund im Fadenkreuz, Charge/Detonate
+  den Anchor selbst. Blockaktionen verwenden den aktuellen Minecraft-HitResult
+  mit seiner tatsächlichen Seite und Trefferposition. Ohne passenden Treffer
+  pausiert der gespeicherte Ablauf; dies kann erneutes Anvisieren erfordern.
+
+Das GrimAC-Profil orientiert sich an den offiziellen Prüfungen für
+[Reach/Hitbox](https://github.com/GrimAnticheat/Grim/blob/2.0/common/src/main/java/ac/grim/grimac/checks/impl/combat/Reach.java),
+[Blockseite](https://github.com/GrimAnticheat/Grim/blob/2.0/common/src/main/java/ac/grim/grimac/checks/impl/scaffolding/PositionPlace.java)
+und [Platzierungsdistanz](https://github.com/GrimAnticheat/Grim/blob/2.0/common/src/main/java/ac/grim/grimac/checks/impl/scaffolding/FarPlace.java).
+Es verändert Crystal-/Anchor-Interaktionen, nicht die Kill-Aura-Rotation.
 
 Weltbestätigungen kommen aus dem Clientzustand, einschließlich möglicher
 Vanilla-Vorhersage. Sie sind keine separate Bestätigung des Servers. Das
@@ -127,6 +139,8 @@ weiterhin erforderlich, insbesondere mit Mods, die Inventare/Interaktionen ände
 Zusätzliche Tests prüfen getrennte Aktionszeiten, native HP-/Totem-/Reichweiten-
 Gates für alle 22 Profile, verspätete Bestätigungen ohne Wiederholung, jede
 einzelne Anchor-Ladung, bevorzugte Detonations-Slots und Settings-Persistenz.
+Native Fixtures prüfen außerdem unter allen Profilen, dass ungepickte Crystals
+nicht angegriffen und reale Anchor-HitResults unverändert benutzt werden.
 
 **IPC v19:** Minecraft vollständig beenden und mit den neu gebauten Agent-/Overlay-
 Dateien erneut starten. Ein bereits geladener alter Agent kann nicht aktualisiert
