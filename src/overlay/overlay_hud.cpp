@@ -5,6 +5,9 @@
 
 namespace mcov {
 bool Overlay::HudEnabled(int i) const {
+    if(i>=int(HudModule::Radar)&&i<=int(HudModule::Cps)) return hud_.extras[i-int(HudModule::Radar)];
+    if(i==int(HudModule::Notifications)) return rockstarConfig_.Enabled(rockstar::Feature::Notifications);
+    if(i==int(HudModule::Nearby)) return rockstarConfig_.Enabled(rockstar::Feature::DetectPlayer);
     switch(static_cast<HudModule>(i)) {
         case HudModule::Equipment:return hud_.equipment;
         case HudModule::Effects:return hud_.effects;
@@ -19,6 +22,9 @@ bool Overlay::HudEnabled(int i) const {
     }
 }
 void Overlay::SetHudEnabled(int i,bool value) {
+    if(i>=int(HudModule::Radar)&&i<=int(HudModule::Cps)) hud_.extras[i-int(HudModule::Radar)]=value;
+    if(i==int(HudModule::Notifications)) rockstarConfig_[rockstar::Feature::Notifications].enabled=value;
+    if(i==int(HudModule::Nearby)) rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=value;
     switch(static_cast<HudModule>(i)) {
         case HudModule::Equipment:hud_.equipment=value;break;
         case HudModule::Effects:hud_.effects=value;break;
@@ -72,6 +78,14 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Watermark:size={260,25};break;
             case HudModule::Modules:size.y=24+std::max(1,active)*17.f;break;
             case HudModule::Keybinds:size.y=24+std::max(1,assigned)*17.f;break;
+            case HudModule::Radar:size={196,196};break;
+            case HudModule::Keystrokes:size={130,138};break;
+            case HudModule::Speedometer:size.y=68;break;
+            case HudModule::Session:size.y=102;break;
+            case HudModule::ArmorStrip:size.y=78;break;
+            case HudModule::Indicators:size.y=84;break;
+            case HudModule::Notifications:size.y=145;break;
+            case HudModule::Nearby:size.y=176;break;
             default:break;
         }
         ImVec2 start{16,stackY};
@@ -81,6 +95,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         else if(kind==HudModule::Watermark) start={16,8};
         else if(kind==HudModule::Modules) start={viewport.x-size.x-16,44};
         else if(kind==HudModule::Keybinds) start={viewport.x-size.x-16,viewport.y-size.y-16};
+        else if(i>=int(HudModule::Radar)) start={16+(i-int(HudModule::Radar))%3*250.f,viewport.y-size.y-20-(i-int(HudModule::Radar))/3*180.f};
         auto& placement=hud_.layout[i]; const bool wasPlaced=placement.placed;
         const auto rect=PlaceHud(placement,viewport,size,start); hudRects_[i]=rect;
         if(!wasPlaced) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
@@ -117,7 +132,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                     y+=17;
                 } break;
             }
-            default:break;
+            default:rockstarPack_.DrawHud(draw,kind,s,rockstarConfig_,combatMenu_.Relations().Read(),size,double(GetTickCount64())/1000); break;
         }
         const int commandEnd=draw.CmdBuffer.Size;
         const float scale=(rect.max.x-rect.min.x)/size.x;
