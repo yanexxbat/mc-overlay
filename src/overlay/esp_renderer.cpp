@@ -53,10 +53,11 @@ void Text(ImDrawList& draw, ImFont& font, float size, ImVec2 at, ImU32 color, co
 }
 // Fester Stack-Puffer, begrenzte Snapshot-Strings und UTF-8-sichere Kürzung.
 using NameBuffer = std::array<char,kNameLen+4>;
-NameBuffer Name(ImFont& font, float size, const EntitySnapshot& e, float maxWidth) {
+NameBuffer Name(ImFont& font, float size, const EntitySnapshot& e, float maxWidth,bool protect=false) {
     NameBuffer result{};
     const char* end=std::find(e.name,e.name+kNameLen,'\0');
     const char* begin=e.name;
+    if(protect&&(e.flags&kEntityIsPlayer)) { begin="Player"; end=begin+6; }
     if (begin==end) { begin="Entity"; end=begin+6; }
     if (font.CalcTextSizeA(size,FLT_MAX,0,begin,end).x <= maxWidth) {
         std::memcpy(result.data(),begin,std::size_t(end-begin));
@@ -184,7 +185,7 @@ void NameTag(ImDrawList& draw,ImFont& font,float size,const EntitySnapshot& e,Sc
     const float fixed=padding*2+(hp ? TextWidth(font,size,health)+gap : 0)+
         (ping ? TextWidth(font,size,latency)+gap : 0)+(config.distanceText ? TextWidth(font,size,distance)+gap : 0);
     const float maxWidth=std::min(viewport.x-12,300.f);
-    const auto name=Name(font,size,e,std::max(12.f,maxWidth-fixed));
+    const auto name=Name(font,size,e,std::max(12.f,maxWidth-fixed),config.nameProtect);
     const float width=std::min(maxWidth,fixed+TextWidth(font,size,name.data()));
     const float height=size+7,center=(rect.left+rect.right)*.5f;
     bool gear=false;
@@ -206,7 +207,7 @@ void NameTag(ImDrawList& draw,ImFont& font,float size,const EntitySnapshot& e,Sc
     if (hp) field(health,IM_COL32(248,101,116,255));
 }
 void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
-                const EntitySnapshot& e, float labelSize, ImVec2 origin, ImVec2 viewport) {
+                const EntitySnapshot& e, float labelSize, ImVec2 origin, ImVec2 viewport,bool protect) {
     if (viewport.x<160 || viewport.y<120) return;
     const float size=std::clamp(labelSize+1,11.f,19.f),gap=16.f,padding=10.f;
     char distance[32],ping[24],health[24];
@@ -216,7 +217,7 @@ void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
     std::snprintf(health,sizeof(health),"%.1f",showHealth ? std::max(0.f,e.health) : 0.f);
     const float fixed=TextWidth(font,size,distance)+(showPing ? TextWidth(font,size,ping)+gap : 0)+
                       (showHealth ? TextWidth(font,size,health)+gap : 0)+gap+padding*2;
-    const auto name=Name(font,size,e,std::max(20.f,std::min(240.f,viewport.x-12-fixed)));
+    const auto name=Name(font,size,e,std::max(20.f,std::min(240.f,viewport.x-12-fixed)),protect);
     const float width=std::min(viewport.x-12,fixed+TextWidth(font,size,name.data()));
     const float height=size+8;
     const ImVec2 lo{origin.x+(viewport.x-width)*.5f,origin.y+std::clamp(viewport.y*.13f,48.f,96.f)};
@@ -284,7 +285,7 @@ void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
         // Zielzeile schneiden würde. So überlagert diese keine Ausrüstung.
         const bool overlap=config.nameTags && targetRect.right-targetRect.left>=24 &&
             nameTop+size+7>=infoTop && nameTop-(gear ? 25.f : 0.f)<=infoTop+size+9;
-        if (!overlap) TargetInfo(draw,font,snapshot,*target,size,origin,viewport);
+        if (!overlap) TargetInfo(draw,font,snapshot,*target,size,origin,viewport,config.nameProtect);
     }
 }
 
