@@ -19,5 +19,9 @@ public:
         for(const auto& entry:history_) if(entry.renderEpoch==epoch) { out=entry; return true; }
         return false;
     }
+    std::uint64_t Latest() const {
+        std::uint64_t latest=0; for(const auto& entry:history_) if(entry.renderEpoch>latest) latest=entry.renderEpoch;
+        return latest;
+    }
 };
 }

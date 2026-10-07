@@ -1,5 +1,6 @@
 // GPU-Pruefung mit echtem ImGui/D3D11, ohne Minecraft oder JVM-Attach.
 #include "overlay/depth_renderer.hpp"
+#include "common/depth_snapshots.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
 #include <iostream>
@@ -11,6 +12,19 @@ void Require(bool condition,const char* message) { if(!condition) throw std::run
 void Hr(HRESULT result) { Require(SUCCEEDED(result),"D3D11 operation failed"); }
 int main() {
     try {
+        auto cache=std::make_unique<DepthSnapshots>(); auto snapshot=std::make_unique<WorldSnapshot>();
+        auto matched=std::make_unique<WorldSnapshot>();
+        Require(!cache->Get(10,*matched),"GPU frame accepted an unobserved snapshot");
+        snapshot->renderEpoch=10; snapshot->frameIndex=7; snapshot->camX=42;
+        cache->Put(*snapshot);
+        Require(cache->Get(10,*matched)&&matched->frameIndex==7&&matched->camX==42,"late sampler could not join queued GPU frame");
+        snapshot->renderEpoch=12; snapshot->camX=43; cache->Put(*snapshot);
+        Require(cache->Get(10,*matched)&&matched->camX==42&&cache->Get(12,*matched)&&matched->camX==43,
+            "new snapshot replaced another epoch's camera");
+        snapshot->renderEpoch=13; cache->Put(*snapshot);
+        Require(!cache->Get(13,*matched)&&cache->Latest()==12,"unfinished camera epoch was accepted");
+        for(auto epoch:{14u,16u,18u}) { snapshot->renderEpoch=epoch; cache->Put(*snapshot); }
+        Require(!cache->Get(10,*matched)&&cache->Get(18,*matched),"bounded depth history did not evict old frames");
         ComPtr<ID3D11Device> device; ComPtr<ID3D11DeviceContext> context;
         Hr(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context));
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.DisplaySize={320,180}; io.DeltaTime=1.f/60; io.IniFilename=nullptr;

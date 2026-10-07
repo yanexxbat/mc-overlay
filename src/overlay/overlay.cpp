@@ -1651,7 +1651,7 @@ void Overlay::DrawSettingsTab() {
             panel::CheckRow("VSync",&settings_.vsync);
             if(panel::CheckRow("Occlude world effects",&settings_.occludeWorldEffects)) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+250; }
             const auto* depth=depthChannel_.Block();
-            panel::ValueRow("World depth",depthFresh_?"Active":!std::strcmp(lastSnapshot_.gameVersion,"1.21.11")?
+            panel::ValueRow("World depth",!settings_.occludeWorldEffects?"Off":depthFresh_?"Active":!std::strcmp(lastSnapshot_.gameVersion,"1.21.11")?
                 !depthActive_?"Idle":
                 depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);

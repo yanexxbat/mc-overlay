@@ -35,6 +35,24 @@ int main() {
         Require(pack.DamageCount(10.6,2)==0&&pack.RingCount(10.6,2)==0&&pack.Markers()[0].used,"world transition leaked effects or erased saved marker");
         Require(std::string(Pack::DisplayName("Secret",true,true))=="Player","privacy alias failed");
         Require(kBlockKindCount<=32&&std::string(BlockKindKey(kBlockBeacon))=="beacon","scanner mask/schema mismatch");
+        // HUD-Position bleibt 100 ms alt, die eigene Entity bewegt sich trotzdem jedes Frame.
+        auto moving=std::make_unique<WorldSnapshot>(); CopyField(moving->dimension,"Overworld");
+        moving->entityCount=1; moving->health=moving->maxHealth=20;
+        auto& self=moving->entities[0]; self.flags=kEntityIsSelf|kEntityIsLiving|kEntityIsPlayer;
+        self.x=1000; self.y=64; self.health=20; moving->frameIndex=1;
+        LARGE_INTEGER qpcFrequency{}; QueryPerformanceFrequency(&qpcFrequency);
+        const auto step=qpcFrequency.QuadPart/100;
+        moving->captureQpc=qpcFrequency.QuadPart*5000;
+        Pack meter; double delivered=100; meter.Update(*moving,delivered,c,0);
+        for(int i=0;i<30;++i) {
+            ++moving->frameIndex; moving->captureQpc+=step;
+            self.x+=4.*double(step)/double(qpcFrequency.QuadPart);
+            delivered+=(i&1)?.004:.025;
+            meter.Update(*moving,delivered,c,0);
+            Require(std::abs(meter.Metrics(delivered).speed-4.f)<.001f,"speedometer used stale HUD positions or IPC delivery time");
+        }
+        --moving->frameIndex; self.x=0; meter.Update(*moving,delivered+.01,c,0);
+        Require(std::abs(meter.Metrics(delivered+.01).speed-4.f)<.001f,"older GPU snapshot overwrote live speed");
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.DisplaySize={640,480}; io.DeltaTime=1.f/60;
         unsigned char* pixels=nullptr; int width=0,height=0; io.Fonts->GetTexDataAsRGBA32(&pixels,&width,&height);
         for(auto& o:c.modules) o.enabled=true; c.Clamp();

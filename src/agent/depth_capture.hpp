@@ -137,7 +137,7 @@ public:
         for(auto& s:slots_) if(s.fence) {
             // Der Sampler darf erst NACH dem GL-Capture fertig werden.
             if(s.world.renderEpoch!=s.epoch) {
-                if(GetTickCount64()-s.time<100) continue;
+                if(snapshots_.Latest()<=s.epoch&&GetTickCount64()-s.time<100) continue;
                 ++unmatched_; gl_.deleteSync(s.fence); s.fence=nullptr; continue;
             }
             const auto done=gl_.wait(s.fence,0,0);
