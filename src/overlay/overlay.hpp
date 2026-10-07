@@ -225,6 +225,7 @@ private:
     rockstar::Pack rockstarPack_{};
     int miscSection_=0;
     char waypointName_[kNameLen]="Waypoint";
+    bool panicActive_=false;
     OverlaySettings settings_{};
     HudSettings     hud_{};
     keys::Bindings bindings_=keys::Defaults();

@@ -22,6 +22,10 @@ std::string BindName(keys::Bind b) {
     return out+"Key "+std::to_string(b.key);
 }
 bool Overlay::ModuleEnabled(keys::Action a) const {
+    if(a>=keys::Action::JumpCircles&&a<=keys::Action::Waypoints)
+        return rockstarConfig_.modules[keys::Index(a)-keys::Index(keys::Action::JumpCircles)].enabled;
+    if(a>=keys::Action::Radar&&a<=keys::Action::Cps)
+        return hud_.extras[keys::Index(a)-keys::Index(keys::Action::Radar)];
     switch(a) {
         case keys::Action::KillAura:return combatMenu_.Store().Read().values.enabled;
         case keys::Action::AimAssist:return combat_.aimLock;
@@ -48,6 +52,17 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
     }
 }
 void Overlay::SetModuleEnabled(keys::Action a,bool value) {
+    const bool changed=ModuleEnabled(a)!=value;
+    if(a>=keys::Action::JumpCircles&&a<=keys::Action::Waypoints) {
+        rockstarConfig_.modules[keys::Index(a)-keys::Index(keys::Action::JumpCircles)].enabled=value; preferencesDirty_=true;
+    } else if(a>=keys::Action::Radar&&a<=keys::Action::Cps) {
+        hud_.extras[keys::Index(a)-keys::Index(keys::Action::Radar)]=value; preferencesDirty_=true;
+    }
+    if(value) panicActive_=false;
+    if(changed) {
+        if(rockstarConfig_.Enabled(rockstar::Feature::Notifications)) { const auto message=std::string(keys::kNames[keys::Index(a)])+(value?" enabled":" disabled"); rockstarPack_.Notify(message.c_str(),double(GetTickCount64())/1000); }
+        if(rockstarConfig_.Enabled(rockstar::Feature::ModuleSounds)) PlayModuleSound(value);
+    }
     switch(a) {
         case keys::Action::KillAura: { auto c=combatMenu_.Store().Read().values; c.enabled=value; combatMenu_.Store().Publish(c); break; }
         case keys::Action::AimAssist:combat_.aimLock=value;break;
@@ -74,6 +89,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
     }
 }
 void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
+    const bool middlePressed=input[VK_MBUTTON]&&!keyInput_[VK_MBUTTON];
     keyInput_=input; const bool capturing=captureAction_>=0;
     if(capturing) {
         if(!focused||!menuVisible_) captureAction_=-1;
@@ -109,7 +125,16 @@ void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
             if(a==keys::Action::Menu) SetMenuVisible(!menuVisible_);
             else if(a==keys::Action::Quit) running_=false;
             else if(a==keys::Action::HudEditor) SetHudEditing(!hudEditing_);
+            else if(a==keys::Action::Panic) Panic();
         });
+    if(middlePressed&&focused&&!capturing&&!menuVisible_&&!hudEditing_&&rockstarConfig_.Enabled(rockstar::Feature::MiddleFriend)&&haveSnapshot_) {
+        for(const auto& entity:std::span(lastSnapshot_.entities,std::min(lastSnapshot_.entityCount,kMaxEntities))) {
+            if(entity.entityId!=lastSnapshot_.targetEntityId||!lastSnapshot_.hasTarget||!(entity.flags&kEntityIsPlayer)||(entity.flags&kEntityIsSelf)||(!entity.uuid.high&&!entity.uuid.low)) continue;
+            auto& book=combatMenu_.Relations(); const bool friendNow=combat::Lookup(book.Read(),entity.uuid)==combat::Relation::Friend;
+            const bool changed=book.Set(entity.uuid,friendNow?combat::Relation::Neutral:combat::Relation::Friend);
+            rockstarPack_.Notify(changed?(friendNow?"Friend removed":"Friend added"):"Friend list is full",double(GetTickCount64())/1000); break;
+        }
+    }
     capturePrevious_=input;
 }
 void Overlay::DrawBind(keys::Action a,bool inlineRow) {
@@ -159,6 +184,11 @@ void Overlay::SavePreferences() {
       unsigned flags=hud_.visible?1:0; for(int i=0;i<kHudModules;++i) if(HudEnabled(i)) flags|=1u<<(i+1);
       out<<"hud "<<flags<<' '<<hud_.durabilityWarn<<'\n';
       for(int i=0;i<kHudModules;++i) { const auto& p=hud_.layout[i]; out<<"place "<<i<<' '<<p.position.x<<' '<<p.position.y<<' '<<p.scale<<' '<<p.placed<<'\n'; }
+      for(int i=0;i<rockstar::kCount;++i) { const auto& c=rockstarConfig_.modules[i];
+          out<<"rockstar "<<i<<' '<<c.enabled<<' '<<c.auraColours<<' '<<c.mode<<' '<<c.range<<' '<<c.size<<' '<<c.lifetime<<' '<<c.speed<<' '<<c.opacity<<' '<<c.glow;
+          for(const auto& color:{c.start,c.end}) out<<' '<<color.x<<' '<<color.y<<' '<<color.z<<' '<<color.w; out<<'\n'; }
+      for(int i=0;i<rockstar::Pack::kMarkers;++i) { const auto& m=rockstarPack_.Markers()[i]; if(m.used)
+          out<<"waypoint "<<i<<' '<<m.death<<' '<<m.p.x<<' '<<m.p.y<<' '<<m.p.z<<' '<<std::quoted(m.label.data())<<' '<<std::quoted(m.dimension.data())<<' '<<std::quoted(m.server.data())<<'\n'; }
       out.flush(); if(!out) { preferenceStatus_="Could not write client preferences."; preferencesDirty_=false; return; }
     }
     if(!MoveFileExW(temporary.c_str(),preferencesPath_.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
@@ -173,12 +203,22 @@ void Overlay::LoadPreferences() {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
-               (i>1||k>0)) bindings_[i]={k,mods,i<=2?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
+                (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }
         } else if(tag=="place") { int i,placed; float x,y,scale;
             if(row>>i>>x>>y>>scale>>placed&&i>=0&&i<kHudModules&&std::isfinite(x)&&std::isfinite(y)&&std::isfinite(scale))
                 hud_.layout[i]={{std::clamp(x,0.f,1.f),std::clamp(y,0.f,1.f)},std::clamp(scale,.65f,1.6f),placed==1};
+        } else if(tag=="rockstar") {
+            int i=0; rockstar::Options c;
+            if(row>>i>>c.enabled>>c.auraColours>>c.mode>>c.range>>c.size>>c.lifetime>>c.speed>>c.opacity>>c.glow>>c.start.x>>c.start.y>>c.start.z>>c.start.w>>c.end.x>>c.end.y>>c.end.z>>c.end.w&&i>=0&&i<rockstar::kCount) rockstarConfig_.modules[i]=c;
+        } else if(tag=="waypoint") {
+            int i=0; rockstar::Marker m; std::string label,dimension,server;
+            if(row>>i>>m.death>>m.p.x>>m.p.y>>m.p.z>>std::quoted(label)>>std::quoted(dimension)>>std::quoted(server)&&i>=0&&i<rockstar::Pack::kMarkers&&
+               std::isfinite(m.p.x)&&std::isfinite(m.p.y)&&std::isfinite(m.p.z)&&std::abs(m.p.x)<=3e7&&std::abs(m.p.z)<=3e7&&std::abs(m.p.y)<=4096) {
+                m.used=true; std::snprintf(m.label.data(),m.label.size(),"%s",label.c_str()); std::snprintf(m.dimension.data(),m.dimension.size(),"%s",dimension.c_str());
+                std::snprintf(m.server.data(),m.server.size(),"%s",server.c_str()); rockstarPack_.Markers()[i]=m;
+            }
         }
     }
     // Beschädigte/doppelte Belegungen aktivieren keine zwei Module zugleich.
@@ -187,5 +227,6 @@ void Overlay::LoadPreferences() {
             bindings_[i]={};
     if(!bindings_[0].key||!bindings_[1].key||keys::Conflict(bindings_,0)||keys::Conflict(bindings_,1)) bindings_=keys::Defaults();
     preferencesDirty_=false;
+    rockstarConfig_.Clamp();
 }
 } // namespace mcov

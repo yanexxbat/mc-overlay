@@ -26,7 +26,7 @@ struct Bind { int key{}; unsigned modifiers{}; Mode mode=Mode::Toggle; };
 using Bindings=std::array<Bind,kCount>;
 using Input=std::array<bool,256>;
 inline constexpr int Index(Action a) { return static_cast<int>(a); }
-inline constexpr bool System(Action a) { return Index(a)<=Index(Action::HudEditor); }
+inline constexpr bool System(Action a) { return Index(a)<=Index(Action::HudEditor)||a==Action::Panic; }
 inline Bindings Defaults() {
     Bindings b{}; b[Index(Action::Menu)].key=0x2D; b[Index(Action::Quit)].key=0x23;
     b[Index(Action::HudEditor)].key=0x75;
