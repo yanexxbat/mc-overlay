@@ -52,6 +52,7 @@ void Config::Clamp() {
 const char* Pack::DisplayName(const char* name,bool protect,bool player) { return protect&&player?"Player":name; }
 void Pack::ResetWorld() {
     tracks_={}; damage_={}; rings_={}; notices_={}; clicks_={}; clickHeads_={}; input_={};
+    damageHead_=ringHead_=noticeHead_=0;
     stats_={}; initialized_=false; hitSound_=false; started_=sampled_=0; hurtAt_=lastSoundAt_=-1000;
 }
 void Pack::Notify(const char* text,double now) {
@@ -109,6 +110,7 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
             }
         }
     }
+    int cosmetics=0;
     for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
         if(!(e.flags&kEntityIsLiving)||(e.flags&kEntityIsSelf)||!std::isfinite(e.health)||!Finite({e.x,e.y,e.z})) continue;
         Track* track=nullptr;
@@ -168,7 +170,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
             const double y=bounds.min.y+(circle.mode==1?(bounds.max.y-bounds.min.y)*(.5+.5*std::sin(spin)):.04);
             DrawRing(d,p,{e.x,y,e.z},std::max(.2f,e.width*.75f)*circle.size,a,b,2,circle.glow);
         }
-        if(!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&e.distance>64)) continue;
+        if(!(e.flags&kEntityIsPlayer)||!selfVisible||(!self&&(e.distance>64||cosmetics++>=32))) continue;
         const auto rig=BuildHumanoidRig(e);
         const auto& halo=config[Feature::Halo];
         if(halo.enabled) { const auto [a,b]=palette(halo); auto head=rig.joints[0]; head.y+=e.height*.16+.05; DrawRing(d,p,head,e.width*.6*halo.size,a,b,2,halo.glow); }
@@ -214,7 +216,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         }
     }
 }
-void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const Config& c,ImVec2 size,ImVec4 a,ImVec4 b,double now) const {
+void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& projection,const Config& c,ImVec2 size,ImVec4 a,ImVec4 b,double now) const {
     const auto& hurt=c[Feature::DamageInfo];
     const float fade=std::clamp(1-float((now-hurtAt_)/hurt.lifetime),0.f,1.f)*hurt.opacity;
     if(hurt.enabled&&fade>0) {
@@ -224,41 +226,52 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const Config& c,ImVec
         d.AddRectFilledMultiColor({0,0},{edge,size.y},red,clear,clear,red);
         d.AddRectFilledMultiColor({size.x-edge,0},size,clear,red,red,clear);
     }
-    const CameraProjection projection(s,size.x,size.y);
     const auto& markers=c[Feature::DamageMarkers];
     if(markers.enabled) for(const auto& hit:damage_) {
         const float age=float(now-hit.born); if(age<0||age>=markers.lifetime) continue;
-        const auto point=WorldPoint{hit.p.x,hit.p.y+age*.5*markers.speed,hit.p.z}; ScreenPoint screen; float radius=0;
+        const auto point=WorldPoint{hit.p.x,hit.p.y+age*.5*markers.speed,hit.p.z}; ScreenPoint screen;
         if(projection.Point(point,screen)) {
             char text[24]; std::snprintf(text,sizeof(text),"-%.1f",hit.amount); const ImVec2 pos{screen.x,screen.y};
-            auto color=markers.auraColours?a:markers.start; color.w=markers.opacity*(1-age/markers.lifetime);
-            d.AddText({pos.x+1,pos.y+1},Ink({0,0,0,color.w}),text); d.AddText(pos,Ink(color),text);
+            auto color=Mix(markers.auraColours?a:markers.start,markers.auraColours?b:markers.end,age/markers.lifetime);
+            color.w=markers.opacity*(1-age/markers.lifetime);
+            const float fontSize=ImGui::GetFontSize()*markers.size;
+            for(int layer=2;layer>=1;--layer) for(const auto offset:{ImVec2{float(layer),0},ImVec2{-float(layer),0},ImVec2{0,float(layer)},ImVec2{0,-float(layer)}})
+                d.AddText(ImGui::GetFont(),fontSize,{pos.x+offset.x,pos.y+offset.y},Ink(color,.09f*markers.glow),text);
+            d.AddText(ImGui::GetFont(),fontSize,pos,Ink(color),text);
         }
     }
     const auto& cross=c[Feature::Crosshair];
     if(cross.enabled) {
         const ImVec2 center{size.x*.5f,size.y*.5f}; auto color=cross.auraColours?(s.hasTarget?b:a):cross.start; color.w=cross.opacity;
         const float gap=cross.range+(cross.mode==3?std::min(stats_.speed*1.5f,12.f):0),length=cross.size,width=std::max(.7f,cross.speed);
-        if(cross.mode==1) d.AddCircle(center,gap+length,Ink(color),40,width);
-        else if(cross.mode==2) d.AddCircleFilled(center,std::max(1.f,length*.3f),Ink(color),16);
+        if(cross.mode==1) {
+            for(int layer=3;layer>=1;--layer) d.AddCircle(center,gap+length,Ink(color,.06f*cross.glow),40,width+layer*2);
+            d.AddCircle(center,gap+length,Ink(color),40,width);
+        } else if(cross.mode==2) {
+            for(int layer=3;layer>=1;--layer) d.AddCircleFilled(center,std::max(1.f,length*.3f)+layer,Ink(color,.06f*cross.glow),16);
+            d.AddCircleFilled(center,std::max(1.f,length*.3f),Ink(color),16);
+        }
         else for(int side:{-1,1}) { GlowLine(d,{center.x+side*gap,center.y},{center.x+side*(gap+length),center.y},color,width,cross.glow); GlowLine(d,{center.x,center.y+side*gap},{center.x,center.y+side*(gap+length)},color,width,cross.glow); }
     }
     const auto& arrows=c[Feature::Arrows];
     if(arrows.enabled) for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) if(Player(e)&&e.distance<=arrows.range) {
-        ScreenPoint screen; float radius=0;
+        ScreenPoint screen;
         if(projection.Point({e.x,e.y+e.height*.5,e.z},screen)&&screen.x>=0&&screen.x<=size.x&&screen.y>=0&&screen.y<=size.y) continue;
         const double bearing=std::atan2(-(e.x-s.camX),e.z-s.camZ)-s.yawDeg*rad;
         const float x=float(std::sin(bearing)),y=-float(std::cos(bearing)); const float rr=std::min(size.x,size.y)*.38f;
         const ImVec2 p{size.x*.5f+x*rr,size.y*.5f+y*rr}; auto color=arrows.auraColours?a:arrows.start; color.w=arrows.opacity;
         const float w=arrows.size;
-        d.AddTriangleFilled({p.x+x*w,p.y+y*w},{p.x-x*w*.7f+y*w*.6f,p.y-y*w*.7f-x*w*.6f},{p.x-x*w*.7f-y*w*.6f,p.y-y*w*.7f+x*w*.6f},Ink(color));
+        auto triangle=[&](float width,ImU32 ink) { d.AddTriangleFilled({p.x+x*width,p.y+y*width},{p.x-x*width*.7f+y*width*.6f,p.y-y*width*.7f-x*width*.6f},{p.x-x*width*.7f-y*width*.6f,p.y-y*width*.7f+x*width*.6f},ink); };
+        auto edge=arrows.auraColours?b:arrows.end; edge.w=color.w;
+        for(int layer=3;layer>=1;--layer) triangle(w+layer*2,Ink(edge,.08f*arrows.glow));
+        triangle(w,Ink(color));
         char text[20]; std::snprintf(text,sizeof(text),"%.0fm",e.distance); d.AddText({p.x-10,p.y+w+3},Ink(color),text);
     }
     for(const auto& m:markers_) if(m.used&&(m.death?c.Enabled(Feature::DeathCoordinates):c.Enabled(Feature::Waypoints))&&
             !std::memcmp(m.dimension.data(),s.dimension,kNameLen)&&!std::memcmp(m.server.data(),s.serverAddress,kAddrLen)) {
         ScreenPoint screen; if(!projection.Point({m.p.x,m.p.y+.8,m.p.z},screen)) continue;
         char text[96]; std::snprintf(text,sizeof(text),"%s | %.0f m",m.label.data(),Distance(m.p,{s.posX,s.posY,s.posZ}));
-        d.AddCircle(screen.x>=0?ImVec2{screen.x,screen.y}:ImVec2{-100,-100},6,IM_COL32(174,105,209,255),16,2);
+        d.AddCircle({screen.x,screen.y},6,IM_COL32(174,105,209,255),16,2);
         d.AddText({screen.x+10,screen.y-6},IM_COL32(236,236,238,255),text);
     }
 }

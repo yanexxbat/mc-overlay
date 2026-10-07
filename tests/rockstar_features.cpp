@@ -38,7 +38,7 @@ int main() {
         s.posX=0; CopyField(s.dimension,"Overworld"); s.frameIndex++; e.health=20; pack.Update(s,11,c,42);
         ImGui::NewFrame(); auto* draw=ImGui::GetBackgroundDrawList(); const CameraProjection projection(s,640,480);
         pack.DrawWorld(*draw,s,projection,c,{},42,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},{},0,true);
-        pack.DrawScreen(*draw,s,c,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},11);
+        pack.DrawScreen(*draw,s,projection,c,{640,480},{.66f,.42f,1,1},{.05f,1,.88f,1},11);
         for(int i=int(HudModule::Radar);i<kHudModules;++i) pack.DrawHud(*draw,static_cast<HudModule>(i),s,c,{}, {232,200},11);
         ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"feature pack rendered nothing");
         for(auto* list:ImGui::GetDrawData()->CmdLists) for(const auto& vertex:list->VtxBuffer) Require(std::isfinite(vertex.pos.x)&&std::isfinite(vertex.pos.y),"nonfinite feature geometry");

@@ -625,7 +625,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     if(extraEffects) {
         rockstarPack_.DrawWorld(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,relations,target,{width,height},
             auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),menu_.reduceMotion);
-        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000);
+        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000);
     }
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
         auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
@@ -1203,17 +1203,24 @@ void Overlay::DrawMenu() {
 }
 
 void Overlay::ResetMenuPage(panel::Page page) {
+    const rockstar::Config defaults;
     switch (page) {
-        case panel::Page::Combat: combat_=CombatSettings{}; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0; break;
+        case panel::Page::Combat: combat_=CombatSettings{}; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0;
+            rockstarConfig_[rockstar::Feature::HitSounds]=defaults[rockstar::Feature::HitSounds]; break;
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
             worldVisualsConfig_=WorldVisualsConfig{}; worldVisuals_.Reset();
             localHatConfig_=LocalHatConfig{};
-            auraRenderer_.Reset(); targetCube_.Reset(); break;
-        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; break;
-        case panel::Page::Hud: hud_=HudSettings{}; preferencesDirty_=true; break;
+            auraRenderer_.Reset(); targetCube_.Reset();
+            for(int i=0;i<=rockstar::Index(rockstar::Feature::Arrows);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
+        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={};
+            for(int i=rockstar::Index(rockstar::Feature::ChestEsp);i<=rockstar::Index(rockstar::Feature::ChunkBorders);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
+        case panel::Page::Hud: hud_=HudSettings{};
+            rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;
         case panel::Page::Stats: break;
-        case panel::Page::Misc: rockstarConfig_=rockstar::Config{}; rockstarPack_.ResetWorld(); preferencesDirty_=true; break;
+        case panel::Page::Misc:
+            for(const auto f:{rockstar::Feature::MiddleFriend,rockstar::Feature::DeathCoordinates,rockstar::Feature::DetectPlayer,rockstar::Feature::Waypoints,rockstar::Feature::NameProtect,rockstar::Feature::ModuleSounds,rockstar::Feature::Notifications}) rockstarConfig_[f]=defaults[f];
+            break;
         case panel::Page::Settings:
             settings_=OverlaySettings{};
             preferencesDirty_=true;
@@ -1221,6 +1228,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             ApplyExtendedStyles(!menuVisible_&&!hudEditing_ && settings_.clickThroughWhenIdle);
             break;
     }
+    preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500;
     PushScanRequest();
 }
 
