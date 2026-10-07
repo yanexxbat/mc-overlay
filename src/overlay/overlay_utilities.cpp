@@ -31,6 +31,9 @@ void Overlay::DrawItemAssistSettings(int section) {
             ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
             if(ImGui::Button("Server conservative")) { macro.Conservative(); changed=true; }
             if(ImGui::IsItemHovered()) ImGui::SetTooltip("Short range, slower actions and strict world confirmation. Server acceptance is not guaranteed.");
+            ImGui::SameLine();
+            if(ImGui::Button("GrimAC conservative")) { macro.GrimConservative(); changed=true; }
+            if(ImGui::IsItemHovered()) ImGui::SetTooltip("Also requires a real crosshair hit and uses Minecraft's clicked block face. Not a verified bypass.");
             changed|=panel::CheckRow("Separate action delays",&macro.separateDelays);
             const auto delay=[&](const char* label,std::uint32_t& value,int low,int high) {
                 int ms=static_cast<int>(value);
@@ -44,6 +47,7 @@ void Overlay::DrawItemAssistSettings(int section) {
             int confirmation=static_cast<int>(macro.confirmationMs);
             if(panel::SliderIntRow("World confirmation timeout",&confirmation,100,2000,"%d ms")) { macro.confirmationMs=confirmation; changed=true; }
             changed|=panel::CheckRow("Strict world confirmation",&macro.strictConfirmation);
+            changed|=panel::CheckRow("Require real crosshair hit",&macro.requireCrosshairHit);
             changed|=panel::SliderRow("Maximum range",&macro.maxRange,1,6,"%.1f m");
             changed|=panel::SliderRow("Minimum health (0 = off)",&macro.minHealth,0,20,"%.0f HP");
             changed|=panel::CheckRow("Require offhand totem",&macro.requireTotem);

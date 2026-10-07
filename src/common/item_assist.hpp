@@ -10,7 +10,7 @@ enum class Item : std::uint8_t { Empty, Other, Totem, Crystal, Anchor, Glowstone
 enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crystal };
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
     MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel,
-    LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout };
+    LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout, CrosshairMismatch };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
@@ -33,6 +33,7 @@ inline const char* Text(Status s) {
         case Status::NeedTotem:return "Paused - equip a totem in offhand";
         case Status::OutOfRange:return "Saved position exceeds configured range";
         case Status::ConfirmationTimeout:return "No world confirmation - release Use to reset";
+        case Status::CrosshairMismatch:return "Paused - aim directly at the crystal / interaction block";
     }
     return "Unavailable";
 }
@@ -41,6 +42,7 @@ struct MacroConfig {
     bool enabled=false,restoreSlot=true;
     std::uint32_t intervalMs=150,confirmationMs=750;
     bool separateDelays=false,requireTotem=false,strictConfirmation=false,chargeWithOffhandFuel=false;
+    bool requireCrosshairHit=false;
     std::uint32_t placeMs=150,breakMs=150,chargeMs=150;
     float maxRange=4.5f,minHealth=0.f;
     // 0 = automatisch, 1..9 = bevorzugter Hotbar-Slot für die Detonation.
@@ -56,6 +58,7 @@ struct MacroConfig {
         separateDelays=strictConfirmation=true; placeMs=breakMs=250; chargeMs=200;
         confirmationMs=1500; maxRange=3.f; minHealth=6.f;
     }
+    void GrimConservative() { Conservative(); requireCrosshairHit=true; }
 };
 struct Request {
     std::uint64_t sentAtMs{};
@@ -79,6 +82,7 @@ struct Frame {
     int crystalId=-1;
     float health=20.f;
     double distance=0;
+    bool crosshairCrystal=false,crosshairSupport=false,crosshairCell=false;
 };
 enum class Operation { None, SwapTotem, PlaceCrystal, AttackCrystal, PlaceAnchor, ChargeAnchor, DetonateAnchor, RestoreSlot };
 struct Action { Operation operation=Operation::None; int slot=-1; bool anchor=false; };
@@ -191,6 +195,9 @@ public:
         } else if(anchor&&f.target==Target::OtherBlock) action={Operation::PlaceAnchor,Find(f,Item::Anchor,9),true};
         else { status=Status::WaitingTarget; return {}; }
         if(action.slot<0) { status=Status::MissingItem; return {}; }
+        const bool aligned=action.operation==Operation::AttackCrystal?f.crosshairCrystal:
+            action.operation==Operation::ChargeAnchor||action.operation==Operation::DetonateAnchor?f.crosshairCell:f.crosshairSupport;
+        if(config.requireCrosshairHit&&!aligned) { status=Status::CrosshairMismatch; return {}; }
         status=Status::Pending;
         const auto delay=!config.separateDelays?config.intervalMs:
             action.operation==Operation::ChargeAnchor?config.chargeMs:

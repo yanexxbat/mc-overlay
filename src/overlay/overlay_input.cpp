@@ -181,7 +181,7 @@ void Overlay::SavePreferences() {
           auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
           out<<"macro "<<i<<' '<<c.restoreSlot<<' '<<c.intervalMs<<' '<<c.confirmationMs<<' '
              <<c.separateDelays<<' '<<c.requireTotem<<' '<<c.strictConfirmation<<' '<<c.chargeWithOffhandFuel<<' '
-             <<c.placeMs<<' '<<c.breakMs<<' '<<c.chargeMs<<' '<<c.maxRange<<' '<<c.minHealth<<' '<<c.detonationSlot<<'\n';
+             <<c.placeMs<<' '<<c.breakMs<<' '<<c.chargeMs<<' '<<c.maxRange<<' '<<c.minHealth<<' '<<c.detonationSlot<<' '<<c.requireCrosshairHit<<'\n';
       }
       for(int i=0;i<keys::kCount;++i) out<<"bind "<<i<<' '<<bindings_[i].key<<' '<<bindings_[i].modifiers<<' '<<int(bindings_[i].mode)<<'\n';
       unsigned flags=hud_.visible?1:0; for(int i=0;i<kHudModules;++i) if(HudEnabled(i)) flags|=1u<<(i+1);
@@ -211,6 +211,8 @@ void Overlay::LoadPreferences() {
             int i; items::MacroConfig c;
             if(row>>i>>c.restoreSlot>>c.intervalMs>>c.confirmationMs>>c.separateDelays>>c.requireTotem>>c.strictConfirmation>>c.chargeWithOffhandFuel
                   >>c.placeMs>>c.breakMs>>c.chargeMs>>c.maxRange>>c.minHealth>>c.detonationSlot&&i>=0&&i<2) {
+                // Ältere Settings ohne den optionalen Treffer-Check bleiben lesbar.
+                bool direct; if(row>>direct) c.requireCrosshairHit=direct;
                 c.Clamp(); auto& current=i?anchorMacro_:crystalMacro_; c.enabled=current.enabled; current=c;
             }
         } else if(tag=="world-depth") { int value; if(row>>value&&(value==0||value==1)) settings_.occludeWorldEffects=value==1;

@@ -167,19 +167,21 @@ template<class B> class InventoryAssist final {
         const double z=env->CallDoubleMethod(entity,b_.mGetZ); Check(env);
         return std::abs(x-(site_.cell[0]+.5))<.2&&std::abs(y-site_.cell[1])<.2&&std::abs(z-(site_.cell[2]+.5))<.2;
     }
-    bool AimMatches(JNIEnv* env,jobject client) {
+    bool AimMatches(JNIEnv* env,jobject client,items::Frame& f) {
         auto entity=b_.fTargetedEntity?env->GetObjectField(client,b_.fTargetedEntity):nullptr; Check(env);
-        if(site_.kind==items::Item::Crystal&&AtSite(env,entity)) return true;
+        if(site_.kind==items::Item::Crystal&&AtSite(env,entity)) { f.crosshairCrystal=true; return true; }
         auto hit=env->GetObjectField(client,hit_); Check(env);
         if(!BlockHit(env,hit)) return false;
         auto pos=env->CallObjectMethod(hit,blockPos_); Check(env); if(!pos) return false;
         int xyz[3]; Coordinates(env,pos,xyz);
-        return std::equal(xyz,xyz+3,site_.clicked)||std::equal(xyz,xyz+3,site_.cell);
+        f.crosshairSupport=std::equal(xyz,xyz+3,site_.clicked);
+        f.crosshairCell=std::equal(xyz,xyz+3,site_.cell);
+        return f.crosshairSupport||f.crosshairCell;
     }
     jobject Observe(JNIEnv* env,jobject client,jobject level,jobject player,jobject manager,items::Frame& f,const items::MacroConfig& config) {
         f.cycle=site_.kind;
         if(site_.kind==items::Item::Empty) return nullptr;
-        f.siteValid=AimMatches(env,client); if(!f.siteValid) return nullptr;
+        f.siteValid=AimMatches(env,client,f); if(!f.siteValid) return nullptr;
         auto eye=env->CallObjectMethod(player,eye_); Check(env); if(!eye) { f.siteValid=false; return nullptr; }
         const double e[]={env->GetDoubleField(eye,b_.fVecX),env->GetDoubleField(eye,b_.fVecY),env->GetDoubleField(eye,b_.fVecZ)}; Check(env);
         const double reach=blockReach_?env->CallDoubleMethod(player,blockReach_):env->CallFloatMethod(manager,oldBlockReach_); Check(env);
@@ -377,13 +379,30 @@ public:
                     const auto id=env->GetIntField(menu,b_.fSyncId); Check(env);
                     env->CallVoidMethod(manager,b_.mClickSlot,id,items::ContainerSlot(action.slot),40,b_.swapAction,player); Check(env);
                 } else {
+                    jobject currentHit=nullptr;
+                    const auto& config=action.anchor?request.anchor:request.crystal;
+                    if(config.requireCrosshairHit&&action.operation!=items::Operation::RestoreSlot) {
+                        // Nur reale Minecraft-Treffer verwenden: exakte Blockseite
+                        // und Trefferposition statt der synthetischen Oberseite.
+                        if(action.operation==items::Operation::AttackCrystal) {
+                            auto aimed=b_.fTargetedEntity?env->GetObjectField(client,b_.fTargetedEntity):nullptr; Check(env);
+                            if(!aimed||!target||!env->IsSameObject(aimed,target)) throw std::runtime_error("crosshair crystal changed before action");
+                        } else {
+                            currentHit=env->GetObjectField(client,hit_); Check(env);
+                            if(!BlockHit(env,currentHit)) throw std::runtime_error("crosshair block changed before action");
+                            auto position=env->CallObjectMethod(currentHit,blockPos_); Check(env);
+                            int xyz[3]; Coordinates(env,position,xyz);
+                            const bool placing=action.operation==items::Operation::PlaceCrystal||action.operation==items::Operation::PlaceAnchor;
+                            if(!std::equal(xyz,xyz+3,placing?site_.clicked:site_.cell)) throw std::runtime_error("crosshair position changed before action");
+                        }
+                    }
                     env->SetIntField(inventory,selected_,action.slot); Check(env); site_.selected=action.slot;
                     if(action.operation==items::Operation::AttackCrystal) {
                         success=target!=nullptr;
                         if(success) { env->CallVoidMethod(manager,attack_,player,target); Check(env); env->CallVoidMethod(player,swing_,hand_); Check(env); }
                     } else if(action.operation!=items::Operation::RestoreSlot) {
                         const bool placing=action.operation==items::Operation::PlaceCrystal||action.operation==items::Operation::PlaceAnchor;
-                        auto result=env->CallObjectMethod(manager,useOn_,player,hand_,placing?site_.placement:site_.interaction); Check(env);
+                        auto result=env->CallObjectMethod(manager,useOn_,player,hand_,currentHit?currentHit:placing?site_.placement:site_.interaction); Check(env);
                         success=result&&env->CallBooleanMethod(result,consumes_)==JNI_TRUE; Check(env);
                         if(success) { env->CallVoidMethod(player,swing_,hand_); Check(env); }
                     }
