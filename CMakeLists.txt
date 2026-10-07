@@ -158,6 +158,7 @@ add_executable(mcov_overlay
     src/overlay/overlay_input.cpp
     src/overlay/overlay_hud.cpp
     src/overlay/overlay_world_visuals.cpp
+    src/overlay/overlay_rockstar.cpp
     src/overlay/overlay_utilities.cpp
     src/overlay/esp_renderer.cpp
     src/overlay/item_icon_atlas_dx11.cpp
@@ -167,6 +168,7 @@ add_executable(mcov_overlay
     src/overlay/friend_hat_renderer.cpp
     src/overlay/target_cube_renderer.cpp
     src/overlay/world_visuals.cpp
+    src/overlay/rockstar_features.cpp
     src/overlay/aura_blend_dx11.cpp
     src/overlay/process.cpp
     src/common/ipc.cpp
@@ -182,6 +184,7 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_overlay PRIVATE
+    winmm
     mcov_settings
     imgui
     d3d11
@@ -357,6 +360,10 @@ if(MCOV_BUILD_UI_CHECKS)
     target_include_directories(mcov_world_visuals_check PRIVATE src)
     target_link_libraries(mcov_world_visuals_check PRIVATE mcov_settings imgui)
     add_test(NAME world_visuals COMMAND mcov_world_visuals_check)
+    add_executable(mcov_rockstar_check tests/rockstar_features.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
+    target_include_directories(mcov_rockstar_check PRIVATE src)
+    target_link_libraries(mcov_rockstar_check PRIVATE mcov_settings imgui)
+    add_test(NAME rockstar_features COMMAND mcov_rockstar_check)
     add_executable(mcov_control_panel_check
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/control_panel_smoke.cpp
@@ -364,6 +371,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_world_visuals.cpp
+        src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
     src/overlay/overlay_utilities.cpp
         src/overlay/combat_menu.cpp
         src/overlay/item_icon_atlas_dx11.cpp
@@ -374,7 +382,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
-        user32 gdi32 shell32 dwmapi ole32 windowscodecs)
+        user32 gdi32 shell32 dwmapi ole32 windowscodecs winmm)
     add_test(NAME control_panel COMMAND mcov_control_panel_check "${CMAKE_BINARY_DIR}/ui-preview")
     set_tests_properties(control_panel PROPERTIES TIMEOUT 30)
     add_executable(mcov_aura_check tests/aura_smoke.cpp src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
