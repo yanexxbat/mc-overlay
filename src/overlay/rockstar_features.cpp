@@ -39,6 +39,7 @@ Config::Config() {
     (*this)[Feature::DetectPlayer].range=32; (*this)[Feature::NameProtect].mode=0;
     (*this)[Feature::DamageMarkers].lifetime=1.6f; (*this)[Feature::Notifications].lifetime=4;
     (*this)[Feature::Arrows].size=10; (*this)[Feature::ChunkBorders].range=1;
+    (*this)[Feature::ChestEsp].range=(*this)[Feature::BeaconRadius].range=24;
     (*this)[Feature::HitSounds].opacity=.5f; (*this)[Feature::ModuleSounds].opacity=.3f;
 }
 void Config::Clamp() {
@@ -48,6 +49,7 @@ void Config::Clamp() {
         c.glow=Safe(c.glow,0,2,.75f);
         for(auto* color:{&c.start,&c.end}) *color={Safe(color->x,0,1),Safe(color->y,0,1),Safe(color->z,0,1),Safe(color->w,0,1)};
     }
+    for(const auto f:{Feature::ChestEsp,Feature::BeaconRadius}) (*this)[f].range=std::clamp((*this)[f].range,4.f,48.f);
 }
 const char* Pack::DisplayName(const char* name,bool protect,bool player) { return protect&&player?"Player":name; }
 void Pack::ResetWorld() {
@@ -110,7 +112,6 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
             }
         }
     }
-    int cosmetics=0;
     for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
         if(!(e.flags&kEntityIsLiving)||(e.flags&kEntityIsSelf)||!std::isfinite(e.health)||!Finite({e.x,e.y,e.z})) continue;
         Track* track=nullptr;
@@ -150,6 +151,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         const float t=static_cast<float>((now_-r.born)/jump.lifetime);
         if(t>=0&&t<1) { const auto [a,b]=palette(jump,1-t); DrawRing(d,p,r.p,jump.size*(reduced?1:.15f+.85f*t),a,b,2,jump.glow); }
     }
+    int cosmetics=0;
     for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
         if(!(e.flags&kEntityIsLiving)||e.health<=0||!Finite({e.x,e.y,e.z})) continue;
         const bool self=(e.flags&kEntityIsSelf)!=0,friendEntity=combat::Lookup(friends,e.uuid)==combat::Relation::Friend;
@@ -202,6 +204,7 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
     }
     const auto& beacon=config[Feature::BeaconRadius];
     if(beacon.enabled) for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) if(block.kind==kBlockBeacon) {
+        if(Distance({block.x,block.y,block.z},{s.posX,s.posY,s.posZ})>beacon.range) continue;
         const auto [a,b]=palette(beacon); DrawRing(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,a,b,1,beacon.glow);
         WorldLine(d,p,{block.x+.5,block.y+1,block.z+.5},{block.x+.5,block.y+32,block.z+.5},b,2,beacon.glow);
     }

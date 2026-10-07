@@ -226,6 +226,8 @@ private:
     int miscSection_=0;
     char waypointName_[kNameLen]="Waypoint";
     bool panicActive_=false;
+    std::array<bool,keys::kCount> observedModules_{};
+    bool moduleObservationReady_=false;
     OverlaySettings settings_{};
     HudSettings     hud_{};
     keys::Bindings bindings_=keys::Defaults();

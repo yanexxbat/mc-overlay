@@ -65,7 +65,18 @@ void Overlay::Panic() {
 }
 void Overlay::UpdateRockstar() {
     const double now=double(GetTickCount64())/1000;
+    for(int i=3;i<keys::kCount;++i) {
+        const auto action=static_cast<keys::Action>(i); if(keys::System(action)) continue;
+        const bool on=ModuleEnabled(action);
+        if(moduleObservationReady_&&on!=observedModules_[i]&&!panicActive_) {
+            if(rockstarConfig_.Enabled(Feature::Notifications)) { char text[112]; std::snprintf(text,sizeof(text),"%s %s",keys::kNames[i],on?"enabled":"disabled"); rockstarPack_.Notify(text,now); }
+            PlayModuleSound(on);
+        }
+        observedModules_[i]=on;
+    }
+    moduleObservationReady_=true;
     if(panicActive_) for(int i=3;i<keys::kCount;++i) if(ModuleEnabled(static_cast<keys::Action>(i))) { panicActive_=false; break; }
+    if(panicActive_&&(visuals_.healthBars||visuals_.distanceText||visuals_.tracers||visuals_.targetInfo)) panicActive_=false;
     rockstarPack_.Input(keyInput_,IsForegroundWindowOwnedBy(target_.pid)&&!menuVisible_&&!hudEditing_&&captureAction_<0,now);
     if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); return; }
     const auto& s=lastSnapshot_;
@@ -106,8 +117,11 @@ void Overlay::DrawRockstarSettings(Feature feature) {
             dirty|=panel::SliderRow("Edge size",&c.size,.2f,4,"%.2f x");
         } else if(feature==Feature::Arrows) {
             dirty|=panel::SliderRow("Distance",&c.range,4,256,"%.0f m"); dirty|=panel::SliderRow("Arrow size",&c.size,4,20,"%.0f px");
-        } else if(feature==Feature::DetectPlayer||feature==Feature::ChestEsp) dirty|=panel::SliderRow("Range",&c.range,8,128,"%.0f m");
-        else if(feature==Feature::BeaconRadius) dirty|=panel::SliderRow("Radius guide",&c.size,10,80,"%.0f m");
+        } else if(feature==Feature::DetectPlayer) dirty|=panel::SliderRow("Range",&c.range,8,128,"%.0f m");
+        else if(feature==Feature::ChestEsp||feature==Feature::BeaconRadius) {
+            dirty|=panel::SliderRow("Scan distance",&c.range,4,48,"%.0f m");
+            if(feature==Feature::BeaconRadius) dirty|=panel::SliderRow("Radius guide",&c.size,10,80,"%.0f m");
+        }
         else if(feature==Feature::ChunkBorders) dirty|=panel::SliderRow("Neighbour chunks",&c.range,0,3,"%.0f");
         else if(feature==Feature::HitSounds) { const char* sounds[]={"Low","Medium","High"}; dirty|=panel::ComboRow("Tone",&c.mode,sounds,3); }
         const bool sound=feature==Feature::HitSounds||feature==Feature::ModuleSounds;
@@ -140,11 +154,7 @@ void Overlay::DrawRockstarSettings(Feature feature) {
             ImGui::SameLine(); if(ImGui::SmallButton("Remove")) { m={}; dirty=true; } ImGui::PopID();
         }
     }
-    if(before!=c.enabled) {
-        if(rockstarConfig_.Enabled(Feature::Notifications)) { char text[112]; std::snprintf(text,sizeof(text),"%s %s",rockstar::kNames[rockstar::Index(feature)],c.enabled?"enabled":"disabled"); rockstarPack_.Notify(text,double(GetTickCount64())/1000); }
-        if(rockstarConfig_.Enabled(Feature::ModuleSounds)) PlayModuleSound(c.enabled);
-        if(c.enabled) panicActive_=false;
-    }
+    if(before!=c.enabled&&c.enabled) panicActive_=false;
     if(dirty) { rockstarConfig_.Clamp(); preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
     ImGui::PopID();
 }

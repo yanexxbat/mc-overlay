@@ -1009,7 +1009,8 @@ void Overlay::PushScanRequest() {
     const std::uint32_t storageMask=(1u<<kBlockChest)|(1u<<kBlockShulker)|(1u<<kBlockBarrel)|(1u<<kBlockHopper)|(1u<<kBlockFurnace);
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
         (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u)|(storage?storageMask:0)|(beacon?1u<<kBlockBeacon:0);
-    const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,storage||beacon?24:4});
+    const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
+        storage?int(rockstarConfig_[rockstar::Feature::ChestEsp].range):4,beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4});
     const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,storage||beacon?1000:3000});
     block->scanMask.store(mask, std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);

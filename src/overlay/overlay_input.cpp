@@ -52,17 +52,12 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
     }
 }
 void Overlay::SetModuleEnabled(keys::Action a,bool value) {
-    const bool changed=ModuleEnabled(a)!=value;
     if(a>=keys::Action::JumpCircles&&a<=keys::Action::Waypoints) {
         rockstarConfig_.modules[keys::Index(a)-keys::Index(keys::Action::JumpCircles)].enabled=value; preferencesDirty_=true;
     } else if(a>=keys::Action::Radar&&a<=keys::Action::Cps) {
         hud_.extras[keys::Index(a)-keys::Index(keys::Action::Radar)]=value; preferencesDirty_=true;
     }
     if(value) panicActive_=false;
-    if(changed) {
-        if(rockstarConfig_.Enabled(rockstar::Feature::Notifications)) { const auto message=std::string(keys::kNames[keys::Index(a)])+(value?" enabled":" disabled"); rockstarPack_.Notify(message.c_str(),double(GetTickCount64())/1000); }
-        if(rockstarConfig_.Enabled(rockstar::Feature::ModuleSounds)) PlayModuleSound(value);
-    }
     switch(a) {
         case keys::Action::KillAura: { auto c=combatMenu_.Store().Read().values; c.enabled=value; combatMenu_.Store().Publish(c); break; }
         case keys::Action::AimAssist:combat_.aimLock=value;break;
@@ -127,7 +122,7 @@ void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
             else if(a==keys::Action::HudEditor) SetHudEditing(!hudEditing_);
             else if(a==keys::Action::Panic) Panic();
         });
-    if(middlePressed&&focused&&!capturing&&!menuVisible_&&!hudEditing_&&rockstarConfig_.Enabled(rockstar::Feature::MiddleFriend)&&haveSnapshot_) {
+    if(middlePressed&&focused&&!capturing&&!menuVisible_&&!hudEditing_&&rockstarConfig_.Enabled(rockstar::Feature::MiddleFriend)&&haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64())) {
         for(const auto& entity:std::span(lastSnapshot_.entities,std::min(lastSnapshot_.entityCount,kMaxEntities))) {
             if(entity.entityId!=lastSnapshot_.targetEntityId||!lastSnapshot_.hasTarget||!(entity.flags&kEntityIsPlayer)||(entity.flags&kEntityIsSelf)||(!entity.uuid.high&&!entity.uuid.low)) continue;
             auto& book=combatMenu_.Relations(); const bool friendNow=combat::Lookup(book.Read(),entity.uuid)==combat::Relation::Friend;
