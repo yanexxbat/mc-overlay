@@ -80,8 +80,15 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
     now_=now;
     const bool worldChanged=std::memcmp(dimension_.data(),s.dimension,kNameLen)||std::memcmp(server_.data(),s.serverAddress,kAddrLen);
     if(initialized_&&(worldChanged||now<sampled_||now-sampled_>2)) ResetWorld();
-    if(initialized_&&frame_==s.frameIndex) return;
-    const WorldPoint local{s.posX,s.posY,s.posZ}; const double dt=now-sampled_;
+    if(initialized_&&frame_>=s.frameIndex) return;
+    WorldPoint local{s.posX,s.posY,s.posZ};
+    for(const auto& entity:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) {
+        if((entity.flags&kEntityIsSelf)&&Finite({entity.x,entity.y,entity.z})) { local={entity.x,entity.y,entity.z}; break; }
+    }
+    // Geometrie wird jedes Kameraframe erfasst; posX/Y/Z gehoeren zum langsamen HUD-Sample.
+    LARGE_INTEGER frequency{}; QueryPerformanceFrequency(&frequency);
+    const double sampled=s.captureQpc>0&&frequency.QuadPart>0?double(s.captureQpc)/double(frequency.QuadPart):now;
+    const double dt=sampled-sampled_;
     if(!initialized_) {
         previous_=local; previousHealth_=s.health; started_=now; previousVertical_=0;
         std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
@@ -123,7 +130,7 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
         }
         track->nearby=nearby; track->health=e.health; track->seen=now;
     }
-    previous_=local; previousHealth_=s.health; sampled_=now; frame_=s.frameIndex; initialized_=true;
+    previous_=local; previousHealth_=s.health; sampled_=sampled; frame_=s.frameIndex; initialized_=true;
 }
 void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& p,const Config& config,
         const combat::Relations& friends,std::uint32_t target,ImVec2 viewport,ImVec4 auraA,ImVec4 auraB,

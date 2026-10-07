@@ -1529,6 +1529,7 @@ void SamplerThread() {
                 // Publish geometry BEFORE equipment, telemetry and block scanning.
                 // These slower modules must not add latency to the entity anchor.
                 if (auto* block = g_channel.block()) PublishSnapshot(block, snapshot);
+                g_depthCapture.ObserveSnapshot(snapshot);
                 const auto hudNow = ::GetTickCount64();
                 if (hudNow >= nextHudTick) {
                     SampleLocalPlayer(env, bindings, player, snapshot);

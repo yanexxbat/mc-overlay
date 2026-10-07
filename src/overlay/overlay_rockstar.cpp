@@ -79,7 +79,8 @@ void Overlay::UpdateRockstar() {
     if(panicActive_&&(visuals_.healthBars||visuals_.distanceText||visuals_.tracers||visuals_.targetInfo)) panicActive_=false;
     rockstarPack_.Input(keyInput_,IsForegroundWindowOwnedBy(target_.pid)&&!menuVisible_&&!hudEditing_&&captureAction_<0,now);
     if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); return; }
-    const auto& s=depthFresh_?depthFrame_->world:lastSnapshot_;
+    // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
+    const auto& s=lastSnapshot_;
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:s.hasTarget?s.targetEntityId:0;
     const auto oldDeath=std::find_if(rockstarPack_.Markers().begin(),rockstarPack_.Markers().end(),[](const auto& m){return m.used&&m.death;});

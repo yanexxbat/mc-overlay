@@ -1,5 +1,7 @@
 #pragma once
 #include "../common/depth_channel.hpp"
+#include "../common/depth_snapshots.hpp"
+#include "../common/log.hpp"
 #include "jvm_interface.hpp"
 #include <GL/gl.h>
 #include <mutex>
@@ -45,6 +47,8 @@ class DepthCapture final {
     std::array<Slot,3> slots_{};
     GLuint source_{},target_{},texture_{}; GLint format_{}; HGLRC context_{};
     std::mutex mutex_; DepthChannel channel_; SharedBlock* world_{};
+    DepthSnapshots snapshots_;
+    std::uint64_t callbacks_{},queued_{},published_{},unmatched_{},reportAt_{};
     jclass signal_{},textureClass_{}; jfieldID enabled_{},width_{},height_{};
     jmethodID client_{},mainTarget_{},depthTexture_{},glId_{},far_{};
     bool enabledState_{};
@@ -100,14 +104,27 @@ public:
     }
     void RefreshRequest(JNIEnv* env) {
         const std::scoped_lock lock(mutex_);
+        if(world_&&channel_.Block()->requested.load(std::memory_order_acquire)&&GetTickCount64()>=reportAt_) {
+            reportAt_=GetTickCount64()+5000;
+            MCOV_LOG_INFO("world depth: callbacks=%llu queued=%llu published=%llu unmatched=%llu status=%u",
+                static_cast<unsigned long long>(callbacks_),static_cast<unsigned long long>(queued_),
+                static_cast<unsigned long long>(published_),static_cast<unsigned long long>(unmatched_),channel_.Block()->status.load());
+        }
         if(world_&&signal_&&enabled_&&!enabledState_&&channel_.Block()->requested.load(std::memory_order_acquire)) {
             env->SetStaticBooleanField(signal_,enabled_,JNI_TRUE); enabledState_=true; Status(DepthStatus::Waiting);
             if(env->ExceptionCheck()) { env->ExceptionClear(); enabledState_=false; }
         }
     }
+    void ObserveSnapshot(const WorldSnapshot& snapshot) {
+        const std::scoped_lock lock(mutex_);
+        if(!world_||!channel_.Block()->requested.load(std::memory_order_acquire)) return;
+        snapshots_.Put(snapshot);
+        for(auto& slot:slots_) if(slot.fence&&slot.epoch==snapshot.renderEpoch) slot.world=snapshot;
+    }
     void Capture(JNIEnv* env,jobject renderer,std::uint64_t epoch) {
         std::unique_lock lock(mutex_,std::try_to_lock); if(!lock) return;
         auto* block=channel_.Block(); if(!block||!world_) { ReleaseGl(); return; }
+        ++callbacks_;
         if(!block->requested.load(std::memory_order_acquire)) {
             ReleaseGl(); Status(DepthStatus::Disabled); env->SetStaticBooleanField(signal_,enabled_,JNI_FALSE); enabledState_=false;
             if(env->ExceptionCheck()) env->ExceptionClear(); return;
@@ -118,6 +135,11 @@ public:
         State state(gl_);
         // Kein Warten auf die GPU: drei PBOs und Fence-Poll mit Timeout 0.
         for(auto& s:slots_) if(s.fence) {
+            // Der Sampler darf erst NACH dem GL-Capture fertig werden.
+            if(s.world.renderEpoch!=s.epoch) {
+                if(GetTickCount64()-s.time<100) continue;
+                ++unmatched_; gl_.deleteSync(s.fence); s.fence=nullptr; continue;
+            }
             const auto done=gl_.wait(s.fence,0,0);
             if(done==0x911d) { gl_.deleteSync(s.fence); s.fence=nullptr; Status(DepthStatus::Unsupported); continue; }
             if(done!=0x911a&&done!=0x911c) continue;
@@ -130,7 +152,7 @@ public:
                     f.sourceWidth=s.width; f.sourceHeight=s.height; f.world=s.world;
                     f.world.nearPlane=f.nearPlane; f.world.farPlane=f.farPlane;
                     for(int y=0;y<kDepthHeight;++y) std::memcpy(f.pixels.data()+y*kDepthWidth,data+(kDepthHeight-1-y)*kDepthWidth,kDepthWidth*sizeof(float));
-                    block->sequence.fetch_add(1,std::memory_order_release); Status(DepthStatus::Ready);
+                    block->sequence.fetch_add(1,std::memory_order_release); ++published_; Status(DepthStatus::Ready);
                 }
                 gl_.unmap(Pack);
             }
@@ -138,7 +160,9 @@ public:
         }
         auto found=std::find_if(slots_.begin(),slots_.end(),[](const Slot& s){return !s.fence;}); if(found==slots_.end()) return;
         auto& slot=*found;
-        if(!TryReadSnapshot(world_,slot.world)||slot.world.renderEpoch!=epoch||!epoch||(epoch&1)) return;
+        if(!epoch||(epoch&1)) return;
+        slot.world.renderEpoch=0;
+        snapshots_.Get(epoch,slot.world);
         jvm::LocalFrame frame(env,8);
         auto client=env->CallObjectMethod(renderer,client_); if(env->ExceptionCheck()) { env->ExceptionClear(); return; }
         auto target=client?env->CallObjectMethod(client,mainTarget_):nullptr; if(env->ExceptionCheck()) { env->ExceptionClear(); return; }
@@ -166,7 +190,7 @@ public:
         gl_.bindFbo(ReadFbo,target_); gl_.bindBuffer(Pack,slot.pbo);
         glPixelStorei(GL_PACK_ALIGNMENT,4); glPixelStorei(GL_PACK_ROW_LENGTH,0); glPixelStorei(GL_PACK_SKIP_ROWS,0); glPixelStorei(GL_PACK_SKIP_PIXELS,0); glPixelStorei(GL_PACK_SWAP_BYTES,0);
         glReadPixels(0,0,kDepthWidth,kDepthHeight,GL_DEPTH_COMPONENT,GL_FLOAT,nullptr);
-        slot.epoch=epoch; slot.time=GetTickCount64(); slot.fence=gl_.fence(0x9117,0);
+        slot.epoch=epoch; slot.time=GetTickCount64(); slot.fence=gl_.fence(0x9117,0); ++queued_;
     }
     void Close(JNIEnv* env) {
         const std::scoped_lock lock(mutex_); world_=nullptr;
