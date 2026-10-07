@@ -17,6 +17,7 @@ struct VisualSettings {
     bool healthBars = true;
     bool distanceText = true;
     bool targetInfo = true;
+    bool nameProtect = false; // Nur die externen Beschriftungen anonymisieren.
 
     bool showPlayers = true;
     bool showHostiles = true;

@@ -19,6 +19,7 @@
 #pragma once
 
 #include <cstdint>
+#include "rockstar_features.hpp"
 #include "../common/agent_health.hpp"
 #include <string>
 
@@ -177,6 +178,11 @@ private:
     void  DrawChunkFinderSettings();
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
+    void DrawRockstarSettings(rockstar::Feature feature);
+    void DrawMiscTab();
+    void UpdateRockstar();
+    void Panic();
+    void PlayModuleSound(bool enabled,bool hit=false);
 
     void SampleTelemetry(const WorldSnapshot& snapshot);
 
@@ -215,6 +221,10 @@ private:
     ItemIconAtlasDX11 itemIcons_{};
     bool auraPrepared_ = false;
     control_panel::State menu_{};
+    rockstar::Config rockstarConfig_{};
+    rockstar::Pack rockstarPack_{};
+    int miscSection_=0;
+    char waypointName_[kNameLen]="Waypoint";
     OverlaySettings settings_{};
     HudSettings     hud_{};
     keys::Bindings bindings_=keys::Defaults();

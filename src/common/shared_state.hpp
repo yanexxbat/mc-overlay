@@ -16,7 +16,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 16;
+inline constexpr std::uint32_t kSharedVersion = 17;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -38,6 +38,11 @@ enum BlockKind : std::uint8_t {
     kBlockChest,
     kBlockSpawner,
     kBlockRotatedDeepslate,
+    kBlockBeacon,
+    kBlockShulker,
+    kBlockBarrel,
+    kBlockHopper,
+    kBlockFurnace,
     kBlockKindCount,
 };
 
@@ -56,6 +61,11 @@ inline const char* BlockKindKey(std::uint8_t kind) {
         case kBlockChest:         return "chest";
         case kBlockSpawner:       return "spawner";
         case kBlockRotatedDeepslate:return "deepslate";
+        case kBlockBeacon:        return "beacon";
+        case kBlockShulker:       return "shulker_box";
+        case kBlockBarrel:        return "barrel";
+        case kBlockHopper:        return "hopper";
+        case kBlockFurnace:       return "furnace";
         default:                  return "";
     }
 }
@@ -75,6 +85,11 @@ inline const char* BlockKindLabel(std::uint8_t kind) {
         case kBlockChest:         return "Chests";
         case kBlockSpawner:       return "Spawners";
         case kBlockRotatedDeepslate:return "Rotated deepslate";
+        case kBlockBeacon:        return "Beacons";
+        case kBlockShulker:       return "Shulker boxes";
+        case kBlockBarrel:        return "Barrels";
+        case kBlockHopper:        return "Hoppers";
+        case kBlockFurnace:       return "Furnaces";
         default:                  return "?";
     }
 }

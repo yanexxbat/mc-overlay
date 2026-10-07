@@ -6,14 +6,22 @@ namespace mcov::keys {
 enum class Action { Menu, Quit, HudEditor, KillAura, AimAssist, Triggerbot, AutoTotem,
     BoxEsp, Skeleton, NameTags, BlockEsp, TargetAura, TargetMarker, Hud,
     Trails, HitParticles, AmbientParticles, HitBubbles, KillEffect, BreadCrumbs, ChinaHat,
-    CrystalMacro, AnchorMacro, ChunkFinder, Count };
+    CrystalMacro, AnchorMacro, ChunkFinder,
+    JumpCircles, Wings, Halo, GlowEsp, DamageMarkers, DamageInfo, TargetCircle, Crosshair, Arrows,
+    NameProtect, HitSounds, ModuleSounds, MiddleFriend, DeathCoordinates, DetectPlayer, Notifications,
+    ChestEsp, BeaconRadius, ChunkBorders, Waypoints,
+    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Panic, Count };
 enum class Mode { Toggle, Hold };
 enum Modifier : unsigned { Ctrl=1, Shift=2, Alt=4 };
 inline constexpr int kCount=static_cast<int>(Action::Count);
 inline constexpr std::array<const char*,kCount> kNames={"Menu","Quit overlay","HUD editor","Kill Aura","Aim assist",
     "Triggerbot","Auto totem","Box ESP","Skeleton","Name tags","Block ESP","Target aura","Target marker","HUD",
     "Trails","Hit particles","Ambient particles","Hit bubbles","Kill effect","BreadCrumbs","China hat",
-    "Crystal macro","Anchor macro","Chunkfinder"};
+    "Crystal macro","Anchor macro","Chunkfinder",
+    "Jump circles","Wings","Halo / Nimb","Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows",
+    "Name protect","Hit sounds","Module sounds","Middle click friend","Death coordinates","Detect players","Notifications",
+    "Storage ESP","Beacon radius","Chunk borders","Waypoints",
+    "Radar","Keystrokes","Speedometer","Session statistics","Armor strip","Combat indicators","Clock","Click rate","Panic"};
 struct Bind { int key{}; unsigned modifiers{}; Mode mode=Mode::Toggle; };
 using Bindings=std::array<Bind,kCount>;
 using Input=std::array<bool,256>;

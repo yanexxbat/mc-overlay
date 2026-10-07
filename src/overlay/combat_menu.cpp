@@ -22,7 +22,7 @@ template<class Draw> void Columns(const char* id,Draw draw) {
 void Header(const char* text) { panel::Section(text); }
 }
 CombatMenu::Section CombatMenu::DrawNavigation() {
-    constexpr const char* labels[]={"Kill Aura","Aim Assist","Triggerbot","Auto Totem","Friends","Crystal Macro","Anchor Macro"};
+    constexpr const char* labels[]={"Kill Aura","Aim Assist","Triggerbot","Auto Totem","Friends","Crystal Macro","Anchor Macro","Hit sounds"};
     const auto requested=section_==Section::Debug ? Section::KillAura : section_;
     const float start=ImGui::GetCursorPosY();
     const auto selected=static_cast<Section>(panel::SubTabs("combat_sections",labels,IM_ARRAYSIZE(labels),static_cast<int>(requested),selectNext_));

@@ -93,9 +93,9 @@ Actions Render(State& state,const Status& status,void* owner,Content content) {
     draw.AddText({pos.x+7,pos.y+5},ImGui::GetColorU32(ImGuiCol_Text),"mcov");
     ImGui::SetCursorScreenPos({pos.x+8,pos.y+27});
     ImGui::BeginChild("navigation",{size.x-16,31},ImGuiChildFlags_None,ImGuiWindowFlags_NoScrollbar|ImGuiWindowFlags_NoBackground);
-    constexpr const char* labels[]={"Combat","Visuals","Blocks","HUD","Stats","Settings"};
-    const float tabWidth=(size.x-16)/6;
-    for(int i=0;i<6;++i) {
+    constexpr const char* labels[]={"Combat","Visuals","Blocks","HUD","Stats","Settings","Misc"};
+    const float tabWidth=(size.x-16)/IM_ARRAYSIZE(labels);
+    for(int i=0;i<IM_ARRAYSIZE(labels);++i) {
         if(i) ImGui::SameLine(0,0);
         style::StyleScope selected;
         if(state.page==static_cast<Page>(i)) selected.Color(ImGuiCol_Button,ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));

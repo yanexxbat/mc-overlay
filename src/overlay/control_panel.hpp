@@ -4,7 +4,7 @@
 
 namespace mcov::control_panel {
 
-enum class Page { Combat, Visuals, Blocks, Hud, Stats, Settings };
+enum class Page { Combat, Visuals, Blocks, Hud, Stats, Settings, Misc };
 struct State {
     Page page = Page::Combat;
     int theme = 0; // Classic violet; für Aufrufer mit Theme-Argument beibehalten.
