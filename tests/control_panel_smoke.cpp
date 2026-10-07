@@ -800,6 +800,8 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
         mcov::OverlayUiCheck::Binds(overlay)=mcov::keys::Defaults();
         mcov::OverlayUiCheck::ItemStatus(overlay);
+        mcov::OverlayUiCheck::Crystal(overlay).GrimConservative();
+        mcov::OverlayUiCheck::Anchor(overlay).GrimConservative();
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
             const auto suffix=size.x<500?"-small.png":".png";
             for(int section:{3,5,6}) {
