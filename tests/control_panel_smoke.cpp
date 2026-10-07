@@ -381,6 +381,51 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     mcov::OverlayUiCheck::ResetVisuals(overlay);
     Require(!config.Enabled()&&hat.enabled&&!hat.firstPerson,"Visual reset retained effects or removed the default F5 hat");
 }
+void RockstarChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using mcov::rockstar::Feature;
+    auto& config=mcov::OverlayUiCheck::Rockstar(overlay); auto& pack=mcov::OverlayUiCheck::Pack(overlay);
+    mcov::WorldSnapshot scene{}; scene.camY=1.6; scene.fovDeg=70; scene.nearPlane=.05f; scene.farPlane=1024;
+    scene.health=scene.maxHealth=20; scene.hasTarget=1; scene.targetEntityId=42; scene.entityCount=3;
+    mcov::CopyField(scene.dimension,"Overworld"); mcov::CopyField(scene.serverAddress,"Local world");
+    auto& entity=scene.entities[0]; entity.entityId=42; entity.uuid={1,2}; entity.z=4;
+    entity.health=entity.maxHealth=20; entity.distance=4; entity.width=.6f; entity.height=entity.modelHeight=1.8f;
+    entity.flags=mcov::kEntityIsLiving|mcov::kEntityIsPlayer; entity.rigKind=mcov::kRigHumanoid; mcov::CopyField(entity.name,"Glow target");
+    scene.entities[1]=entity; scene.entities[1].entityId=43; scene.entities[1].uuid={3,4}; scene.entities[1].x=10; scene.entities[1].z=-4; scene.entities[1].distance=11;
+    scene.entities[2]=entity; scene.entities[2].entityId=44; scene.entities[2].uuid={5,6}; scene.entities[2].x=-1.5; scene.entities[2].z=5; scene.entities[2].flags|=mcov::kEntityIsSelf;
+    // Freund-Zuordnung wird durch echte Mittelklick-Flanken geaendert, nie durch gehaltene Buttons oder das Menue.
+    config[Feature::MiddleFriend].enabled=true; mcov::OverlayUiCheck::Snapshot(overlay,scene); Draw(overlay,Page::Misc,0);
+    mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input); input[VK_MBUTTON]=true; mcov::OverlayUiCheck::Input(overlay,input);
+    Require(mcov::combat::Lookup(mcov::OverlayUiCheck::CombatEditor(overlay).Relations().Read(),entity.uuid)==mcov::combat::Relation::Friend,"Middle click did not add crosshair player as friend");
+    mcov::OverlayUiCheck::Input(overlay,input);
+    Require(mcov::combat::Lookup(mcov::OverlayUiCheck::CombatEditor(overlay).Relations().Read(),entity.uuid)==mcov::combat::Relation::Friend,"Held middle button toggled a friend twice");
+    mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::Input(overlay,input,true);
+    Require(mcov::combat::Lookup(mcov::OverlayUiCheck::CombatEditor(overlay).Relations().Read(),entity.uuid)==mcov::combat::Relation::Friend,"Menu click changed friend relation");
+    mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::Input(overlay,input);
+    Require(mcov::combat::Lookup(mcov::OverlayUiCheck::CombatEditor(overlay).Relations().Read(),entity.uuid)==mcov::combat::Relation::Neutral,"Second middle click did not remove friend");
+    mcov::OverlayUiCheck::Input(overlay,{});
+    for(int i=0;i<=int(Feature::Arrows);++i) config.modules[i].enabled=true;
+    config[Feature::TargetCircle].mode=1; config[Feature::DeathCoordinates].enabled=config[Feature::Waypoints].enabled=true;
+    pack.ResetWorld(); const double now=double(GetTickCount64())/1000;
+    scene.frameIndex=1; pack.Update(scene,now-.1,config,42);
+    scene.frameIndex=2; scene.posY=.2f; scene.health=16; entity.health=12; pack.Update(scene,now-.05,config,42);
+    scene.posX=2; scene.posZ=5; Require(pack.AddMarker(scene,"Waypoint preview"),"preview waypoint missing");
+    auto render=[&](ImVec2 size) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        mcov::OverlayUiCheck::InitGlow(overlay,device);
+        auto* draw=ImGui::GetBackgroundDrawList(); const auto clips=draw->_ClipRectStack.Size;
+        mcov::OverlayUiCheck::DrawEsp(overlay,scene);
+        Require(draw->_ClipRectStack.Size==clips&&draw->VtxBuffer.Size>0,"new visual pack lost clipping or emitted no geometry");
+        for(const auto& v:draw->VtxBuffer) Require(std::isfinite(v.pos.x)&&std::isfinite(v.pos.y),"new visual generated nonfinite vertices");
+        ImGui::Render();
+    };
+    render({1280,800}); SaveFrame(device,context,output/"rockstar-effects.png");
+    render({480,360}); SaveFrame(device,context,output/"rockstar-effects-small.png");
+    for(int index:{18,20,21,24,25}) {
+        SelectSubTab(overlay,Page::Visuals,"visual_sections",index,26);
+        SaveFrame(device,context,output/(std::string("rockstar-settings-")+std::to_string(index)+".png"));
+    }
+    config={}; pack.ResetWorld(); pack.ClearMarkers(); mcov::OverlayUiCheck::Seed(overlay);
+}
 void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                const std::filesystem::path& output) {
     mcov::OverlayUiCheck::InitIcons(overlay,device);
@@ -661,6 +706,7 @@ int main(int argc,char** argv) {
         SaveFrame(device.Get(),context.Get(),output/"classic-small.png");
         MarkerMenuChecks(overlay,device.Get(),context.Get(),output);
         WorldVisualChecks(overlay,device.Get(),context.Get(),output);
+        RockstarChecks(overlay,device.Get(),context.Get(),output);
         mcov::WorldSnapshot hudScene{}; hudScene.health=hudScene.maxHealth=20; hudScene.fps=144; hudScene.hasTarget=1;
         hudScene.targetDistance=2.4f; hudScene.targetHealth=16; hudScene.targetMaxHealth=20;
         mcov::CopyField(hudScene.targetName,"Target player"); mcov::CopyField(hudScene.gameVersion,"1.21.11");

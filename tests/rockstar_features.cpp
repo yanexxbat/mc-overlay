@@ -29,7 +29,7 @@ int main() {
         Require(pack.Metrics(10.5).leftCps==2&&pack.Metrics(11.5).leftCps==0,"CPS sliding window failed");
         s.frameIndex++; s.posX=1000; pack.Update(s,10.5,c,42); Require(pack.Metrics(10.5).speed==0,"teleport reported extreme speed");
         CopyField(s.dimension,"Nether"); s.frameIndex++; e.health=1; pack.Update(s,10.6,c,42);
-        Require(pack.DamageCount(10.6,2)==0&&pack.Markers()[0].used,"world transition leaked damage or erased saved marker");
+        Require(pack.DamageCount(10.6,2)==0&&pack.RingCount(10.6,2)==0&&pack.Markers()[0].used,"world transition leaked effects or erased saved marker");
         Require(std::string(Pack::DisplayName("Secret",true,true))=="Player","privacy alias failed");
         Require(kBlockKindCount<=32&&std::string(BlockKindKey(kBlockBeacon))=="beacon","scanner mask/schema mismatch");
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.DisplaySize={640,480}; io.DeltaTime=1.f/60;

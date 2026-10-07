@@ -163,7 +163,12 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
             if(p.Bounds(bounds,box)) {
                 auto [a,b]=palette(esp); if(friendEntity) a=b={.2f,1,.6f,esp.opacity};
                 for(int layer=4;layer>=1;--layer) d.AddRect({box.left,box.top},{box.right,box.bottom},Ink(a,.035f*esp.glow),7,0,esp.size+layer*3);
+                const int first=d.VtxBuffer.Size;
                 d.AddRect({box.left,box.top},{box.right,box.bottom},Ink(a),7,0,esp.size);
+                for(int i=first;i<d.VtxBuffer.Size;++i) {
+                    auto& v=d.VtxBuffer[i]; auto color=Mix(a,b,std::clamp((v.pos.y-box.top)/std::max(1.f,box.bottom-box.top),0.f,1.f));
+                    color.w=float((v.col>>IM_COL32_A_SHIFT)&255)/255; v.col=Ink(color);
+                }
             }
         }
         const auto& circle=config[Feature::TargetCircle];
