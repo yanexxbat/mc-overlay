@@ -132,7 +132,8 @@ template<class B> class InventoryAssist final {
             if(world_) env->DeleteWeakGlobalRef(world_); if(player_) env->DeleteWeakGlobalRef(player_);
             world_=env->NewWeakGlobalRef(level); player_=env->NewWeakGlobalRef(player); Check(env);
         }
-        f.alive=env->CallFloatMethod(player,b_.mHealth)>0; Check(env);
+        f.health=env->CallFloatMethod(player,b_.mHealth); Check(env);
+        f.alive=std::isfinite(f.health)&&f.health>0;
         f.totemSupported=totemReady_; f.macroSupported=macroReady_; f.anchorSupported=anchorReady_;
         f.paused=paused_?env->CallBooleanMethod(client,paused_)==JNI_TRUE:true; Check(env);
         auto screenOwner=b_.fGui?env->GetObjectField(client,b_.fGui):client; Check(env);
@@ -175,7 +176,7 @@ template<class B> class InventoryAssist final {
         int xyz[3]; Coordinates(env,pos,xyz);
         return std::equal(xyz,xyz+3,site_.clicked)||std::equal(xyz,xyz+3,site_.cell);
     }
-    jobject Observe(JNIEnv* env,jobject client,jobject level,jobject player,jobject manager,items::Frame& f) {
+    jobject Observe(JNIEnv* env,jobject client,jobject level,jobject player,jobject manager,items::Frame& f,const items::MacroConfig& config) {
         f.cycle=site_.kind;
         if(site_.kind==items::Item::Empty) return nullptr;
         f.siteValid=AimMatches(env,client); if(!f.siteValid) return nullptr;
@@ -183,7 +184,10 @@ template<class B> class InventoryAssist final {
         const double e[]={env->GetDoubleField(eye,b_.fVecX),env->GetDoubleField(eye,b_.fVecY),env->GetDoubleField(eye,b_.fVecZ)}; Check(env);
         const double reach=blockReach_?env->CallDoubleMethod(player,blockReach_):env->CallFloatMethod(manager,oldBlockReach_); Check(env);
         const double dx=e[0]-site_.hit[0],dy=e[1]-site_.hit[1],dz=e[2]-site_.hit[2];
+        f.distance=std::sqrt(dx*dx+dy*dy+dz*dz);
         if(!std::isfinite(dx+dy+dz+reach)||reach<=0||dx*dx+dy*dy+dz*dz>reach*reach) { f.siteValid=false; return nullptr; }
+        // Eigene Reichweite verkürzt nur Vanilla. Kein Scan außerhalb des Limits.
+        if(f.distance>config.maxRange) return nullptr;
         if(site_.kind==items::Item::Anchor) {
             auto state=env->CallObjectMethod(level,b_.mGetBlockState,site_.position); Check(env);
             const auto key=BlockKey(env,state);
@@ -220,7 +224,7 @@ template<class B> class InventoryAssist final {
                 const bool live=env->CallBooleanMethod(entity,alive_)==JNI_TRUE; Check(env);
                 if(live) {
                     auto bounds=env->CallObjectMethod(entity,b_.geometry.getBounds); Check(env);
-                    const double attackReach=attackReach_?env->CallDoubleMethod(player,attackReach_):env->CallBooleanMethod(manager,farReach_)==JNI_TRUE?6.:3.; Check(env);
+                    const double attackReach=std::min(double(config.maxRange),attackReach_?env->CallDoubleMethod(player,attackReach_):env->CallBooleanMethod(manager,farReach_)==JNI_TRUE?6.:3.); Check(env);
                     double squared=0;
                     if(!bounds||!std::isfinite(attackReach)||attackReach<=0) { f.siteValid=false; return nullptr; }
                     for(int axis=0;axis<3;++axis) {
@@ -329,6 +333,7 @@ public:
     void Tick(JNIEnv* env,jobject client,bool checkForeground=true) noexcept {
         const std::scoped_lock lock(mutex_); if(!ready_||!channel_) return;
         items::Request request; if(!channel_->itemRequest.Read(request)) return;
+        request.crystal.Clamp(); request.anchor.Clamp();
         const auto now=GetTickCount64(); Foreground(request,checkForeground);
         try {
             jvm::LocalFrame frame(env,192); if(!frame.ok()) throw std::runtime_error("local frame");
@@ -360,7 +365,7 @@ public:
                     }
                 }
                 manager=env->GetObjectField(client,b_.fInteractionMgr); Check(env);
-                if(macroActive&&macroReady_&&manager&&f.selected==site_.selected&&f.useDown&&!f.screen&&!f.paused&&items::Lease(request,now)) target=Observe(env,client,level,player,manager,f);
+                if(macroActive&&macroReady_&&manager&&f.selected==site_.selected&&f.useDown&&!f.screen&&!f.paused&&items::Lease(request,now)) target=Observe(env,client,level,player,manager,f,site_.kind==items::Item::Anchor?request.anchor:request.crystal);
                 else f.cycle=site_.kind;
             }
             const auto action=controller_.Tick(request,f,now);

@@ -19,6 +19,7 @@ void Overlay::DrawItemAssistSettings(int section) {
     auto& macro=anchor?anchorMacro_:crystalMacro_;
     auto status=totem?itemReport_.totem:anchor?itemReport_.anchor:itemReport_.crystal;
     if(!agentConnected_) status=items::Status::Unsupported;
+    bool changed=false;
     if(panel::BeginRows("item_assist_controls")) {
         panel::CheckRow(totem?"Enable Auto Totem":"Enable macro",totem?&combat_.autoTotem.enabled:&macro.enabled);
         DrawBind(action,true);
@@ -27,17 +28,36 @@ void Overlay::DrawItemAssistSettings(int section) {
             if(panel::SliderIntRow("Retry interval",&retry,50,500,"%d ms")) combat_.autoTotem.retryMs=retry;
         } else {
             panel::ValueRow("Activation","Hold Minecraft Place / Use");
-            int interval=static_cast<int>(macro.intervalMs);
-            if(panel::SliderIntRow("Action interval",&interval,100,500,"%d ms")) macro.intervalMs=interval;
+            if(ImGui::Button("Server conservative")) { macro.Conservative(); changed=true; }
+            if(ImGui::IsItemHovered()) ImGui::SetTooltip("Short range, slower actions and strict world confirmation. Server acceptance is not guaranteed.");
+            panel::CheckRow("Separate action delays",&macro.separateDelays); changed|=ImGui::IsItemEdited();
+            const auto delay=[&](const char* label,std::uint32_t& value,int low,int high) {
+                int ms=static_cast<int>(value);
+                if(panel::SliderIntRow(label,&ms,low,high,"%d ms")) { value=ms; changed=true; }
+            };
+            if(macro.separateDelays) {
+                delay("Place delay",macro.placeMs,50,1000);
+                if(anchor) delay("Charge delay",macro.chargeMs,50,1000);
+                delay(anchor?"Detonate delay":"Break delay",macro.breakMs,50,1000);
+            } else delay("Action interval",macro.intervalMs,100,500);
             int confirmation=static_cast<int>(macro.confirmationMs);
-            if(panel::SliderIntRow("World confirmation timeout",&confirmation,100,2000,"%d ms")) macro.confirmationMs=confirmation;
-            panel::CheckRow("Restore previous slot",&macro.restoreSlot);
+            if(panel::SliderIntRow("World confirmation timeout",&confirmation,100,2000,"%d ms")) { macro.confirmationMs=confirmation; changed=true; }
+            panel::CheckRow("Strict world confirmation",&macro.strictConfirmation); changed|=ImGui::IsItemEdited();
+            changed|=panel::SliderRow("Maximum range",&macro.maxRange,1,6,"%.1f m");
+            changed|=panel::SliderRow("Minimum health (0 = off)",&macro.minHealth,0,20,"%.0f HP");
+            panel::CheckRow("Require offhand totem",&macro.requireTotem); changed|=ImGui::IsItemEdited();
+            panel::CheckRow("Restore previous slot",&macro.restoreSlot); changed|=ImGui::IsItemEdited();
+            if(anchor) {
+                panel::CheckRow("Charge to 4 with offhand glowstone",&macro.chargeWithOffhandFuel); changed|=ImGui::IsItemEdited();
+                changed|=panel::SliderIntRow("Detonation slot (0 = auto)",&macro.detonationSlot,0,9,"%d");
+            }
         }
         const auto count=totem?itemReport_.swaps:anchor?itemReport_.anchorActions:itemReport_.crystalActions;
         char text[32]; std::snprintf(text,sizeof(text),"%llu",static_cast<unsigned long long>(count));
         panel::ValueRow(totem?"Swaps sent":"Actions sent",text);
         ImGui::EndTable();
     }
+    if(changed) { macro.Clamp(); preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
     panel::Section("Live status");
     ImGui::TextWrapped("%s",items::Text(status));
     panel::Section("How to use");
@@ -45,6 +65,7 @@ void Overlay::DrawItemAssistSettings(int section) {
     else if(anchor) ImGui::TextWrapped("Enable the macro, select an anchor and hold Minecraft's Place / Use key on a placement block or anchor. It repeatedly places, charges and detonates at the saved position. Keep glowstone and a non-glowstone item in the hotbar. Respawn dimensions pause detonation.");
     else ImGui::TextWrapped("Enable the macro, select end crystals and hold Minecraft's Place / Use key on obsidian or bedrock. It repeatedly places and breaks the crystal at that position; no re-aiming between steps is needed.");
     if(!totem) ImGui::TextWrapped("Release Place / Use to stop. A manual slot change, looking away, menus or focus loss also stops the cycle. The optional module keybind arms the macro; it does not replace Minecraft's Use key. Kill Aura pauses macros.");
+    if(!totem) ImGui::TextWrapped("Minimum health and the totem check pause the cycle until satisfied. Range never exceeds Minecraft's own reach. Strict confirmation suppresses retries after a timeout; release Use to reset. Timing and protection settings are saved automatically.");
 }
 
 void Overlay::DrawChunkFinderSettings() {
