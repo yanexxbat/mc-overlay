@@ -176,6 +176,13 @@ void Overlay::SavePreferences() {
       if(!out) { preferenceStatus_="Could not save client-settings.ini."; preferencesDirty_=false; return; }
       out<<"mcov-client 1\n"<<std::setprecision(9);
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
+      // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
+      for(int i=0;i<2;++i) {
+          auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
+          out<<"macro "<<i<<' '<<c.restoreSlot<<' '<<c.intervalMs<<' '<<c.confirmationMs<<' '
+             <<c.separateDelays<<' '<<c.requireTotem<<' '<<c.strictConfirmation<<' '<<c.chargeWithOffhandFuel<<' '
+             <<c.placeMs<<' '<<c.breakMs<<' '<<c.chargeMs<<' '<<c.maxRange<<' '<<c.minHealth<<' '<<c.detonationSlot<<'\n';
+      }
       for(int i=0;i<keys::kCount;++i) out<<"bind "<<i<<' '<<bindings_[i].key<<' '<<bindings_[i].modifiers<<' '<<int(bindings_[i].mode)<<'\n';
       unsigned flags=hud_.visible?1:0; for(int i=0;i<kHudModules;++i) if(HudEnabled(i)) flags|=1u<<(i+1);
       out<<"hud "<<flags<<' '<<hud_.durabilityWarn<<'\n';
@@ -200,6 +207,12 @@ void Overlay::LoadPreferences() {
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
                 (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
+        } else if(tag=="macro") {
+            int i; items::MacroConfig c;
+            if(row>>i>>c.restoreSlot>>c.intervalMs>>c.confirmationMs>>c.separateDelays>>c.requireTotem>>c.strictConfirmation>>c.chargeWithOffhandFuel
+                  >>c.placeMs>>c.breakMs>>c.chargeMs>>c.maxRange>>c.minHealth>>c.detonationSlot&&i>=0&&i<2) {
+                c.Clamp(); auto& current=i?anchorMacro_:crystalMacro_; c.enabled=current.enabled; current=c;
+            }
         } else if(tag=="world-depth") { int value; if(row>>value&&(value==0||value==1)) settings_.occludeWorldEffects=value==1;
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }

@@ -28,9 +28,10 @@ void Overlay::DrawItemAssistSettings(int section) {
             if(panel::SliderIntRow("Retry interval",&retry,50,500,"%d ms")) combat_.autoTotem.retryMs=retry;
         } else {
             panel::ValueRow("Activation","Hold Minecraft Place / Use");
+            ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
             if(ImGui::Button("Server conservative")) { macro.Conservative(); changed=true; }
             if(ImGui::IsItemHovered()) ImGui::SetTooltip("Short range, slower actions and strict world confirmation. Server acceptance is not guaranteed.");
-            panel::CheckRow("Separate action delays",&macro.separateDelays); changed|=ImGui::IsItemEdited();
+            changed|=panel::CheckRow("Separate action delays",&macro.separateDelays);
             const auto delay=[&](const char* label,std::uint32_t& value,int low,int high) {
                 int ms=static_cast<int>(value);
                 if(panel::SliderIntRow(label,&ms,low,high,"%d ms")) { value=ms; changed=true; }
@@ -42,13 +43,13 @@ void Overlay::DrawItemAssistSettings(int section) {
             } else delay("Action interval",macro.intervalMs,100,500);
             int confirmation=static_cast<int>(macro.confirmationMs);
             if(panel::SliderIntRow("World confirmation timeout",&confirmation,100,2000,"%d ms")) { macro.confirmationMs=confirmation; changed=true; }
-            panel::CheckRow("Strict world confirmation",&macro.strictConfirmation); changed|=ImGui::IsItemEdited();
+            changed|=panel::CheckRow("Strict world confirmation",&macro.strictConfirmation);
             changed|=panel::SliderRow("Maximum range",&macro.maxRange,1,6,"%.1f m");
             changed|=panel::SliderRow("Minimum health (0 = off)",&macro.minHealth,0,20,"%.0f HP");
-            panel::CheckRow("Require offhand totem",&macro.requireTotem); changed|=ImGui::IsItemEdited();
-            panel::CheckRow("Restore previous slot",&macro.restoreSlot); changed|=ImGui::IsItemEdited();
+            changed|=panel::CheckRow("Require offhand totem",&macro.requireTotem);
+            changed|=panel::CheckRow("Restore previous slot",&macro.restoreSlot);
             if(anchor) {
-                panel::CheckRow("Charge to 4 with offhand glowstone",&macro.chargeWithOffhandFuel); changed|=ImGui::IsItemEdited();
+                changed|=panel::CheckRow("Charge to 4 with offhand glowstone",&macro.chargeWithOffhandFuel);
                 changed|=panel::SliderIntRow("Detonation slot (0 = auto)",&macro.detonationSlot,0,9,"%d");
             }
         }
