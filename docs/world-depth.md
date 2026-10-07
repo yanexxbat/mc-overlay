@@ -10,6 +10,7 @@ Agent, Java-Helfer und Overlay verwenden jetzt IPC **18**.
 - **Waiting:** passende Tiefendaten fehlen noch; Welt-Effekte bleiben ausgeblendet.
 - **Unavailable:** der aktuelle Renderer oder sein Tiefenformat ist inkompatibel.
 - **Idle:** es sind keine entsprechenden Effekte sichtbar oder die Option ist aus.
+- **Off:** die Option ist ausgeschaltet.
 
 Aura-Orbs und Schweife, Partikel, Trails, Sprung-/Zielringe, Wings, Halo,
 Freund-/Self-Hats sowie der Target-Marker werden pixelweise mit der Spieltiefe
@@ -29,6 +30,8 @@ Minecrafts GL-Thread. Der externe Renderprozess führt weiterhin keine JNI-Aufru
 Ohne benötigte Welt-Effekte wird die native Render-Brücke deaktiviert.
 
 Tiefenframe und Kamera-/Entity-Snapshot müssen dieselbe Render-Epoche besitzen.
+Ein fester Cache ordnet beide auch dann zu, wenn der Sampler erst nach dem
+GPU-Capture fertig wird. Uebersprungene Epochen blockieren die PBOs nicht.
 Der Kanal enthält beide zusammen. Frames älter als 100 ms, Weltwechsel und falsche
 Bildschirmproportionen werden verworfen. Das Overlay verwendet einen zusätzlichen
 Vertex-Stream für inverse Sichttiefe und einen D3D11-Pixelshader zum Vergleich.
@@ -42,6 +45,10 @@ schreibt. Shaderpacks, Vulkan, abweichende Mod-Projektionen und Renderziele werd
 nicht als unterstützt zugesichert. Hurt-/Portal-Verzerrungen können von der
 rekonstruierten Kamera abweichen. Diese Integration wurde mit synthetischen
 GPU-/Java-Tests geprüft; der Live-Test in Minecraft steht noch aus.
+
+Das Speedometer nutzt den interpolierten eigenen Entity-Record und den
+Erfassungszeitpunkt, unabhängig vom Tiefenframe. Die langsamen HUD-Positionsfelder
+und schwankende IPC-Ankunftszeiten bestimmen die Geschwindigkeitsanzeige nicht.
 
 ## Prüfungen
 

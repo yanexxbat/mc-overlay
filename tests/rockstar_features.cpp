@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <limits>
 #include <memory>
+#include <windows.h>
 using namespace mcov;
 using namespace mcov::rockstar;
 void Require(bool v,const char* why) { if(!v) throw std::runtime_error(why); }
