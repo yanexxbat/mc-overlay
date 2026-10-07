@@ -16,7 +16,8 @@ Die interpolierte Position, Körper-Yaw, Kopf-Pitch und Pose kommen aus demselbe
 Snapshot wie ESP. Ducken, Schwimmen und Fliegen verwenden die vorhandene
 Humanoid-Geometrie; modifizierte Spieler-Modelle bleiben eine Näherung. Bei
 Near-Plane-Schnitt wird der Hut verworfen, statt große Dreiecke zu zeichnen.
-Im externen Overlay gibt es keine Minecraft-Tiefenprüfung.
+Für 1.21.11 Fabric / normales OpenGL verdeckt der neue
+[Tiefenvergleich](world-depth.md) Hüte hinter Spielern und Blöcken.
 
 Die UUID liegt in `EntitySnapshot`. Der Sampler liest sie einmal pro Java-Objekt
 und speichert sie mit einer schwachen Referenz in `EntityIdentityCache`.

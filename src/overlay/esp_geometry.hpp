@@ -89,7 +89,7 @@ public:
         pixelRadius=worldRadius*height_*.5f*scale/c.w;
         return std::isfinite(out.x)&&std::isfinite(out.y)&&std::isfinite(pixelRadius);
     }
-    bool Segment(WorldPoint start,WorldPoint end,ScreenPoint& a,ScreenPoint& b) const {
+    bool Segment(WorldPoint start,WorldPoint end,ScreenPoint& a,ScreenPoint& b,float* inverseA=nullptr,float* inverseB=nullptr) const {
         auto ca=Clip(start),cb=Clip(end);
         if (!valid_||!ClipNear(ca,cb)) return false;
         a=Pixel(ca); b=Pixel(cb);
@@ -103,6 +103,9 @@ public:
             else { const float t=qs[i]/ps[i]; if (ps[i]<0) low=std::max(low,t); else high=std::min(high,t); }
         }
         if (low>high) return false;
+        const float firstDepth=1/ca.w,lastDepth=1/cb.w;
+        if(inverseA) *inverseA=firstDepth+(lastDepth-firstDepth)*low;
+        if(inverseB) *inverseB=firstDepth+(lastDepth-firstDepth)*high;
         b={a.x+dx*high,a.y+dy*high}; a={a.x+dx*low,a.y+dy*low};
         return true;
     }

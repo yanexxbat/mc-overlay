@@ -15,7 +15,9 @@ ImVec4 Mix(ImVec4 a,ImVec4 b,float t) { return {a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,
 ImU32 Ink(ImVec4 c,float alpha=1) { c.w*=std::clamp(alpha,0.f,1.f); return ImGui::ColorConvertFloat4ToU32(c); }
 bool Player(const EntitySnapshot& e) { return (e.flags&kEntityIsPlayer)&&!(e.flags&kEntityIsSelf)&&e.health>0&&Finite({e.x,e.y,e.z}); }
 void WorldLine(ImDrawList& d,const CameraProjection& p,WorldPoint a,WorldPoint b,ImVec4 color,float width,float glow,ImTextureID texture) {
-    ScreenPoint sa,sb; if(p.Segment(a,b,sa,sb)) soft::Stroke(d,{sa.x,sa.y},{sb.x,sb.y},width,color,glow,texture);
+    ScreenPoint sa,sb; float inverseA{},inverseB{};
+    if(p.Segment(a,b,sa,sb,&inverseA,&inverseB))
+        soft::Stroke(d,{sa.x,sa.y},{sb.x,sb.y},width,color,glow,texture,1/inverseA,1/inverseB);
 }
 void LineText(ImDrawList& d,float y,const char* text,ImU32 color=IM_COL32(236,236,238,255)) { d.AddText({8,y},color,text); }
 }

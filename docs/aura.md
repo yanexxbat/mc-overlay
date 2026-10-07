@@ -130,10 +130,9 @@ Ressourcen und Callback-Daten müssen bis zum tatsächlichen Rendern gültig ble
 
 Ein externes Fenster addiert seine eigenen Glow-Schichten auf seinem Renderziel;
 Minecrafts Framebuffer ist nicht Teil dieses Blendpasses. Der Desktop-Compositor
-legt das Ergebnis später über das Spiel. Der Effekt hat keinen Zugriff auf
-Minecrafts Tiefenpuffer und kann deshalb hinter der Entität oder Wänden liegende
-Orbs nicht anhand der Spieltiefe verdecken. Die perspektivischen 3D-Positionen
-und Größen bleiben korrekt.
+legt das Ergebnis später über das Spiel. Unter 1.21.11 Fabric / normalem OpenGL
+verdeckt der neue [Tiefenvergleich](world-depth.md) hinter Spielern oder Blöcken
+liegende Orbs und Schweifteile. Andere Versionen behalten die bisherige Darstellung.
 
 Für OpenGL benötigt derselbe `AuraRenderer` eine einmal hochgeladene weiße RGBA-
 Gauß-Textur und einen Callback mit `glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD)`

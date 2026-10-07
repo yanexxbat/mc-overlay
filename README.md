@@ -16,7 +16,12 @@ death coordinates/waypoints, privacy aliases, notifications and eight HUD widget
 Every new feature has its own tab and starts disabled with an unassigned keybind.
 The HUD now offers 19 movable/scalable elements. [Source-module coverage](docs/rockstar-catalog.md)
 lists all 122 reference modules and distinguishes implemented behavior from remaining work.
-Restart Minecraft before using this updated package: the agent/overlay now use **IPC v17**.
+Restart Minecraft before using this updated package: the agent/overlay now use **IPC v18**.
+
+**World-effect occlusion:** on 1.21.11 Fabric with normal OpenGL, **Settings → Overlay →
+Occlude world effects** hides aura orbs, trails, particles, rings, wings and hats behind
+players and solid blocks. Other versions retain the previous behavior.
+See [world depth and limitations](docs/world-depth.md).
 
 The modular C++20 [Combat Assist / Kill Aura core](docs/combat-assist.md) includes
 deterministic selection/rotation/cooldown/sync tests and an executable simulator

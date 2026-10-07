@@ -72,8 +72,9 @@ werden in der Zahl 29 nicht doppelt gezählt.
   keinen Angreifer nach; Treppen und Knockback können Sprungringe auslösen. Die
   Session-Anzeige zählt deshalb **beobachtete Ziel-Todesfälle**, keine sicher
   zugeordneten eigenen Kills. Session-Werte beginnen bei Welt-/Serverwechsel neu.
-- Externe Effekte besitzen keinen Zugriff auf den Minecraft-Tiefenpuffer. Sie
-  können durch Wände sichtbar sein. Crosshair ergänzt das Vanilla-Fadenkreuz,
+- Welt-Effekte können unter 1.21.11 Fabric / normalem OpenGL mit dem neuen
+  [Tiefenvergleich](world-depth.md) verdeckt werden. ESP bleibt unabhängig davon
+  sichtbar. Crosshair ergänzt das Vanilla-Fadenkreuz,
   Name protect verändert Minecrafts eigene Beschriftungen und Combat-Menütexte nicht.
 - Beacon radius ist ein manuell gewählter Radius-Hinweis; Pyramidenstufe und
   tatsächlich vergebene Beacon-Effekte werden nicht erfasst.
@@ -102,9 +103,9 @@ normales Alpha-Blending. Kein zusätzlicher Blur- oder Shader-Pass, keine neuen
 Texturen oder Effekt-Pools pro Frame. Reduced motion unterbindet Ringrotation,
 Wachstum, Staubaufstieg und Flügelschlag; das Ausblenden bleibt erhalten.
 
-Das weiche Visual-Update benötigt keinen neuen Agenten und verändert IPC 17 nicht.
-Bei bereits aktuellem Agenten genügt es, den bisherigen Client mit END zu beenden
-und die neue `build/client/mcov.exe` zu öffnen. Unter **Visuals → Jump circles**
+Der neue Tiefenkanal benötigt aktualisierte Agent-/Java-Helfer und IPC 18.
+Minecraft vollständig neu starten und die neue `build/client/mcov.exe` öffnen.
+Unter **Visuals → Jump circles**
 lassen sich Farben unabhängig von der Aura wählen, wenn **Aura colours** aus ist.
 
 `overlay_rockstar.cpp` integriert Einstellungen, Sounds, Panic und Ereignisse;
