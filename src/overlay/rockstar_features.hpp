@@ -82,6 +82,7 @@ private:
     float previousHealth_=0,previousVertical_=0;
     double now_=0,sampled_=0,started_=0,hurtAt_=-1000,lastSoundAt_=-1000;
     std::uint64_t frame_=0;
+    std::int64_t positionQpc_=0;
     int damageHead_=0,ringHead_=0,noticeHead_=0;
     Stats stats_{};
     bool initialized_=false,hitSound_=false;

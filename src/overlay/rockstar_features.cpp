@@ -44,7 +44,7 @@ const char* Pack::DisplayName(const char* name,bool protect,bool player) { retur
 void Pack::ResetWorld() {
     tracks_={}; damage_={}; rings_={}; notices_={}; clicks_={}; clickHeads_={}; input_={};
     damageHead_=ringHead_=noticeHead_=0;
-    stats_={}; initialized_=false; hitSound_=false; started_=sampled_=0; hurtAt_=lastSoundAt_=-1000;
+    stats_={}; initialized_=false; hitSound_=false; started_=sampled_=0; positionQpc_=0; hurtAt_=lastSoundAt_=-1000;
 }
 void Pack::Notify(const char* text,double now) {
     auto& n=notices_[noticeHead_++%kNotices]; std::snprintf(n.text.data(),n.text.size(),"%s",text); n.born=now;
@@ -86,9 +86,8 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
         if((entity.flags&kEntityIsSelf)&&Finite({entity.x,entity.y,entity.z})) { local={entity.x,entity.y,entity.z}; break; }
     }
     // Geometrie wird jedes Kameraframe erfasst; posX/Y/Z gehoeren zum langsamen HUD-Sample.
-    LARGE_INTEGER frequency{}; QueryPerformanceFrequency(&frequency);
-    const double sampled=s.captureQpc>0&&frequency.QuadPart>0?double(s.captureQpc)/double(frequency.QuadPart):now;
-    const double dt=sampled-sampled_;
+    static const double frequency=[] { LARGE_INTEGER f{}; QueryPerformanceFrequency(&f); return double(f.QuadPart); }();
+    const double dt=s.captureQpc>0&&positionQpc_>0&&frequency>0?double(s.captureQpc-positionQpc_)/frequency:now-sampled_;
     if(!initialized_) {
         previous_=local; previousHealth_=s.health; started_=now; previousVertical_=0;
         std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
@@ -130,7 +129,7 @@ void Pack::Update(const WorldSnapshot& s,double now,const Config& c,std::uint32_
         }
         track->nearby=nearby; track->health=e.health; track->seen=now;
     }
-    previous_=local; previousHealth_=s.health; sampled_=sampled; frame_=s.frameIndex; initialized_=true;
+    previous_=local; previousHealth_=s.health; sampled_=now; positionQpc_=s.captureQpc; frame_=s.frameIndex; initialized_=true;
 }
 void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& p,const Config& config,
         const combat::Relations& friends,std::uint32_t target,ImVec2 viewport,ImVec4 auraA,ImVec4 auraB,
