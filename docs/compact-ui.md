@@ -60,4 +60,4 @@ Slider inklusive sichtbarer Ctrl-Eingabe, Keybinds, HUD und bestehende Renderer.
 Offscreen-Vorschauen mit synthetischem Hintergrund beweisen die ImGui-Darstellung
 und Alpha-Komposition; sie sind keine Live-Aufnahme aus Minecraft.
 Aktuelle Ansichten:
-`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop}.png`.
+`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.

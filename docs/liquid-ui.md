@@ -109,7 +109,7 @@ mode. These checks validate the retained capture renderer, not a client capture
 requirement or every GPU/runtime combination.
 
 The current client review images are
-`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop}.png`.
+`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
 They show direct ImGui alpha compositing over synthetic backgrounds. The older
 `glass-grid-*` and `glass-settings-*` images show the superseded client material
 over synthetic textures; older fallback images and historical `classic-*.png`

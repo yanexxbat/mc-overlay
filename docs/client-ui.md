@@ -149,7 +149,7 @@ Strg-Eingabe. Bestehende Keybind-, HUD-, Renderer-, Launcher- und portable
 Build-Prüfungen bestehen ebenfalls.
 
 Aktuelle native WARP-Vorschauen liegen unter
-`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop}.png`.
+`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
 Sie zeigen die echte ImGui-Ausgabe mit direkter Alpha-Komposition vor synthetischem
 Hintergrund. Sie sind keine Minecraft-Screenshots und prüfen keine Live-Optik,
 Attach-/Fokus-Verbindung zum Spiel oder sämtliche GPUs. Ältere Glas-/Rasterbilder

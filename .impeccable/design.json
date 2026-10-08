@@ -580,7 +580,7 @@
       "kind": "custom",
       "description": "Static approximation of the retained launcher material. Native D3D11 supplies capture-backed blur/refraction; this CSS does not reproduce it.",
       "html": "<section class=\"ds-launcher-glass\"><strong>mcov</strong><p>Liquid Glass launcher</p></section>",
-      "css": ".ds-launcher-glass{font:500 14px Inter,sans-serif;color:#F3F4FF;width:260px;padding:16px;border-radius:22px;background:rgba(25,32,51,.98);border:1px solid rgba(210,222,255,.18);box-shadow:0 9px 20px rgba(0,0,0,.22)}.ds-launcher-glass strong{font-size:22.1px;font-weight:600}.ds-launcher-glass p{margin:8px 0 0;color:#D7DCEC}"
+      "css": ".ds-launcher-glass{font:500 14px Inter,sans-serif;color:#F3F4FF;width:260px;padding:16px;border-radius:22px;background:rgba(21,26,42,.96);border:1px solid rgba(185,203,255,.16);box-shadow:0 9px 20px rgba(0,0,0,.22)}.ds-launcher-glass strong{font-size:22.1px;font-weight:600}.ds-launcher-glass p{margin:8px 0 0;color:#D7DCEC}"
     }
   ],
   "narrative": {

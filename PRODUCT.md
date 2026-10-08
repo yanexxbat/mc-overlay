@@ -60,23 +60,23 @@ preference applies while the menu is open. Settings → Overlay reports
 `Translucent dark / 88% opacity` and `Not required`.
 
 The launcher's separate glass material captures the desktop only while its
-glass surface is visible. DXGI Desktop Duplication runs first; after 750 ms without a usable frame,
-Windows Graphics Capture attempts monitor capture on the overlay's render device.
-Closing/minimizing the launcher, disabling capture, supplying a fixture texture or changing the
-monitor stops capture sessions. Temporary Windows capture exclusion prevents
-recursive feedback, and closure restores its prior capture affinity.
-Unavailable capture uses a stable tinted fallback. This is presentation behavior, not a change
-to world-effect visibility or JNI data acquisition.
+glass surface is visible. DXGI Desktop Duplication runs first; after 750 ms without
+a usable frame, Windows Graphics Capture attempts monitor capture on the existing
+render device. Closing/minimizing the launcher, disabling capture, supplying a
+fixture texture or changing the monitor stops capture sessions. Temporary Windows
+capture exclusion prevents recursive feedback, and closure restores its prior
+capture affinity. Unavailable capture uses a stable tinted fallback. This is
+presentation behavior, not a change to world-effect visibility or JNI acquisition.
 
 ## Verification limits
 
 Offscreen D3D11 WARP checks exercise the real shaders, UI input, small viewports,
 HUD/keybind behavior and portable packaging. Current compact-client review images
 under `.impeccable/review/compact-client/` use synthetic backgrounds and direct
-alpha compositing; they do not establish live Minecraft appearance. An explicit native `--live` probe
-passed WGC startup, the full LiquidGlass runtime, capture pause, display-affinity
+alpha compositing; they do not establish live Minecraft appearance. An explicit
+native `--live` probe passed WGC startup, the full LiquidGlass runtime, capture pause, display-affinity
 restoration and live capture after reopening on this host without saving desktop
 images or attaching to a JVM. These glass checks concern the retained renderer
 and launcher, not a client capture requirement. These checks do not establish
-live Minecraft capture/attach behavior on every GPU or runtime. Existing compatibility details
-remain in [docs/compatibility.md](docs/compatibility.md).
+live Minecraft capture/attach behavior on every GPU or runtime. Existing
+compatibility details remain in [docs/compatibility.md](docs/compatibility.md).
