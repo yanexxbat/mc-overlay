@@ -169,9 +169,8 @@ void Overlay::DrawKeybindSettings() {
             }
             ImGui::Spacing(); ImGui::PopID();
         }
-        ImGui::PopID(); return;
-    }
-    if(ImGui::BeginTable("keybind_editor",3,ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp)) {
+        ImGui::PopID();
+    } else if(ImGui::BeginTable("keybind_editor",3,ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Module",ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Key",ImGuiTableColumnFlags_WidthFixed,150);
         ImGui::TableSetupColumn("Mode",ImGuiTableColumnFlags_WidthFixed,90); ImGui::TableHeadersRow();

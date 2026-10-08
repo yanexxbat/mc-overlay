@@ -339,6 +339,10 @@ void CompactKeybindChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     mcov::keys::Input cancel{}; cancel[VK_ESCAPE]=true; mcov::OverlayUiCheck::Input(overlay,cancel,true);
     mcov::OverlayUiCheck::Input(overlay,{},true); io.AddMousePosEvent(-100,-100); frame(); frame();
     SaveFrame(device,context,output/"compact-keybinds.png");
+    ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+    Require(content->DC.CursorPosPrevLine.y>=content->InnerRect.Min.y&&content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y,
+            "Compact keybind footer is unreachable");
+    SaveFrame(device,context,output/"compact-keybinds-bottom.png");
     mcov::OverlayUiCheck::Center(overlay);
 }
 void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
