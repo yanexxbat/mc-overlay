@@ -1,5 +1,6 @@
 #pragma once
 #include "imgui.h"
+#include "../common/compact_theme.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -40,8 +41,6 @@ struct HudSettings {
     std::array<HudPlacement,kHudModules> layout{};
 };
 inline void DrawHudPanel(ImDrawList& draw,ImVec2 min,ImVec2 max) {
-    draw.AddRectFilled(min,max,IM_COL32(32,32,32,235));
-    draw.AddRect(min,max,IM_COL32(4,4,4,255));
-    draw.AddLine({min.x+1,min.y+1},{max.x-1,min.y+1},IM_COL32(174,105,209,255));
+    style::compact::Panel(draw,min,max);
 }
 } // namespace mcov

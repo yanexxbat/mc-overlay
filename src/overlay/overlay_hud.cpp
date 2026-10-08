@@ -1,5 +1,5 @@
 #include "overlay.hpp"
-#include "../common/flat_style.hpp"
+#include "../common/compact_style.hpp"
 #include <windows.h>
 #include <cstdio>
 
@@ -51,7 +51,7 @@ void Overlay::SetHudEditing(bool editing) {
 }
 void Overlay::DrawHud(const WorldSnapshot& s) {
     if(!hud_.visible&&!hudEditing_) return;
-    ImGui::PushFont(style::ClassicMenuFont());
+    ImGui::PushFont(style::MenuFont());
     auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
     int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
     const int effects=std::min<int>(s.effectCount,kMaxEffects);
@@ -60,6 +60,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         active+=ModuleEnabled(static_cast<keys::Action>(i)); assigned+=bindings_[i].key!=0;
     }
     float stackY=44;
+    const float lineHeight=ImGui::GetTextLineHeight();
     for(int i=0;i<kHudModules;++i) {
         hudRects_[i]={}; const auto kind=static_cast<HudModule>(i);
         if(hudEditing_&&(viewport.x<640||viewport.y<480)&&i!=hudSelected_) continue;
@@ -69,15 +70,15 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         if(empty&&!hudEditing_) continue;
         ImVec2 size{232,50};
         switch(kind) {
-            case HudModule::Equipment:size.y=equipment?24+equipment*22.f:50;break;
-            case HudModule::Effects:size.y=effects?28+effects*17.f:50;break;
-            case HudModule::Coordinates:size.y=92;break;
+            case HudModule::Equipment:size.y=equipment?24+equipment*(lineHeight+9):50;break;
+            case HudModule::Effects:size.y=effects?28+effects*(lineHeight+4):50;break;
+            case HudModule::Coordinates:size.y=28+4*(lineHeight+3);break;
             case HudModule::Performance:size.y=132;break;
             case HudModule::Compass:size={320,26};break;
             case HudModule::Reach:size.y=54;break;
-            case HudModule::Watermark:size={260,25};break;
-            case HudModule::Modules:size.y=24+std::max(1,active)*17.f;break;
-            case HudModule::Keybinds:size.y=24+std::max(1,assigned)*17.f;break;
+            case HudModule::Watermark:size={260,28};break;
+            case HudModule::Modules:size.y=28+std::max(1,active)*(lineHeight+4);break;
+            case HudModule::Keybinds:size.y=28+std::max(1,assigned)*(lineHeight+4);break;
             case HudModule::Radar:size={196,196};break;
             case HudModule::Keystrokes:size={130,138};break;
             case HudModule::Speedometer:size.y=68;break;
@@ -117,8 +118,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         const int vertexStart=draw.VtxBuffer.Size;
         draw.PushClipRect({0,0},size,false); const int commandStart=draw.CmdBuffer.Size-1;
         if(empty) {
-            DrawHudPanel(draw,{0,0},size); draw.AddText({8,7},style::kText,kHudNames[i]);
-            draw.AddText({8,26},style::kMuted,"No data / editor preview");
+            DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]);
+            draw.AddText({10,28},style::compact::Muted,"No data / editor preview");
         } else switch(kind) {
             case HudModule::Equipment:DrawEquipmentPanel(s,0,0);break;
             case HudModule::Effects:DrawEffectsPanel(s,0,0);break;
@@ -129,20 +130,24 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Watermark: {
                 DrawHudPanel(draw,{0,0},size); char text[100];
                 std::snprintf(text,sizeof(text),"mcov | %d FPS | %s",s.fps,s.gameVersion[0]?s.gameVersion:"waiting");
-                draw.AddText({8,6},style::kText,text); break;
+                draw.AddCircleFilled({12,14},2.5f,style::compact::Accent,12);
+                draw.AddText({22,7},style::compact::Text,text); break;
             }
             case HudModule::Modules:case HudModule::Keybinds: {
-                DrawHudPanel(draw,{0,0},size); draw.AddText({8,6},style::kText,kHudNames[i]); float y=24;
+                DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
                 for(int a=3;a<keys::kCount;++a) {
                     if(a==keys::Index(keys::Action::Hud)) continue;
                     const bool on=ModuleEnabled(static_cast<keys::Action>(a));
                     if(kind==HudModule::Modules?!on:!bindings_[a].key) continue;
-                    draw.AddText({8,y},on?IM_COL32(204,156,229,255):style::kMuted,keys::kNames[a]);
                     if(kind==HudModule::Keybinds) {
                         const auto key=BindName(bindings_[a]); const auto extent=ImGui::CalcTextSize(key.c_str());
-                        draw.AddText({size.x-8-extent.x,y},style::kText,key.c_str());
-                    }
-                    y+=17;
+                        const float keyX=std::max(10.f,size.x-10-extent.x);
+                        draw.PushClipRect({10,y},{std::max(10.f,keyX-8),y+lineHeight},true);
+                        draw.AddText({10,y},on?style::compact::Accent:style::compact::Muted,keys::kNames[a]);
+                        draw.PopClipRect();
+                        draw.AddText({keyX,y},style::compact::Text,key.c_str());
+                    } else draw.AddText({10,y},style::compact::Accent,keys::kNames[a]);
+                    y+=lineHeight+4;
                 } break;
             }
             default:rockstarPack_.DrawHud(draw,kind,s,rockstarConfig_,combatMenu_.Relations().Read(),size,double(GetTickCount64())/1000); break;
@@ -150,7 +155,11 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         const int commandEnd=draw.CmdBuffer.Size;
         const float scale=(rect.max.x-rect.min.x)/size.x;
         for(int v=vertexStart;v<draw.VtxBuffer.Size;++v) { auto& p=draw.VtxBuffer[v].pos; p={rect.min.x+p.x*scale,rect.min.y+p.y*scale}; }
-        for(int c=commandStart;c<commandEnd;++c) draw.CmdBuffer[c].ClipRect={rect.min.x,rect.min.y,rect.max.x,rect.max.y};
+        for(int c=commandStart;c<commandEnd;++c) {
+            auto& clip=draw.CmdBuffer[c].ClipRect;
+            clip={rect.min.x+std::clamp(clip.x,0.f,size.x)*scale,rect.min.y+std::clamp(clip.y,0.f,size.y)*scale,
+                  rect.min.x+std::clamp(clip.z,0.f,size.x)*scale,rect.min.y+std::clamp(clip.w,0.f,size.y)*scale};
+        }
         draw.PopClipRect();
     }
     ImGui::PopFont();

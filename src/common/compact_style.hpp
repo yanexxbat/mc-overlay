@@ -1,8 +1,9 @@
 #pragma once
 #include "flat_style.hpp"
+#include "compact_theme.hpp"
 
 namespace mcov::style {
-// Shared client/launcher palette, scoped so HUD and world effects retain theirs.
+// Shared menu, injector and HUD editor palette; always owned by a local scope.
 inline void ApplyCustomStyle(ImGuiStyle& s) {
     s.Alpha=1; s.DisabledAlpha=.48f;
     s.WindowPadding={16,14}; s.FramePadding={7,3}; s.ItemSpacing={9,6};
@@ -14,7 +15,8 @@ inline void ApplyCustomStyle(ImGuiStyle& s) {
     s.ScrollbarSize=6; s.GrabMinSize=10;
     s.AntiAliasedFill=s.AntiAliasedLines=true;
     auto* c=s.Colors;
-    c[ImGuiCol_Text]=Color(0xECECEF); c[ImGuiCol_TextDisabled]=Color(0xAEAEB8);
+    c[ImGuiCol_Text]=ImGui::ColorConvertU32ToFloat4(compact::Text);
+    c[ImGuiCol_TextDisabled]=ImGui::ColorConvertU32ToFloat4(compact::Muted);
     c[ImGuiCol_WindowBg]=Color(0x222229,.88f); c[ImGuiCol_ChildBg]={0,0,0,0};
     c[ImGuiCol_PopupBg]=Color(0x26262D,.98f); c[ImGuiCol_Border]=Color(0xFFFFFF,.08f);
     c[ImGuiCol_BorderShadow]={0,0,0,0};
