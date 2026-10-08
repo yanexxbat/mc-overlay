@@ -229,121 +229,77 @@ ImGuiWindow* Child(const char* name) {
     throw std::runtime_error("Missing menu child");
 }
 // Echte Rechtsklicks erreichen auch Module unterhalb der sichtbaren Grid-Zeilen.
+ImGuiTabBar* ModuleTabs(Page page) {
+    auto* root=ImGui::FindWindowByName("mcov control panel");
+    const int index=int(page);
+    const auto scope=ImHashData(&index,sizeof(index),root->IDStack.back());
+    return ImGui::GetCurrentContext()->TabBars.GetByKey(ImHashStr("module_tabs",0,scope));
+}
 void SelectSubTab(mcov::Overlay& overlay,Page page,const char* id,int index,int count,ImVec2 viewport={1280,800}) {
     (void)id;
     auto frame=[&] { Draw(overlay,page,0,viewport); };
-    mcov::OverlayUiCheck::CloseDetails(overlay); frame(); frame(); frame();
-    std::array<mcov::control_panel::ModuleView,64> before{},after{};
-    Require(mcov::OverlayUiCheck::Modules(overlay,page,before)==count,"Module catalog is incomplete");
-    auto grid=[&] { return ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid")); };
-    Require(grid()!=nullptr,"Module grid is missing");
-    auto point=[&] {
-        auto* table=grid(); const auto& column=table->Columns[index%table->ColumnsCount];
-        return ImVec2{(column.WorkMinX+column.WorkMaxX)*.5f,
-            table->OuterRect.Min.y+(index/table->ColumnsCount)*(96+2*table->RowCellPaddingY)+table->RowCellPaddingY+48};
-    };
-    auto p=point(); auto* modules=Child("/modules_");
-    if(p.y<modules->InnerRect.Min.y+48||p.y>modules->InnerRect.Max.y-48) {
-        ImGui::SetScrollY(modules,modules->Scroll.y+p.y-modules->InnerRect.GetCenter().y); frame(); frame();
-    }
-    p=point(); auto& io=ImGui::GetIO(); io.AddMousePosEvent(p.x,p.y); frame();
-    io.AddMouseButtonEvent(1,true); frame(); io.AddMouseButtonEvent(1,false); frame(); frame();
-    const auto& menu=mcov::OverlayUiCheck::Menu(overlay);
-    Require(menu.settingsOpen&&menu.settingsPage==page&&menu.settingsSection==index,"Right click did not open the correct module");
-    mcov::OverlayUiCheck::Modules(overlay,page,after);
-    Require(before[index].enabled==after[index].enabled,"Right click toggled the module");
-    ImGui::GetIO().AddMousePosEvent(-100,-100); frame();
+    ImGui::GetIO().AddMousePosEvent(-100,-100); frame(); frame(); frame();
+    auto* bar=ModuleTabs(page); Require(bar&&bar->Tabs.Size==count,"Module tabs are incomplete");
+    const auto& tab=bar->Tabs[index];
+    bar->ScrollingAnim=bar->ScrollingTarget=std::max(0.f,tab.Offset+tab.Width*.5f-bar->BarRect.GetWidth()*.5f);
+    frame(); frame();
+    const ImVec2 p{bar->BarRect.Min.x+tab.Offset-bar->ScrollingAnim+tab.Width*.5f,bar->BarRect.GetCenter().y};
+    auto& io=ImGui::GetIO(); io.AddMousePosEvent(p.x,p.y); frame();
+    io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsPage==page&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==index,"Module tab did not select its actual controls");
+    io.AddMousePosEvent(-100,-100); frame();
 }
 void ModuleTileChecks(mcov::Overlay& overlay) {
     auto& io=ImGui::GetIO();
     for(Page page:{Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Misc}) {
         std::array<mcov::control_panel::ModuleView,64> modules{};
         const int count=mcov::OverlayUiCheck::Modules(overlay,page,modules);
-        auto frame=[&] { Draw(overlay,page,0,{1280,800}); };
         for(int index=0;index<count;++index) {
             if(modules[index].mode!=mcov::control_panel::TileMode::Toggle) continue;
-            mcov::OverlayUiCheck::CloseDetails(overlay); frame(); frame();
-            auto grid=[&] { return ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid")); };
-            auto point=[&] {
-                auto* t=grid(); const auto& col=t->Columns[index%t->ColumnsCount];
-                return ImVec2{(col.WorkMinX+col.WorkMaxX)*.5f,t->OuterRect.Min.y+
-                    (index/t->ColumnsCount)*(96+2*t->RowCellPaddingY)+t->RowCellPaddingY+48};
-            };
-            auto p=point(); auto* child=Child("/modules_");
-            if(p.y<child->InnerRect.Min.y+48||p.y>child->InnerRect.Max.y-48) {
-                ImGui::SetScrollY(child,child->Scroll.y+p.y-child->InnerRect.GetCenter().y); frame(); frame();
-            }
+            SelectSubTab(overlay,page,"",index,count);
             mcov::OverlayUiCheck::Modules(overlay,page,modules); const bool original=modules[index].enabled;
+            auto frame=[&] { Draw(overlay,page,0,{1280,800}); };
+            auto* root=ImGui::FindWindowByName("mcov control panel");
+            const ImVec2 p{root->Pos.x+root->Size.x-159,root->Pos.y+22};
             for(bool expected:{!original,original}) {
-                p=point(); io.AddMousePosEvent(p.x,p.y); frame();
-                io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+                io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
                 mcov::OverlayUiCheck::Modules(overlay,page,modules);
-                Require(modules[index].enabled==expected,"Left click did not toggle the real module state");
-                Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Left click unexpectedly opened settings");
+                Require(modules[index].enabled==expected,"Compact module toggle did not update real module state");
             }
         }
     }
-    // Tastatur-Aktivierung verwendet denselben Widget-Pfad wie ein Linksklick.
-    mcov::OverlayUiCheck::CloseDetails(overlay);
-    Draw(overlay,Page::Visuals,0,{1280,800}); ImGui::SetScrollY(Child("/modules_"),0);
-    Draw(overlay,Page::Visuals,0,{1280,800}); Draw(overlay,Page::Visuals,0,{1280,800});
-    auto* child=Child("/modules_"); auto& stack=child->IDStack; const int zero=0;
-    stack.push_back(child->GetID("module_grid"));
-    stack.push_back(ImHashData(&zero,sizeof(zero),child->IDStack.back()));
-    const auto id=child->GetID("##module"); stack.pop_back(); stack.pop_back();
+    SelectSubTab(overlay,Page::Visuals,"",0,26);
+    auto* root=ImGui::FindWindowByName("mcov control panel");
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
-    ImGui::FocusWindow(child); ImGui::SetNavID(id,ImGuiNavLayer_Main,0,ImRect({0,0},{50,50}));
+    ImGui::FocusWindow(root); ImGui::SetNavID(root->GetID("Enabled##module_enabled"),ImGuiNavLayer_Main,0,ImRect({0,0},{50,50}));
     ImGui::GetCurrentContext()->NavCursorVisible=true;
     const bool box=mcov::OverlayUiCheck::Box(overlay);
     io.AddKeyEvent(ImGuiKey_Space,true); Draw(overlay,Page::Visuals,0,{1280,800});
     io.AddKeyEvent(ImGuiKey_Space,false); Draw(overlay,Page::Visuals,0,{1280,800});
-    Require(mcov::OverlayUiCheck::Box(overlay)!=box,"Keyboard could not activate the module tile");
+    Require(mcov::OverlayUiCheck::Box(overlay)!=box,"Keyboard could not activate the compact toggle");
     mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,box);
 }
 void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto& io=ImGui::GetIO();
-    const bool originalBox=mcov::OverlayUiCheck::Box(overlay);
-    SelectSubTab(overlay,Page::Settings,"settings_sections",2,4);
+    SelectSubTab(overlay,Page::Settings,"",2,4);
     auto* content=Child("/content_"); ImGui::SetScrollY(content,150);
     Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
-    const float scroll=content->Scroll.y; Require(scroll>0,"Keybind scroll fixture is empty");
-    Draw(overlay,Page::Combat,0,{1280,800}); Draw(overlay,Page::Combat,0,{1280,800});
-    Require(content->Scroll.y==scroll,"Changing root category reset the settings scroll every frame");
-    Require(mcov::OverlayUiCheck::Menu(overlay).settingsPage==Page::Settings,"Root navigation replaced the open module settings");
-    SelectSubTab(overlay,Page::Visuals,"visual_sections",0,26);
+    Require(content->Scroll.y>0,"Keybind scrolling is unavailable");
+    SelectSubTab(overlay,Page::Visuals,"",0,26);
+    Require(Child("/content_")->Scroll.y==0,"Changing module did not reset content scroll");
+    auto* root=ImGui::FindWindowByName("mcov control panel"); const auto original=root->Pos;
+    const ImVec2 grip{original.x+root->Size.x*.5f,original.y+20};
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
-    auto* root=ImGui::FindWindowByName("mcov control panel");
-    auto* detail=ImGui::FindWindowByName("mcov module settings");
-    const auto rootPos=root->Pos,detailPos=detail->Pos;
-    const ImVec2 grip{detailPos.x+100,detailPos.y+25};
     io.AddMousePosEvent(grip.x,grip.y); frame(); io.AddMouseButtonEvent(0,true); frame();
-    io.AddMousePosEvent(grip.x-65,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
-    Require(detail->Pos.x==detailPos.x-65&&detail->Pos.y==detailPos.y+15,"Settings window could not be dragged independently");
-    Require(root->Pos.x==rootPos.x&&root->Pos.y==rootPos.y,"Dragging settings moved the main window");
-    auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid"));
-    const ImVec2 tile{table->Columns[0].WorkMinX+35,table->OuterRect.Min.y+table->RowCellPaddingY+48};
-    // Root nach vorne holen, dann dasselbe Modul erneut rechtsklicken.
-    io.AddMousePosEvent(tile.x,tile.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
-    io.AddMouseButtonEvent(1,true); frame(); io.AddMouseButtonEvent(1,false); frame(); frame();
-    Require(ImGui::GetCurrentContext()->NavWindow->RootWindow==detail,"Reopening the same module did not raise its settings window");
-    const ImVec2 close{detail->Pos.x+detail->Size.x-30,detail->Pos.y+30};
-    io.AddMousePosEvent(close.x,close.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
-    Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Settings close button did not close only the second window");
-    // Einstellungs-Kacheln ohne Enable-Zustand muessen auch links oeffnen.
-    Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
-    table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid"));
-    io.AddMousePosEvent(table->Columns[0].WorkMinX+35,table->OuterRect.Min.y+table->RowCellPaddingY+48);
-    Draw(overlay,Page::Settings,0,{1280,800}); io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Settings,0,{1280,800});
-    io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Settings,0,{1280,800});
-    Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==0,"Settings-only tile did not open on left click");
-    mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
-    Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
+    io.AddMousePosEvent(grip.x+35,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
+    Require(root->Pos.x==original.x+35&&root->Pos.y==original.y+15,"Compact menu drag lost its offset");
+    mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
+    SelectSubTab(overlay,Page::Combat,"",1,8,{480,360});
     SaveFrame(device,context,output/"module-grid-small.png");
-    SelectSubTab(overlay,Page::Combat,"combat_sections",1,8,{1920,1080}); mcov::OverlayUiCheck::Center(overlay);
+    SelectSubTab(overlay,Page::Combat,"",1,8,{1920,1080}); mcov::OverlayUiCheck::Center(overlay);
     Draw(overlay,Page::Combat,0,{1920,1080}); Draw(overlay,Page::Combat,0,{1920,1080});
     SaveFrame(device,context,output/"module-settings-large.png");
-    mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
-    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,originalBox);
+    mcov::OverlayUiCheck::Center(overlay);
 }
 void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     // Kontrollierter Hintergrund: keine Desktop-Aufnahme, keine Spiel-/Benutzerdaten.
@@ -366,7 +322,7 @@ void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
         Hr(device->CreateTexture2D(&d,&data,&previewScene));
         Hr(device->CreateShaderResourceView(previewScene.Get(),nullptr,&previewSceneImage));
         mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
-        Draw(overlay,Page::Combat,0,size); ImGui::SetScrollY(Child("/modules_"),0); Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
+        Draw(overlay,Page::Combat,0,size); ImGui::SetScrollY(Child("/content_"),0); Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
         const char* suffix=w<500?"small":"desktop";
         SaveFrame(device,context,output/(std::string("glass-scene-grid-")+suffix+".png"));
         SelectSubTab(overlay,Page::Combat,"combat_sections",1,8,size);
@@ -791,7 +747,7 @@ int main(int argc,char** argv) {
             SelectSubTab(overlay,pages[p],sectionIds[p],0,sectionCounts[p]);
         }
         mcov::OverlayUiCheck::CloseDetails(overlay);
-        frame(Page::Combat); ImGui::SetScrollY(Child("/modules_"),0); frame(Page::Combat);
+        frame(Page::Combat); ImGui::SetScrollY(Child("/content_"),0); frame(Page::Combat);
         editor.Select(mcov::CombatMenu::Section::AimAssist); frame(Page::Combat); frame(Page::Combat);
         frame(Page::Combat); SaveFrame(device.Get(),context.Get(),output/"classic-combat.png");
         SaveFrame(device.Get(),context.Get(),output/"module-grid-combat.png");
@@ -1014,3 +970,4 @@ int main(int argc,char** argv) {
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
+
