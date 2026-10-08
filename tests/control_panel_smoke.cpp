@@ -353,18 +353,20 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     click({top.x+32,top.y+8});
     Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
     // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
-    const float row=mcov::style::MenuFont()->FontSize+12+2*controls()->RowCellPaddingY;
-    const auto& column=controls()->Columns[0];
-    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34});
+    const float frameHeight=mcov::style::MenuFont()->FontSize+6;
+    const float row=frameHeight+2*controls()->RowCellPaddingY;
+    const auto& column=controls()->Columns[1];
+    const float sliderY=controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+frameHeight*.5f;
+    click({column.WorkMaxX-10,sliderY});
     Require(config.sizeFraction>1&&config.sizeFraction<=1.5f,"Marker size slider was not wired to renderer config");
     // CTRL-Klick muss einen sichtbaren Editor oeffnen, statt alle Glyphen zu verstecken.
     io.AddKeyEvent(ImGuiMod_Ctrl,true);
-    click({column.WorkMinX+80,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34});
+    click({column.WorkMinX+60,sliderY});
     Require(ctx.TempInputId!=0,"CTRL-click did not open numeric slider input");
     auto* input=ImGui::GetInputTextState(ctx.TempInputId);
     Require(input&&input->TextLen>0,"Numeric slider input lost its value");
     bool visibleInput=false;
-    const ImVec2 editPoint{column.WorkMinX+80,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34};
+    const ImVec2 editPoint{column.WorkMinX+60,sliderY};
     const auto white=ImGui::GetIO().Fonts->TexUvWhitePixel;
     for(const auto& v:content->DrawList->VtxBuffer)
         if(v.pos.x>=column.WorkMinX&&v.pos.x<=column.WorkMaxX&&v.pos.y>editPoint.y-9&&v.pos.y<editPoint.y+9&&
@@ -767,7 +769,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::ResetVisuals(overlay); Require(mcov::OverlayUiCheck::Box(overlay),"Visuals reset failed");
         mcov::OverlayUiCheck::CloseDetails(overlay); frame(Page::Visuals); frame(Page::Visuals);
         auto* nav=Child("/navigation_");
-        const float tabHeight=std::clamp((nav->Size.y-36)/7,24.f,40.f);
+        const float tabHeight=29;
         click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+tabHeight*.5f});
         Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Left navigation did not select Combat");
         nav=Child("/navigation_"); click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+5*(tabHeight+6)+tabHeight*.5f},Page::Combat);
