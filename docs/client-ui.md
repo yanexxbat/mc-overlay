@@ -113,7 +113,7 @@ Active modules und Keybinds zeigen aktive Module und vergebene Modul-Binds.
 Alle 19 Snapshot-Elemente und das optionale Combat-Debug-HUD verwenden eingebettetes
 Inter mit 14 Pixeln sowie eine einzelne anthrazitfarbene Flaeche mit 8 Pixel Rundung,
 ohne Rahmen, Zierstreifen oder Schatten. Ruhige Ueberschriften und Trennlinien,
-korallfarbene aktive Zustaende und gruene/amberrote/rote Statusfarben halten die
+korallfarbene aktive Zustaende und gruene, amberfarbene sowie rote Statusfarben halten die
 Informationen lesbar. Lange Namen, Item-/Effect- und Keybind-Texte bleiben durch
 Zeilen-Clipping auch bei Skalierung innerhalb des Elements. Der Reach-Readout
 hat eine dunkle Flaeche zwischen offenen Fadenkreuzklammern; der Name clippt vor

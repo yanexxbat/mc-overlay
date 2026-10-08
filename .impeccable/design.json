@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-08T20:29:55.0006554Z",
+  "generatedAt": "2026-10-08T21:26:36Z",
   "title": "Design System: mcov Compact Controls",
   "extensions": {
     "colorMeta": {
@@ -326,6 +326,21 @@
           "oklch(95% 0.011 17)"
         ]
       },
+      "positive": {
+        "role": "secondary",
+        "displayName": "Soft green feedback",
+        "tonalRamp": ["oklch(15% 0.0515 152.20)", "oklch(26% 0.0515 152.20)", "oklch(37% 0.0515 152.20)", "oklch(48% 0.0515 152.20)", "oklch(59% 0.0515 152.20)", "oklch(70% 0.0515 152.20)", "oklch(81% 0.0515 152.20)", "oklch(95% 0.0515 152.20)"]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Amber warning",
+        "tonalRamp": ["oklch(15% 0.1040 78.27)", "oklch(26% 0.1040 78.27)", "oklch(37% 0.1040 78.27)", "oklch(48% 0.1040 78.27)", "oklch(59% 0.1040 78.27)", "oklch(70% 0.1040 78.27)", "oklch(81% 0.1040 78.27)", "oklch(95% 0.1040 78.27)"]
+      },
+      "danger": {
+        "role": "secondary",
+        "displayName": "Soft red danger",
+        "tonalRamp": ["oklch(15% 0.1401 21.09)", "oklch(26% 0.1401 21.09)", "oklch(37% 0.1401 21.09)", "oklch(48% 0.1401 21.09)", "oklch(59% 0.1401 21.09)", "oklch(70% 0.1401 21.09)", "oklch(81% 0.1401 21.09)", "oklch(95% 0.1401 21.09)"]
+      },
       "surface-instance-list": {
         "role": "neutral",
         "displayName": "Quiet instance surface",
@@ -344,11 +359,11 @@
     "typographyMeta": {
       "title": {
         "displayName": "Compact heading",
-        "purpose": "Client mcov/category and injector mcov/page headers at the shared 14px control size."
+        "purpose": "Client mcov/category, injector mcov/page and HUD headers at the shared 14px control size."
       },
       "body": {
         "displayName": "Control body",
-        "purpose": "Native client and launcher settings, tabs and actions."
+        "purpose": "Native client and launcher settings, tabs and actions, plus snapshot HUD text."
       },
       "label": {
         "displayName": "Section label",
@@ -498,11 +513,19 @@
       "description": "Static approximation of the shared alpha-composited injector surface, normally 640x640 with 480x380 coverage. Native DWM/region behavior is not reproduced by this web preview.",
       "html": "<section class=\"ds-launcher-root\"><strong>mcov</strong><p>Start / Diagnose</p><span>Translucent dark / 88% opacity</span></section>",
       "css": ".ds-launcher-root{font:500 14px Inter,sans-serif;color:#ECECEF;width:280px;padding:14px 16px;border-radius:12px;background:rgba(34,34,41,.88);border:0}.ds-launcher-root strong{font-size:14px;font-weight:600}.ds-launcher-root p{margin:8px 0;color:#F5D0C4}.ds-launcher-root span{color:#AEAEB8}"
+    },
+    {
+      "name": "Compact snapshot HUD",
+      "kind": "custom",
+      "refersTo": "hud-panel",
+      "description": "Static visual translation of the shared 19-element snapshot HUD: one rounded fill, quiet heading/divider, coral activity and semantic status. Native scaling, clipping and F6 editor behavior remain in the application.",
+      "html": "<section class=\"ds-hud\"><span class=\"ds-hud-heading\">Indicators</span><div class=\"ds-hud-row\"><span>HP 20.0</span><span class=\"ds-hud-positive\">Health advantage</span></div><div class=\"ds-hud-track\"><span></span></div><span class=\"ds-hud-muted\">Crosshair target</span></section>",
+      "css": ".ds-hud{font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(34,34,41,.88);border:0;border-radius:8px;width:212px;padding:6px 10px 8px;overflow:hidden}.ds-hud-heading{display:block;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.066667)}.ds-hud-row{display:flex;justify-content:space-between;gap:8px;margin-top:4px;white-space:nowrap;overflow:hidden}.ds-hud-positive{color:#A5C7AD}.ds-hud-track{height:6px;margin:6px 0;border-radius:3px;background:rgba(255,255,255,.047059)}.ds-hud-track span{display:block;width:65%;height:6px;border-radius:3px;background:#EF8B70}.ds-hud-muted{color:#AEAEB8}"
     }
   ],
   "narrative": {
     "northStar": "Compact Translucent Controls",
-    "overview": "The client follows the user's `design/reference-translucent-menu.png`: a wide, compact anthracite menu with a narrow sidebar, module tabs and a muted coral accent. The user approved this design and requested the same system on the injector. This replaces the spacious cyan example, the client's glass tile grid and the launcher's lavender Liquid Glass presentation. The reference supplies visual direction; mcov retains its real module names, settings and actions.\n\nBoth surfaces use direct ImGui alpha compositing, scoped `CompactStyle`, embedded Inter and modest headings. The client organizes module settings; the injector organizes instance selection and diagnostics. The shared palette and controls keep these operations consistent. HUD and world effects retain their styles.",
+    "overview": "The client follows the user's `design/reference-translucent-menu.png`: a wide, compact anthracite menu with a narrow sidebar, module tabs and a muted coral accent. The user approved this design and requested the same system on the injector and snapshot HUD. This replaces the spacious cyan example, the client's glass tile grid and the launcher's lavender Liquid Glass presentation. The reference supplies visual direction; mcov retains its real module names, settings and actions.\n\nClient controls, injector and HUD editor use direct ImGui alpha compositing, scoped `CompactStyle`, embedded Inter and modest headings. Snapshot HUDs share the drawing tokens and font. The client organizes module settings; the injector organizes instance selection and diagnostics. The shared palette and controls keep these operations consistent. World effects retain their styles.",
     "keyCharacteristics": [
       "Shared compact anthracite roots with restrained coral interaction states.",
       "Seven categories, searchable module tabs and settings within one window.",
@@ -513,12 +536,12 @@
     "rules": [
       {
         "name": "The Material Scope Rule",
-        "body": "Client and injector use the same compact palette and direct alpha compositing. This shared presentation does not change HUD/world style.",
+        "body": "Client, injector and snapshot HUD use the same compact palette and direct alpha compositing. World effects retain their styles.",
         "section": "colors"
       },
       {
         "name": "The Local Type Rule",
-        "body": "Both surfaces use `CompactStyle` to push their menu font and restore the prior style and font on scope exit.",
+        "body": "Both surfaces use `CompactStyle` to push their menu font and restore the prior style and font on scope exit. The HUD editor uses the same scope; snapshot HUD rendering pushes and restores the shared `MenuFont` locally.",
         "section": "typography"
       },
       {
@@ -528,7 +551,7 @@
       }
     ],
     "dos": [
-      "**Do** use scoped `CompactStyle` for both client and injector controls.",
+      "**Do** use scoped `CompactStyle` for client, injector and HUD editor controls.",
       "**Do** preserve real module names, section identities, keybinds and native input behavior.",
       "**Do** keep module tabs outside content scroll and provide search recovery.",
       "**Do** keep the launcher primary action and close footer outside scrolling content.",
@@ -536,8 +559,8 @@
     ],
     "donts": [
       "**Don't** reintroduce the rejected spacious cyan client or large module tile grid.",
-      "**Don't** describe compact client or injector transparency as live desktop capture or Liquid Glass blur.",
-      "**Don't** globally restyle HUD/ESP or add render-thread JNI during menu work.",
+      "**Don't** describe compact client, injector or HUD transparency as live desktop capture or Liquid Glass blur.",
+      "**Don't** restyle world ESP/effects or add render-thread JNI during compact UI work.",
       "**Don't** require loose shader/font/DLL files beside the portable EXE.",
       "**Don't** claim synthetic WARP images validate live Minecraft appearance or attach behavior."
     ]
