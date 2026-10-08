@@ -27,10 +27,11 @@ camera/entity projection stability.
   the header and available Quick toggles operate real modules and actions.
   Preserve actual controls, keybinds and HUD behavior. The spacious cyan example,
   large module tile grid and independent module settings window are superseded.
-- The launcher retains its separate Liquid Glass visual system based on
-  [poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11) and performs Minecraft
-  selection, connection and overlay startup. Technical diagnostics remain separate
-  from the primary start action.
+- The injector uses the same approved compact coral design as the client:
+  scoped `CompactStyle`, embedded Inter at 14 pixels, an 88%-opaque anthracite
+  root and a narrow Start/Diagnose sidebar. It performs Minecraft selection,
+  connection and overlay startup. The fixed primary action and close footer
+  remain reachable while status, JDK recovery and diagnostics scroll.
 - Keep the simplified Kill Aura workflow and independent mouse-controlled camera.
 - Renderers consume snapshots; UI/HUD changes add no render-thread JNI.
 - Keep one canonical `build` directory and existing version/Forge compatibility.
@@ -59,24 +60,37 @@ client glass renderer receives visibility false. The configured overlay capture
 preference applies while the menu is open. Settings → Overlay reports
 `Translucent dark / 88% opacity` and `Not required`.
 
-The launcher's separate glass material captures the desktop only while its
-glass surface is visible. DXGI Desktop Duplication runs first; after 750 ms without
-a usable frame, Windows Graphics Capture attempts monitor capture on the existing
-render device. Closing/minimizing the launcher, disabling capture, supplying a
-fixture texture or changing the monitor stops capture sessions. Temporary Windows
-capture exclusion prevents recursive feedback, and closure restores its prior
-capture affinity. Unavailable capture uses a stable tinted fallback. This is
-presentation behavior, not a change to world-effect visibility or JNI acquisition.
+The injector also uses direct ImGui alpha compositing. Its native shell clears
+to transparent RGBA, extends DWM across the client area and clips to a rounded
+Windows region matching the 12-pixel panel radius. Initialization stays hidden
+until the first frame is presented. `FlatApp` no longer owns or calls LiquidGlass;
+injector presentation requires no desktop capture, blur or refraction. Native
+drag, close/minimize, async launch, JDK selection and logs retain their behavior.
+
+The retained LiquidGlass renderer and capture checks remain a legacy/standalone
+capability based on
+[poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11).
+Their material, capture lifecycle and license remain documented in
+[docs/liquid-ui.md](docs/liquid-ui.md). They are not active injector requirements.
+The redesign changes presentation only, not world-effect visibility or JNI acquisition.
 
 ## Verification limits
 
-Offscreen D3D11 WARP checks exercise the real shaders, UI input, small viewports,
-HUD/keybind behavior and portable packaging. Current compact-client review images
-under `.impeccable/review/compact-client/` use synthetic backgrounds and direct
-alpha compositing; they do not establish live Minecraft appearance. An explicit
-native `--live` probe passed WGC startup, the full LiquidGlass runtime, capture pause, display-affinity
-restoration and live capture after reopening on this host without saving desktop
-images or attaching to a JVM. These glass checks concern the retained renderer
-and launcher, not a client capture requirement. These checks do not establish
-live Minecraft capture/attach behavior on every GPU or runtime. Existing
-compatibility details remain in [docs/compatibility.md](docs/compatibility.md).
+The `mcov` and `mcov_injector` builds, native/UI checks and portable share ZIP
+passed after the redesign. Offscreen D3D11 WARP checks exercise real UI input,
+small viewports, HUD/keybind behavior and portable packaging. Updated launcher
+checks cover selection, start, duplicate-start prevention, both sidebar tabs,
+fixed footer and title controls. Hidden native HWND/swapchain checks cover alpha,
+control ink, hidden initialization, resize and rounded clipping.
+
+Current images under `.impeccable/review/compact-client/` and
+`.impeccable/review/compact-injector/` use synthetic fixtures. The two injector
+`launcher-native-*` images are hidden swapchain readbacks before OS clipping.
+These images do not establish live desktop composition or Minecraft appearance.
+Historical explicit `--live` and `--live-sta` probes passed WGC startup, the full
+LiquidGlass runtime, capture pause, affinity restoration and capture after
+reopening on this host without saving desktop images or attaching to a JVM.
+Those results concern the retained legacy renderer, not current injector capture.
+Live Minecraft attach/focus and every GPU/runtime combination remain outside
+these checks. Existing compatibility details remain in
+[docs/compatibility.md](docs/compatibility.md).
