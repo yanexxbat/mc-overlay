@@ -1,12 +1,13 @@
 #include "debug_hud.hpp"
 #include "imgui.h"
+#include "../common/compact_theme.hpp"
 #include <cstdio>
 
 namespace mcov::combat {
 namespace {
 constexpr float kMargin=16, kPanelWidth=320, kLineHeight=18, kPlotHeight=68, kPadding=12;
-constexpr ImU32 kText=IM_COL32(236,236,238,255), kMuted=IM_COL32(157,157,171,255),
-    kAccent=IM_COL32(88,101,242,255), kTarget=IM_COL32(109,235,224,255), kBackground=IM_COL32(18,18,20,225);
+constexpr ImU32 kText=style::compact::Text, kMuted=style::compact::Muted,
+    kAccent=style::compact::Accent, kTarget=style::compact::AccentActive;
 }
 void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,const ImVec2& viewport) {
     if(!c.enabled || viewport.x<64 || viewport.y<64 || !std::isfinite(viewport.x) || !std::isfinite(viewport.y)) return;
@@ -20,7 +21,7 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
     const float width=std::min(kPanelWidth,viewport.x-2*kMargin);
     const float height=2*kPadding+(c.target ? 3*kLineHeight : 0)+(c.packetStats ? 2*kLineHeight : 0)+(c.trace ? kPlotHeight+kLineHeight : 0);
     const ImVec2 start(kMargin,kMargin),end(kMargin+width,kMargin+height);
-    draw.AddRectFilled(start,end,kBackground,8);
+    style::compact::Panel(draw,start,end);
     draw.PushClipRect(ImVec2(start.x+kPadding,start.y),ImVec2(end.x-kPadding,end.y),true);
     ClipScope bodyClip{draw};
     float y=start.y+kPadding;
@@ -57,8 +58,8 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
             }
             draw.AddPolyline(wantedYaw.data(),static_cast<int>(count),kTarget,0,1);
             draw.AddPolyline(actualYaw.data(),static_cast<int>(count),kText,0,1.5f);
-            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),IM_COL32(109,235,224,100),0,1);
-            draw.AddPolyline(actualPitch.data(),static_cast<int>(count),IM_COL32(236,236,238,100),0,1);
+            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),IM_COL32(255,163,136,100),0,1);
+            draw.AddPolyline(actualPitch.data(),static_cast<int>(count),IM_COL32(236,236,239,100),0,1);
         }
     }
 }

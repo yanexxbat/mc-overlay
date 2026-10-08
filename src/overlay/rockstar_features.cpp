@@ -19,7 +19,7 @@ void WorldLine(ImDrawList& d,const CameraProjection& p,WorldPoint a,WorldPoint b
     if(p.Segment(a,b,sa,sb,&inverseA,&inverseB))
         soft::Stroke(d,{sa.x,sa.y},{sb.x,sb.y},width,color,glow,texture,1/inverseA,1/inverseB);
 }
-void LineText(ImDrawList& d,float y,const char* text,ImU32 color=IM_COL32(236,236,238,255)) { d.AddText({8,y},color,text); }
+void LineText(ImDrawList& d,float y,const char* text,ImU32 color=style::compact::Text) { d.AddText({10,y},color,text); }
 }
 Config::Config() {
     (*this)[Feature::Crosshair].size=5; (*this)[Feature::Crosshair].range=3;
@@ -306,7 +306,7 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
 }
 void Pack::DrawHud(ImDrawList& d,HudModule kind,const WorldSnapshot& s,const Config& config,const combat::Relations& friends,ImVec2 size,double now) const {
     const auto metrics=Metrics(now); char text[128];
-    DrawHudPanel(d,{0,0},size); LineText(d,6,kHudNames[static_cast<int>(kind)]);
+    DrawHudPanel(d,{0,0},size); style::compact::Heading(d,{0,0},size.x,kHudNames[static_cast<int>(kind)]);
     switch(kind) {
         case HudModule::Speedometer:
             std::snprintf(text,sizeof(text),"%.2f m/s | %.1f km/h",metrics.speed,metrics.speed*3.6f); LineText(d,27,text);
@@ -322,41 +322,46 @@ void Pack::DrawHud(ImDrawList& d,HudModule kind,const WorldSnapshot& s,const Con
             constexpr int keys[]={0x57,0x41,0x53,0x44,0x20,1,2}; constexpr const char* labels[]={"W","A","S","D","SPACE","LMB","RMB"};
             constexpr ImVec2 positions[]={{48,26},{10,53},{48,53},{86,53},{10,80},{10,107},{69,107}};
             for(int i=0;i<7;++i) { const auto p=positions[i]; const float width=i==4?110.f:i>4?51.f:34.f;
-                d.AddRectFilled(p,{p.x+width,p.y+23},input_[keys[i]]?IM_COL32(105,65,125,255):IM_COL32(25,25,25,255));
-                d.AddText({p.x+5,p.y+5},IM_COL32(236,236,238,255),labels[i]); }
+                d.AddRectFilled(p,{p.x+width,p.y+23},input_[keys[i]]?style::compact::Pressed:style::compact::Track,4);
+                const auto measure=ImGui::CalcTextSize(labels[i]);
+                d.AddText({p.x+(width-measure.x)*.5f,p.y+(23-measure.y)*.5f},input_[keys[i]]?style::compact::AccentActive:style::compact::Text,labels[i]); }
             break;
         }
         case HudModule::Radar: {
             const ImVec2 center{size.x*.5f,size.y*.5f+8}; const float radius=std::min(size.x,size.y)*.38f;
-            d.AddCircle(center,radius,IM_COL32(102,83,115,255),48); d.AddLine({center.x-radius,center.y},{center.x+radius,center.y},IM_COL32(70,65,75,255));
-            d.AddLine({center.x,center.y-radius},{center.x,center.y+radius},IM_COL32(70,65,75,255));
-            d.AddTriangleFilled({center.x,center.y-5},{center.x-4,center.y+4},{center.x+4,center.y+4},IM_COL32(236,236,238,255));
+            d.AddCircle(center,radius,style::compact::Muted,48);
+            d.AddLine({center.x-radius,center.y},{center.x+radius,center.y},style::compact::Separator);
+            d.AddLine({center.x,center.y-radius},{center.x,center.y+radius},style::compact::Separator);
+            d.AddTriangleFilled({center.x,center.y-5},{center.x-4,center.y+4},{center.x+4,center.y+4},style::compact::Text);
             const double yaw=s.yawDeg*rad; const double range=std::max(8.f,config[Feature::DetectPlayer].range);
             for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) if(Player(e)) {
                 const double dx=e.x-s.posX,dz=e.z-s.posZ,dist=std::hypot(dx,dz); if(dist>range) continue;
                 const float x=float((-dx*std::cos(yaw)-dz*std::sin(yaw))/range)*radius,y=float((dx*std::sin(yaw)-dz*std::cos(yaw))/range)*radius;
                 const bool friendEntity=combat::Lookup(friends,e.uuid)==combat::Relation::Friend;
-                d.AddCircleFilled({center.x+x,center.y+y},3,friendEntity?IM_COL32(80,240,155,255):IM_COL32(174,105,209,255),12);
+                d.AddCircleFilled({center.x+x,center.y+y},3,friendEntity?style::compact::Positive:style::compact::Accent,12);
             } break;
         }
         case HudModule::ArmorStrip: {
             for(int i=0;i<4;++i) { const auto& item=s.equipment[i]; const float x=8+i*54.f;
-                constexpr const char* names[]={"Head","Chest","Legs","Feet"}; d.AddText({x,28},IM_COL32(182,175,190,255),names[i]);
+                constexpr const char* names[]={"Head","Chest","Legs","Feet"}; d.AddText({x,28},style::compact::Muted,names[i]);
                 const float remaining=item.maxDamage>0?std::clamp(1-float(item.damage)/item.maxDamage,0.f,1.f):item.present?1.f:0.f;
-                d.AddRectFilled({x,46},{x+46,50},IM_COL32(25,25,25,255)); d.AddRectFilled({x,46},{x+46*remaining,50},IM_COL32(174,105,209,255));
-                std::snprintf(text,sizeof(text),item.present?"%.0f%%":"--",remaining*100); d.AddText({x,55},IM_COL32(236,236,238,255),text);
+                d.AddRectFilled({x,46},{x+46,50},style::compact::Track,2);
+                d.AddRectFilled({x,46},{x+46*remaining,50},remaining<.2f?style::compact::Danger:remaining<.5f?style::compact::Warning:style::compact::Accent,2);
+                std::snprintf(text,sizeof(text),item.present?"%.0f%%":"--",remaining*100); d.AddText({x,55},style::compact::Text,text);
             } break;
         }
         case HudModule::Indicators: {
             const float target=s.hasTarget?s.targetHealth:0; std::snprintf(text,sizeof(text),"HP %.1f | Target %.1f",s.health,target); LineText(d,27,text);
-            const float value=std::clamp((s.health-target+20)/40,0.f,1.f); d.AddRectFilled({8,48},{size.x-8,54},IM_COL32(25,25,25,255));
-            if(s.hasTarget) d.AddRectFilled({8,48},{8+(size.x-16)*value,54},s.health>=target?IM_COL32(80,220,130,255):IM_COL32(240,85,95,255));
+            const float value=std::clamp((s.health-target+20)/40,0.f,1.f); d.AddRectFilled({10,48},{size.x-10,54},style::compact::Track,3);
+            if(s.hasTarget) d.AddRectFilled({10,48},{10+(size.x-20)*value,54},s.health>=target?style::compact::Positive:style::compact::Danger,3);
             LineText(d,64,s.hasTarget?"Health advantage":"No crosshair target"); break;
         }
         case HudModule::Notifications: {
             float y=27; const double lifetime=config[Feature::Notifications].lifetime;
             for(int i=0;i<3;++i) { const auto& note=notices_[(noticeHead_-1-i+kNotices*2)%kNotices]; if(now<note.born||now-note.born>lifetime||!note.text[0]) continue;
-                d.AddText(ImGui::GetFont(),ImGui::GetFontSize(),{8,y},IM_COL32(236,236,238,255),note.text.data(),nullptr,size.x-16); y+=38; }
+                d.PushClipRect({10,y},{size.x-10,std::min(y+34,size.y-8)},true);
+                d.AddText(ImGui::GetFont(),ImGui::GetFontSize(),{10,y},style::compact::Text,note.text.data(),nullptr,size.x-20);
+                d.PopClipRect(); y+=38; }
             break;
         }
         case HudModule::Nearby: {
