@@ -953,7 +953,9 @@ int main(int argc,char** argv) {
         Require(toolbar->ScrollMax.y==0&&toolbar->DC.CursorMaxPos.x<=toolbar->Pos.x+toolbar->Size.x+1,"HUD editor controls overflowed compact toolbar");
         const auto scaleBefore=hud.layout[2].scale;
         const auto scaleId=toolbar->GetID("Scale"); ImGui::SetFocusID(scaleId,toolbar);
-        ctx.NavId=scaleId; ctx.NavWindow=toolbar; ctx.NavCursorVisible=true; io.AddKeyEvent(ImGuiKey_RightArrow,true);
+        ctx.NavId=scaleId; ctx.NavWindow=toolbar; ctx.NavCursorVisible=true;
+        io.AddKeyEvent(ImGuiKey_Space,true); hudFrame({480,360});
+        io.AddKeyEvent(ImGuiKey_Space,false); hudFrame({480,360}); io.AddKeyEvent(ImGuiKey_RightArrow,true);
         hudFrame({480,360}); io.AddKeyEvent(ImGuiKey_RightArrow,false); hudFrame({480,360});
         Require(hud.layout[2].scale>scaleBefore,"Compact HUD scale is not keyboard operable");
         io.AddMousePosEvent(-100,-100);
@@ -977,7 +979,8 @@ int main(int argc,char** argv) {
         for(int i=0;i<mcov::kHudModules;++i) {
             for(int j=0;j<mcov::kHudModules;++j) mcov::OverlayUiCheck::HudElement(overlay,j,j==i);
             hud.layout[i]={{0,0},1,true};
-            const int first=galleryDraw.VtxBuffer.Size,command=galleryDraw.CmdBuffer.Size-1;
+            const int first=galleryDraw.VtxBuffer.Size;
+            const int command=galleryDraw.CmdBuffer.Size-(galleryDraw.CmdBuffer.back().ElemCount==0?1:0);
             mcov::OverlayUiCheck::DrawHud(overlay,hudScene,false);
             const auto r=mcov::OverlayUiCheck::HudRects(overlay)[i];
             Require(r.max.x>r.min.x&&r.max.y>r.min.y,"HUD catalog omitted an element");
