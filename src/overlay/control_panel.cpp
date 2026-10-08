@@ -113,7 +113,7 @@ Actions Render(State& state,const Status& status,void* owner,Content content,Cat
     draw.AddRectFilled(pos,{pos.x+size.x,pos.y+size.y},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
     draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(0x15151B,.22f)),12,ImDrawFlags_RoundCornersLeft);
     draw.AddLine({pos.x+sidebar,pos.y+12},{pos.x+sidebar,pos.y+size.y-12},ImGui::GetColorU32(ImGuiCol_Separator));
-    ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{size.x-48,32});
+    ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-216),32});
     if(ImGui::IsItemActivated()) { state.dragging=true; const auto m=ImGui::GetIO().MousePos; state.dragOffset={m.x-pos.x,m.y-pos.y}; }
     if(ImGui::IsItemHovered()||state.dragging) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
     draw.AddCircle({pos.x+25,pos.y+23},6,ImGui::GetColorU32(ImGuiCol_CheckMark),20,1.5f);
@@ -146,7 +146,7 @@ Actions Render(State& state,const Status& status,void* owner,Content content,Cat
     for(int i=0;i<count;++i) if(Matches(modules[i].name,state.search)) { if(!matching&&!Matches(modules[selected].name,state.search)) selected=i; ++matching; }
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+46});
     ImGui::PushID(int(state.page));
-    if(count&&matching&&ImGui::BeginTabBar("module_tabs",ImGuiTabBarFlags_FittingPolicyScroll|ImGuiTabBarFlags_NoCloseWithMiddleMouse)) {
+    if(count&&matching&&ImGui::BeginTabBar("module_tabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
         for(int i=0;i<count;++i) if(Matches(modules[i].name,state.search)) {
             const bool force=(pageChanged||filterChanged)&&i==selected;
             if(ImGui::BeginTabItem(modules[i].name,nullptr,force?ImGuiTabItemFlags_SetSelected:0)) { selected=i; ImGui::EndTabItem(); }

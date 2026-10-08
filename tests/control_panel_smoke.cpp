@@ -738,9 +738,9 @@ int main(int argc,char** argv) {
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
         constexpr int sectionCounts[]={8,26,7,20,3,4,8};
+        GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
-        GlassScenePreview(overlay,device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
