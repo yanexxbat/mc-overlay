@@ -67,6 +67,8 @@ private:
 // presentation state only. The caller owns all real module settings and actions.
 Actions Render(State& state, const Status& status, void* owner, Content content,
                Catalog catalog=nullptr,Activate activate=nullptr);
+Actions RenderMenu(State& state, const Status& status, void* owner, Content content,
+                   Catalog catalog=nullptr,Activate activate=nullptr);
 const char* ThemeName(int index);
 float Scale();
 bool MotionAllowed(const State& state);

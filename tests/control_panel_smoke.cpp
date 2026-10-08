@@ -301,6 +301,28 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     SaveFrame(device,context,output/"module-settings-large.png");
     mcov::OverlayUiCheck::Center(overlay);
 }
+void SearchChecks(mcov::Overlay& overlay) {
+    SelectSubTab(overlay,Page::Combat,"",0,8);
+    auto frame=[&] { Draw(overlay,Page::Combat,0,{1280,800}); };
+    auto& io=ImGui::GetIO(); auto* root=ImGui::FindWindowByName("mcov control panel");
+    const ImVec2 p{root->Pos.x+45,root->Pos.y+58};
+    io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+    io.AddInputCharactersUTF8("AURA"); frame(); frame(); frame();
+    auto* tabs=ModuleTabs(Page::Combat);
+    Require(tabs&&tabs->Tabs.Size==1&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==0,"Case-insensitive module search failed");
+    io.AddInputCharactersUTF8("zzzz"); frame(); frame();
+    auto* content=Child("/content_");
+    Require(content->DrawList->VtxBuffer.Size>0,"Empty search lost its recovery UI");
+    io.AddKeyEvent(ImGuiKey_Escape,true); frame(); io.AddKeyEvent(ImGuiKey_Escape,false); frame();
+    // Search resets when the user chooses another category.
+    Draw(overlay,Page::Visuals,0,{1280,800});
+    auto* nav=Child("/navigation_"); const ImVec2 item{nav->Pos.x+50,nav->Pos.y+29*.5f+35};
+    io.AddMousePosEvent(item.x,item.y); Draw(overlay,Page::Visuals,0,{1280,800},true);
+    io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Visuals,0,{1280,800},true);
+    io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Visuals,0,{1280,800},true);
+    Require(!mcov::OverlayUiCheck::Menu(overlay).search[0],"Category navigation retained a stale search");
+    io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
+}
 void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     // Kontrollierter Hintergrund: keine Desktop-Aufnahme, keine Spiel-/Benutzerdaten.
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
@@ -743,6 +765,7 @@ int main(int argc,char** argv) {
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
+        SearchChecks(overlay);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
@@ -968,7 +991,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: liquid glass shaders, 7 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura/Rockstar pack\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 76 module tabs, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and glass launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

@@ -91,7 +91,7 @@ int SubTabs(const char* id,const char* const* labels,int count,int selected,bool
     }
     return selected;
 }
-Actions Render(State& state,const Status& status,void* owner,Content content,Catalog catalog,Activate activate) {
+Actions RenderMenu(State& state,const Status& status,void* owner,Content content,Catalog catalog,Activate activate) {
     style::CompactStyle scoped; Actions actions;
     const auto* viewport=ImGui::GetMainViewport(); const auto work=viewport->WorkSize;
     if(work.x<180||work.y<180) return actions;
@@ -210,6 +210,9 @@ Actions Render(State& state,const Status& status,void* owner,Content content,Cat
     state.settingsPage=state.page; state.settingsSection=selected; state.settingsOpen=!actions.close;
     state.pageAlpha=1; state.animateNextPage=false;
     return actions;
+}
+Actions Render(State& state,const Status& status,void* owner,Content content,Catalog catalog,Activate activate) {
+    return RenderMenu(state,status,owner,content,catalog,activate);
 }
 bool BeginRows(const char* id) {
     if(!ImGui::BeginTable(id,2,ImGuiTableFlags_SizingStretchProp|ImGuiTableFlags_NoSavedSettings)) return false;
