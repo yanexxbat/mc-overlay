@@ -91,6 +91,9 @@ struct OverlayUiCheck {
         o.hudEditing_=editing; o.DrawHud(s); if(editing) o.DrawHudEditor();
     }
     static const auto& HudRects(const Overlay& o) { return o.hudRects_; }
+    static void HudSelection(Overlay& o,int value) { o.hudSelected_=value; }
+    static void HudElement(Overlay& o,int value,bool enabled) { o.SetHudEnabled(value,enabled); }
+    static void Telemetry(Overlay& o,const WorldSnapshot& s) { o.SampleTelemetry(s); }
     static void CubeReport(Overlay& o,const EntitySnapshot& e,CombatBridgeStatus status=CombatBridgeStatus::Active,std::uint64_t age=0) {
         auto config=combat::MakeKillAuraConfig({}); config.enabled=true; o.combatMenu_.Store().Publish(config);
         o.combatReport_={}; o.combatReport_.sampledAtMs=GetTickCount64()-age;
@@ -921,6 +924,7 @@ int main(int argc,char** argv) {
         RockstarChecks(overlay,device.Get(),context.Get(),output);
         mcov::WorldSnapshot hudScene{}; hudScene.health=hudScene.maxHealth=20; hudScene.fps=144; hudScene.hasTarget=1;
         hudScene.targetDistance=2.4f; hudScene.targetHealth=16; hudScene.targetMaxHealth=20;
+        hudScene.heapUsedBytes=1536ull*1024*1024; hudScene.heapMaxBytes=4096ull*1024*1024;
         mcov::CopyField(hudScene.targetName,"Target player"); mcov::CopyField(hudScene.gameVersion,"1.21.11");
         hudScene.posX=124; hudScene.posY=64; hudScene.posZ=-285; hudScene.effectCount=2;
         mcov::CopyField(hudScene.effects[0].name,"Speed"); hudScene.effects[0].durationTicks=2400;
@@ -930,6 +934,7 @@ int main(int argc,char** argv) {
         auto hudFrame=[&](ImVec2 size,bool edit=true) {
             io.DisplaySize=size; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             const auto before=ImGui::GetStyle(); const auto vars=ctx.StyleVarStack.Size,colors=ctx.ColorStack.Size,fonts=ctx.FontStack.Size;
+            mcov::OverlayUiCheck::Telemetry(overlay,hudScene);
             mcov::OverlayUiCheck::DrawHud(overlay,hudScene,edit);
             Require(vars==ctx.StyleVarStack.Size&&colors==ctx.ColorStack.Size&&fonts==ctx.FontStack.Size&&
                     std::memcmp(&before,&ImGui::GetStyle(),sizeof(ImGuiStyle))==0,"HUD editor leaked global style or fonts"); ImGui::Render();
@@ -944,16 +949,44 @@ int main(int argc,char** argv) {
         io.AddMousePosEvent(-100,-100); hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"HUD module escaped small viewport");
         SaveFrame(device.Get(),context.Get(),output/"modular-hud-small.png");
+        auto* toolbar=Child("/editor_toolbar");
+        Require(toolbar->ScrollMax.y==0&&toolbar->DC.CursorMaxPos.x<=toolbar->Pos.x+toolbar->Size.x+1,"HUD editor controls overflowed compact toolbar");
+        const auto scaleBefore=hud.layout[2].scale;
+        const auto scaleId=toolbar->GetID("Scale"); ImGui::SetFocusID(scaleId,toolbar);
+        ctx.NavId=scaleId; ctx.NavWindow=toolbar; ctx.NavCursorVisible=true; io.AddKeyEvent(ImGuiKey_RightArrow,true);
+        hudFrame({480,360}); io.AddKeyEvent(ImGuiKey_RightArrow,false); hudFrame({480,360});
+        Require(hud.layout[2].scale>scaleBefore,"Compact HUD scale is not keyboard operable");
+        io.AddMousePosEvent(-100,-100);
         hud.layout[2]={}; hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"modular-hud.png");
         hud.extras.fill(true); extra[mcov::rockstar::Feature::Notifications].enabled=extra[mcov::rockstar::Feature::DetectPlayer].enabled=true;
         mcov::keys::Input hudKeys{}; hudKeys[0x57]=hudKeys[1]=true; pack.Input(hudKeys,true,double(GetTickCount64())/1000);
         pack.Notify("Wings enabled",double(GetTickCount64())/1000); pack.Notify("Waypoint saved",double(GetTickCount64())/1000);
         hudScene.entityCount=1; auto& nearby=hudScene.entities[0]; nearby.entityId=50; nearby.uuid={1,50}; nearby.distance=12;
-        nearby.health=18; nearby.x=8; nearby.z=-280; nearby.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving; mcov::CopyField(nearby.name,"Nearby player");
+        nearby.health=18; nearby.x=hudScene.posX+8; nearby.z=hudScene.posZ+5; nearby.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving; mcov::CopyField(nearby.name,"Nearby player");
         hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"rockstar-hud.png");
         hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"new HUD escaped a small viewport");
         hudFrame({1280,800},false);
+        // All nineteen real widgets, isolated into a synthetic catalog for visual coverage.
+        const auto galleryHud=hud; const auto galleryExtra=extra;
+        io.DisplaySize={1440,1100}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto& galleryDraw=*ImGui::GetBackgroundDrawList();
+        ImGui::PushFont(mcov::style::MenuFont());
+        galleryDraw.AddText({24,16},mcov::style::compact::Muted,"HUD catalog / synthetic snapshot data");
+        ImGui::PopFont();
+        for(int i=0;i<mcov::kHudModules;++i) {
+            for(int j=0;j<mcov::kHudModules;++j) mcov::OverlayUiCheck::HudElement(overlay,j,j==i);
+            hud.layout[i]={{0,0},1,true};
+            const int first=galleryDraw.VtxBuffer.Size,command=galleryDraw.CmdBuffer.Size-1;
+            mcov::OverlayUiCheck::DrawHud(overlay,hudScene,false);
+            const auto r=mcov::OverlayUiCheck::HudRects(overlay)[i];
+            Require(r.max.x>r.min.x&&r.max.y>r.min.y,"HUD catalog omitted an element");
+            const ImVec2 shift{24+(i%4)*350.f,52+(i/4)*205.f};
+            for(int v=first;v<galleryDraw.VtxBuffer.Size;++v) { auto& p=galleryDraw.VtxBuffer[v].pos; p={p.x+shift.x,p.y+shift.y}; }
+            for(int c=command;c<galleryDraw.CmdBuffer.Size-1;++c) { auto& clip=galleryDraw.CmdBuffer[c].ClipRect; clip={clip.x+shift.x,clip.y+shift.y,clip.z+shift.x,clip.w+shift.y}; }
+        }
+        ImGui::Render(); SaveFrame(device.Get(),context.Get(),output/"hud-catalog.png");
+        hud=galleryHud; extra=galleryExtra;
         extra={}; pack.ResetWorld();
         hud={}; binds=mcov::keys::Defaults(); io.AddMousePosEvent(-100,-100);
         EspChecks(overlay,device.Get(),context.Get(),output);
