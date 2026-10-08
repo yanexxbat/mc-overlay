@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-08T20:07:51.626Z",
-  "title": "Design System: mcov Compact Client",
+  "generatedAt": "2026-10-08T20:29:55.0006554Z",
+  "title": "Design System: mcov Compact Controls",
   "extensions": {
     "colorMeta": {
       "primary": {
@@ -298,151 +298,53 @@
           "oklch(95% 0.0000 0.00)"
         ]
       },
-      "launcher-primary": {
+      "primary-pressed": {
         "role": "primary",
-        "displayName": "Launcher lavender",
+        "displayName": "Pressed coral",
         "tonalRamp": [
-          "oklch(15% 0.1583 276.93)",
-          "oklch(26% 0.1583 276.93)",
-          "oklch(37% 0.1583 276.93)",
-          "oklch(48% 0.1583 276.93)",
-          "oklch(59% 0.1583 276.93)",
-          "oklch(70% 0.1583 276.93)",
-          "oklch(81% 0.1583 276.93)",
-          "oklch(95% 0.1583 276.93)"
+          "oklch(15% 0.1285 35.98)",
+          "oklch(26% 0.1285 35.98)",
+          "oklch(37% 0.1285 35.98)",
+          "oklch(48% 0.1285 35.98)",
+          "oklch(59% 0.1285 35.98)",
+          "oklch(70% 0.1285 35.98)",
+          "oklch(81% 0.1285 35.98)",
+          "oklch(95% 0.1285 35.98)"
         ]
       },
-      "launcher-primary-ink": {
-        "role": "primary",
-        "displayName": "Launcher pale lavender",
-        "tonalRamp": [
-          "oklch(15% 0.0992 279.50)",
-          "oklch(26% 0.0992 279.50)",
-          "oklch(37% 0.0992 279.50)",
-          "oklch(48% 0.0992 279.50)",
-          "oklch(59% 0.0992 279.50)",
-          "oklch(70% 0.0992 279.50)",
-          "oklch(81% 0.0992 279.50)",
-          "oklch(95% 0.0992 279.50)"
-        ]
-      },
-      "launcher-text": {
+      "primary-ink": {
         "role": "neutral",
-        "displayName": "Launcher cool white",
+        "displayName": "Near-black primary ink",
         "tonalRamp": [
-          "oklch(15% 0.0147 281.96)",
-          "oklch(26% 0.0147 281.96)",
-          "oklch(37% 0.0147 281.96)",
-          "oklch(48% 0.0147 281.96)",
-          "oklch(59% 0.0147 281.96)",
-          "oklch(70% 0.0147 281.96)",
-          "oklch(81% 0.0147 281.96)",
-          "oklch(95% 0.0147 281.96)"
+          "oklch(15% 0.011 17)",
+          "oklch(26% 0.011 17)",
+          "oklch(37% 0.011 17)",
+          "oklch(48% 0.011 17)",
+          "oklch(59% 0.011 17)",
+          "oklch(70% 0.011 17)",
+          "oklch(81% 0.011 17)",
+          "oklch(95% 0.011 17)"
         ]
       },
-      "launcher-text-muted": {
+      "surface-instance-list": {
         "role": "neutral",
-        "displayName": "Launcher muted cool white",
+        "displayName": "Quiet instance surface",
         "tonalRamp": [
-          "oklch(15% 0.0225 272.04)",
-          "oklch(26% 0.0225 272.04)",
-          "oklch(37% 0.0225 272.04)",
-          "oklch(48% 0.0225 272.04)",
-          "oklch(59% 0.0225 272.04)",
-          "oklch(70% 0.0225 272.04)",
-          "oklch(81% 0.0225 272.04)",
-          "oklch(95% 0.0225 272.04)"
-        ]
-      },
-      "launcher-surface-window": {
-        "role": "neutral",
-        "displayName": "Launcher night blue",
-        "tonalRamp": [
-          "oklch(15% 0.0324 270.33)",
-          "oklch(26% 0.0324 270.33)",
-          "oklch(37% 0.0324 270.33)",
-          "oklch(48% 0.0324 270.33)",
-          "oklch(59% 0.0324 270.33)",
-          "oklch(70% 0.0324 270.33)",
-          "oklch(81% 0.0324 270.33)",
-          "oklch(95% 0.0324 270.33)"
-        ]
-      },
-      "launcher-surface-child": {
-        "role": "neutral",
-        "displayName": "Launcher dark inset",
-        "tonalRamp": [
-          "oklch(15% 0.0274 267.73)",
-          "oklch(26% 0.0274 267.73)",
-          "oklch(37% 0.0274 267.73)",
-          "oklch(48% 0.0274 267.73)",
-          "oklch(59% 0.0274 267.73)",
-          "oklch(70% 0.0274 267.73)",
-          "oklch(81% 0.0274 267.73)",
-          "oklch(95% 0.0274 267.73)"
-        ]
-      },
-      "launcher-surface-popup": {
-        "role": "neutral",
-        "displayName": "Launcher popup",
-        "tonalRamp": [
-          "oklch(15% 0.0441 267.32)",
-          "oklch(26% 0.0441 267.32)",
-          "oklch(37% 0.0441 267.32)",
-          "oklch(48% 0.0441 267.32)",
-          "oklch(59% 0.0441 267.32)",
-          "oklch(70% 0.0441 267.32)",
-          "oklch(81% 0.0441 267.32)",
-          "oklch(95% 0.0441 267.32)"
-        ]
-      },
-      "launcher-surface-button": {
-        "role": "neutral",
-        "displayName": "Launcher button fill",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "launcher-surface-button-hover": {
-        "role": "neutral",
-        "displayName": "Launcher button hover",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "launcher-border": {
-        "role": "neutral",
-        "displayName": "Launcher light edge",
-        "tonalRamp": [
-          "oklch(15% 0.0755 269.86)",
-          "oklch(26% 0.0755 269.86)",
-          "oklch(37% 0.0755 269.86)",
-          "oklch(48% 0.0755 269.86)",
-          "oklch(59% 0.0755 269.86)",
-          "oklch(70% 0.0755 269.86)",
-          "oklch(81% 0.0755 269.86)",
-          "oklch(95% 0.0755 269.86)"
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(37% 0 0)",
+          "oklch(48% 0 0)",
+          "oklch(59% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(81% 0 0)",
+          "oklch(95% 0 0)"
         ]
       }
     },
     "typographyMeta": {
       "title": {
-        "displayName": "Compact client heading",
-        "purpose": "Client mcov/category header at the same 14px size as its controls."
+        "displayName": "Compact heading",
+        "purpose": "Client mcov/category and injector mcov/page headers at the shared 14px control size."
       },
       "body": {
         "displayName": "Control body",
@@ -451,21 +353,11 @@
       "label": {
         "displayName": "Section label",
         "purpose": "Semibold grouping labels."
-      },
-      "launcher-title": {
-        "displayName": "Launcher heading",
-        "purpose": "The separate launcher retains the larger semibold mcov heading."
       }
     },
-    "shadows": [
-      {
-        "name": "launcher-soft-shadow",
-        "value": "0 9px 20px rgba(0,0,0,0.22)",
-        "purpose": "Launcher only: visual approximation of native material offset/radius/strength; HLSL remains normative. The compact client adds no shader shadow."
-      }
-    ],
+    "shadows": [],
     "nativeMaterial": {
-      "source": "Launcher only: src/common/liquid_glass.cpp and third_party/glass/backdrop.cpp",
+      "source": "Retained legacy/standalone renderer only: src/common/liquid_glass.cpp and third_party/glass/backdrop.cpp; inactive on the client and removed from FlatApp.",
       "tintRgb": [
         0.045,
         0.05,
@@ -478,7 +370,9 @@
       "contrast": 0.94,
       "kawaseDownsamplePasses": 3,
       "kawaseIntermediateUpsamplePasses": 2,
-      "finalFullResolutionReconstruction": true
+      "finalFullResolutionReconstruction": true,
+      "activeCompactSurfaces": false,
+      "legacyShadowApproximation": "0 9px 20px rgba(0,0,0,0.22); retained material only, HLSL remains normative"
     },
     "motion": [],
     "breakpoints": [
@@ -501,8 +395,31 @@
       {
         "name": "compact-hud-editor-height",
         "value": "480px viewport height"
+      },
+      {
+        "name": "compact-launcher-sidebar",
+        "value": "620px viewport width; 142px sidebar above, 112px below"
       }
-    ]
+    ],
+    "nativeShell": {
+      "source": "src/common/flat_app.cpp",
+      "clearRgba": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dwmMargins": [
+        -1,
+        -1,
+        -1,
+        -1
+      ],
+      "exteriorInset": "12px",
+      "regionCornerDiameter": "24px",
+      "firstFrameBeforeShow": true,
+      "liquidGlassIntegrated": false
+    }
   },
   "components": [
     {
@@ -525,7 +442,7 @@
       "name": "Category sidebar",
       "kind": "nav",
       "refersTo": "category-navigation",
-      "description": "Native 150px sidebar, or 112px below 620px root width; the navigation child has 10px insets. Selected category uses warm text and coral icon.",
+      "description": "Shared native navigation: client sidebar 150px, injector 142px, both 112px below their 620px root/viewport threshold. Selected rows use warm text and authored coral line icons.",
       "html": "<nav class=\"ds-categories\" aria-label=\"Categories\"><button class=\"ds-category ds-category-selected\" aria-current=\"page\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"5.5\"/><path d=\"M2 10h16M10 2v16\"/></svg>Combat</button><button class=\"ds-category\">Visuals</button><button class=\"ds-category\">Blocks</button></nav>",
       "css": ".ds-categories{display:flex;flex-direction:column;gap:6px;width:130px;padding:10px;background:rgba(21,21,27,.22)}.ds-category{position:relative;text-align:left;font:500 14px Inter,sans-serif;color:#C2C2CC;background:transparent;padding:4px 0 4px 32px;height:29px;border:0;border-radius:4px}.ds-category-selected{color:#F5D0C4;background:rgba(255,255,255,.065)}.ds-category svg{position:absolute;left:5px;top:4px;width:20px;height:20px;fill:none;stroke:#EF8B70;stroke-width:1.25}.ds-category:hover{background:rgba(255,255,255,.09)}.ds-category:active{background:rgba(239,139,112,.18)}.ds-category:focus-visible{outline:1px solid #FFA388;outline-offset:1px}"
     },
@@ -568,58 +485,59 @@
       "css": ".ds-client-root{font:500 14px Inter,sans-serif;color:#ECECEF;width:280px;padding:14px 16px;border-radius:12px;background:rgba(34,34,41,.88);border:0}.ds-client-root strong{font-weight:600}.ds-client-root p{margin:6px 0 0;color:#AEAEB8}"
     },
     {
-      "name": "Launcher button",
+      "name": "Primary start action",
       "kind": "button",
-      "refersTo": "launcher-button",
-      "description": "Separate launcher control palette and spacing; the native main action remains outside its scrolling child.",
-      "html": "<button class=\"ds-launcher-button\">Client starten</button>",
-      "css": ".ds-launcher-button{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.10);border:0;border-radius:8px;padding:6px 10px}.ds-launcher-button:hover{background:rgba(192,207,255,.21)}.ds-launcher-button:active{background:rgba(129,140,248,.50)}.ds-launcher-button:focus-visible{outline:2px solid #B2B9FF;outline-offset:2px}"
+      "refersTo": "button-primary",
+      "description": "Injector action stays outside scrolling content at 34px high. Enabled ink is near-black; busy or absent selection uses soft-white disabled ink and 0.48 alpha.",
+      "html": "<div class=\"ds-primary-examples\"><button class=\"ds-primary-action\">Client starten</button><button class=\"ds-primary-action\" disabled>Verbindung wird vorbereitet...</button></div>",
+      "css": ".ds-primary-examples{display:grid;gap:6px;width:280px}.ds-primary-action{font:500 14px Inter,sans-serif;color:#221B1B;background:#EF8B70;border:0;border-radius:4px;padding:3px 7px;height:34px;width:100%}.ds-primary-action:hover:not(:disabled){background:#FFA388}.ds-primary-action:active:not(:disabled){background:#DC7D64}.ds-primary-action:focus-visible{outline:1px solid #FFA388;outline-offset:2px}.ds-primary-action:disabled{color:#ECECEF;opacity:.48}"
     },
     {
-      "name": "Launcher glass root",
+      "name": "Compact injector root",
       "kind": "custom",
-      "description": "Static approximation of the retained launcher material. Native D3D11 supplies capture-backed blur/refraction; this CSS does not reproduce it.",
-      "html": "<section class=\"ds-launcher-glass\"><strong>mcov</strong><p>Liquid Glass launcher</p></section>",
-      "css": ".ds-launcher-glass{font:500 14px Inter,sans-serif;color:#F3F4FF;width:260px;padding:16px;border-radius:22px;background:rgba(21,26,42,.96);border:1px solid rgba(185,203,255,.16);box-shadow:0 9px 20px rgba(0,0,0,.22)}.ds-launcher-glass strong{font-size:22.1px;font-weight:600}.ds-launcher-glass p{margin:8px 0 0;color:#D7DCEC}"
+      "refersTo": "launcher-root",
+      "description": "Static approximation of the shared alpha-composited injector surface, normally 640x640 with 480x380 coverage. Native DWM/region behavior is not reproduced by this web preview.",
+      "html": "<section class=\"ds-launcher-root\"><strong>mcov</strong><p>Start / Diagnose</p><span>Translucent dark / 88% opacity</span></section>",
+      "css": ".ds-launcher-root{font:500 14px Inter,sans-serif;color:#ECECEF;width:280px;padding:14px 16px;border-radius:12px;background:rgba(34,34,41,.88);border:0}.ds-launcher-root strong{font-size:14px;font-weight:600}.ds-launcher-root p{margin:8px 0;color:#F5D0C4}.ds-launcher-root span{color:#AEAEB8}"
     }
   ],
   "narrative": {
     "northStar": "Compact Translucent Controls",
-    "overview": "The client follows the user's `design/reference-translucent-menu.png`: a wide, compact anthracite menu with a narrow sidebar, module tabs and a muted coral accent. This supersedes the spacious cyan example and the client's Liquid Glass tile grid. The reference supplies visual direction; mcov retains its real module names, settings and actions.\n\nThe client uses direct alpha compositing over the game viewport. Small native controls and modest headings keep settings dense and readable. The launcher remains a separate Liquid Glass surface with its existing lavender palette, backdrop capture and larger heading. HUD and world effects retain their styles.",
+    "overview": "The client follows the user's `design/reference-translucent-menu.png`: a wide, compact anthracite menu with a narrow sidebar, module tabs and a muted coral accent. The user approved this design and requested the same system on the injector. This replaces the spacious cyan example, the client's glass tile grid and the launcher's lavender Liquid Glass presentation. The reference supplies visual direction; mcov retains its real module names, settings and actions.\n\nBoth surfaces use direct ImGui alpha compositing, scoped `CompactStyle`, embedded Inter and modest headings. The client organizes module settings; the injector organizes instance selection and diagnostics. The shared palette and controls keep these operations consistent. HUD and world effects retain their styles.",
     "keyCharacteristics": [
-      "Compact anthracite client root with restrained coral interaction states.",
+      "Shared compact anthracite roots with restrained coral interaction states.",
       "Seven categories, searchable module tabs and settings within one window.",
       "Native keyboard input, visible slider values and real module state.",
-      "Local style/font ownership and direct transparency without client capture.",
-      "A separate launcher whose main action stays outside scrolling content."
+      "Local style/font ownership and direct transparency without backdrop capture.",
+      "Start/Diagnose navigation with a fixed launcher action and close footer."
     ],
     "rules": [
       {
         "name": "The Material Scope Rule",
-        "body": "Client transparency uses the compact palette; launcher glass uses its own tokens and renderer. Neither changes HUD/world style. ",
+        "body": "Client and injector use the same compact palette and direct alpha compositing. This shared presentation does not change HUD/world style.",
         "section": "colors"
       },
       {
         "name": "The Local Type Rule",
-        "body": "`CompactStyle` and `LiquidStyle` push their menu font and restore the prior style and font on scope exit. ",
+        "body": "Both surfaces use `CompactStyle` to push their menu font and restore the prior style and font on scope exit.",
         "section": "typography"
       },
       {
         "name": "The Layer Order Rule",
-        "body": "World effects and HUD draw before client controls. UI presentation adds no render-thread JNI and does not replace world-depth handling. ",
+        "body": "World effects and HUD draw before client controls. UI presentation adds no render-thread JNI and does not replace world-depth handling.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "**Do** use scoped `CompactStyle` for client controls and `LiquidStyle` for the launcher.",
+      "**Do** use scoped `CompactStyle` for both client and injector controls.",
       "**Do** preserve real module names, section identities, keybinds and native input behavior.",
       "**Do** keep module tabs outside content scroll and provide search recovery.",
-      "**Do** keep the launcher start action outside scrolling content.",
+      "**Do** keep the launcher primary action and close footer outside scrolling content.",
       "**Do** report direct client transparency and preserve its configured capture preference."
     ],
     "donts": [
       "**Don't** reintroduce the rejected spacious cyan client or large module tile grid.",
-      "**Don't** describe client transparency as live desktop capture or Liquid Glass blur.",
+      "**Don't** describe compact client or injector transparency as live desktop capture or Liquid Glass blur.",
       "**Don't** globally restyle HUD/ESP or add render-thread JNI during menu work.",
       "**Don't** require loose shader/font/DLL files beside the portable EXE.",
       "**Don't** claim synthetic WARP images validate live Minecraft appearance or attach behavior."
