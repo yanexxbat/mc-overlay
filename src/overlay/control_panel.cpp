@@ -162,7 +162,29 @@ Actions Render(State& state,const Status& status,void* owner,Content content,Cat
         if(catalog&&!matching) {
             ImGui::TextDisabled("No modules match your search.");
             if(ImGui::Button("Clear search")) state.search[0]='\0';
-        } else if(content) { SectionScope section(catalog?selected:-1); content(owner,state.page); }
+        } else if(content) {
+            const int toggles=int(std::count_if(modules.begin(),modules.begin()+count,[](const ModuleView& m) { return m.mode==TileMode::Toggle; }));
+            const ImGuiID settingsId=ImGui::GetCurrentWindow()->IDStack.back();
+            if(activate&&toggles>2&&ImGui::GetContentRegionAvail().x>=660&&
+               ImGui::BeginTable("settings_columns",2,ImGuiTableFlags_SizingStretchProp)) {
+                ImGui::TableSetupColumn("Settings",ImGuiTableColumnFlags_WidthStretch,.60f);
+                ImGui::TableSetupColumn("Related modules",ImGuiTableColumnFlags_WidthStretch,.40f);
+                ImGui::TableNextColumn();
+                // Preserve existing widget IDs when switching to the compact one-column view.
+                ImGui::PushOverrideID(settingsId);
+                { SectionScope section(selected); content(owner,state.page); }
+                ImGui::PopID();
+                ImGui::TableNextColumn(); Section("Quick toggles");
+                if(BeginRows("quick_modules")) {
+                    for(int i=0;i<count;++i) if(i!=selected&&modules[i].mode==TileMode::Toggle) {
+                        bool enabled=modules[i].enabled;
+                        if(CheckRow(modules[i].name,&enabled)) activate(owner,state.page,i);
+                    }
+                    ImGui::EndTable();
+                }
+                ImGui::EndTable();
+            } else { SectionScope section(catalog?selected:-1); content(owner,state.page); }
+        }
     }
     ImGui::EndChild();
     // Current module's real state and actions. Tab clicks only select settings.

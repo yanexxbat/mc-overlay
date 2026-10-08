@@ -484,7 +484,7 @@ bool Overlay::RunFrame() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
-    const bool glassVisible=shouldDraw&&menuVisible_;
+    const bool glassVisible=false; // The translucent client menu composites directly over the game.
     glass_.BeginFrame(hwnd_,ImGui::GetIO().DisplaySize,glassVisible);
     if(glassVisible!=glassWasVisible_) { glassWasVisible_=glassVisible; ApplyCaptureAffinity(); }
 
@@ -1669,14 +1669,13 @@ void Overlay::DrawSettingsTab() {
                 !depthActive_?"Idle":
                 depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);
-            panel::ValueRow("Menu material",glass_.liveBackdrop()?"Liquid glass / live backdrop":"Liquid glass / fallback backdrop");
-            panel::ValueRow("Background capture",glass_.captureStatus());
+            panel::ValueRow("Menu material","Translucent dark / 88% opacity");
+            panel::ValueRow("Background capture","Not required");
             if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
             ImGui::EndTable();
         }
         ImGui::TextWrapped("Watermark visibility and layout are configured under HUD > Watermark.");
-        ImGui::TextDisabled("Glass renderer: liquidDX11 by poncipp (MIT).");
-        ImGui::TextWrapped("While the glass menu is open, the overlay is excluded from desktop captures to prevent feedback. Closing the menu restores your capture preference.");
+        ImGui::TextWrapped("The menu uses direct alpha compositing. Your screen-capture preference also applies while it is open.");
         if(ImGui::Button("Close overlay",ImVec2(-1,0))) running_=false;
     } else if(settingsSection_==1) {
         static const char* focusLabels[]={"No focus","Activate","Unlock","Legacy"};

@@ -136,8 +136,10 @@ void Overlay::DrawBind(keys::Action a,bool inlineRow) {
     const int index=keys::Index(a); ImGui::PushID(index+10000);
     const auto label=captureAction_==index?"Press key...":BindName(bindings_[index]);
     if(inlineRow) {
-        const float right=ImGui::GetCursorScreenPos().x+ImGui::GetContentRegionAvail().x;
-        ImGui::SameLine(); ImGui::SetCursorScreenPos({right-88,ImGui::GetCursorScreenPos().y});
+        // CheckRow places its checkbox at the far right of the value column.
+        // Put the binding in the same row, just before it, without covering it.
+        const ImVec2 check=ImGui::GetItemRectMin();
+        ImGui::SetCursorScreenPos({check.x-94,check.y});
     }
     if(ImGui::Button(label.c_str(),{inlineRow?88.f:150.f,0})) {
         captureAction_=captureAction_==index?-1:index; captureModifier_=0; captureArmed_=false; capturePrevious_=keyInput_; preferenceStatus_.clear();
