@@ -68,6 +68,11 @@ einer Kombination sein kann. **Esc** bricht die Erfassung ab; **Backspace/Delete
 entfernt eine Modul-Belegung. Menü und Beenden müssen eine Taste behalten.
 Doppelte Belegungen werden abgewiesen; die Meldung bleibt im Editor sichtbar.
 
+Unter 420 Pixel Content-Breite steht der Modulname über einer zweiten Zeile mit
+Tastenfeld und Toggle/Hold-Modus. Tastenfelder passen in die verfügbare Breite;
+die Tastenerfassung behält beim Wechsel zwischen breiter und schmaler Ansicht
+dieselben Widget-IDs.
+
 | Standard | Aktion |
 | --- | --- |
 | INSERT | Menü öffnen/schließen |

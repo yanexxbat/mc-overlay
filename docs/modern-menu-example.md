@@ -14,6 +14,13 @@ Benutzerreferenz ersetzt. Vollstaendige Implementierungen:
 und das Menue zwischen `NewFrame()` und `Render()` zeichnen. Der Aufrufer setzt
 Close/Reset-Actions wie bisher um und besitzt die echten Modulwerte.
 
+`State::selectedSections` behaelt den gewaehlten Abschnitt je Kategorie;
+`State::search` filtert die Modulnamen der aktuellen Kategorie. Tabs waehlen den
+Abschnitt, `Activate` fuehrt echte Toggle-/Action-Operationen aus. Details werden
+im selben Fenster durch `SectionScope` auf den gewaehlten Abschnitt begrenzt.
+Die zwei Child-Bereiche Navigation/Content und nativen Tab-/Eingabe-IDs bleiben
+Teil des produktiven Renderers. Der Adapter erfindet keine Modulwerte.
+
 Das direkte `ApplyCustomStyle()` veraendert den globalen Style. Beim Client
 wird es deshalb durch `CompactStyle` lokal verwendet; ein erneuter globaler
 Theme-Aufruf pro Frame ist nicht erforderlich. Fonts/Backend-Initialisierung

@@ -276,6 +276,9 @@ retain native popups and IDs.
 Sliders retain ImGui mouse and keyboard interaction with a compact coral fill
 and centered value lozenge. Ctrl-click and keyboard direct entry show a native
 numeric field with visible text and caret. Existing bounds and clamping apply.
+Below 420 pixels content width, Keybinds places each module name above its
+binding/mode row. Binding fields fit the available width and retain widget IDs
+when the layout changes.
 
 ### Containers and module state
 

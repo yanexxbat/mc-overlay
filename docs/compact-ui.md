@@ -26,12 +26,16 @@ Der Launcher behaelt seine separate Liquid-Glass-Darstellung.
 - Genau zwei Child-Bereiche: Navigation und Content. Die Tabs stehen oberhalb des
   Content-Scrollbereichs und bleiben sichtbar. Jede Kategorie behaelt ihren
   gewaehlten Abschnitt; ein Modul-/Kategorienwechsel setzt Content-Scroll zurueck.
-- Ab 660 Pixel Content-Breite stehen links Detailregler und rechts Quick toggles
+- Ab 660 Pixel Content-Breite und bei mehr als zwei Toggle-Modulen stehen links
+  Detailregler und rechts Quick toggles im Verhaeltnis 60/40
   fuer andere Module derselben Kategorie. Bei schmaleren Fenstern bleiben alle
   Abschnitte ueber Tabs und der aktuelle Enable-Schalter erreichbar.
 - Labels und Werte haben eigene Tabellenspalten. Checkboxen und Farbfelder sitzen
   rechts; Labels schalten Checkboxen ebenfalls. Keybinds stehen vor der Checkbox.
   Native Slider unterstuetzen Maus, Tastatur und Ctrl-Klick zur Zahleneingabe.
+- Unter 420 Pixel Content-Breite steht in Keybinds jeder Modulname in einer
+  eigenen Zeile ueber dem Tastenfeld und Toggle/Hold-Modus. Tastenfelder bleiben
+  innerhalb der verfuegbaren Breite; Widget-IDs bleiben beim Layoutwechsel stabil.
 - Header ziehen, Center, kategorienbezogenes Reset und Close funktionieren weiter.
   Enable und Run action im Header sind an die vorhandenen Module gebunden.
   HUD-Editor, Keybinds, Friend-Listen und Minecraft/JNI-Logik bleiben erhalten.
@@ -55,3 +59,5 @@ Tastaturbedienung, Suche, Style-/Font-/Window-Stack, Drag, kompakte Darstellung,
 Slider inklusive sichtbarer Ctrl-Eingabe, Keybinds, HUD und bestehende Renderer.
 Offscreen-Vorschauen mit synthetischem Hintergrund beweisen die ImGui-Darstellung
 und Alpha-Komposition; sie sind keine Live-Aufnahme aus Minecraft.
+Aktuelle Ansichten:
+`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop}.png`.
