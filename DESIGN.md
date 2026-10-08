@@ -1,9 +1,11 @@
 ---
-name: mcov Compact Client
-description: Compact translucent client controls with a separate Liquid Glass launcher.
+name: mcov Compact Controls
+description: Shared compact translucent anthracite and coral controls for the client and injector.
 colors:
   primary: "#EF8B70"
   primary-active: "#FFA388"
+  primary-pressed: "#DC7D64"
+  primary-ink: "#221B1B"
   text: "#ECECEF"
   text-muted: "#AEAEB8"
   navigation-text: "#C2C2CC"
@@ -21,18 +23,9 @@ colors:
   surface-tab: "rgba(255,255,255,0.035)"
   surface-tab-selected: "rgba(239,139,112,0.16)"
   surface-value: "rgba(37,37,44,0.72)"
+  surface-instance-list: "rgba(255,255,255,0.025)"
   border: "rgba(255,255,255,0.08)"
   separator: "rgba(255,255,255,0.065)"
-  launcher-primary: "#818CF8"
-  launcher-primary-ink: "#B2B9FF"
-  launcher-text: "#F3F4FF"
-  launcher-text-muted: "#D7DCEC"
-  launcher-surface-window: "rgba(21,26,42,0.96)"
-  launcher-surface-child: "rgba(16,21,34,0.24)"
-  launcher-surface-popup: "rgba(34,43,66,0.99)"
-  launcher-surface-button: "rgba(192,207,255,0.10)"
-  launcher-surface-button-hover: "rgba(192,207,255,0.21)"
-  launcher-border: "rgba(185,203,255,0.16)"
 typography:
   title:
     fontFamily: "Inter"
@@ -46,10 +39,6 @@ typography:
     fontFamily: "Inter"
     fontSize: "14px"
     fontWeight: 600
-  launcher-title:
-    fontFamily: "Inter"
-    fontSize: "22.1px"
-    fontWeight: 600
 rounded:
   window: "12px"
   child: "8px"
@@ -57,10 +46,6 @@ rounded:
   control: "4px"
   tab: "5px"
   grab: "3px"
-  launcher-window: "22px"
-  launcher-child: "14px"
-  launcher-popup: "12px"
-  launcher-control: "8px"
 spacing:
   window-x: "16px"
   window-y: "14px"
@@ -72,9 +57,8 @@ spacing:
   inner-y: "4px"
   cell-x: "3px"
   cell-y: "4px"
-  launcher-window: "16px"
-  launcher-frame-x: "10px"
-  launcher-frame-y: "6px"
+  sidebar-x: "10px"
+  launcher-inset: "12px"
 components:
   button:
     backgroundColor: "{colors.surface-control}"
@@ -124,19 +108,37 @@ components:
     rounded: "{rounded.window}"
     width: "1040px"
     height: "520px"
-  launcher-button:
-    backgroundColor: "{colors.launcher-surface-button}"
-    textColor: "{colors.launcher-text}"
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.primary-ink}"
     typography: "{typography.body}"
-    rounded: "{rounded.launcher-control}"
-    padding: "6px 10px"
-  launcher-button-hover:
-    backgroundColor: "{colors.launcher-surface-button-hover}"
-    textColor: "{colors.launcher-text}"
-    rounded: "{rounded.launcher-control}"
+    rounded: "{rounded.control}"
+    padding: "3px 7px"
+    height: "34px"
+  button-primary-hover:
+    backgroundColor: "{colors.primary-active}"
+    textColor: "{colors.primary-ink}"
+    rounded: "{rounded.control}"
+  button-primary-active:
+    backgroundColor: "{colors.primary-pressed}"
+    textColor: "{colors.primary-ink}"
+    rounded: "{rounded.control}"
+  button-primary-disabled:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  launcher-root:
+    backgroundColor: "{colors.surface-window}"
+    rounded: "{rounded.window}"
+    width: "640px"
+    height: "640px"
+  instance-list:
+    backgroundColor: "{colors.surface-instance-list}"
+    rounded: "{rounded.child}"
+    padding: "8px"
 ---
 
-# Design System: mcov Compact Client
+# Design System: mcov Compact Controls
 
 ## Overview
 
@@ -144,69 +146,71 @@ components:
 
 The client follows the user's `design/reference-translucent-menu.png`: a wide,
 compact anthracite menu with a narrow sidebar, module tabs and a muted coral
-accent. This supersedes the spacious cyan example and the client's Liquid Glass
-tile grid. The reference supplies visual direction; mcov retains its real module
-names, settings and actions.
+accent. The user approved this design and requested the same system on the
+injector. This replaces the spacious cyan example, the client's glass tile grid
+and the launcher's lavender Liquid Glass presentation. The reference supplies
+visual direction; mcov retains its real module names, settings and actions.
 
-The client uses direct alpha compositing over the game viewport. Small native
-controls and modest headings keep settings dense and readable. The launcher
-remains a separate Liquid Glass surface with its existing lavender palette,
-backdrop capture and larger heading. HUD and world effects retain their styles.
+Both surfaces use direct ImGui alpha compositing, scoped `CompactStyle`, embedded
+Inter and modest headings. The client organizes module settings; the injector
+organizes instance selection and diagnostics. The shared palette and controls
+keep these operations consistent. HUD and world effects retain their styles.
 
 **Key Characteristics:**
 
-- Compact anthracite client root with restrained coral interaction states.
+- Shared compact anthracite roots with restrained coral interaction states.
 - Seven categories, searchable module tabs and settings within one window.
 - Native keyboard input, visible slider values and real module state.
-- Local style/font ownership and direct transparency without client capture.
-- A separate launcher whose main action stays outside scrolling content.
+- Local style/font ownership and direct transparency without backdrop capture.
+- Start/Diagnose navigation with a fixed launcher action and close footer.
 
 ## Colors
 
-Client primitives come from `src/common/compact_style.hpp`; launcher-prefixed
-tokens come from `src/common/liquid_style.hpp`. The frontmatter is normative.
+Shared primitives come from `src/common/compact_style.hpp`. The injector's solid
+primary button and list treatment come from `src/injector/launcher_ui.cpp`.
+The frontmatter is normative; obsolete launcher lavender primitives are removed.
 
 ### Primary
 
 - **Muted coral** (`primary`): checkmarks, slider fill, active category icons and
-  selected tab tint. **Warm coral** (`primary-active`) marks slider activity,
-  keyboard navigation and text links.
-- **Launcher lavender** (`launcher-primary`, `launcher-primary-ink`): the
-  launcher's existing selected and active controls only.
+  selected tab tint, plus the launcher's main action. **Warm coral**
+  (`primary-active`) marks slider activity, keyboard navigation, text links and
+  primary-button hover. **Pressed coral** (`primary-pressed`) marks that button's
+  pressed state.
 
 ### Neutral
 
-- **Soft white** and **muted gray** (`text`, `text-muted`): client labels, values
+- **Soft white** and **muted gray** (`text`, `text-muted`): shared labels, values
   and supporting text. Navigation has its own quiet and selected text tones.
-- **Anthracite** (`surface-window`): the client root. The sidebar adds its darker
+- **Anthracite** (`surface-window`): both roots. The sidebar adds its darker
   overlay; children remain transparent. Popups use a nearly opaque dark fill.
 - **Translucent white fills**: control, navigation and tab tokens distinguish
   rest and hover. Coral tint marks active controls and selected module tabs.
 - **Dark value lozenge** (`surface-value`): keeps numeric slider text legible
   across the filled and unfilled portions.
-- **Launcher cool neutrals**: the prefixed text, surface and border tokens remain
-  confined to the separate launcher.
+- **Near-black primary ink** (`primary-ink`): enabled coral action text. Disabled
+  actions use soft white with the shared disabled alpha (0.48).
+- **Quiet instance surface** (`surface-instance-list`): the native selectable
+  instance list within the launcher's transparent content area.
 
-**The Material Scope Rule.** Client transparency uses the compact palette;
-launcher glass uses its own tokens and renderer. Neither changes HUD/world style.
+**The Material Scope Rule.** Client and injector use the same compact palette
+and direct alpha compositing. This shared presentation does not change HUD/world style.
 
 ## Typography
 
-Both surfaces use embedded Inter. The client uses medium body text and semibold
-labels at the same compact size; its mcov/category header is not a display title.
-The launcher retains the existing larger semibold heading. Fonts remain part of
-the executable and existing HUD/ESP atlas entries remain intact.
+Both surfaces use embedded Inter at the same compact size. Medium body text and
+semibold labels keep controls and headings aligned; the mcov/category/page header
+is not a display title. Fonts remain part of the executable and existing HUD/ESP
+atlas entries remain intact.
 
 ### Hierarchy
 
-- **Title:** the client mcov and category header.
+- **Title:** mcov, client category and launcher page headers.
 - **Body:** controls, module tabs, category names and supporting text.
 - **Label:** section headings.
-- **Launcher title:** the separate launcher's mcov heading, derived from its
-  default font size multiplied by 1.3.
 
-**The Local Type Rule.** `CompactStyle` and `LiquidStyle` push their menu font and
-restore the prior style and font on scope exit.
+**The Local Type Rule.** Both surfaces use `CompactStyle` to push their menu font
+and restore the prior style and font on scope exit.
 
 ## Layout
 
@@ -229,34 +233,44 @@ uses one column. The current module's real **Enabled** checkbox or **Run action*
 remains in the header. Center, category Reset and Close remain in the footer.
 There is no separate module settings window.
 
-The launcher opens at 640 × 640. Start and Diagnose keep their existing content;
-the 40-pixel primary start action remains outside the scrolling child. Diagnostics
-stays separate from the primary operation.
+The launcher opens at 640 × 640 with 12-pixel exterior insets and a 58-pixel native
+title strip. Its Start/Diagnose sidebar is 142 pixels wide, reducing to 112 pixels
+below 620 pixels viewport width. Simple authored line icons and selected states
+match the client navigation. At 480 × 380 the same controls remain reachable.
+
+The native instance list scrolls within Start and exposes full titles and details
+in a tooltip. Status, JDK recovery and diagnostics use the scrolling content
+child. A 34-pixel coral primary action remains outside it, followed by the fixed
+close footer. Diagnose has the same close footer. Diagnostic actions wrap to
+another row when required. Native title drag, minimize and close remain available.
 
 ## Elevation & Depth
 
-The client root is an ordinary rounded ImGui fill composited directly over the
-transparent overlay. A darker sidebar overlay and quiet separators establish
-hierarchy. It adds no desktop capture, blur, refraction or shader shadow. The
-client calls `LiquidGlass::BeginFrame` with visibility false. Settings → Overlay
+Both roots are ordinary rounded ImGui fills composited directly over transparent
+render output. A darker sidebar overlay and quiet separators establish hierarchy.
+There are no shader shadows on these controls. Neither surface requires desktop
+capture, blur or refraction. The client calls `LiquidGlass::BeginFrame` with
+visibility false. Settings → Overlay
 reports **Translucent dark / 88% opacity** and **Not required**; the configured
 screen-capture preference applies while the menu is open.
 
-The launcher retains `LiquidGlass`: Dual Kawase blur, neutral dark tint,
-restrained refraction, light rims and a soft shader shadow. Its material values
-remain in `.impeccable/design.json` and `src/common/liquid_glass.cpp`. Its capture
-sessions, exclusion and fallback are described in `docs/liquid-ui.md`. The
-launcher has an opaque native base and rounded window region below the material.
+The injector's `FlatApp` clears RGBA to zero, uses DWM frame-extension margins
+of −1 and applies a rounded native region matching the panel silhouette. It
+presents the first frame before `ShowWindow`. LiquidGlass ownership, initialization,
+frame/render calls and shutdown are removed from this shell. Retained glass
+renderer values, capture behavior and license are legacy/standalone context in
+`docs/liquid-ui.md`, rather than requirements of the active compact surfaces.
 
 **The Layer Order Rule.** World effects and HUD draw before client controls. UI
 presentation adds no render-thread JNI and does not replace world-depth handling.
 
 ## Shapes
 
-The client uses modest root rounding, smaller controls and tabs, zero window,
-child and frame borders, and a one-pixel popup border. Its scrollbar is six pixels
-wide. The rounded scale in the frontmatter is local to the client unless prefixed
-with `launcher-`. The launcher retains its larger root and inset corner shapes.
+Both surfaces use the shared rounded scale: modest root rounding, smaller
+controls and tabs, zero window, child and frame borders, and a one-pixel popup
+border. Scrollbars are six pixels wide. The launcher's native window region uses
+a 24-pixel corner diameter to match the 12-pixel panel radius and clips the outer
+transparent margin. Viewport resize updates that region.
 
 ## Components
 
@@ -292,8 +306,12 @@ without invented enabled state; action sections retain their real action.
 
 The launcher retains instance selection, refresh, busy/disabled state, missing-JDK
 recovery, log actions and close/minimize controls. Its main action starts the
-client or returns to running Minecraft. Its material and capture remain separate
-from the client's compact theme.
+client or returns to running Minecraft. Its compact controls and Start/Diagnose
+navigation use the shared theme. The primary action uses near-black text when
+enabled and soft-white text when disabled; busy or absent selection disables it.
+Long instance labels remain clipped within their row, with full title/details on
+hover. Existing async connection, selected-instance identity and duplicate-start
+prevention remain unchanged.
 
 ### Preserved HUD and world surfaces
 
@@ -308,16 +326,16 @@ their real behavior. See `docs/client-ui.md`, `docs/aura.md`,
 
 ### Do:
 
-- **Do** use scoped `CompactStyle` for client controls and `LiquidStyle` for the launcher.
+- **Do** use scoped `CompactStyle` for both client and injector controls.
 - **Do** preserve real module names, section identities, keybinds and native input behavior.
 - **Do** keep module tabs outside content scroll and provide search recovery.
-- **Do** keep the launcher start action outside scrolling content.
+- **Do** keep the launcher primary action and close footer outside scrolling content.
 - **Do** report direct client transparency and preserve its configured capture preference.
 
 ### Don't:
 
 - **Don't** reintroduce the rejected spacious cyan client or large module tile grid.
-- **Don't** describe client transparency as live desktop capture or Liquid Glass blur.
+- **Don't** describe compact client or injector transparency as live desktop capture or Liquid Glass blur.
 - **Don't** globally restyle HUD/ESP or add render-thread JNI during menu work.
 - **Don't** require loose shader/font/DLL files beside the portable EXE.
 - **Don't** claim synthetic WARP images validate live Minecraft appearance or attach behavior.
