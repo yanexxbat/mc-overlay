@@ -741,7 +741,7 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     view.log="[INFO] Minecraft gefunden\n[WARN] Ein passendes JDK 21 fehlt.";
     screenshot("launcher-diagnose.png",{480,380});
     screenshot("launcher-diagnose-desktop.png",{640,640});
-    // Echte Eingabe prueft den einzigen Start-Button; der Test startet keinen Prozess.
+    // Real input, including fixed actions and compact navigation; no process starts.
     view.tab=0; view.error=view.needsJdk=false;
     frame({640,520}); auto* content=Child("/launcher_content");
     ImGui::SetScrollY(content,0); frame({640,520}); frame({640,520});
@@ -751,6 +751,23 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     Require(frame({640,520}).start,"Launcher start button did not respond");
     view.busy=true; io.AddMouseButtonEvent(0,true); frame({640,520}); io.AddMouseButtonEvent(0,false);
     Require(!frame({640,520}).start,"Launcher allowed duplicate starts while connecting");
+    view.busy=false;
+    auto click=[&](ImVec2 p,ImVec2 size=ImVec2(640,520)) {
+        io.AddMousePosEvent(p.x,p.y); frame(size);
+        io.AddMouseButtonEvent(0,true); frame(size);
+        io.AddMouseButtonEvent(0,false); return frame(size);
+    };
+    Require(click({572,495}).close,"Launcher footer close is clipped or unresponsive");
+    Require(click({580,33}).minimize,"Launcher minimize did not respond");
+    Require(click({606,33}).close,"Launcher title close did not respond");
+    frame({640,520}); auto* instances=Child("/instances");
+    click({instances->Pos.x+50,instances->DC.CursorStartPos.y+49+20});
+    Require(view.selected==1,"Launcher instance selection did not respond");
+    Require(click(point).start,"Running instance action did not respond");
+    frame({480,380});
+    click({75,122},{480,380}); Require(view.tab==1,"Compact Diagnose navigation failed");
+    click({75,87},{480,380}); Require(view.tab==0,"Compact Start navigation failed");
+    Require(click({412,354},{480,380}).close,"Compact footer close is unreachable");
     io.AddMousePosEvent(-100,-100);
 }
 int main(int argc,char** argv) {

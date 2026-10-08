@@ -100,10 +100,9 @@ Actions Render(View& v,ImVec2 size) {
         ImGui::EndChild();
     }
     ImGui::SameLine(0,20);
-    const float contentX=ImGui::GetCursorPosX();
     ImGui::BeginGroup();
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x-16);
-    const float footer=v.tab==0?66.f:36.f;
+    const float footer=v.tab==0?70.f:36.f;
     const ImVec2 contentSize{width,std::max(1.f,ImGui::GetContentRegionAvail().y-footer)};
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,14));
@@ -152,12 +151,13 @@ Actions Render(View& v,ImVec2 size) {
             primary.Color(ImGuiCol_Button,style::Color(0xEF8B70));
             primary.Color(ImGuiCol_ButtonHovered,style::Color(0xFFA388));
             primary.Color(ImGuiCol_ButtonActive,style::Color(0xDC7D64));
-            primary.Color(ImGuiCol_Text,style::Color(0x221B1B));
+            primary.Color(ImGuiCol_Text,style::Color(v.busy||!selected?0xECECEF:0x221B1B));
             if(ImGui::Button(v.busy?"Verbindung wird vorbereitet...":running?"Zu Minecraft wechseln":"Client starten",{width,34})) a.start=true;
         }
         ImGui::EndDisabled();
     }
-    ImGui::TextDisabled("mcov"); ImGui::SameLine(contentX+std::max(0.f,width-80));
+    ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("mcov");
+    ImGui::SameLine(0,std::max(9.f,width-ImGui::CalcTextSize("mcov").x-80));
     if(ImGui::Button("Schliessen",{80,22})) a.close=true;
     ImGui::EndGroup(); ImGui::End(); return a;
 }
