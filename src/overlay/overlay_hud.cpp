@@ -165,23 +165,14 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
     ImGui::PopFont();
 }
 void Overlay::DrawHudEditor() {
+    style::CompactStyle themed;
     const auto size=ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos({0,0}); ImGui::SetNextWindowSize(size);
     style::StyleScope scoped;
-    scoped.Var(ImGuiStyleVar_WindowPadding,ImVec2(5,5)); scoped.Var(ImGuiStyleVar_ChildRounding,0.f);
-    scoped.Var(ImGuiStyleVar_FrameRounding,0.f); scoped.Var(ImGuiStyleVar_FramePadding,ImVec2(4,2));
-    scoped.Var(ImGuiStyleVar_PopupRounding,0.f); scoped.Var(ImGuiStyleVar_FrameBorderSize,1.f);
-    scoped.Var(ImGuiStyleVar_ItemSpacing,ImVec2(6,4));
-    scoped.Color(ImGuiCol_ChildBg,IM_COL32(36,36,36,255)); scoped.Color(ImGuiCol_Border,IM_COL32(8,8,8,255));
-    scoped.Color(ImGuiCol_FrameBg,IM_COL32(25,25,25,255)); scoped.Color(ImGuiCol_Button,IM_COL32(25,25,25,255));
-    scoped.Color(ImGuiCol_PopupBg,IM_COL32(36,36,36,255)); scoped.Color(ImGuiCol_Header,IM_COL32(46,39,51,255));
-    scoped.Color(ImGuiCol_HeaderHovered,IM_COL32(64,50,71,255));
-    scoped.Color(ImGuiCol_ButtonHovered,IM_COL32(57,48,63,255)); scoped.Color(ImGuiCol_ButtonActive,IM_COL32(73,52,81,255));
-    scoped.Color(ImGuiCol_CheckMark,IM_COL32(174,105,209,255)); scoped.Color(ImGuiCol_SliderGrab,IM_COL32(174,105,209,255));
-    scoped.Color(ImGuiCol_SliderGrabActive,IM_COL32(205,160,225,255));
-    ImGui::PushFont(style::ClassicMenuFont());
+    scoped.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
     ImGui::Begin("HUD editor",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings);
     auto& draw=*ImGui::GetWindowDrawList();
+    hudSelected_=std::clamp(hudSelected_,0,kHudModules-1);
     const int selected=hudSelected_;
     // Das ausgewählte Element bekommt bei überlappenden Vorschauen die oberste
     // Hit-Fläche. Die Toolbar erreicht auch Elemente unter einem anderen Modul.
@@ -199,23 +190,35 @@ void Overlay::DrawHudEditor() {
         if(ImGui::IsItemHovered()) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move",kHudNames[i]);
         }
-        draw.AddRect(rect.min,rect.max,hudSelected_==i?IM_COL32(190,119,225,255):IM_COL32(140,134,146,180));
-        if(!HudEnabled(i)) draw.AddText({rect.min.x+8,rect.min.y+5},IM_COL32(232,130,130,255),"Disabled");
+        draw.AddRect(rect.min,rect.max,hudSelected_==i?style::compact::Accent:IM_COL32(174,174,184,100),8*hud_.layout[i].scale);
+        if(hudSelected_==i&&!HudEnabled(i)) {
+            const float width=ImGui::CalcTextSize("Disabled").x+12;
+            const ImVec2 badge{std::max(rect.min.x,rect.max.x-width),std::max(0.f,rect.min.y-22)};
+            draw.AddRectFilled(badge,{badge.x+width,badge.y+20},style::compact::Surface,4);
+            draw.AddText({badge.x+6,badge.y+3},style::compact::AccentActive,"Disabled");
+        }
         ImGui::PopID();
     }
-    const float width=std::min(430.f,size.x-16);
-    ImGui::SetCursorScreenPos({(size.x-width)*.5f,size.y-91});
-    ImGui::BeginChild("editor_toolbar",{width,83},ImGuiChildFlags_Borders|ImGuiChildFlags_AlwaysUseWindowPadding);
-    ImGui::Text("HUD editor | Esc / %s finishes",BindName(bindings_[keys::Index(keys::Action::HudEditor)]).c_str());
-    if(size.x<640||size.y<480) ImGui::TextDisabled("Compact editor: selected element only");
-    ImGui::SetNextItemWidth(width*.42f);
+    const bool compact=size.x<640||size.y<480;
+    const float width=std::min(540.f,size.x-24),height=compact?110.f:90.f;
+    ImGui::SetCursorScreenPos({(size.x-width)*.5f,size.y-height-12});
+    style::StyleScope toolbar;
+    toolbar.Color(ImGuiCol_ChildBg,style::compact::Surface);
+    toolbar.Var(ImGuiStyleVar_WindowPadding,ImVec2(14,10));
+    ImGui::BeginChild("editor_toolbar",{width,height},ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::TextUnformatted("HUD editor"); ImGui::SameLine(0,12);
+    ImGui::TextDisabled("Esc / %s finishes",BindName(bindings_[keys::Index(keys::Action::HudEditor)]).c_str());
+    if(compact) ImGui::TextDisabled("Compact editor: selected element only");
+    const float available=ImGui::GetContentRegionAvail().x;
+    const float enabledWidth=ImGui::GetFrameHeight()+ImGui::GetStyle().ItemInnerSpacing.x+ImGui::CalcTextSize("Enabled").x;
+    ImGui::SetNextItemWidth(std::max(80.f,available-enabledWidth-60-2*ImGui::GetStyle().ItemSpacing.x));
     ImGui::Combo("##module",&hudSelected_,kHudNames.data(),kHudModules); ImGui::SameLine();
     bool enabled=HudEnabled(hudSelected_);
     if(ImGui::Checkbox("Enabled",&enabled)) { SetHudEnabled(hudSelected_,enabled); preferencesDirty_=true; }
-    ImGui::SameLine(); if(ImGui::Button("Done")) SetHudEditing(false);
-    ImGui::SetNextItemWidth(width*.55f);
+    ImGui::SameLine(); if(ImGui::Button("Done",{60,0})) SetHudEditing(false);
+    ImGui::SetNextItemWidth(std::max(80.f,available-104-ImGui::GetStyle().ItemSpacing.x-ImGui::CalcTextSize("Scale").x-ImGui::GetStyle().ItemInnerSpacing.x));
     if(ImGui::SliderFloat("Scale",&hud_.layout[hudSelected_].scale,.65f,1.6f,"%.2f x")) preferencesDirty_=true;
-    ImGui::SameLine(); if(ImGui::Button("Reset layout")) { hud_.layout={}; preferencesDirty_=true; }
-    ImGui::EndChild(); ImGui::End(); ImGui::PopFont();
+    ImGui::SameLine(); if(ImGui::Button("Reset layout",{104,0})) { hud_.layout={}; preferencesDirty_=true; }
+    ImGui::EndChild(); ImGui::End();
 }
 } // namespace mcov
