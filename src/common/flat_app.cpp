@@ -11,6 +11,8 @@
 #include <dwmapi.h>
 
 #include <cwchar>
+#include <cstdio>
+#include <stdexcept>
 
 #include "flat_style.hpp"
 #include "log.hpp"
@@ -21,8 +23,13 @@ namespace mcov {
 namespace {
 
 constexpr wchar_t kClassName[]    = L"mcov_flat_app";
-constexpr DWORD   kExcludeCapture = 0x11;   // WDA_EXCLUDEFROMCAPTURE
 constexpr UINT_PTR kMoveTimerId   = 1;
+
+std::string RenderFailure(const char* action,HRESULT result) {
+    char text[160]{};
+    std::snprintf(text,sizeof(text),"%s (HRESULT 0x%08lX)",action,unsigned long(result));
+    return text;
+}
 
 FlatApp* AppFromWindow(HWND hwnd) {
     return reinterpret_cast<FlatApp*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -110,15 +117,23 @@ bool FlatApp::CreateAppWindow(const wchar_t* title, std::string* error) {
     // So the window procedure can reach us for hit-testing and move-time frames.
     ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
-    // Negative margins push DWM's glass frame across the whole client area,
-    // which is what makes alpha=0 genuinely transparent rather than black.
-    const MARGINS margins{-1, -1, -1, -1};
+    // Das Glas entsteht im Shader. Die Startoberflaeche braucht keine komplett
+    // transparente DWM-Scheibe: ein opaker Untergrund verhindert leere Fenster.
+    const MARGINS margins{0, 0, 0, 0};
     ::DwmExtendFrameIntoClientArea(hwnd, &margins);
-    ::SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
-
-    ::ShowWindow(hwnd, SW_SHOW);
-    ::UpdateWindow(hwnd);
+    if(!::SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)) {
+        if(error) *error="SetLayeredWindowAttributes failed";
+        return false;
+    }
+    UpdateWindowRegion();
     return true;
+}
+
+void FlatApp::UpdateWindowRegion() {
+    // Windows schneidet die transparenten Aussenraender zuverlaessig aus.
+    const auto region=::CreateRoundRectRgn(12,12,width_-11,height_-11,44,44);
+    if(region&&!::SetWindowRgn(static_cast<HWND>(hwnd_),region,TRUE)) ::DeleteObject(region);
+    // Bei Erfolg gehoert die Region Windows, deshalb dann kein DeleteObject.
 }
 
 bool FlatApp::CreateDevice(std::string* error) {
@@ -137,27 +152,32 @@ bool FlatApp::CreateDevice(std::string* error) {
     D3D_FEATURE_LEVEL       obtained{};
 
     HRESULT hr = ::D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, wanted, 2, D3D11_SDK_VERSION,
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, wanted, 2, D3D11_SDK_VERSION,
         &sd, &swapChain_, &device_, &obtained, &context_);
     if (hr == DXGI_ERROR_UNSUPPORTED) {
         hr = ::D3D11CreateDeviceAndSwapChain(
-            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, wanted, 2, D3D11_SDK_VERSION,
+            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, wanted, 2, D3D11_SDK_VERSION,
             &sd, &swapChain_, &device_, &obtained, &context_);
     }
     if (FAILED(hr)) {
-        if (error) *error = "D3D11CreateDeviceAndSwapChain failed";
+        if (error) *error = RenderFailure("D3D11CreateDeviceAndSwapChain failed",hr);
         return false;
     }
-    CreateRenderTarget();
-    return true;
+    return CreateRenderTarget(error);
 }
 
-void FlatApp::CreateRenderTarget() {
+bool FlatApp::CreateRenderTarget(std::string* error) {
     ID3D11Texture2D* back = nullptr;
-    if (SUCCEEDED(swapChain_->GetBuffer(0, IID_PPV_ARGS(&back))) && back) {
-        device_->CreateRenderTargetView(back, nullptr, &backBuffer_);
-        back->Release();
+    HRESULT hr=swapChain_->GetBuffer(0, IID_PPV_ARGS(&back));
+    if(SUCCEEDED(hr)&&back) {
+        hr=device_->CreateRenderTargetView(back, nullptr, &backBuffer_);
     }
+    if(back) back->Release();
+    if(FAILED(hr)||!backBuffer_) {
+        if(error) *error=RenderFailure("Injector render target failed",FAILED(hr)?hr:E_FAIL);
+        return false;
+    }
+    return true;
 }
 
 void FlatApp::CleanupRenderTarget() {
@@ -166,10 +186,11 @@ void FlatApp::CleanupRenderTarget() {
 
 bool FlatApp::Initialize(const wchar_t* title, int width, int height, std::string* error) {
     ImGui_ImplWin32_EnableDpiAwareness();
+    closing_=false; renderingFailure_.clear();
     width_  = width;
     height_ = height;
 
-    if (!CreateAppWindow(title, error)) return false;
+    if (!CreateAppWindow(title, error)) { Shutdown(); return false; }
     if (!CreateDevice(error)) { Shutdown(); return false; }
 
     IMGUI_CHECKVERSION();
@@ -180,14 +201,18 @@ bool FlatApp::Initialize(const wchar_t* title, int width, int height, std::strin
 
     style::ApplyFlatTheme(ImGui::GetStyle());
 
-    ImGui_ImplWin32_Init(hwnd_);
-    ImGui_ImplDX11_Init(device_, context_);
+    if(!ImGui_ImplWin32_Init(hwnd_)||!ImGui_ImplDX11_Init(device_, context_)) {
+        if(error) *error="Injector ImGui backend initialization failed";
+        Shutdown(); return false;
+    }
     style::LoadFonts();
+    glass_.Initialize(device_,context_);
 
     return true;
 }
 
 void FlatApp::Shutdown() {
+    glass_.Shutdown();
     if (ImGui::GetCurrentContext()) {
         if(ImGui::GetIO().BackendRendererUserData) ImGui_ImplDX11_Shutdown();
         if(ImGui::GetIO().BackendPlatformUserData) ImGui_ImplWin32_Shutdown();
@@ -226,13 +251,22 @@ void FlatApp::ResizeIfNeeded() {
 
     width_ = w;
     height_ = h;
+    context_->OMSetRenderTargets(0,nullptr,nullptr);
     CleanupRenderTarget();
-    swapChain_->ResizeBuffers(0, static_cast<UINT>(w), static_cast<UINT>(h), DXGI_FORMAT_UNKNOWN, 0);
-    CreateRenderTarget();
+    const auto resized=swapChain_->ResizeBuffers(0, static_cast<UINT>(w), static_cast<UINT>(h), DXGI_FORMAT_UNKNOWN, 0);
+    if(FAILED(resized)) throw std::runtime_error(RenderFailure("Injector resize failed",resized));
+    std::string failure;
+    if(!CreateRenderTarget(&failure)) throw std::runtime_error(failure);
+    UpdateWindowRegion();
 }
 
 void FlatApp::Run(std::function<void()> draw) {
     draw_ = std::move(draw);
+    // Erst einen vollstaendigen Frame praesentieren, dann das Fenster zeigen.
+    RenderFrame();
+    if(!renderingFailure_.empty()) throw std::runtime_error(renderingFailure_);
+    ::ShowWindow(static_cast<HWND>(hwnd_), SW_SHOW);
+    ::UpdateWindow(static_cast<HWND>(hwnd_));
 
     MSG msg;
     while (!closing_) {
@@ -242,22 +276,34 @@ void FlatApp::Run(std::function<void()> draw) {
             if (msg.message == WM_QUIT) closing_ = true;
         }
         if (closing_) break;
-        if(::IsIconic(static_cast<HWND>(hwnd_))) { ::MsgWaitForMultipleObjects(0,nullptr,FALSE,100,QS_ALLINPUT); continue; }
+        if(::IsIconic(static_cast<HWND>(hwnd_))) {
+            glass_.BeginFrame(hwnd_,{float(width_),float(height_)},false);
+            ::MsgWaitForMultipleObjects(0,nullptr,FALSE,100,QS_ALLINPUT); continue;
+        }
         RenderFrame();
     }
+    if(!renderingFailure_.empty()) throw std::runtime_error(renderingFailure_);
 }
 
 void FlatApp::RenderFrame() {
-    if (!device_ || !draw_) return;
-
+    if (!device_ || !draw_ || closing_) return;
+    try {
     ResizeIfNeeded();
 
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    glass_.BeginFrame(hwnd_,{float(width_),float(height_)},true,::IsWindowVisible(static_cast<HWND>(hwnd_))!=FALSE);
+
     draw_();
     EndFrameInternal();
+    } catch(const std::exception& error) {
+        // Auch WM_TIMER waehrend eines Fenster-Drags ruft uns auf. Exceptions
+        // duerfen die Windows-Callback-Grenze nicht verlassen.
+        renderingFailure_=error.what(); closing_=true;
+        MCOV_LOG_ERROR("%s",renderingFailure_.c_str());
+    }
 }
 
 void FlatApp::Panel(float x0, float y0, float x1, float y1, float rounding) {
@@ -265,17 +311,23 @@ void FlatApp::Panel(float x0, float y0, float x1, float y1, float rounding) {
                          ImVec2(x0, y0), ImVec2(x1, y1), rounding, style::kBackground);
 }
 
-void FlatApp::EndFrameInternal() {
+void FlatApp::DrawFrame() {
     ImGui::Render();
+    glass_.RenderTexture();
 
     if (backBuffer_) {
         context_->OMSetRenderTargets(1, &backBuffer_, nullptr);
-        const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        const float clear[4] = {.045f, .050f, .063f, 1.0f};
         context_->ClearRenderTargetView(backBuffer_, clear);
 
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
     }
-    swapChain_->Present(1, 0);
+}
+
+void FlatApp::EndFrameInternal() {
+    DrawFrame();
+    const auto presented=swapChain_->Present(1, 0);
+    if(FAILED(presented)) throw std::runtime_error(RenderFailure("Injector Present failed",presented));
 }
 
 } // namespace mcov

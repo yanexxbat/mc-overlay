@@ -37,7 +37,7 @@ Nicht portierte Module haben keine vorgetäuschten Schalter im Menü.
 | Rockstar-Datei | mcov-Status / Entsprechung |
 |---|---|
 | ArreyList | **Bereits vorhanden:** Module-HUD; feste Modulreihenfolge. |
-| ClickGUI | **Bereits vorhanden:** Bestehendes Classic-Menü mit eigenen Funktionstabs. |
+| ClickGUI | **Bereits vorhanden:** Liquid-Glass-Menü mit linken Kategorien, Modulkacheln und separatem Einstellungsfenster; kein Java-GUI-Port. |
 | ClientFont | Nicht portiert. Bestehende eingebettete Fonts bleiben fest; kein freier Font-Selector. |
 | DamageFlyIndicator | Nicht portiert. Eigene Movement-/DamageFly-Zustandsmaschine fehlt. |
 | DamageInfo | **Neu:** Visuals → Damage vignette. |
@@ -170,4 +170,3 @@ mcov-Funktionen und werden nicht als identische Rockstar-Module ausgegeben.
 2. Anschließend versionierte Client-Tick-Aktionen für Auto armor, Auto gapple, Auto potion und Middle click pearl ergänzen und einzeln prüfen.
 3. Render-Hooks für Full bright, Fog color, View model und Swing animations benötigen eine eigene Integration in die jeweilige Minecraft-/Forge-Pipeline.
 4. Movement- und Netzwerkmodule benötigen getrennte Adapter, Zustandsmaschinen und Tests; die bestehenden externen DrawLists können diese Funktionen nicht ersetzen.
-

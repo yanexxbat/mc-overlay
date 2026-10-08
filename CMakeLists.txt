@@ -123,6 +123,16 @@ target_include_directories(imgui PUBLIC
 target_link_libraries(imgui PUBLIC d3d11 dxgi d3dcompiler)
 target_compile_features(imgui PUBLIC cxx_std_20)
 
+# Nur der MIT-lizenzierte Material-Renderer, nicht der ImGui-Fork/demo/Recorder.
+add_library(mcov_liquid STATIC src/common/liquid_glass.cpp src/common/windows_backdrop_capture.cpp
+    third_party/glass/glass.cpp third_party/glass/backdrop.cpp)
+target_include_directories(mcov_liquid PUBLIC src/common PRIVATE third_party/glass)
+target_link_libraries(mcov_liquid PUBLIC imgui user32 winmm windowsapp)
+target_compile_definitions(mcov_liquid PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+if(MSVC)
+    target_compile_options(mcov_liquid PRIVATE /utf-8 /W3)
+endif()
+
 # ---------------------------------------------------------------------------
 # Shared compile settings
 # ---------------------------------------------------------------------------
@@ -163,6 +173,7 @@ add_executable(mcov_overlay
     src/overlay/esp_renderer.cpp
     src/overlay/item_icon_atlas_dx11.cpp
     src/overlay/control_panel.cpp
+    src/overlay/overlay_modules.cpp
     src/overlay/combat_menu.cpp
     src/overlay/aura_renderer.cpp
     src/overlay/friend_hat_renderer.cpp
@@ -185,6 +196,7 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_overlay PRIVATE
+    mcov_liquid
     winmm
     mcov_settings
     imgui
@@ -223,6 +235,7 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_injector PRIVATE
+    mcov_liquid
     mcov_settings
     imgui
     d3d11
@@ -333,7 +346,7 @@ add_executable(mcov WIN32 "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
     src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
 target_include_directories(mcov PRIVATE src third_party/glass "${CMAKE_BINARY_DIR}")
 target_compile_definitions(mcov PRIVATE MCOV_BUNDLED=1 MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
-target_link_libraries(mcov PRIVATE mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
+target_link_libraries(mcov PRIVATE mcov_liquid mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
 set_target_properties(mcov PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
 message(STATUS "mcov: open ${CMAKE_BINARY_DIR}/client/mcov.exe (single-file client)")
 
@@ -352,6 +365,27 @@ add_custom_target(mcov_distribution ALL DEPENDS "${MCOV_CLIENT_ARCHIVE}" "${CMAK
 option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
 if(MCOV_BUILD_UI_CHECKS)
     enable_testing()
+    add_executable(mcov_liquid_check tests/liquid_glass_rendering.cpp)
+    target_include_directories(mcov_liquid_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_liquid_check PRIVATE mcov_settings mcov_liquid)
+    add_test(NAME liquid_glass COMMAND mcov_liquid_check)
+    # Nur explizit --live starten: die regulaere Testsuite liest keinen Desktop.
+    add_executable(mcov_backdrop_capture_check tests/backdrop_capture_live.cpp)
+    target_include_directories(mcov_backdrop_capture_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_backdrop_capture_check PRIVATE mcov_settings mcov_liquid)
+    if(MSVC)
+        target_link_options(mcov_backdrop_capture_check PRIVATE /MAP)
+    endif()
+    set_tests_properties(liquid_glass PROPERTIES TIMEOUT 30)
+    add_executable(mcov_launcher_window_check
+        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+        tests/launcher_window_rendering.cpp src/common/flat_app.cpp
+        src/common/flat_style.cpp src/common/log.cpp src/injector/launcher_ui.cpp
+        src/overlay/control_panel.cpp)
+    target_include_directories(mcov_launcher_window_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_launcher_window_check PRIVATE mcov_settings mcov_liquid d3d11 dxgi dwmapi gdi32 ole32 windowscodecs)
+    add_test(NAME launcher_window COMMAND mcov_launcher_window_check "${CMAKE_BINARY_DIR}/ui-preview")
+    set_tests_properties(launcher_window PROPERTIES TIMEOUT 30)
     add_executable(mcov_ui_check
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/flat_style_smoke.cpp
@@ -381,6 +415,7 @@ if(MCOV_BUILD_UI_CHECKS)
         tests/control_panel_smoke.cpp
         src/injector/launcher_ui.cpp
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
+        src/overlay/overlay_modules.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_world_visuals.cpp
         src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
@@ -394,6 +429,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
+        mcov_liquid
         user32 gdi32 shell32 dwmapi ole32 windowscodecs winmm)
     add_test(NAME control_panel COMMAND mcov_control_panel_check "${CMAKE_BINARY_DIR}/ui-preview")
     set_tests_properties(control_panel PROPERTIES TIMEOUT 30)

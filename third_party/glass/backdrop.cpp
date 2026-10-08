@@ -17,7 +17,7 @@ namespace Glass {
 
 bool Backdrop::Init(ID3D11Device* device, ID3D11DeviceContext* ctx, HWND hwnd) {
     dev_ = device; ctx_ = ctx; hwnd_ = hwnd;
-    ::SetWindowDisplayAffinity(hwnd_, WDA_EXCLUDEFROMCAPTURE);
+    // mcov verwaltet und restauriert die Fenster-Affinitaet im RAII-Wrapper.
     if (!CompileBlurShaders()) { Shutdown(); return false; }
     { D3D11_BUFFER_DESC bd = {};
       bd.ByteWidth = 16; bd.Usage = D3D11_USAGE_DYNAMIC;
@@ -38,7 +38,7 @@ bool Backdrop::Init(ID3D11Device* device, ID3D11DeviceContext* ctx, HWND hwnd) {
     { D3D11_DEPTH_STENCIL_DESC dd = {};
       dd.DepthEnable = FALSE; dd.StencilEnable = FALSE;
       if (FAILED(dev_->CreateDepthStencilState(&dd, &depth_off_))) { Shutdown(); return false; } }
-    CreateDuplication();
+    if(hwnd_) CreateDuplication();
     if (!up_[0].srv) {
         int W = ::GetSystemMetrics(SM_CXSCREEN);
         int H = ::GetSystemMetrics(SM_CYSCREEN);
@@ -46,11 +46,11 @@ bool Backdrop::Init(ID3D11Device* device, ID3D11DeviceContext* ctx, HWND hwnd) {
         out_x_ = 0; out_y_ = 0;
         CreateChain(W, H);
     }
-    for (int i = 0; i < 8 && !have_first_; ++i) Capture();
     return true;
 }
 
 void Backdrop::Shutdown() {
+    have_first_=false; retry_at_=0;
     ReleaseDuplication();
     ReleaseChain();
     if (depth_off_)    { depth_off_->Release();    depth_off_ = nullptr; }
@@ -175,6 +175,7 @@ void Backdrop::BlurUI(ID3D11Texture2D* src, int w, int h) {
 
 bool Backdrop::CreateDuplication() {
     ReleaseDuplication();
+    status_="DXGI capture unavailable";
     IDXGIDevice* dxgi = nullptr;
     if (FAILED(dev_->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi))) return false;
     IDXGIAdapter* adapter = nullptr;
@@ -184,6 +185,7 @@ bool Backdrop::CreateDuplication() {
     POINT c = { (wr.left + wr.right) / 2, (wr.top + wr.bottom) / 2 };
     IDXGIOutput* chosen = nullptr;
     DXGI_OUTPUT_DESC chosen_desc = {};
+    bool matching_output=false;
     for (UINT i = 0; ; ++i) {
         IDXGIOutput* o = nullptr;
         if (adapter->EnumOutputs(i, &o) == DXGI_ERROR_NOT_FOUND) break;
@@ -193,22 +195,29 @@ bool Backdrop::CreateDuplication() {
         if (inside || chosen == nullptr) {
             if (chosen) chosen->Release();
             chosen = o; chosen_desc = od;
-            if (inside) break;
+            if (inside) { matching_output=true; break; }
         } else {
             o->Release();
         }
     }
     adapter->Release();
     if (!chosen) return false;
+    // Andere GPU/rotierter Monitor: Material-Fallback statt falschem Hintergrund.
+    if(!matching_output||chosen_desc.Rotation!=DXGI_MODE_ROTATION_IDENTITY) {
+        status_=!matching_output?"Monitor is on another GPU":"DXGI monitor is rotated";
+        last_error_=DXGI_ERROR_UNSUPPORTED; chosen->Release(); return false;
+    }
     const RECT& dc = chosen_desc.DesktopCoordinates;
     out_x_ = dc.left; out_y_ = dc.top;
     int W = dc.right - dc.left, H = dc.bottom - dc.top;
     if (FAILED(chosen->QueryInterface(__uuidof(IDXGIOutput1), (void**)&output1_))) { chosen->Release(); return false; }
     chosen->Release();
-    if (FAILED(output1_->DuplicateOutput(dev_, &dupl_))) { return false; }
-    if (down_[0].tex == nullptr || W != down_[0].w * 2)
-        if (!CreateChain(W, H)) return false;
+    last_error_=output1_->DuplicateOutput(dev_, &dupl_);
+    if (FAILED(last_error_)) { ReleaseDuplication(); return false; }
+    if (!heavy_.srv || W != heavy_.w || H != heavy_.h)
+        if (!CreateChain(W, H)) { ReleaseDuplication(); ReleaseChain(); have_first_=false; return false; }
     out_w_ = W; out_h_ = H;
+    status_="Waiting for first desktop frame";
     return true;
 }
 
@@ -248,12 +257,10 @@ void Backdrop::RunBlur() {
     ctx_->OMSetDepthStencilState(depth_off_, 0);
     ctx_->RSSetState(raster_);
     BlurPass(ps_down_, desktop_.srv, down_[0], desktop_.w, desktop_.h);
-    for (int k = 1; k < 6; ++k)
+    // Drei Stufen behalten Konturen des Spiels; sechs machten fast alles einfarbig.
+    for (int k = 1; k < 3; ++k)
         BlurPass(ps_down_, down_[k - 1].srv, down_[k], down_[k - 1].w, down_[k - 1].h);
-    BlurPass(ps_up_, down_[5].srv, up_[4], down_[5].w, down_[5].h);
-    BlurPass(ps_up_, up_[4].srv,   up_[3], up_[4].w,   up_[4].h);
-    BlurPass(ps_up_, up_[3].srv,   up_[2], up_[3].w,   up_[3].h);
-    BlurPass(ps_up_, up_[2].srv,   up_[1], up_[2].w,   up_[2].h);
+    BlurPass(ps_up_, down_[2].srv, up_[1], down_[2].w, down_[2].h);
     BlurPass(ps_up_, up_[1].srv,   up_[0], up_[1].w,   up_[1].h);
     BlurPass(ps_up_, up_[0].srv, heavy_, up_[0].w, up_[0].h);
     BlurPass(ps_up_, desktop_.srv, soft_, desktop_.w, desktop_.h);
@@ -263,32 +270,57 @@ void Backdrop::RunBlur() {
     ctx_->OMSetRenderTargets(1, &nullrtv, nullptr);
 }
 
+void Backdrop::StopCapture() {
+    ReleaseDuplication();
+    have_first_=false;
+    retry_at_=0;
+}
+
 void Backdrop::Capture() {
-    if (!dupl_) { if (!CreateDuplication()) return; }
+    if (!dupl_) {
+        const auto now=GetTickCount64();
+        if(now<retry_at_) return;
+        retry_at_=now+1000;
+        if (!CreateDuplication()) return;
+    }
     IDXGIResource* res = nullptr;
     DXGI_OUTDUPL_FRAME_INFO info = {};
-    HRESULT hr = dupl_->AcquireNextFrame(have_first_ ? 0 : 250, &info, &res);
+    HRESULT hr = dupl_->AcquireNextFrame(0, &info, &res);
     if (hr == DXGI_ERROR_WAIT_TIMEOUT) return;
-    if (hr == DXGI_ERROR_ACCESS_LOST) { ReleaseDuplication(); return; }
-    if (FAILED(hr)) return;
+    last_error_=hr;
+    if (hr == DXGI_ERROR_ACCESS_LOST) { status_="DXGI capture lost; reconnecting"; ReleaseDuplication(); have_first_=false; return; }
+    if (FAILED(hr)) { status_="DXGI frame acquisition failed"; have_first_=false; ReleaseDuplication(); return; }
     bool new_image = (info.LastPresentTime.QuadPart != 0) || !have_first_;
     if (new_image) {
         ID3D11Texture2D* frame = nullptr;
         if (SUCCEEDED(res->QueryInterface(__uuidof(ID3D11Texture2D), (void**)&frame))) {
-            D3D11_TEXTURE2D_DESC fd = {}; frame->GetDesc(&fd);
-            if (!desktop_.tex || (int)fd.Width != desktop_.w ||
-                (int)fd.Height != desktop_.h || fd.Format != desktop_fmt_) {
-                desktop_fmt_ = fd.Format;
-                CreateRT(desktop_, (int)fd.Width, (int)fd.Height, fd.Format, false, true);
-            }
-            ctx_->CopyResource(desktop_.tex, frame);
+            UpdateTexture(frame,out_x_,out_y_);
             frame->Release();
-            RunBlur();
-            have_first_ = true;
         }
     }
     res->Release();
     dupl_->ReleaseFrame();
+}
+
+bool Backdrop::UpdateTexture(ID3D11Texture2D* frame,int x,int y) {
+    if(!frame||!dev_||!ctx_||!vs_full_) return false;
+    D3D11_TEXTURE2D_DESC fd{}; frame->GetDesc(&fd);
+    if((fd.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&fd.Format!=DXGI_FORMAT_R8G8B8A8_UNORM)||fd.SampleDesc.Count!=1) {
+        last_error_=DXGI_ERROR_UNSUPPORTED; status_="Unsupported capture format"; have_first_=false; return false;
+    }
+    if(!heavy_.srv||int(fd.Width)!=heavy_.w||int(fd.Height)!=heavy_.h) {
+        have_first_=false;
+        if(!CreateChain(int(fd.Width),int(fd.Height))) { ReleaseChain(); status_="Capture texture allocation failed"; last_error_=E_OUTOFMEMORY; return false; }
+    }
+    if(!desktop_.tex||!desktop_.srv||int(fd.Width)!=desktop_.w||int(fd.Height)!=desktop_.h||fd.Format!=desktop_fmt_) {
+        desktop_fmt_=fd.Format;
+        if(!CreateRT(desktop_,int(fd.Width),int(fd.Height),fd.Format,false,true)) {
+            have_first_=false; status_="Capture upload allocation failed"; last_error_=E_OUTOFMEMORY; return false;
+        }
+    }
+    out_x_=x; out_y_=y; out_w_=int(fd.Width); out_h_=int(fd.Height);
+    ctx_->CopyResource(desktop_.tex,frame); RunBlur();
+    have_first_=true; last_error_=S_OK; status_="Live desktop capture"; return true;
 }
 
 }

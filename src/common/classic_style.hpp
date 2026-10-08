@@ -2,7 +2,6 @@
 #include "flat_style.hpp"
 
 namespace mcov::style {
-inline ImVec4 Color(unsigned rgb) { return {float(rgb>>16&255)/255,float(rgb>>8&255)/255,float(rgb&255)/255,1}; }
 // Gemeinsame Palette und RAII für Menü und Launcher; verändert kein HUD dauerhaft.
 struct ClassicStyle final {
     ImGuiStyle saved=ImGui::GetStyle();

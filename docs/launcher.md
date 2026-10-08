@@ -42,8 +42,25 @@ The default **END** binding quits the overlay, **INSERT** opens its menu and
 
 ## Presentation and diagnostics
 
-The injector shares `ClassicStyle` with the client: #242424 background,
-#191919 fields, #AE69D1 accents, black borders and embedded ProggyClean.
+The injector shares `LiquidStyle` and `LiquidGlass` with the client: a rounded
+neutral dark glass root, GPU backdrop blur/refraction, subtle light edges and embedded
+Inter controls. The launcher opens at 640 × 640. The primary 40-pixel start action
+stays outside scrolling content so smaller windows retain it. Capture failure
+uses a stable tinted fallback; temporary Windows capture exclusion prevents the
+glass from capturing itself. DXGI capture runs first; after 750 ms without a
+usable frame, WGC attempts monitor capture on the launcher's render device.
+Closing the window ends capture and restores its previous display affinity.
+[Material behavior](liquid-ui.md) describes capture restoration and live/fallback
+status. The standard Windows SDK `windowsapp` library adds no portable runtime
+files beside `mcov.exe` and optional `START.txt`.
+
+The native shell has an opaque render base beneath the shader material, with
+zero DWM frame-extension margins. A Windows rounded region clips the outer
+12-pixel padding to the glass panel's 22-pixel corners. Initialization stays
+hidden; `Run` draws the first frame before showing the window. Minimizing ends
+desktop capture until the launcher returns. Backend, render-target, resize and
+presentation failures are reported instead of leaving a silently blank window.
+
 The main page contains instance selection, refresh, one primary start action,
 phase/status and recovery actions. Technical logs live under **Diagnose**,
 with copy and open-folder actions. Connection runs on a worker; the native
@@ -60,5 +77,20 @@ the GUI subsystem and exact embedded payloads, tests paths with spaces/Unicode,
 idempotent extraction, concurrent corruption repair, and early rejection of
 invalid overlay PIDs. `control_panel` renders the actual launcher offscreen at
 640 x 520 and 480 x 380, including empty, selected, busy, missing-JDK and diagnostic
-states, and checks style restoration and button input. Neither check attaches to
-Minecraft. Live attach/focus behavior still needs a real game session.
+states, and checks style restoration and button input. `liquid_glass` also runs
+the real material and Dual Kawase blur shaders with synthetic inputs on WARP,
+checking pixels, clipping, layering and resize. These checks do not attach to
+Minecraft. Synthetic glass-grid/settings review images under `.impeccable/review`
+exercise the real material with synthetic GPU input, not Minecraft screenshots.
+The explicit native `mcov_backdrop_capture_check --live` probe passed WGC startup,
+the full LiquidGlass runtime, capture pause, display-affinity restoration and
+live capture after reopening on this host without saving desktop images or using
+a JVM. Live Minecraft appearance and attach/focus behavior still need a real game session.
+
+`launcher_window` adds a real hidden HWND and swapchain check at 640 × 640 and
+480 × 380: opaque background, foreground controls, resize, rounded window region
+and presentation. It performs no desktop capture and attaches to no JVM.
+`launcher-native-start.png` and `launcher-native-diagnose.png` under
+`.impeccable/review` are swapchain readbacks before OS clipping; they are not
+desktop screenshots and do not prove user-visible desktop composition.
+The capture probe also passed `--live-sta`, using the launcher's STA COM mode.

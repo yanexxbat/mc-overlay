@@ -241,7 +241,7 @@ bool LoadFonts(float uiSize) {
     // Keep the HUD's first two atlas entries and default font unchanged.
     io.Fonts->AddFontFromMemoryTTF(inter_medium.data(), static_cast<int>(inter_medium.size()), 14.f, &cfg);
     io.Fonts->AddFontFromMemoryTTF(inter_semibold.data(), static_cast<int>(inter_semibold.size()), 14.f, &cfg);
-    // RCDATA travels with the executable: no runtime font paths or glass renderer.
+    // RCDATA travels with the executable: no runtime font paths.
     const HMODULE module = GetModuleHandleW(nullptr);
     const HRSRC resource = FindResourceW(module, MAKEINTRESOURCEW(101), RT_RCDATA);
     if (resource) {
@@ -264,6 +264,10 @@ ImFont* MenuFont(bool bold) {
 ImFont* MenuIconFont() {
     const auto& fonts = ImGui::GetIO().Fonts->Fonts;
     return fonts.Size >= 5 ? fonts[4] : ImGui::GetFont();
+}
+ImFont* MenuHeadingFont() {
+    const auto& fonts=ImGui::GetIO().Fonts->Fonts;
+    return fonts.Size>=2?fonts[1]:ImGui::GetFont();
 }
 ImFont* ClassicMenuFont() {
     const auto& fonts=ImGui::GetIO().Fonts->Fonts;

@@ -1,13 +1,25 @@
 #pragma once
 #include <cstdint>
+#include <span>
 #include "imgui.h"
 
 namespace mcov::control_panel {
 
 enum class Page { Combat, Visuals, Blocks, Hud, Stats, Settings, Misc };
+enum class TileMode { Toggle, Settings, Action };
+struct ModuleView {
+    const char* name="";
+    TileMode mode=TileMode::Settings;
+    bool enabled=false;
+    char binding[48]{};
+};
+struct Placement {
+    bool positioned=false,dragging=false;
+    ImVec2 position{},offset{};
+};
 struct State {
     Page page = Page::Combat;
-    int theme = 0; // Classic violet; für Aufrufer mit Theme-Argument beibehalten.
+    int theme = 0; // Liquid glass; fuer bestehende Theme-Aufrufer beibehalten.
     bool reduceMotion = false;
     bool positioned = false;
     bool dragging = false;
@@ -18,6 +30,14 @@ struct State {
     float pageAlpha = 1.f;
     float pageStartAlpha = 1.f;
     float pageElapsed = .16f;
+    bool settingsOpen=false;
+    Page settingsPage=Page::Combat;
+    int settingsSection=0;
+    Page renderedSettingsPage=Page::Combat;
+    int renderedSettingsSection=-1;
+    bool settingsWasOpen=false;
+    Placement settingsPlacement{};
+    char settingsLabel[64]{};
 };
 struct Status {
     bool connected = false;
@@ -27,15 +47,29 @@ struct Status {
 };
 struct Actions { bool close = false; bool reset = false; };
 using Content = void (*)(void*, Page);
+using Catalog = int (*)(void*,Page,std::span<ModuleView>);
+using Activate = void (*)(void*,Page,int);
+// Nur das gewaehlte Modul zeichnen; bestehende Einstellungen bleiben erhalten.
+class SectionScope final {
+public:
+    explicit SectionScope(int section);
+    ~SectionScope();
+    SectionScope(const SectionScope&)=delete;
+    SectionScope& operator=(const SectionScope&)=delete;
+private:
+    int previous_;
+};
 
-// Geometry and controls follow the user's screenshot. Renderer-independent;
+// Gemeinsame Liquid-Glass-Navigation; Bedienelemente bleiben rendererunabhaengig.
 // presentation state only. The caller owns all real module settings and actions.
-Actions Render(State& state, const Status& status, void* owner, Content content);
+Actions Render(State& state, const Status& status, void* owner, Content content,
+               Catalog catalog=nullptr,Activate activate=nullptr);
 const char* ThemeName(int index);
 float Scale();
 bool MotionAllowed(const State& state);
 void Section(const char* label);
-// Gemeinsame Funktionsnavigation; lange Leisten scrollen statt Tabs abzuschneiden.
+// SectionScope waehlt im Modulfenster direkt die vorhandenen Einstellungen.
+// Ohne Scope bleibt die native Tab-Navigation fuer bestehende Aufrufer erhalten.
 int SubTabs(const char* id, const char* const* labels, int count, int selected,
             bool selectNext = false);
 

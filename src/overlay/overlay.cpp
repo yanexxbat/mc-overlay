@@ -168,7 +168,7 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
     D3D_FEATURE_LEVEL       obtained{};
 
     HRESULT hr = ::D3D11CreateDeviceAndSwapChain(
-        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, 0, wanted, 2, D3D11_SDK_VERSION,
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, wanted, 2, D3D11_SDK_VERSION,
         &sd, &swapChain_, &device_, &obtained, &context_);
 
     if (hr == DXGI_ERROR_UNSUPPORTED) {
@@ -176,7 +176,7 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         // at a real performance cost.
         MCOV_LOG_WARN("no hardware D3D11 device; falling back to WARP");
         hr = ::D3D11CreateDeviceAndSwapChain(
-            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, 0, wanted, 2, D3D11_SDK_VERSION,
+            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, wanted, 2, D3D11_SDK_VERSION,
             &sd, &swapChain_, &device_, &obtained, &context_);
     }
 
@@ -208,6 +208,7 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         CleanupDeviceD3D(); return false;
     }
     depthFrame_=std::make_unique<DepthFrame>();
+    if(!glass_.Initialize(device_,context_)) MCOV_LOG_WARN("Liquid glass unavailable; using the fallback material.");
     return true;
 }
 
@@ -224,6 +225,7 @@ void Overlay::CleanupRenderTarget() {
 }
 
 void Overlay::CleanupDeviceD3D() {
+    glass_.Shutdown();
     if(auto* depth=depthChannel_.Block()) depth->requested.store(0,std::memory_order_release);
     depthChannel_.Close(); depthRenderer_.Shutdown(); depthActive_=depthFresh_=false;
     itemIcons_.Shutdown();
@@ -239,9 +241,9 @@ void Overlay::CleanupDeviceD3D() {
 
 void Overlay::ApplyCaptureAffinity() {
     if (!hwnd_) return;
-    // Independent recording preference; no desktop capture is needed by the UI.
+    // Die Glasflaeche darf sich nicht selbst im Desktop-Hintergrund aufnehmen.
     ::SetWindowDisplayAffinity(static_cast<HWND>(hwnd_),
-                               settings_.excludeFromCapture ? kExcludeFromCapture : kCaptureNormal);
+                               (settings_.excludeFromCapture||glassWasVisible_) ? kExcludeFromCapture : kCaptureNormal);
 }
 
 bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
@@ -482,6 +484,10 @@ bool Overlay::RunFrame() {
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    const bool glassVisible=shouldDraw&&menuVisible_;
+    glass_.BeginFrame(hwnd_,ImGui::GetIO().DisplaySize,glassVisible);
+    if(glassVisible!=glassWasVisible_) { glassWasVisible_=glassVisible; ApplyCaptureAffinity(); }
+
     const auto depthNow=GetTickCount64();
     const auto depthRelations=combatMenu_.Relations().Read();
     const bool friendEffects=std::any_of(depthRelations.begin(),depthRelations.end(),[](const auto& r) {
@@ -564,6 +570,7 @@ bool Overlay::RunFrame() {
     if(preferencesDirty_&&::GetTickCount64()>=preferenceSaveAt_) SavePreferences();
 
     ImGui::Render();
+    glass_.RenderTexture();
     if(depthActive_&&!depthRenderer_.Finish(context_,*ImGui::GetDrawData(),depthFresh_?depthFrame_.get():nullptr)) {
         // Bei GPU-Ausfall keine versehentlich ungeprueften Welt-Effekte ausgeben.
         ImGui::GetBackgroundDrawList()->CmdBuffer.clear();
@@ -1249,6 +1256,10 @@ void Overlay::DrawMenu() {
             case panel::Page::Settings: self.DrawSettingsTab(); break;
             case panel::Page::Misc: self.DrawMiscTab(); break;
         }
+    },[](void* owner,panel::Page page,std::span<panel::ModuleView> modules) {
+        return static_cast<Overlay*>(owner)->ReadModules(page,modules);
+    },[](void* owner,panel::Page page,int index) {
+        static_cast<Overlay*>(owner)->ActivateModule(page,index);
     });
     if (actions.reset) ResetMenuPage(menu_.page);
     if (actions.close) SetMenuVisible(false);
@@ -1547,7 +1558,7 @@ void Overlay::DrawHudTab() {
             ImGui::EndTable();
         }
         if(ImGui::Button("Reset HUD layout")) { hud_.layout={}; changed=true; }
-        ImGui::TextWrapped("Choose an element tab for its scale and position. In the editor, drag elements directly; empty and disabled elements are previewed too.");
+        ImGui::TextWrapped("Right-click an element tile for its scale and position. In the editor, drag elements directly; empty and disabled elements are previewed too.");
     } else {
         const int module=hudSection_-1; bool on=HudEnabled(module);
         if(panel::BeginRows("hud_element")) {
@@ -1565,7 +1576,7 @@ void Overlay::DrawHudTab() {
             ImGui::EndTable();
         }
         if(ImGui::Button("Reset element layout")) { hud_.layout[module]={}; changed=true; }
-        if(!hud_.visible) ImGui::TextWrapped("The entire HUD is hidden. Enable Show HUD in the Editor tab to display this element.");
+        if(!hud_.visible) ImGui::TextWrapped("The entire HUD is hidden. Right-click the Editor tile and enable Show HUD to display this element.");
     }
     if(changed) { preferencesDirty_=true; preferenceSaveAt_=::GetTickCount64()+500; }
 }
@@ -1658,10 +1669,14 @@ void Overlay::DrawSettingsTab() {
                 !depthActive_?"Idle":
                 depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);
+            panel::ValueRow("Menu material",glass_.liveBackdrop()?"Liquid glass / live backdrop":"Liquid glass / fallback backdrop");
+            panel::ValueRow("Background capture",glass_.captureStatus());
             if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
             ImGui::EndTable();
         }
         ImGui::TextWrapped("Watermark visibility and layout are configured under HUD > Watermark.");
+        ImGui::TextDisabled("Glass renderer: liquidDX11 by poncipp (MIT).");
+        ImGui::TextWrapped("While the glass menu is open, the overlay is excluded from desktop captures to prevent feedback. Closing the menu restores your capture preference.");
         if(ImGui::Button("Close overlay",ImVec2(-1,0))) running_=false;
     } else if(settingsSection_==1) {
         static const char* focusLabels[]={"No focus","Activate","Unlock","Legacy"};

@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <string>
+#include "liquid_glass.hpp"
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -34,14 +35,18 @@ public:
     static constexpr int kTitleBarHeight = 58;
 
 private:
+    friend struct FlatAppRenderingCheck;
     bool CreateAppWindow(const wchar_t* title, std::string* error);
     bool CreateDevice(std::string* error);
-    void CreateRenderTarget();
+    bool CreateRenderTarget(std::string* error);
+    void UpdateWindowRegion();
     void CleanupRenderTarget();
     void ResizeIfNeeded();
+    void DrawFrame();
     void EndFrameInternal();
 
     std::function<void()> draw_;
+    LiquidGlass glass_;
     float noDrag_[4] = {};
     bool hasNoDrag_ = false;
     void* hwnd_ = nullptr;
@@ -50,6 +55,7 @@ private:
     IDXGISwapChain* swapChain_ = nullptr;
     ID3D11RenderTargetView* backBuffer_ = nullptr;
     bool closing_ = false;
+    std::string renderingFailure_;
     int width_ = 0;
     int height_ = 0;
 };

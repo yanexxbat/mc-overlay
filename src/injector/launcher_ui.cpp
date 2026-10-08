@@ -1,23 +1,22 @@
 #include "launcher_ui.hpp"
-#include "../common/classic_style.hpp"
+#include "../common/liquid_style.hpp"
+#include "../common/liquid_glass.hpp"
 #include "../overlay/control_panel.hpp"
 #include <algorithm>
 
 namespace mcov::launcher {
 Actions Render(View& v,ImVec2 size) {
-    style::ClassicStyle scoped; Actions a;
+    style::LiquidStyle scoped; Actions a;
     const ImVec2 top{12,12},bottom{size.x-12,size.y-12};
     auto* draw=ImGui::GetBackgroundDrawList();
-    draw->AddRectFilled(top,bottom,ImGui::GetColorU32(ImGuiCol_WindowBg));
-    draw->AddRect(top,bottom,ImGui::GetColorU32(ImGuiCol_Border));
-    draw->AddLine({13,13},{size.x-13,13},ImGui::GetColorU32(ImGuiCol_CheckMark),2);
-    draw->AddText({21,26},ImGui::GetColorU32(ImGuiCol_Text),"mcov - Client");
+    LiquidGlass::Panel(*draw,top,bottom,22);
+    draw->AddText(style::MenuHeadingFont(),style::MenuHeadingFont()->FontSize,{29,24},ImGui::GetColorU32(ImGuiCol_Text),"mcov");
+    draw->AddText({102,32},ImGui::GetColorU32(ImGuiCol_TextDisabled),"Client starten");
     const ImVec2 closeMin{size.x-44,22},closeMax{size.x-22,44},minMin{size.x-70,22},minMax{size.x-48,44};
     const auto hit=[&](ImVec2 low,ImVec2 high) {
         const auto m=ImGui::GetIO().MousePos;
         const bool hover=m.x>=low.x&&m.y>=low.y&&m.x<high.x&&m.y<high.y;
-        draw->AddRectFilled(low,high,ImGui::GetColorU32(hover?ImGuiCol_ButtonHovered:ImGuiCol_Button));
-        draw->AddRect(low,high,ImGui::GetColorU32(ImGuiCol_Border));
+        draw->AddRectFilled(low,high,ImGui::GetColorU32(hover?ImGuiCol_ButtonHovered:ImGuiCol_Button),7);
         return hover&&ImGui::IsMouseClicked(0);
     };
     a.close=hit(closeMin,closeMax); a.minimize=hit(minMin,minMax);
@@ -30,15 +29,15 @@ Actions Render(View& v,ImVec2 size) {
     const float width=ImGui::GetContentRegionAvail().x;
     const char* tabs[]={"Start","Diagnose"};
     for(int i=0;i<2;++i) {
-        if(i) ImGui::SameLine(0,0);
+        if(i) ImGui::SameLine(0,6);
         style::StyleScope selected;
-        if(v.tab==i) selected.Color(ImGuiCol_Button,ImGui::GetStyleColorVec4(ImGuiCol_WindowBg));
-        if(ImGui::Button(tabs[i],{width*.5f,28})) v.tab=i;
+        if(v.tab==i) selected.Color(ImGuiCol_Button,style::Color(0x818CF8,.34f));
+        if(ImGui::Button(tabs[i],{(width-6)*.5f,34})) v.tab=i;
     }
     ImGui::Dummy({0,6});
-    const float remaining=std::max(60.f,ImGui::GetContentRegionAvail().y-29);
-    ImGui::BeginChild("launcher_content",{0,remaining},ImGuiChildFlags_Borders);
-    ImGui::Indent(8); ImGui::SetCursorPosY(ImGui::GetCursorPosY()+8);
+    const float remaining=std::max(40.f,ImGui::GetContentRegionAvail().y-(v.tab==0?87.f:39.f));
+    ImGui::BeginChild("launcher_content",{0,remaining},ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::Indent(0);
     if(v.tab==0) {
         ImGui::TextUnformatted("Minecraft auswaehlen"); ImGui::SameLine();
         ImGui::BeginDisabled(v.busy);
@@ -63,16 +62,6 @@ Actions Render(View& v,ImVec2 size) {
             list->PopClipRect(); ImGui::PopID();
         }
         ImGui::EndDisabled(); ImGui::EndChild();
-        const bool selected=v.selected>=0&&v.selected<static_cast<int>(v.instances.size());
-        const bool running=selected&&v.instances[v.selected].running;
-        ImGui::Spacing();
-        ImGui::BeginDisabled(v.busy||!selected);
-        {
-            style::StyleScope primary;
-            primary.Color(ImGuiCol_Button,style::Color(0x69417D));
-            if(ImGui::Button(v.busy?"Verbindung wird vorbereitet...":running?"Zu Minecraft wechseln":"Client starten",{-8,32})) a.start=true;
-        }
-        ImGui::EndDisabled();
         control_panel::Section(v.busy?"Verbindung":"Status");
         if(v.busy) {
             ImGui::TextWrapped("%s",v.phase.c_str());
@@ -94,11 +83,23 @@ Actions Render(View& v,ImVec2 size) {
         if(ImGui::Button("Protokoll kopieren")) ImGui::SetClipboardText((v.diagnostic+"\n"+v.log).c_str());
         control_panel::Section("Protokoll"); ImGui::TextWrapped("%s",v.log.empty()?"Noch keine Eintraege.":v.log.c_str());
     }
-    ImGui::Unindent(8); ImGui::EndChild();
+    ImGui::Unindent(0); ImGui::EndChild();
+    if(v.tab==0) {
+        const bool selected=v.selected>=0&&v.selected<static_cast<int>(v.instances.size());
+        const bool running=selected&&v.instances[v.selected].running;
+        ImGui::BeginDisabled(v.busy||!selected);
+        {
+            style::StyleScope primary;
+            primary.Color(ImGuiCol_Button,style::Color(0x6F79E8,.80f));
+            primary.Color(ImGuiCol_ButtonHovered,style::Color(0x818CF8));
+            if(ImGui::Button(v.busy?"Verbindung wird vorbereitet...":running?"Zu Minecraft wechseln":"Client starten",{-1,40})) a.start=true;
+        }
+        ImGui::EndDisabled();
+    }
     ImGui::Dummy({0,5});
     ImGui::TextDisabled("mcov | Windows x64");
     ImGui::SameLine(std::max(0.f,width-140));
-    if(ImGui::Button("Schliessen",{140,19})) a.close=true;
+    if(ImGui::Button("Schliessen",{140,27})) a.close=true;
     ImGui::End(); return a;
 }
 } // namespace mcov::launcher

@@ -6,14 +6,15 @@ version-specific member names. See [compatibility and verification](docs/compati
 
 **Start here:** open `build/client/mcov.exe`, select Minecraft and click
 **Client starten**. This single portable file contains the overlay, native agent
-and Java helpers. The launcher uses the same dark/violet controls as the client.
+and Java helpers. The launcher uses the same rounded Liquid Glass controls as the client.
 See [launcher and portable package](docs/launcher.md) for runtime requirements and diagnostics.
 
 The [Rockstar-inspired feature package](docs/rockstar-features.md) adds **29 functions**:
 glowing wings/halo/ESP, jump and target rings, damage markers/vignette, crosshair,
 offscreen arrows, storage/beacon/chunk guides, sound feedback, middle-click friends,
 death coordinates/waypoints, privacy aliases, notifications and eight HUD widgets.
-Every new feature has its own tab and starts disabled with an unassigned keybind.
+Every new feature has its own module tile and settings section. Toggleable features
+start disabled with an unassigned keybind; Panic is an action.
 The HUD now offers 19 movable/scalable elements. [Source-module coverage](docs/rockstar-catalog.md)
 lists all 122 reference modules and distinguishes implemented behavior from remaining work.
 Restart Minecraft before using this updated package: the agent/overlay now use **IPC v19**.
@@ -86,7 +87,7 @@ and it dynamically resolves `jvm.dll` exactly as specified. The normal path
 
 ```
 CMakeLists.txt              overlay, injector, agent + FetchContent for ImGui
-third_party/glass/          retained vendor/font assets; glass renderer is not built
+third_party/glass/          adapted liquidDX11 material/blur renderer and embedded fonts
 scripts/build.ps1           configure + build wrapper
 tools/AgentLoader.java      JVM attach helper (jdk.attach)
 tools/frame-sync/           Java frame markers and audited bytecode transformer
@@ -94,7 +95,9 @@ src/
   main.cpp                  overlay entry point
   common/
     flat_style.hpp/.cpp     flat theme, shadows, module panels, scoped styles
-    flat_app.hpp/.cpp       shared flat Win32/D3D11 injector shell
+    flat_app.hpp/.cpp       shared Win32/D3D11 injector shell with glass runtime
+    liquid_style.hpp       scoped Liquid Glass menu/launcher theme
+    liquid_glass.hpp/.cpp   RAII backdrop/material texture and capture fallback
     shared_state.hpp        POD wire format + seqlock (compiled into both)
     ipc.hpp/.cpp            named shared memory (Local\ namespace, no admin)
     log.hpp/.cpp            logger that works inside a console-less javaw.exe
@@ -168,7 +171,7 @@ overlay running. Developer runs of `mcov_overlay.exe` still support `--no-agent`
 ## HUD
 
 Independent HUD elements, individually enabled, moved and scaled under **HUD**.
-Use **Open HUD editor** or **F6**, drag elements, select them in the toolbar and
+Left-click **HUD → Editor** or use **F6**, drag elements, select them in the toolbar and
 adjust Enabled/Scale. **Esc**, **Done** or F6 finishes. Watermark, Active modules
 and Keybinds are configurable elements too. Empty/disabled elements preview in
 the editor; compact editor viewports show the selected element only. Positions,
@@ -209,13 +212,30 @@ player's interaction range. So a non-null value means "in reach" *by the game's
 own definition* rather than by a reimplementation of its raycast that would
 drift out of agreement with the real hit registration.
 
-## Rendering: classic client UI
+## Rendering: Liquid Glass client UI
 
-The overlay follows [the latest user reference](design/reference-classic-ui.png):
-a rectangular dark window, violet rules/filled sliders, compact fields, 13 px
-embedded pixel-aligned font and horizontal Combat/Visuals/Blocks/HUD/Stats/Settings/Misc
-tabs. Drag the title bar to move; Center restores placement. Small viewports
-scroll and stack controls. The injector shares the same classic controls.
+The menu and launcher now follow the user's requested
+[poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11) material:
+a rounded dark-blue glass root with backdrop blur, restrained refraction, soft
+shadow and light edges. Embedded Inter keeps settings readable. The 900 × 680
+menu places Combat/Visuals/Blocks/HUD/Stats/Settings/Misc categories on the left
+and their module tiles in one to three columns. Left-click toggles real modules;
+right-click opens a separate draggable settings window, up to 480 × 610.
+Settings-only tiles also open on left-click; Editor and Panic run their actions.
+Both windows clamp to the viewport minus 24 pixels and have scrolling content.
+Changing category resets the grid scroll while keeping the selected module's
+settings and scroll. Selecting a different module starts its settings at the
+top; right-clicking the same module preserves scroll and brings settings forward.
+Drag either title bar to move its window; Center restores root placement.
+Ctrl-click a slider to enter its value.
+The launcher keeps its main start action outside its scrolling content.
+See [Liquid Glass integration](docs/liquid-ui.md) and [design tokens](DESIGN.md).
+
+Desktop capture runs only while glass is visible, at a 33-ms cadence. The open
+glass window is temporarily excluded from Windows captures to prevent recursive
+feedback; closing the menu restores the configured capture preference. Settings
+→ Overlay → Menu material reports live or fallback backdrop. Unavailable capture
+uses a stable tinted material. Existing HUD/ESP/world effects retain their styles.
 
 **Settings → Keybinds** assigns keyboard/mouse keys, modifier chords and Toggle/Hold
 per module. A single modifier is captured on release. Esc cancels capture;
@@ -233,16 +253,18 @@ Full usage and implementation: [client UI](docs/client-ui.md).
 The backend remains **Win32 + Direct3D 11** with Dear ImGui. Only pixels occupied
 by panels/effects are drawn; the surrounding framebuffer stays transparent.
 JNI/JVMTI remains in the separate agent, and all UI/HUD rendering consumes the
-published WorldSnapshot. This change adds no JNI or IPC fields. Styles and fonts
-restore after the menu/editor. Shared flat helpers: [flat UI](docs/flat-ui.md).
+published WorldSnapshot. This redesign adds no JNI or IPC fields. The scoped
+menu/launcher style restores afterward. Existing flat helpers remain available
+for HUD/developer surfaces: [flat UI](docs/flat-ui.md).
 
-Combat has eight function tabs: **Kill Aura**, **Aim Assist**, **Triggerbot**,
+Combat has eight module tiles: **Kill Aura**, **Aim Assist**, **Triggerbot**,
 **Auto Totem**, **Friends**, **Crystal macro**, **Anchor macro** and **Hit sounds**.
-Every main page uses the same sub-tab navigation;
-long tab bars have scroll arrows. Visuals separates each effect, HUD provides a
-tab per element, Blocks separates scanning/types/tracers, and Stats separates
-player/client/entities. Settings has Overlay, Focus, Keybinds and Agent.
-Enable **Enable Kill Aura**, close the menu and use F5. It aims and attacks
+Every category uses the same tile navigation; all 76 existing sections remain
+reachable. Visuals separates each effect, HUD provides a tile per element,
+Blocks separates scanning/types/tracers, and Stats separates player/client/entities.
+Settings has Overlay, Focus, Keybinds and Agent. Right-click a tile to configure
+its existing controls. Left-click **Kill Aura** to enable it, or use
+**Enable Kill Aura** in its settings, then close the menu and use F5. It aims and attacks
 the nearest valid living hitbox in reach, including behind the camera, and
 keeps that lock until death or loss of sight/reach. Players and mobs are included
 by default; friends and occluded entities are skipped. The basic controls are
@@ -250,7 +272,7 @@ activation, target type and reach. Rotation always keeps the camera independent.
 There is no preset step or selection-mode chooser. See [camera behavior and hooks](docs/silent-camera.md).
 Optional live state is under the collapsed **Diagnostics** section;
 the debug HUD is off by default. Aim Assist, Triggerbot and Auto Totem each
-have their own tab; Aim Assist and Triggerbot visibly pause while Kill Aura is enabled.
+have their own tiles and settings; Aim Assist and Triggerbot visibly pause while Kill Aura is enabled.
 Friends manages UUID exclusions and automatically marks those players with a
 translucent conical hat. Its soft violet/turquoise glow uses the Target Aura
 colors; it also works with Target Aura and ESP disabled. Removing the friend
@@ -264,18 +286,24 @@ remain accessible, including the new Misc page.
 
 Visuals has **Trails**, **Hit particles**, **Ambient particles**, **Hit bubbles**,
 **Kill effect** and **BreadCrumbs**, inspired by ThunderHack-Recode. Enable effects
-in their function tabs; they start disabled and unbound. Every particle style has
+with their module tiles; they start disabled and unbound. Right-click opens their
+settings. Every particle style has
 Aura-style soft glow and an intensity control. Colours follow Target Aura or can
 be edited separately. **China hat** enables a transparent glowing hat on your own
 sampled head, on in F5 by default. Restart Minecraft and reattach the updated
 agent for own head geometry. [Controls and snapshot limitations](docs/world-visuals.md).
 
-Optional -DMCOV_BUILD_UI_CHECKS=ON enables headless flat_ui, client_controls,
-world_visuals,
-control_panel and aura_rendering checks. These verify style ownership, actual
-settings input, key capture/conflicts, toggle/hold/focus, preference roundtrip,
-HUD dragging and small viewports. D3D11 WARP renders classic-*.png and
-modular-hud*.png under build/ui-preview without opening or attaching Minecraft.
+Optional -DMCOV_BUILD_UI_CHECKS=ON enables headless UI/rendering checks, including
+liquid_glass, flat_ui, client_controls, control_panel, aura_rendering and
+depth_rendering. They verify actual D3D11 material/blur shaders, pixels, clipping,
+resize, style ownership, settings input, key capture/conflicts, toggle/hold/focus,
+preference roundtrip, HUD dragging and small viewports. D3D11 WARP renders
+classic-*.png (historical names, current Liquid Glass UI) and modular-hud*.png
+under build/ui-preview without opening or attaching Minecraft. Preview backdrops
+are deterministic fallbacks; live Minecraft capture is not confirmed by them.
+Current native grid/settings review captures are under `.impeccable/review`:
+`desktop-grid.png`, `desktop-settings.png`, `compact-grid.png`,
+`compact-settings.png` and `large-settings.png`; they use the same WARP fallback.
 
 ## Target aura
 
@@ -306,9 +334,10 @@ Full C++ implementation, render-loop example and caveats: [Aura guide](docs/aura
 `MCOV_BUILD_UI_CHECKS` also enables `aura_rendering` for real WARP pixels and
 allocation/projection checks.
 
-The current binaries live only in `build/bin`; previews are in `build/ui-preview`.
-The original liquidDX11 reference sources are under `third_party/reference`,
-alongside the retained font assets under `third_party/glass`.
+The shareable executable is `build/client/mcov.exe`; developer binaries are in
+`build/bin` and previews in `build/ui-preview`. The adapted liquidDX11 runtime
+and retained font assets are under `third_party/glass`. The portable EXE embeds
+its payload, shader strings, font assets and the glass renderer's MIT notice.
 `scripts/build.ps1` always uses `build`, with `-Checks` for the regression suite
 and `-Clean` to remove old outputs while retaining dependency/mapping caches.
 
@@ -525,7 +554,8 @@ including repeated attach, camera methods with multiple return paths and
 classes without the optional camera getter. Namespace tests check inherited
 Fabric method names; connection checks cover world loading and high overlay FPS.
 Flat UI and ESP projection/rig checks also pass.
-Restart Minecraft before using shared-memory version 15 with the rebuilt binaries.
+Restart Minecraft when updating an already attached agent to IPC v19. This UI
+redesign itself does not change the shared-memory protocol.
 
 Live Minecraft/Forge sessions and actual Java 17/25 VMs have not been exercised
 here. See [the compatibility matrix and reproducible checks](docs/compatibility.md).
@@ -537,12 +567,14 @@ here. See [the compatibility matrix and reproducible checks](docs/compatibility.
 | Component | Licence | Use |
 |---|---|---|
 | [Dear ImGui](https://github.com/ocornut/imgui) 1.91.9b | MIT | UI and draw lists |
-| [liquidDX11](https://github.com/Pondot/liquidDX11) | MIT | Retained vendor/font assets in third_party/glass; renderer not compiled |
+| [liquidDX11](https://github.com/poncippg-spec/liquidDX11) | MIT | Adapted D3D11 material renderer, backdrop capture and blur shaders in third_party/glass |
 
-The existing vendor files and third_party/glass/LICENSE.liquidDX11 remain in
-the tree. Only data/fonts.h is consumed by the flat UI; no glass shaders or
-widgets are linked. ImGui remains pinned to **1.91.9b** to retain the current
-API and font atlas behavior.
+The original-source notice remains in `third_party/glass/LICENSE.liquidDX11` and
+is embedded as executable RCDATA 103. The renderer is adapted from commit
+`00c2b2b19eb5523abde473b2c08220326d4146d4`; the reference demo's recorder,
+custom-widget suite and ImGui upgrade are not adopted. ImGui remains pinned to
+**1.91.9b** with the existing embedded font assets. See
+[third-party notices](THIRD-PARTY-NOTICES.md).
 
 ## Scope
 

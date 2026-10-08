@@ -17,6 +17,7 @@
 //                       repositioned, which would otherwise yank the mouse out
 //                       of the game every time the overlay tracked a resize.
 #pragma once
+#include "../common/liquid_glass.hpp"
 
 #include <cstdint>
 #include "rockstar_features.hpp"
@@ -156,6 +157,8 @@ private:
     void LoadPreferences();
 
     void DrawMenu();
+    int ReadModules(control_panel::Page,std::span<control_panel::ModuleView>) const;
+    void ActivateModule(control_panel::Page,int);
     void ResetMenuPage(control_panel::Page page);
     void DrawEsp(const WorldSnapshot& snapshot);
     void DrawAura(const WorldSnapshot& snapshot, const CameraProjection& projection, float width, float height);
@@ -206,6 +209,8 @@ private:
     ID3D11DeviceContext*    context_     = nullptr;
     IDXGISwapChain*         swapChain_   = nullptr;
     ID3D11RenderTargetView* backBuffer_  = nullptr;
+    LiquidGlass glass_;
+    bool glassWasVisible_ = false;
     bool                    quitRequested_ = false;
 
     VisualSettings  visuals_{};

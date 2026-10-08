@@ -230,7 +230,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
 #endif
         {
             AppState state; state.Refresh(); FlatApp app; std::string failure;
-            if(!app.Initialize(L"mcov - Client",640,520,&failure)) throw std::runtime_error(failure);
+            if(!app.Initialize(L"mcov - Client",640,640,&failure)) throw std::runtime_error(failure);
             app.Run([&] {
                 const auto now=GetTickCount64();
                 if(state.view.busy&&state.job.valid()&&state.job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {

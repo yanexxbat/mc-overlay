@@ -192,7 +192,7 @@ public:
     void SubmitOverlay(const Primitive& p);
 
     void Render(ID3D11ShaderResourceView* backdrop_heavy,
-                ID3D11ShaderResourceView* backdrop_soft);
+                ID3D11ShaderResourceView* backdrop_soft, int primitive = -1);
 
     SpringCache& springs() { return springs_; }
     float Entrance() const { return entrance_; }

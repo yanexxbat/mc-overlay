@@ -356,7 +356,8 @@ float4 PS_Glass(VSOut i) : SV_Target
 
     float a   = shape * fade;
     float outA = a + shadow_a * (1.0 - a);
-    return float4(glass * a, outA);
+    // mcov: Straight alpha fuer AddImage mit ImGuis SRC_ALPHA-Blending.
+    return float4(glass * a / max(outA, 0.00001), outA);
 }
 )HLSL";
 

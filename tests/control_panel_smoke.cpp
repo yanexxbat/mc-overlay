@@ -42,6 +42,8 @@ struct OverlayUiCheck {
     }
     static bool Box(const Overlay& o) { return o.visuals_.boxEsp; }
     static const control_panel::State& Menu(const Overlay& o) { return o.menu_; }
+    static void CloseDetails(Overlay& o) { o.menu_.settingsOpen=false; }
+    static int Modules(const Overlay& o,Page page,std::span<control_panel::ModuleView> out) { return o.ReadModules(page,out); }
     static void ReduceMotion(Overlay& o,bool value) { o.menu_.reduceMotion=value; }
     static void Center(Overlay& o) { o.menu_.positioned=false; }
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
@@ -155,9 +157,13 @@ struct OverlayUiCheck {
 };
 }
 namespace {
+mcov::LiquidGlass* previewGlass=nullptr;
+ComPtr<ID3D11Texture2D> previewScene;
+ComPtr<ID3D11ShaderResourceView> previewSceneImage;
 void Require(bool good,const char* message) { if (!good) throw std::runtime_error(message); }
 void Hr(HRESULT value) { if (FAILED(value)) throw std::runtime_error("Off-screen D3D11/PNG operation failed"); }
 void SaveFrame(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& path) {
+    if(previewGlass) previewGlass->RenderTexture();
     const auto size=ImGui::GetIO().DisplaySize;
     D3D11_TEXTURE2D_DESC desc{};
     desc.Width=UINT(size.x); desc.Height=UINT(size.y); desc.MipLevels=desc.ArraySize=1;
@@ -196,6 +202,9 @@ void SaveFrame(ID3D11Device* device,ID3D11DeviceContext* context,const std::file
 void Draw(mcov::Overlay& overlay,Page page,int theme,ImVec2 size,bool preserveState=false) {
     auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
     ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+    if(previewGlass) previewGlass->BeginFrame(nullptr,size,true,false,previewScene.Get());
+    if(previewSceneImage) ImGui::GetBackgroundDrawList()->AddImage(
+        static_cast<ImTextureID>(reinterpret_cast<uintptr_t>(previewSceneImage.Get())),{0,0},size);
     auto& ctx=*ImGui::GetCurrentContext();
     const auto colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size,fonts=ctx.FontStack.Size;
     const auto before=ImGui::GetStyle();
@@ -219,35 +228,152 @@ ImGuiWindow* Child(const char* name) {
     }
     throw std::runtime_error("Missing menu child");
 }
-// Echte Maus-Eingaben erreichen auch Tabs hinter den nativen Scroll-Pfeilen.
+// Echte Rechtsklicks erreichen auch Module unterhalb der sichtbaren Grid-Zeilen.
 void SelectSubTab(mcov::Overlay& overlay,Page page,const char* id,int index,int count,ImVec2 viewport={1280,800}) {
+    (void)id;
     auto frame=[&] { Draw(overlay,page,0,viewport); };
-    frame(); ImGui::SetScrollY(Child("/content_"),0); frame(); frame();
-    auto bar=[&] {
-        auto* tabs=ImGui::GetCurrentContext()->TabBars.GetByKey(Child("/content_")->GetID(id));
-        if(!tabs||tabs->Tabs.Size!=count) {
-            throw std::runtime_error(std::string("Function tabs are missing: ")+id+" count="+std::to_string(tabs ? tabs->Tabs.Size : -1));
-        }
-        return tabs;
+    mcov::OverlayUiCheck::CloseDetails(overlay); frame(); frame(); frame();
+    std::array<mcov::control_panel::ModuleView,64> before{},after{};
+    Require(mcov::OverlayUiCheck::Modules(overlay,page,before)==count,"Module catalog is incomplete");
+    auto grid=[&] { return ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid")); };
+    Require(grid()!=nullptr,"Module grid is missing");
+    auto point=[&] {
+        auto* table=grid(); const auto& column=table->Columns[index%table->ColumnsCount];
+        return ImVec2{(column.WorkMinX+column.WorkMaxX)*.5f,
+            table->OuterRect.Min.y+(index/table->ColumnsCount)*(96+2*table->RowCellPaddingY)+table->RowCellPaddingY+48};
     };
-    const auto wanted=bar()->Tabs[index].ID;
-    for(int attempt=0;attempt<count+1&&bar()->SelectedTabId!=wanted;++attempt) {
-        auto* tabs=bar(); int current=0;
-        while(current<count&&tabs->Tabs[current].ID!=tabs->SelectedTabId) ++current;
-        Require(current<count,"Unknown selected function tab");
-        ImVec2 point;
-        if(tabs->WidthAllTabsIdeal>tabs->BarRect.GetWidth()) {
-            point={tabs->BarRect.Max.x+1+(index>current ? 16.5f : 5.5f),tabs->BarRect.GetCenter().y};
-        } else {
-            const auto& tab=tabs->Tabs[index];
-            point={tabs->BarRect.Min.x+tab.Offset-tabs->ScrollingAnim+tab.Width*.5f,tabs->BarRect.GetCenter().y};
-        }
-        auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame();
-        io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+    auto p=point(); auto* modules=Child("/modules_");
+    if(p.y<modules->InnerRect.Min.y+48||p.y>modules->InnerRect.Max.y-48) {
+        ImGui::SetScrollY(modules,modules->Scroll.y+p.y-modules->InnerRect.GetCenter().y); frame(); frame();
     }
-    Require(bar()->SelectedTabId==wanted,"Function tab could not be selected through input");
-    for(int settle=0;settle<20;++settle) frame();
+    p=point(); auto& io=ImGui::GetIO(); io.AddMousePosEvent(p.x,p.y); frame();
+    io.AddMouseButtonEvent(1,true); frame(); io.AddMouseButtonEvent(1,false); frame(); frame();
+    const auto& menu=mcov::OverlayUiCheck::Menu(overlay);
+    Require(menu.settingsOpen&&menu.settingsPage==page&&menu.settingsSection==index,"Right click did not open the correct module");
+    mcov::OverlayUiCheck::Modules(overlay,page,after);
+    Require(before[index].enabled==after[index].enabled,"Right click toggled the module");
     ImGui::GetIO().AddMousePosEvent(-100,-100); frame();
+}
+void ModuleTileChecks(mcov::Overlay& overlay) {
+    auto& io=ImGui::GetIO();
+    for(Page page:{Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Misc}) {
+        std::array<mcov::control_panel::ModuleView,64> modules{};
+        const int count=mcov::OverlayUiCheck::Modules(overlay,page,modules);
+        auto frame=[&] { Draw(overlay,page,0,{1280,800}); };
+        for(int index=0;index<count;++index) {
+            if(modules[index].mode!=mcov::control_panel::TileMode::Toggle) continue;
+            mcov::OverlayUiCheck::CloseDetails(overlay); frame(); frame();
+            auto grid=[&] { return ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid")); };
+            auto point=[&] {
+                auto* t=grid(); const auto& col=t->Columns[index%t->ColumnsCount];
+                return ImVec2{(col.WorkMinX+col.WorkMaxX)*.5f,t->OuterRect.Min.y+
+                    (index/t->ColumnsCount)*(96+2*t->RowCellPaddingY)+t->RowCellPaddingY+48};
+            };
+            auto p=point(); auto* child=Child("/modules_");
+            if(p.y<child->InnerRect.Min.y+48||p.y>child->InnerRect.Max.y-48) {
+                ImGui::SetScrollY(child,child->Scroll.y+p.y-child->InnerRect.GetCenter().y); frame(); frame();
+            }
+            mcov::OverlayUiCheck::Modules(overlay,page,modules); const bool original=modules[index].enabled;
+            for(bool expected:{!original,original}) {
+                p=point(); io.AddMousePosEvent(p.x,p.y); frame();
+                io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+                mcov::OverlayUiCheck::Modules(overlay,page,modules);
+                Require(modules[index].enabled==expected,"Left click did not toggle the real module state");
+                Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Left click unexpectedly opened settings");
+            }
+        }
+    }
+    // Tastatur-Aktivierung verwendet denselben Widget-Pfad wie ein Linksklick.
+    mcov::OverlayUiCheck::CloseDetails(overlay);
+    Draw(overlay,Page::Visuals,0,{1280,800}); ImGui::SetScrollY(Child("/modules_"),0);
+    Draw(overlay,Page::Visuals,0,{1280,800}); Draw(overlay,Page::Visuals,0,{1280,800});
+    auto* child=Child("/modules_"); auto& stack=child->IDStack; const int zero=0;
+    stack.push_back(child->GetID("module_grid"));
+    stack.push_back(ImHashData(&zero,sizeof(zero),child->IDStack.back()));
+    const auto id=child->GetID("##module"); stack.pop_back(); stack.pop_back();
+    io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
+    ImGui::FocusWindow(child); ImGui::SetNavID(id,ImGuiNavLayer_Main,0,ImRect({0,0},{50,50}));
+    ImGui::GetCurrentContext()->NavCursorVisible=true;
+    const bool box=mcov::OverlayUiCheck::Box(overlay);
+    io.AddKeyEvent(ImGuiKey_Space,true); Draw(overlay,Page::Visuals,0,{1280,800});
+    io.AddKeyEvent(ImGuiKey_Space,false); Draw(overlay,Page::Visuals,0,{1280,800});
+    Require(mcov::OverlayUiCheck::Box(overlay)!=box,"Keyboard could not activate the module tile");
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,box);
+}
+void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto& io=ImGui::GetIO();
+    const bool originalBox=mcov::OverlayUiCheck::Box(overlay);
+    SelectSubTab(overlay,Page::Settings,"settings_sections",2,4);
+    auto* content=Child("/content_"); ImGui::SetScrollY(content,150);
+    Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
+    const float scroll=content->Scroll.y; Require(scroll>0,"Keybind scroll fixture is empty");
+    Draw(overlay,Page::Combat,0,{1280,800}); Draw(overlay,Page::Combat,0,{1280,800});
+    Require(content->Scroll.y==scroll,"Changing root category reset the settings scroll every frame");
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsPage==Page::Settings,"Root navigation replaced the open module settings");
+    SelectSubTab(overlay,Page::Visuals,"visual_sections",0,26);
+    auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+    auto* root=ImGui::FindWindowByName("mcov control panel");
+    auto* detail=ImGui::FindWindowByName("mcov module settings");
+    const auto rootPos=root->Pos,detailPos=detail->Pos;
+    const ImVec2 grip{detailPos.x+100,detailPos.y+25};
+    io.AddMousePosEvent(grip.x,grip.y); frame(); io.AddMouseButtonEvent(0,true); frame();
+    io.AddMousePosEvent(grip.x-65,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
+    Require(detail->Pos.x==detailPos.x-65&&detail->Pos.y==detailPos.y+15,"Settings window could not be dragged independently");
+    Require(root->Pos.x==rootPos.x&&root->Pos.y==rootPos.y,"Dragging settings moved the main window");
+    auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid"));
+    const ImVec2 tile{table->Columns[0].WorkMinX+35,table->OuterRect.Min.y+table->RowCellPaddingY+48};
+    // Root nach vorne holen, dann dasselbe Modul erneut rechtsklicken.
+    io.AddMousePosEvent(tile.x,tile.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+    io.AddMouseButtonEvent(1,true); frame(); io.AddMouseButtonEvent(1,false); frame(); frame();
+    Require(ImGui::GetCurrentContext()->NavWindow->RootWindow==detail,"Reopening the same module did not raise its settings window");
+    const ImVec2 close{detail->Pos.x+detail->Size.x-30,detail->Pos.y+30};
+    io.AddMousePosEvent(close.x,close.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
+    Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Settings close button did not close only the second window");
+    // Einstellungs-Kacheln ohne Enable-Zustand muessen auch links oeffnen.
+    Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
+    table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/modules_")->GetID("module_grid"));
+    io.AddMousePosEvent(table->Columns[0].WorkMinX+35,table->OuterRect.Min.y+table->RowCellPaddingY+48);
+    Draw(overlay,Page::Settings,0,{1280,800}); io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Settings,0,{1280,800});
+    io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Settings,0,{1280,800});
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==0,"Settings-only tile did not open on left click");
+    mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
+    Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
+    SaveFrame(device,context,output/"module-grid-small.png");
+    SelectSubTab(overlay,Page::Combat,"combat_sections",1,8,{1920,1080}); mcov::OverlayUiCheck::Center(overlay);
+    Draw(overlay,Page::Combat,0,{1920,1080}); Draw(overlay,Page::Combat,0,{1920,1080});
+    SaveFrame(device,context,output/"module-settings-large.png");
+    mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,originalBox);
+}
+void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    // Kontrollierter Hintergrund: keine Desktop-Aufnahme, keine Spiel-/Benutzerdaten.
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        const int w=int(size.x),h=int(size.y); std::vector<ImU32> pixels(w*h);
+        for(int y=0;y<h;++y) for(int x=0;x<w;++x) {
+            const float u=float(x)/w,v=float(y)/h;
+            if(v<.45f) pixels[y*w+x]=IM_COL32(100+int(u*35),153+int(u*25),195,255);
+            else {
+                const int patch=((x/90)+(y/65))%2;
+                pixels[y*w+x]=IM_COL32(55+patch*45,100+patch*45,58+patch*25,255);
+            }
+            if((u>.13f&&u<.26f&&v>.13f&&v<.75f)||(u>.65f&&u<.79f&&v>.27f&&v<.68f))
+                pixels[y*w+x]=IM_COL32(91,68,45,255);
+            if((u>.82f&&u<.94f&&v>.19f&&v<.39f)) pixels[y*w+x]=IM_COL32(230,219,199,255);
+        }
+        D3D11_TEXTURE2D_DESC d{}; d.Width=w; d.Height=h; d.MipLevels=d.ArraySize=1;
+        d.Format=DXGI_FORMAT_R8G8B8A8_UNORM; d.SampleDesc.Count=1; d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
+        D3D11_SUBRESOURCE_DATA data{pixels.data(),UINT(w*4),0};
+        Hr(device->CreateTexture2D(&d,&data,&previewScene));
+        Hr(device->CreateShaderResourceView(previewScene.Get(),nullptr,&previewSceneImage));
+        mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
+        Draw(overlay,Page::Combat,0,size); ImGui::SetScrollY(Child("/modules_"),0); Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
+        const char* suffix=w<500?"small":"desktop";
+        SaveFrame(device,context,output/(std::string("glass-scene-grid-")+suffix+".png"));
+        SelectSubTab(overlay,Page::Combat,"combat_sections",1,8,size);
+        Draw(overlay,Page::Combat,0,size); SaveFrame(device,context,output/(std::string("glass-scene-settings-")+suffix+".png"));
+        previewSceneImage.Reset(); previewScene.Reset();
+    }
+    mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
 }
 void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                       const std::filesystem::path& output) {
@@ -255,13 +381,8 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     auto& config=mcov::OverlayUiCheck::CubeSettings(overlay);
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
     mcov::OverlayUiCheck::Center(overlay); frame(); frame();
-    auto bar=[&]() -> ImGuiTabBar* {
-        auto* tabs=ctx.TabBars.GetByKey(Child("/content_")->GetID("visual_sections"));
-        Require(tabs&&tabs->Tabs.Size==26,"Visuals did not expose all function tabs"); return tabs;
-    };
     SelectSubTab(overlay,Page::Visuals,"visual_sections",8,26);
     auto* content=Child("/content_");
-    const auto markerId=bar()->Tabs[8].ID;
     auto click=[&](ImVec2 p) {
         io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
         io.AddMouseButtonEvent(0,false); frame(); frame();
@@ -276,10 +397,26 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     click({top.x+32,top.y+8});
     Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
     // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
-    const float row=23.f;
+    const float row=mcov::style::MenuFont()->FontSize+12+2*controls()->RowCellPaddingY;
     const auto& column=controls()->Columns[0];
-    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+24});
+    click({column.WorkMaxX-10,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34});
     Require(config.sizeFraction>1&&config.sizeFraction<=1.5f,"Marker size slider was not wired to renderer config");
+    // CTRL-Klick muss einen sichtbaren Editor oeffnen, statt alle Glyphen zu verstecken.
+    io.AddKeyEvent(ImGuiMod_Ctrl,true);
+    click({column.WorkMinX+80,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34});
+    Require(ctx.TempInputId!=0,"CTRL-click did not open numeric slider input");
+    auto* input=ImGui::GetInputTextState(ctx.TempInputId);
+    Require(input&&input->TextLen>0,"Numeric slider input lost its value");
+    bool visibleInput=false;
+    const ImVec2 editPoint{column.WorkMinX+80,controls()->OuterRect.Min.y+row+controls()->RowCellPaddingY+34};
+    const auto white=ImGui::GetIO().Fonts->TexUvWhitePixel;
+    for(const auto& v:content->DrawList->VtxBuffer)
+        if(v.pos.x>=column.WorkMinX&&v.pos.x<=column.WorkMaxX&&v.pos.y>editPoint.y-9&&v.pos.y<editPoint.y+9&&
+           (v.uv.x!=white.x||v.uv.y!=white.y)&&
+           (v.col&IM_COL32_A_MASK)!=0&&((v.col>>IM_COL32_R_SHIFT)&255)>220) visibleInput=true;
+    Require(visibleInput,"Numeric slider input text was transparent");
+    io.AddKeyEvent(ImGuiMod_Ctrl,false); io.AddKeyEvent(ImGuiKey_Escape,true); frame();
+    io.AddKeyEvent(ImGuiKey_Escape,false); frame();
     config.glow=.4f; config.animate=false; config.showDepth=false; config.lime={.85f,.15f,1,1};
     mcov::OverlayUiCheck::ResetVisuals(overlay);
     Require(config.enabled&&config.animate&&config.showDepth&&config.glow==1&&config.sizeFraction==.68f&&config.lime.y==1,
@@ -293,9 +430,9 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     mcov::OverlayUiCheck::Center(overlay);
     for(int i=0;i<3;++i) Draw(overlay,Page::Visuals,0,{480,360});
     content=Child("/content_");
-    ImGui::SetScrollY(content,content->Scroll.y+bar()->BarRect.Min.y-content->InnerRect.Min.y-28);
+    ImGui::SetScrollY(content,0);
     for(int i=0;i<3;++i) Draw(overlay,Page::Visuals,0,{480,360});
-    Require(bar()->SelectedTabId==markerId,"Marker tab selection did not survive compact layout");
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsSection==8,"Marker selection did not survive compact layout");
     SaveFrame(device,context,output/"marker-settings-small.png");
     mcov::OverlayUiCheck::MarkerDetails(overlay,false);
     ImGui::SetScrollY(Child("/content_"),0);
@@ -574,6 +711,7 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        if(previewGlass) previewGlass->BeginFrame(nullptr,size,true,false);
         auto& ctx=*ImGui::GetCurrentContext(); const auto before=ImGui::GetStyle();
         const int colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size,fonts=ctx.FontStack.Size;
         auto actions=mcov::launcher::Render(view,size);
@@ -604,7 +742,7 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     view.tab=0; view.error=view.needsJdk=false;
     frame({640,520}); auto* content=Child("/launcher_content");
     ImGui::SetScrollY(content,0); frame({640,520}); frame({640,520});
-    const ImVec2 point{320,content->Pos.y+208};
+    const ImVec2 point{320,content->Pos.y+content->Size.y+25};
     auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame({640,520});
     io.AddMouseButtonEvent(0,true); frame({640,520}); io.AddMouseButtonEvent(0,false);
     Require(frame({640,520}).start,"Launcher start button did not respond");
@@ -633,6 +771,9 @@ int main(int argc,char** argv) {
                 mcov::control_panel::motion::EaseOut(.2f)>.5f,"Feedback curve does not respond promptly");
         mcov::style::ApplyFlatTheme(ImGui::GetStyle());
         Require(ImGui_ImplDX11_Init(device.Get(),context.Get()),"Off-screen ImGui renderer failed");
+        mcov::LiquidGlass glass;
+        Require(glass.Initialize(device.Get(),context.Get()),"Liquid glass shaders failed to initialize");
+        previewGlass=&glass;
         // Die erweiterte Fixture plus mehrere große Snapshots passen nicht auf den 1-MB-Teststack.
         auto overlayStorage=std::make_unique<mcov::Overlay>(); auto& overlay=*overlayStorage; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
@@ -641,31 +782,40 @@ int main(int argc,char** argv) {
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
         constexpr int sectionCounts[]={8,26,7,20,3,4,8};
+        ModuleTileChecks(overlay);
+        SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
+        GlassScenePreview(overlay,device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
             SelectSubTab(overlay,pages[p],sectionIds[p],0,sectionCounts[p]);
         }
+        mcov::OverlayUiCheck::CloseDetails(overlay);
+        frame(Page::Combat); ImGui::SetScrollY(Child("/modules_"),0); frame(Page::Combat);
         editor.Select(mcov::CombatMenu::Section::AimAssist); frame(Page::Combat); frame(Page::Combat);
         frame(Page::Combat); SaveFrame(device.Get(),context.Get(),output/"classic-combat.png");
+        SaveFrame(device.Get(),context.Get(),output/"module-grid-combat.png");
         frame(Page::Visuals); SaveFrame(device.Get(),context.Get(),output/"classic-visuals.png");
         frame(Page::Hud); SaveFrame(device.Get(),context.Get(),output/"classic-hud-settings.png");
         auto click=[&](ImVec2 p,Page page=Page::Visuals) {
             io.AddMousePosEvent(p.x,p.y); frame(page,true); io.AddMouseButtonEvent(0,true); frame(page,true);
             io.AddMouseButtonEvent(0,false); frame(page,true); frame(page,true);
         };
+        SelectSubTab(overlay,Page::Visuals,"visual_sections",0,26);
+        SaveFrame(device.Get(),context.Get(),output/"module-settings-box.png");
         frame(Page::Visuals); auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(Page::Visuals);
         auto* boxTable=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("box_controls"));
         Require(boxTable!=nullptr,"Box ESP settings are missing");
         const ImVec2 checkbox{boxTable->OuterRect.Min.x+23,boxTable->OuterRect.Min.y+8};
         click(checkbox); Require(!mcov::OverlayUiCheck::Box(overlay),"Classic checkbox did not update real ESP setting");
         mcov::OverlayUiCheck::ResetVisuals(overlay); Require(mcov::OverlayUiCheck::Box(overlay),"Visuals reset failed");
+        mcov::OverlayUiCheck::CloseDetails(overlay); frame(Page::Visuals); frame(Page::Visuals);
         auto* nav=Child("/navigation_");
-        const float width=nav->Size.x/7;
-        click({nav->Pos.x+width*.5f,nav->Pos.y+15});
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Top navigation did not select Combat");
-        nav=Child("/navigation_"); click({nav->Pos.x+width*5.5f,nav->Pos.y+15},Page::Combat);
-        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Settings,"Top navigation did not select Settings");
+        const float tabHeight=std::clamp((nav->Size.y-36)/7,24.f,40.f);
+        click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+tabHeight*.5f});
+        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Left navigation did not select Combat");
+        nav=Child("/navigation_"); click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+5*(tabHeight+6)+tabHeight*.5f},Page::Combat);
+        Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Settings,"Left navigation did not select Settings");
         auto* panel=ImGui::FindWindowByName("mcov control panel"); const auto original=panel->Pos;
         const ImVec2 grip{original.x+panel->Size.x*.5f,original.y+12};
         io.AddMousePosEvent(grip.x,grip.y); frame(Page::Settings); io.AddMouseButtonEvent(0,true); frame(Page::Settings);
@@ -673,15 +823,14 @@ int main(int argc,char** argv) {
         io.AddMousePosEvent(grip.x+55,grip.y+35); frame(Page::Settings); io.AddMouseButtonEvent(0,false); frame(Page::Settings);
         Require(panel->Pos.x==original.x+55&&panel->Pos.y==original.y+35,"Classic menu drag lost its offset");
         mcov::OverlayUiCheck::Center(overlay); frame(Page::Settings);
+        SelectSubTab(overlay,Page::Settings,"settings_sections",2,4);
         auto& ctx=*ImGui::GetCurrentContext(); content=Child("/content_");
-        auto* settingsTabs=ctx.TabBars.GetByKey(content->GetID("settings_sections"));
-        Require(settingsTabs&&settingsTabs->Tabs.Size==4,"Settings lacks Keybinds tab");
-        const auto& keyTab=settingsTabs->Tabs[2];
-        click({settingsTabs->BarRect.Min.x+keyTab.Offset+keyTab.Width*.5f,settingsTabs->BarRect.GetCenter().y},Page::Settings);
         SaveFrame(device.Get(),context.Get(),output/"classic-keybinds.png");
         auto* keysTable=ctx.Tables.GetByKey(content->GetID("keybind_editor"));
         Require(keysTable!=nullptr,"Keybind editor not rendered");
-        click({keysTable->Columns[1].WorkMinX+50,keysTable->OuterRect.Min.y+19+3*23+12},Page::Settings);
+        const float bindRow=keysTable->RowPosY2-keysTable->RowPosY1;
+        const float keyHeader=mcov::style::MenuFont()->FontSize+2*keysTable->RowCellPaddingY;
+        click({keysTable->Columns[1].WorkMinX+50,keysTable->OuterRect.Min.y+keyHeader+3*bindRow+bindRow*.5f},Page::Settings);
         Require(mcov::OverlayUiCheck::Capture(overlay)==mcov::keys::Index(mcov::keys::Action::KillAura),"Real bind button did not enter capture");
         mcov::keys::Input input{}; input[0x4B]=input[0x11]=true;
         mcov::OverlayUiCheck::Input(overlay,input,true);
@@ -689,6 +838,9 @@ int main(int argc,char** argv) {
         Require(binds[auraKey].key==0x4B&&binds[auraKey].modifiers==mcov::keys::Ctrl,"Key capture failed to store Ctrl+K");
         mcov::OverlayUiCheck::Input(overlay,{}); mcov::OverlayUiCheck::Input(overlay,input);
         Require(editor.Store().Read().values.enabled,"Captured key did not toggle the production Kill Aura store");
+        std::array<mcov::control_panel::ModuleView,64> liveTiles{};
+        mcov::OverlayUiCheck::Modules(overlay,Page::Combat,liveTiles);
+        Require(liveTiles[0].enabled&&std::string(liveTiles[0].binding).find("K")!=std::string::npos,"Tiles did not reflect the keybind toggle and binding");
         mcov::OverlayUiCheck::Input(overlay,{});
         mcov::OverlayUiCheck::Capture(overlay,mcov::keys::Action::Skeleton); mcov::OverlayUiCheck::Input(overlay,input,true);
         Require(mcov::OverlayUiCheck::Capture(overlay)>=0&&!binds[mcov::keys::Index(mcov::keys::Action::Skeleton)].key,"Conflicting keybind was accepted");
@@ -805,7 +957,7 @@ int main(int argc,char** argv) {
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
             const auto suffix=size.x<500?"-small.png":".png";
             for(int section:{3,5,6}) {
-                editor.Select(static_cast<mcov::CombatMenu::Section>(section));
+                SelectSubTab(overlay,Page::Combat,"combat_sections",section,8,size);
                 mcov::OverlayUiCheck::Center(overlay);
                 for(int i=0;i<20;++i) Draw(overlay,Page::Combat,0,size);
                 SaveFrame(device.Get(),context.Get(),output/(std::string("item-settings-")+std::to_string(section)+suffix));
@@ -856,8 +1008,9 @@ int main(int argc,char** argv) {
         for (int i=0;i<16;++i) auraFrame();
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
         LauncherChecks(device.Get(),context.Get(),output);
+        previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: classic menu, 7 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura/Rockstar pack\n";
+        std::cout<<"PASS control panel: liquid glass shaders, 7 tabs, style ownership, drag, marker settings, key capture/conflicts/production toggle, saved HUD layout, HUD drag/resize, ESP/friend hats/aura/Rockstar pack\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

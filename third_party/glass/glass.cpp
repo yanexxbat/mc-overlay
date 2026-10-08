@@ -1,8 +1,4 @@
 #include "glass.h"
-// mcov: the widget layer uses internal ImGui APIs (ButtonBehavior,
-// ImGuiButtonFlags_AllowOverlap, ...). The upstream project picked this up
-// transitively from its example app; compiled standalone it has to be explicit.
-#include "imgui_internal.h"
 #include "shaders.h"
 #include <d3dcompiler.h>
 #include <d3d11shader.h>
@@ -368,7 +364,9 @@ bool Renderer::Init(ID3D11Device* device, ID3D11DeviceContext* ctx) {
       sd.ComparisonFunc = D3D11_COMPARISON_NEVER; sd.MaxLOD = D3D11_FLOAT32_MAX;
       if (FAILED(device_->CreateSamplerState(&sd, &sampler_))) return false; }
     { D3D11_BLEND_DESC bd = {};
-      bd.RenderTarget[0].BlendEnable = TRUE;
+      // mcov rendert eine Flaeche in eine transparente ImGui-Textur.
+      // Straight alpha verhindert doppelte Abdunklung an deren Glasrand.
+      bd.RenderTarget[0].BlendEnable = FALSE;
       bd.RenderTarget[0].SrcBlend  = D3D11_BLEND_ONE;  bd.RenderTarget[0].DestBlend  = D3D11_BLEND_INV_SRC_ALPHA; bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
       bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE; bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA; bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
       bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
@@ -435,9 +433,7 @@ void Renderer::BeginFrame(int win_w, int win_h, int win_x, int win_y,
     ClearClipRect();
     float dt = ImGui::GetIO().DeltaTime;
     time_ += dt;
-    Spring& e = springs_.Get(0xE0E0E0u, 0, SpringStyle::Bouncy, 0.0f);
-    e.target = 1.0f; e.Tick(dt);
-    entrance_ = e.x;
+    entrance_ = 1.0f;
     float th  = light_angle_deg_  * (kPI / 180.0f);
     float th2 = light2_angle_deg_ * (kPI / 180.0f);
     light_x_  = std::sin(th);   light_y_  = -std::cos(th);
@@ -453,7 +449,7 @@ size_t Renderer::Submit(const Primitive& p) {
 Primitive& Renderer::At(size_t i) { return queue_[i]; }
 void Renderer::SubmitOverlay(const Primitive& p) { overlay_.push_back(p); }
 
-void Renderer::Render(ID3D11ShaderResourceView* heavy, ID3D11ShaderResourceView* soft) {
+void Renderer::Render(ID3D11ShaderResourceView* heavy, ID3D11ShaderResourceView* soft, int primitive) {
     if (queue_.empty() && overlay_.empty()) return;
     ctx_->OMSetDepthStencilState(depth_, 0);
     const FLOAT bf[4] = { 0,0,0,0 };
@@ -557,61 +553,12 @@ void Renderer::Render(ID3D11ShaderResourceView* heavy, ID3D11ShaderResourceView*
         ctx_->Unmap(cb_, 0);
         ctx_->Draw(6, 0);
     };
-    for (const Primitive& p : queue_)   draw_one(p);
-    for (const Primitive& p : overlay_) draw_one(p);
+    for (size_t i = 0; i < queue_.size(); ++i)
+        if (primitive < 0 || i == size_t(primitive)) draw_one(queue_[i]);
+    if (primitive < 0) for (const Primitive& p : overlay_) draw_one(p);
     ID3D11ShaderResourceView* nullsrv[2] = { nullptr, nullptr };
     ctx_->PSSetShaderResources(0, 2, nullsrv);
 }
 
-struct CardState { Material mat; size_t queue_index; float radius; };
-static std::vector<CardState> g_card_stack;
 
-static inline float Dt() { return ImGui::GetIO().DeltaTime; }
-
-bool BeginCard(const char* id, Material m, ImVec2 size) {
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(US(22 * g_density), US(20 * g_density)));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(US(12 * g_density), US(11 * g_density)));
-    ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(0,0,0,0));
-    ImGuiWindowFlags fl =
-        ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoTitleBar |
-        ImGuiWindowFlags_NoCollapse   | ImGuiWindowFlags_NoMove     |
-        ImGuiWindowFlags_NoScrollbar  | ImGuiWindowFlags_NoResize;
-    if (size.x != 0 && size.y != 0) {
-        ImGui::SetNextWindowSize(size, ImGuiCond_Always);
-    } else {
-        fl |= ImGuiWindowFlags_AlwaysAutoResize;
-        if (size.x != 0)
-            ImGui::SetNextWindowSizeConstraints(ImVec2(size.x, 0), ImVec2(size.x, 100000.0f));
-    }
-    bool open = ImGui::Begin(id, nullptr, fl);
-    size_t idx = 0;
-    if (g) idx = g->Submit(Primitive{});
-    g_card_stack.push_back({ m, idx, US(26.0f) });
-    return open;
-}
-
-void EndCard() {
-    if (g_card_stack.empty()) { ImGui::End(); ImGui::PopStyleColor(); ImGui::PopStyleVar(2); return; }
-    CardState s = g_card_stack.back(); g_card_stack.pop_back();
-    ImVec2 wp = ImGui::GetWindowPos();
-    ImVec2 ws = ImGui::GetWindowSize();
-    if (g) {
-        Primitive& p = g->At(s.queue_index);
-        p.cx = wp.x + ws.x * 0.5f; p.cy = wp.y + ws.y * 0.5f;
-        p.hw = ws.x * 0.5f; p.hh = ws.y * 0.5f;
-        p.corner_radius = s.radius; p.fade = 1.0f; p.material = s.mat;
-    }
-    ImGui::End();
-    ImGui::PopStyleColor();
-    ImGui::PopStyleVar(2);
-}
-
-#include "widgets/audio.inc"
-#include "widgets/widgets_core.inc"
-#include "widgets/widgets_input.inc"
-#include "widgets/fields_color.inc"
-#include "widgets/widgets_misc.inc"
-#include "widgets/modals.inc"
-#include "widgets/widgets_extra.inc"
-#include "widgets/chrome.inc"
-}
+} // namespace Glass

@@ -1,9 +1,10 @@
-# Flat UI
+# Bestehende Flat- und HUD-Helfer
 
-Diese Helfer bleiben die Grundlage des Injectors und der gemeinsamen UI-Runtime.
-Das Overlay-Menü und HUD verwenden inzwischen das vom Benutzer vorgegebene
-kantige Violett-Design; Bedienung, HUD-Editor und Keybinds stehen in
-[client-ui.md](client-ui.md).
+Diese API bleibt für bestehende HUD-/Entwickleroberflächen und das globale
+Basistheme verfügbar. Sie ist nicht mehr das Menü-/Injector-Design: beide
+verwenden jetzt das lokale `LiquidStyle` und den D3D11-Glasrenderer aus
+[liquid-ui.md](liquid-ui.md). Das modulare HUD behält sein bisheriges Aussehen.
+Bedienung, HUD-Editor und Keybinds stehen in [client-ui.md](client-ui.md).
 
 Die gemeinsame Implementierung liegt in `src/common/flat_style.hpp/.cpp`.
 Nach `ImGui::CreateContext()` einmal das Theme anwenden:
@@ -83,13 +84,12 @@ ist kein Bestandteil dieses UI-Umbaus.
 JNI/JVMTI bleibt vollständig in `mcov_agent.dll`. Der Sampler veröffentlicht
 POD-Snapshots über Shared Memory. `Overlay::RunFrame()` übernimmt einen fertigen
 Snapshot mit `TryReadSnapshot()` und übergibt ihn als `const WorldSnapshot&` an
-die Renderer. UI-Helfer importieren weder JNI noch Agent-Header. Die Umstellung
-fügt keine JNI-Abfragen hinzu. Desktop Duplication, Blur, Refraction und
-Specular-Pässe sowie die Glass-Widget-Runtime werden nicht mehr gebaut oder
-ausgeführt. Nur vorhandene eingebettete Schriftdateien werden weiterverwendet.
-Der transparente Framebuffer außerhalb der deckenden UI bleibt für das Overlay
-erforderlich; Halbtransparenz innerhalb des UI dient nur Schatten und
-ImGui-Zuständen wie deaktivierten Widgets oder modaler Abdunklung.
+die Renderer. Die Flat-Helfer importieren weder JNI noch Agent-Header und fügen
+keine JNI-Abfragen hinzu. Der separate Liquid-Glass-Menürenderer baut und
+verwendet inzwischen Desktop Duplication, Blur und Refraction; seine
+GPU-spezifische Implementierung ist keine portable OpenGL-Variante dieser Flat-
+API. Die originalen Demo-Widgets werden nicht übernommen. Der transparente
+Framebuffer außerhalb der UI bleibt für das Overlay erforderlich.
 
 ## Prüfung
 

@@ -1,149 +1,301 @@
-# Minecraft overlay UI and HUD
+---
+name: mcov Liquid Glass
+description: A native, readable control surface over the Minecraft viewport.
+colors:
+  primary: "#818CF8"
+  primary-ink: "#B2B9FF"
+  primary-grab-active: "#E3E6FF"
+  text: "#F3F4FF"
+  text-muted: "#D7DCEC"
+  surface-window: "rgba(21,26,42,0.96)"
+  surface-child: "rgba(16,21,34,0.24)"
+  surface-popup: "rgba(34,43,66,0.99)"
+  surface-control: "rgba(192,207,255,0.09)"
+  surface-control-hover: "rgba(192,207,255,0.17)"
+  surface-control-active: "rgba(192,207,255,0.23)"
+  surface-button: "rgba(192,207,255,0.10)"
+  surface-button-hover: "rgba(192,207,255,0.21)"
+  surface-tab: "rgba(192,207,255,0.06)"
+  surface-tab-selected: "rgba(129,140,248,0.32)"
+  border: "rgba(185,203,255,0.16)"
+  separator: "rgba(203,213,255,0.10)"
+typography:
+  title:
+    fontFamily: "Inter"
+    fontSize: "22.1px"
+    fontWeight: 600
+  body:
+    fontFamily: "Inter"
+    fontSize: "14px"
+    fontWeight: 500
+  label:
+    fontFamily: "Inter"
+    fontSize: "14px"
+    fontWeight: 600
+rounded:
+  window: "22px"
+  child: "14px"
+  popup: "12px"
+  navigation: "10px"
+  module: "12px"
+  control: "8px"
+  grab: "6px"
+spacing:
+  window: "16px"
+  content: "13px"
+  frame-x: "10px"
+  frame-y: "6px"
+  item-x: "10px"
+  item-y: "8px"
+  inner-x: "7px"
+  inner-y: "5px"
+components:
+  button:
+    backgroundColor: "{colors.surface-button}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "6px 10px"
+  button-hover:
+    backgroundColor: "{colors.surface-button-hover}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  input:
+    backgroundColor: "{colors.surface-control}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.control}"
+    padding: "6px 10px"
+  input-hover:
+    backgroundColor: "{colors.surface-control-hover}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.control}"
+  category-navigation:
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.navigation}"
+    padding: "7px 4px"
+  module-tile:
+    textColor: "{colors.text}"
+    typography: "{typography.label}"
+    rounded: "{rounded.module}"
+    height: "96px"
+  content-panel:
+    backgroundColor: "{colors.surface-child}"
+    rounded: "{rounded.child}"
+    padding: "13px"
+---
 
-Mode: Operate. Visual authority: the user's latest screenshot, committed as
-`design/reference-classic-ui.png`. This explicitly replaces the prior amber
-floating-panel/rail menu. Preserve the actual mcov module behavior and names;
-the reference's game background and product title are not shipped assets.
+# Design System: mcov Liquid Glass
 
-A single rectangular 600 x 650 px window, constrained to the game viewport,
-has a compact draggable title bar and seven horizontal tabs: Combat, Visuals,
-Blocks, HUD, Stats, Settings, Misc. Background #242424, fields #191919, black borders,
-violet #AE69D1, text #ECECEC and muted #B6AFBE. Pixel-aligned embedded ImGui
-ProggyClean is 13 px in menu/HUD and launcher; the existing Inter fonts remain for ESP.
-No decorative rings, glossy highlights or rounded
-floating navigation. Sliders fill their full width in violet with centered
-numbers; labels sit above fields. Module groups use fine borders and violet
-section rules. Two columns fit above 500 px content width; narrower menus stack
-and scroll. Tab selection and input update immediately. Styles/fonts restore
-before the rest of the frame. The launcher now shares the same scoped classic theme.
+## Overview
 
-Every main page has a consistent, horizontally scrolling function tab bar.
-Visuals separates Box ESP, Skeleton, Name tags, Health bars, Distance labels,
-Tracers, Target info, Target aura, Target marker, Trails, Hit particles,
-Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat, Entity filters,
-Jump circles, Wings, Halo, Glow ESP, Damage markers, Damage vignette, Target circle,
-Crosshair and Offscreen arrows. Blocks has Block ESP, Block types, Tracers,
-Chunkfinder, Storage ESP, Beacon radius and Chunk borders. Misc has Middle click
-friend, Death coordinates, Detect players, Waypoints, Name protect, Module sounds,
-Notifications and Panic. HUD has Editor plus a tab per element, each
-with visibility, scale, position and individual layout reset. Stats separates
-Local player, Client and Entities. Settings has Overlay, Focus, Keybinds and Agent. Every module bind is initially None, explicitly
-chosen by the user; INSERT/Menu, F6/HUD editor and END/Quit remain defaults.
-Keyboard/mouse keys and Ctrl/Shift/Alt chords support Toggle or Hold; single
-modifiers are captured on release. Conflicts, capture cancellation and clearing
-are visible. Binds act only with Minecraft/overlay focus and pause module changes
-while menu/editor/capture is open. Hold restores prior state on release/focus loss.
+**Creative North Star: "Liquid Glass"**
 
-HUD: nineteen independently enabled, positioned and scaled elements using dark
-rectangular fills, violet top rules and the same compact font. The editor adds
-outlines, empty/disabled previews, drag hit areas and a toolbar with selection,
-visibility, scale and reset. Below 640 x 480 it isolates the selected element.
-Coordinates are normalized within the viewport travel and clamped on resize;
-free layouts may overlap intentionally. HUD placements/scale/visibility and binds
-save in %LOCALAPPDATA%/mcov/client-settings.ini for the portable client, or beside
-the overlay executable for direct developer runs. New Rockstar feature settings
-and world/server-scoped waypoints also persist; existing feature settings and UUID
-relations retain their session behavior. Renderers consume coherent snapshots;
-no render-thread JNI or new native hooks. IPC v17 appends scanner kind identifiers.
+Mode: Operate. The user's latest visual authority is
+[poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11), replacing
+the earlier classic dark/violet menu. This system describes the implemented
+native Windows control surface, not a web dashboard or a copy of the reference
+demo's content.
 
-Combat shows eight tabs: Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends,
-Crystal macro, Anchor macro and Hit sounds. Kill Aura exposes
-activation, target type and reach, plus status and the last target.
-It acquires the nearest valid living hitbox all around the player, then keeps
-that target until death or loss of range/sight. Players and mobs are included
-by default; friends and occluded targets are skipped. Rotation follows the
-current hitbox directly every client tick, with no smoothing or reaction controls.
-Attacks use Minecraft's cooldown, with the hit ray refreshed after rotation.
-There is no preset or selection-mode chooser. Diagnostics is collapsed by
-default and exposes HUD toggles and read-only live state. Old technical settings
-are normalized in the client adapter and cannot delay this behavior.
-The debug HUD is off by default. Aim Assist, Triggerbot and Auto Totem each
-own a function tab; conflicting controls are visibly paused while Kill Aura is enabled.
-Friends uses one action to add a UUID exclusion, with no enemy-priority chooser.
-Adding a friend also applies a translucent conical hat automatically. Its violet
-and turquoise rim shares the Target Aura colors and Gaussian glow resource.
-The hat follows the interpolated humanoid head and pose in world space, scales
-with distance, and renders below ESP labels. It remains visible when Target Aura
-and ESP are disabled; removing the UUID removes the hat. No extra menu controls.
-The player's combat angles and
-mouse-controlled view are always independent. Camera decoupling has no toggle.
-An active Kill Aura target automatically receives a neon yellow/lime corner
-cube inspired by the user's target-marker screenshot. Four thick front corner
-brackets have rounded joins/end caps and a soft Gaussian glow; faint rear corners
-and connectors give depth. The frame uses the interpolated hitbox center and
-perspective size, faces the camera and reverses its roll smoothly every 3.5 s.
-Visuals exposes Target aura and Target marker directly in its function tab bar.
-The marker exposes enable, size, stroke, glow, opacity, animation, rotation arc,
-direction interval and two colours using the existing row controls. Shape & timing
-folds away corner length/rounding, rear depth and fade duration. Values update live;
-Visuals Reset restores all three visual configs. Animation pause keeps the current
-angle, and interval edits retain the phase. It works with ESP/orbs off. Only a fresh active Combat
-report can show it; target loss, death or pause removes it. Explicit Reduced motion
-freezes its roll; Windows menu-animation settings do not block the game effect.
-No new render-thread JNI, texture creation or shader passes. It draws below ESP
-labels and restores ordinary alpha blending after its glow.
-Native callbacks run on the client tick;
-ImGui only publishes settings and consumes diagnostics. Page reset covers both stores.
-## Entity ESP
+A dark, neutral-tinted glass root provides blur, restrained refraction and subtle
+light edges. Crisp Inter text and quiet translucent controls keep real settings
+readable over changing game imagery. The client menu and launcher share this
+material; existing world effects, entity ESP and modular HUD retain their own
+visuals and behavior.
 
-Mode: Operate. The user's ESP screenshot is the visual authority for this
-surface: thin near-white rounded boxes and skeleton lines, a narrow vertical
-white-to-violet health bar on the left and compact information above the entity.
-Default box stroke: 1.6 px; corner radius: 7 px, capped on small boxes;
-skeleton stroke: 1.1 px; labels: 12 px from the embedded Inter font.
-Filled boxes stay off by default. The violet health accent matches the Aura.
+**Key Characteristics:**
 
-Nametags now group distance, player ping, name and red HP in a compact dark
-rounded strip. Worn armor, main hand and offhand appear as a centered row of
-16 px vanilla inventory icons directly above it, with violet durability tracks
-and small stack counts. Unknown ping reads n/a; mobs omit it. Empty equipment
-slots use no space. Individual HP/ping/equipment toggles live under Name tags.
+- A softly rounded glass root with calmer, inset setting surfaces.
+- Seven left-side categories, a responsive module grid and independent settings glass.
+- Visible values, conventional checkbox interaction and keyboard-editable sliders.
+- A primary launcher action that remains outside its scrolling details.
+- Scoped style/font changes and a deterministic capture fallback.
 
-The selected entity has a quiet dark info pill near the upper center with
-distance, available selected-player ping, name and health. Unknown ping is
-omitted. The info pill yields when it would overlap an entity nametag at the
-upper viewport edge. With nametags off, distances appear below boxes and HP
-above the health bar. Colors, label size,
-rounding, stroke widths and target info remain configurable under Visuals.
+## Colors
 
-EspRenderer draws only from the coherent snapshot and existing world-space
-geometry. It introduces no JNI calls, pixel smoothing or delayed anchor state.
-Aura renders below ESP, and HUD/menu above it. Text and stroke sizing use UI
-pixels while entity bounds and bones retain their actual perspective scale.
+The palette combines cool neutral text with a restrained lavender-blue accent.
+The frontmatter records the actual shared style values; translucent colors depend
+on the dark root underneath them.
 
+### Primary
 
-## Trails and particles
+- **Lavender blue** (`primary`): selected categories, enabled modules and active buttons.
+- **Pale lavender** (`primary-ink`): checkmarks, slider rails, values and keyboard
+  navigation outlines. Active slider grabs use `primary-grab-active`.
 
-ThunderHack-Recode is the visual reference for Trails, Hit particles and Ambient
-particles; the user prioritizes particles and trails. Preserve the current menu,
-ESP and Aura identity. New effects start disabled and unbound, with dedicated
-Visuals tabs and standard keybinds. Ribbon/line/orb trails fade in world space;
-HP loss triggers orb/star bursts and billboard glow rings; positive-to-zero HP
-triggers a ground ring and death burst. Fireflies/Stars/Snow form a local ambient
-field; BreadCrumbs leaves fading points at the local feet. Own China hat starts
-enabled in F5, uses sampled self head geometry and remains unbound.
-All share Aura colours by default or accept separate palettes. Reuse the Gaussian
-glow and additive blend resource, bounded pools and the existing coherent snapshot.
-The agent samples the own body once in the existing JNI worker as a flagged Self
-entity; no render-thread JNI, new hooks or IPC layout changes. Reduced motion
-keeps particle fades and removes drift, spin and ring growth. Glow uses the Aura's
-Gaussian halo, middle colour and bright core, with intensity controls per module.
-See docs/world-visuals.md for exact controls, bounds and external-depth limitations.
+### Neutral
 
-## Rockstar-inspired expansion
+- **Cool white** (`text`): labels, values and actions.
+- **Muted cool white** (`text-muted`): supporting instructions and inactive state.
+- **Night blue** (`surface-window`, `surface-child`, `surface-popup`): shared window
+  defaults, inset content and nearly opaque popups. The shader supplies the root
+  material instead of painting the window default over it.
+- **Light translucent control fills**: frame, button and tab tokens distinguish
+  rest, hover and active state without competing with the root.
+- **Quiet light edges** (`border`, `separator`): popup boundaries and section
+  divisions and module boundaries.
 
-Preserve the classic menu; each new function gets the existing scrolling function
-tabs, compact rows and initially unbound keybind. New effects share Aura colours,
-use bounded pools and layered glow, and render before ESP/HUD. Jump circles use
-soft concentric alpha masks with rotating wisps, light dust, gentle expansion and
-a cosine fade. Wings use filled feather masks rather than skeletal spokes; hats
-keep a translucent surface with a Gaussian brim and no visible ribs. Trails and
-helper outlines use textured Gaussian strokes. Generate masks once during GPU
-initialization, never in the frame loop. Clip and tessellate ground textures for
-stable projection in first person; cap visible jump rings at eight.
-World and screen
-positions reuse the same camera projection and FOV trim. Session metrics and
-damage/death feedback describe observations, not guaranteed attacker attribution.
-Panic clears transient effects and deactivates held modules without restoring their
-old active state on release. Page resets affect only that page's new modules.
-See docs/rockstar-features.md and docs/rockstar-catalog.md for controls and coverage.
+**The Readable Glass Rule.** Root refraction and blur remain behind text and
+controls. Dense settings use the darker inset content surface; they do not
+inherit a more transparent root merely to emphasize the effect.
+
+## Typography
+
+Menu and launcher use embedded Inter: medium body and controls, semibold section
+labels and the existing larger semibold font for the mcov heading. The larger
+heading derives from the default font size multiplied by 1.3. The pinned atlas
+and HUD/ESP fonts remain intact.
+
+### Hierarchy
+
+- **Title:** the `title` role is used for the root's mcov heading.
+- **Body:** the `body` role is used for controls, category names and supporting text.
+- **Label:** the `label` role is used for section headings.
+
+**The Local Type Rule.** `LiquidStyle` pushes the menu font and restores it on
+scope exit. Do not change global font defaults to restyle the menu or launcher.
+
+## Layout
+
+The client menu targets 900 × 680 UI pixels and clamps to the viewport minus
+24 pixels, with a minimum requested size of 160 pixels. Its draggable header and
+footer frame a left category sidebar and independently scrolling module grid.
+The seven categories remain Combat, Visuals, Blocks, HUD, Stats, Settings and Misc.
+The sidebar is 146 pixels wide, reducing to 98 pixels below 620 pixels root width.
+The grid uses one to three equal-width columns, 96-pixel-high tiles and the
+existing 10-pixel horizontal item spacing. Changing category resets grid scroll.
+Center, Reset and Close remain in the root footer; Reset applies to that category.
+
+Right-clicking a tile opens that module's existing controls in a second draggable
+glass window, up to 480 × 610 pixels and clamped to the viewport minus 24 pixels.
+It has its own retained position, close button and scrolling inset content. It
+remains on the selected module when the root category changes. Selecting a
+different module resets settings scroll; selecting the same module preserves it
+and brings the settings window forward. Closing the root closes settings too.
+All 76 existing sections remain reachable through their category tiles.
+
+The launcher opens at 640 × 640. Its Start and Diagnose views share the root
+material. The instance list, status and recovery instructions scroll inside a
+child. The 40-pixel primary start action is outside that child, above the footer,
+so small windows retain the main operation. Diagnostics remains a separate view.
+
+## Elevation & Depth
+
+`LiquidGlass` retains a fixed pool of four shader-backed D3D11 panes. Each visible
+glass window uses its own texture, render target and shader resource view,
+allocated on first use and recreated after viewport resize. The
+adapted liquidDX11 renderer combines Dual Kawase backdrop blur, a neutral dark tint,
+moderate edge refraction, subtle chromatic separation, light rims and a soft
+shadow. Root and settings panes reuse the same captured and blurred desktop;
+nested content surfaces use ordinary ImGui fills. Independent pane images retain
+ImGui window order without composing both glass windows into each image.
+
+The material's shared parameters live in `src/common/liquid_glass.cpp`: tint RGB
+0.045/0.050/0.063 with opacity 0.56, blur mix 0.78, saturation 0.9, brightness
+offset −0.02 and contrast 0.94. Backdrop blur uses three Kawase downsample passes,
+two intermediate upsample passes and final reconstruction to full resolution,
+preserving recognizable background contours.
+
+Capture is polled at a 33-ms cadence only while the menu or launcher is visible.
+DXGI Desktop Duplication runs first; after 750 ms without a usable frame,
+Windows Graphics Capture attempts monitor capture on the existing render device.
+Failed WGC starts retry after two seconds. Capture sessions stop when glass closes,
+capture is disabled, a fixture texture is supplied or the monitor changes; DXGI
+also stops at the WGC handoff. Blur resources survive ordinary capture stops.
+Capture failure uses an immutable blue/violet backdrop; failure of the GPU
+material uses the rounded tinted draw-list fallback. Neither fallback nor a
+provided GPU fixture texture invents a live desktop capture status.
+
+**The Layer Order Rule.** World effects and HUD precede the menu glass; controls
+and text follow it. `RenderTexture()` plus the root's `AddImage` retain this order.
+Each window's own image retains that order when windows overlap. The glass pass
+introduces no JVM calls and does not replace world-depth handling.
+
+## Shapes
+
+The rounded scale in the frontmatter differentiates the root, inset content,
+popups and controls. Category buttons use the navigation radius; module tiles use
+the module radius. Root and settings glass use the window radius. Shadow and edge shading follow the
+same rounded shape. Fields remain rectangular enough to read as settings, with
+small slider grabs instead of the old full-width violet value bars.
+
+## Components
+
+### Buttons and navigation
+
+Ordinary buttons use translucent neutral fills; selected left-side categories
+use lavender-blue fills. Category labels and existing section identities remain
+stable. ImGui keyboard navigation retains its visible cursor color.
+
+### Module tiles and settings
+
+Tiles show the genuine module name and, for toggles, Enabled or Disabled plus the
+available binding. Enabled modules receive the existing lavender-blue accent;
+hover and keyboard focus remain visible. Left-click changes the real module
+state. Right-click opens or raises the separate settings window, including when
+the same module is already selected. Friends, Entity filters, Block types and
+the Stats/Settings sections instead say Open settings and open on left-click too.
+Editor and Panic say Run action: left-click opens the HUD editor or invokes
+Panic. Settings and actions do not present a fabricated enabled state.
+
+### Inputs and sliders
+
+Checkboxes use actual ImGui checkbox items. Combos and color editors retain their
+native popups and IDs. Sliders have a thin rail, pale grab and right-aligned value
+beside the label; hovering/dragging adds a restrained grab halo. Ctrl-click enters
+numeric input with visible text and caret. Focus receives a visible outline.
+Bounds and clamping remain those of each existing setting.
+
+### Containers and section labels
+
+The root is the signature material. Content children use the darker inset fill
+and independent clipping/scrolling. Semibold section labels and quiet separators
+group settings. `StyleScope` contains local changes; `LiquidStyle` restores the
+entire prior ImGui style and font after menu/launcher rendering.
+
+### Launcher
+
+The launcher retains real instance selection, refresh, busy/disabled state,
+missing-JDK recovery, log-copy/open actions and close/minimize controls. The
+primary action selects either client startup or return to the running Minecraft
+instance. No borrowed sign-in form, recorder or reference-demo widgets are added.
+
+The launcher shell keeps an opaque base below the shader material and clips its
+outer padding with a native rounded window region. It does not use a full
+transparent DWM sheet. Initialization remains hidden and a frame is drawn before
+the window is shown; minimizing pauses desktop capture. The shared material,
+palette, typography and controls remain unchanged.
+
+### Preserved HUD and world surfaces
+
+Nineteen HUD elements retain independent visibility, position and scale. The
+editor keeps drag previews, selection, reset and its small-viewport behavior.
+Keyboard/mouse bindings retain Toggle/Hold, modifier chords, conflict detection
+and focus restrictions. Module binds remain initially unbound; INSERT, F6 and END
+remain defaults.
+
+Entity ESP retains the user's clean rounded box/skeleton treatment, health bar,
+nametags and equipment row. Target Aura, Marker, trails, particles and hats keep
+their existing glow, world projection and depth-occlusion controls. Combat retains
+the simplified Kill Aura controls and separate module settings. Detailed existing
+behavior lives in `docs/client-ui.md`, `docs/aura.md`, `docs/target-cube.md` and
+`docs/world-visuals.md`.
+
+## Do's and Don'ts
+
+### Do:
+
+- **Do** reuse the shared glass root and scoped `LiquidStyle` for client controls.
+- **Do** preserve real module names, section identities, keybinds and input behavior.
+- **Do** keep the launcher start action outside scrolling content.
+- **Do** keep HUD/ESP rendering styles and JNI acquisition separate from menu material.
+- **Do** report live versus fallback material and the actual Background capture state under Settings → Overlay.
+
+### Don't:
+
+- **Don't** globally replace the HUD/ESP style or fonts during a menu redesign.
+- **Don't** capture an unexcluded glass window into its own backdrop.
+- **Don't** require loose shader/font/DLL files beside the portable EXE.
+- **Don't** claim offscreen WARP previews validate live Minecraft capture on every GPU.
+- **Don't** reintroduce reference-demo controls as placeholders for mcov modules.

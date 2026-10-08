@@ -3,6 +3,9 @@
 #include "imgui.h"
 
 namespace mcov::style {
+inline ImVec4 Color(unsigned rgb,float alpha=1.f) {
+    return {float(rgb>>16&255)/255,float(rgb>>8&255)/255,float(rgb&255)/255,alpha};
+}
 
 inline constexpr ImU32 kBackground = IM_COL32(18, 18, 20, 255);  // #121214
 inline constexpr ImU32 kPanel      = IM_COL32(30, 30, 36, 255);  // #1E1E24
@@ -17,6 +20,7 @@ inline constexpr ImU32 kBorder     = IM_COL32(53, 53, 63, 255);
 void ApplyFlatTheme(ImGuiStyle& style);
 bool LoadFonts(float uiSize = 17.0f);
 ImFont* MenuFont(bool bold = false);
+ImFont* MenuHeadingFont();
 ImFont* MenuIconFont();
 ImFont* ClassicMenuFont();
 

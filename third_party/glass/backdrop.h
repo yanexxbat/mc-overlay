@@ -10,13 +10,20 @@ public:
     bool Init(ID3D11Device* device, ID3D11DeviceContext* ctx, HWND overlay_hwnd);
     void Shutdown();
     void Capture();
+    // Desktop-Sitzung beenden; wiederverwendbare Blur-Ressourcen behalten.
+    void StopCapture();
+    // Gemeinsamer Upload fuer DXGI und Windows Graphics Capture.
+    bool UpdateTexture(ID3D11Texture2D*,int origin_x,int origin_y);
+    void Invalidate() { have_first_=false; }
+    HRESULT lastError() const { return last_error_; }
+    const char* status() const { return status_; }
     ID3D11ShaderResourceView* heavySRV() const { return heavy_.srv; }
     ID3D11ShaderResourceView* softSRV()  const { return soft_.srv;  }
     int width()   const { return out_w_; }
     int height()  const { return out_h_; }
     int originX() const { return out_x_; }
     int originY() const { return out_y_; }
-    bool ok()     const { return heavy_.srv != nullptr && soft_.srv != nullptr; }
+    bool ok()     const { return have_first_ && heavy_.srv != nullptr && soft_.srv != nullptr; }
     void BlurUI(ID3D11Texture2D* src, int w, int h);
     ID3D11ShaderResourceView* uiSRV() const { return ui_heavy_.srv; }
     int uiW() const { return ui_cap_.w; }
@@ -69,6 +76,9 @@ private:
     ID3D11RasterizerState*   raster_       = nullptr;
     ID3D11DepthStencilState* depth_off_    = nullptr;
     bool have_first_ = false;
+    ULONGLONG retry_at_ = 0;
+    HRESULT last_error_ = S_OK;
+    const char* status_ = "Waiting for first desktop frame";
 };
 
 }
