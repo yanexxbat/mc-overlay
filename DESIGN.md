@@ -1,11 +1,14 @@
 ---
 name: mcov Compact Controls
-description: Shared compact translucent anthracite and coral controls for the client and injector.
+description: Shared compact translucent anthracite and coral controls for the client, injector and snapshot HUD.
 colors:
   primary: "#EF8B70"
   primary-active: "#FFA388"
   primary-pressed: "#DC7D64"
   primary-ink: "#221B1B"
+  positive: "#A5C7AD"
+  warning: "#E8BB73"
+  danger: "#F28080"
   text: "#ECECEF"
   text-muted: "#AEAEB8"
   navigation-text: "#C2C2CC"
@@ -136,6 +139,11 @@ components:
     backgroundColor: "{colors.surface-instance-list}"
     rounded: "{rounded.child}"
     padding: "8px"
+  hud-panel:
+    backgroundColor: "{colors.surface-window}"
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.child}"
 ---
 
 # Design System: mcov Compact Controls
@@ -147,14 +155,15 @@ components:
 The client follows the user's `design/reference-translucent-menu.png`: a wide,
 compact anthracite menu with a narrow sidebar, module tabs and a muted coral
 accent. The user approved this design and requested the same system on the
-injector. This replaces the spacious cyan example, the client's glass tile grid
+injector and snapshot HUD. This replaces the spacious cyan example, the client's glass tile grid
 and the launcher's lavender Liquid Glass presentation. The reference supplies
 visual direction; mcov retains its real module names, settings and actions.
 
-Both surfaces use direct ImGui alpha compositing, scoped `CompactStyle`, embedded
-Inter and modest headings. The client organizes module settings; the injector
+Client controls, injector and HUD editor use direct ImGui alpha compositing,
+scoped `CompactStyle`, embedded Inter and modest headings. Snapshot HUDs share
+the drawing tokens and font. The client organizes module settings; the injector
 organizes instance selection and diagnostics. The shared palette and controls
-keep these operations consistent. HUD and world effects retain their styles.
+keep these operations consistent. World effects retain their styles.
 
 **Key Characteristics:**
 
@@ -166,7 +175,8 @@ keep these operations consistent. HUD and world effects retain their styles.
 
 ## Colors
 
-Shared primitives come from `src/common/compact_style.hpp`. The injector's solid
+Shared drawing tokens come from `src/common/compact_theme.hpp`; control styling
+comes from `src/common/compact_style.hpp`. The injector's solid
 primary button and list treatment come from `src/injector/launcher_ui.cpp`.
 The frontmatter is normative; obsolete launcher lavender primitives are removed.
 
@@ -175,14 +185,14 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
 - **Muted coral** (`primary`): checkmarks, slider fill, active category icons and
   selected tab tint, plus the launcher's main action. **Warm coral**
   (`primary-active`) marks slider activity, keyboard navigation, text links and
-  primary-button hover. **Pressed coral** (`primary-pressed`) marks that button's
+  primary-button hover, plus HUD selection and active states. **Pressed coral** (`primary-pressed`) marks that button's
   pressed state.
 
 ### Neutral
 
 - **Soft white** and **muted gray** (`text`, `text-muted`): shared labels, values
   and supporting text. Navigation has its own quiet and selected text tones.
-- **Anthracite** (`surface-window`): both roots. The sidebar adds its darker
+- **Anthracite** (`surface-window`): client/injector roots and HUD panels. The sidebar adds its darker
   overlay; children remain transparent. Popups use a nearly opaque dark fill.
 - **Translucent white fills**: control, navigation and tab tokens distinguish
   rest and hover. Coral tint marks active controls and selected module tabs.
@@ -193,14 +203,18 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
 - **Quiet instance surface** (`surface-instance-list`): the native selectable
   instance list within the launcher's transparent content area.
 
-**The Material Scope Rule.** Client and injector use the same compact palette
-and direct alpha compositing. This shared presentation does not change HUD/world style.
+HUD feedback uses **soft green** (`positive`) for favorable health/friends,
+**amber** (`warning`) for durability warnings and **soft red** (`danger`) for
+danger or depleted durability. Coral continues to identify activity.
+
+**The Material Scope Rule.** Client, injector and snapshot HUD use the same compact palette
+and direct alpha compositing. World effects retain their styles.
 
 ## Typography
 
-Both surfaces use embedded Inter at the same compact size. Medium body text and
+Client, injector and snapshot HUD use embedded Inter at the same compact size. Medium body text and
 semibold labels keep controls and headings aligned; the mcov/category/page header
-is not a display title. Fonts remain part of the executable and existing HUD/ESP
+is not a display title. Fonts remain part of the executable and existing ESP
 atlas entries remain intact.
 
 ### Hierarchy
@@ -210,7 +224,8 @@ atlas entries remain intact.
 - **Label:** section headings.
 
 **The Local Type Rule.** Both surfaces use `CompactStyle` to push their menu font
-and restore the prior style and font on scope exit.
+and restore the prior style and font on scope exit. The HUD editor uses the same
+scope; snapshot HUD rendering pushes and restores the shared `MenuFont` locally.
 
 ## Layout
 
@@ -244,9 +259,14 @@ child. A 34-pixel coral primary action remains outside it, followed by the fixed
 close footer. Diagnose has the same close footer. Diagnostic actions wrap to
 another row when required. Native title drag, minimize and close remain available.
 
+The HUD editor toolbar is at most 540 pixels wide, clamped to viewport width
+minus 24 pixels, with 14 × 10 pixels of padding. It is 90 pixels high, or 110
+below 640 pixels viewport width or 480 pixels height; that compact editor shows
+only the selected element while keeping all 19 available through its selector.
+
 ## Elevation & Depth
 
-Both roots are ordinary rounded ImGui fills composited directly over transparent
+Client and injector roots are ordinary rounded ImGui fills composited directly over transparent
 render output. A darker sidebar overlay and quiet separators establish hierarchy.
 There are no shader shadows on these controls. Neither surface requires desktop
 capture, blur or refraction. The client calls `LiquidGlass::BeginFrame` with
@@ -261,6 +281,10 @@ frame/render calls and shutdown are removed from this shell. Retained glass
 renderer values, capture behavior and license are legacy/standalone context in
 `docs/liquid-ui.md`, rather than requirements of the active compact surfaces.
 
+HUD panels use one rounded anthracite fill with no border, stripe or shadow.
+Quiet headings and separators supply hierarchy; the HUD requires no desktop
+capture, blur or new renderer.
+
 **The Layer Order Rule.** World effects and HUD draw before client controls. UI
 presentation adds no render-thread JNI and does not replace world-depth handling.
 
@@ -271,6 +295,8 @@ controls and tabs, zero window, child and frame borders, and a one-pixel popup
 border. Scrollbars are six pixels wide. The launcher's native window region uses
 a 24-pixel corner diameter to match the 12-pixel panel radius and clips the outer
 transparent margin. Viewport resize updates that region.
+HUD panels reuse the gently rounded child radius (8 pixels); only editor
+selection adds a coral outline. A disabled badge appears on the selected element.
 
 ## Components
 
@@ -313,9 +339,22 @@ Long instance labels remain clipped within their row, with full title/details on
 hover. Existing async connection, selected-instance identity and duplicate-start
 prevention remain unchanged.
 
-### Preserved HUD and world surfaces
+### Snapshot HUD and editor
+
+All 19 snapshot HUD elements and the optional Combat debug HUD share compact
+tokens and the 14-pixel `MenuFont`. Active modules and pressed keys use coral;
+health, friends and durability use semantic feedback. Long name, item, effect
+and keybind text is clipped within its row, including after element scaling.
+The Reach readout has an anthracite surface inside open crosshair brackets;
+its name clips before the separate health/distance column.
 
 Nineteen HUD elements retain visibility, position, scale, drag previews and reset.
+The F6 editor uses local `CompactStyle`; positions, scales and visibility retain
+their existing persistence. Small-view selection does not hide enabled elements
+from the normal HUD.
+
+### Preserved world surfaces and bindings
+
 Keyboard/mouse bindings retain modifier chords, Toggle/Hold, conflict detection
 and focus restrictions. Module binds begin unbound; INSERT, F6 and END are defaults.
 Combat, entity ESP, Aura, Marker, trails, particles, hats and depth controls retain
@@ -326,7 +365,7 @@ their real behavior. See `docs/client-ui.md`, `docs/aura.md`,
 
 ### Do:
 
-- **Do** use scoped `CompactStyle` for both client and injector controls.
+- **Do** use scoped `CompactStyle` for client, injector and HUD editor controls.
 - **Do** preserve real module names, section identities, keybinds and native input behavior.
 - **Do** keep module tabs outside content scroll and provide search recovery.
 - **Do** keep the launcher primary action and close footer outside scrolling content.
@@ -335,7 +374,7 @@ their real behavior. See `docs/client-ui.md`, `docs/aura.md`,
 ### Don't:
 
 - **Don't** reintroduce the rejected spacious cyan client or large module tile grid.
-- **Don't** describe compact client or injector transparency as live desktop capture or Liquid Glass blur.
-- **Don't** globally restyle HUD/ESP or add render-thread JNI during menu work.
+- **Don't** describe compact client, injector or HUD transparency as live desktop capture or Liquid Glass blur.
+- **Don't** restyle world ESP/effects or add render-thread JNI during compact UI work.
 - **Don't** require loose shader/font/DLL files beside the portable EXE.
 - **Don't** claim synthetic WARP images validate live Minecraft appearance or attach behavior.

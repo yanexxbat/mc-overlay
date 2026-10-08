@@ -32,6 +32,10 @@ camera/entity projection stability.
   root and a narrow Start/Diagnose sidebar. It performs Minecraft selection,
   connection and overlay startup. The fixed primary action and close footer
   remain reachable while status, JDK recovery and diagnostics scroll.
+- The 19 snapshot HUD elements and optional Combat debug HUD use the same
+  compact anthracite/coral design and embedded Inter at 14 pixels. Rounded fills,
+  quiet headings and semantic green/amber/red feedback preserve readability.
+  The F6 editor retains movable/scalable elements, visibility, reset and persistence.
 - Keep the simplified Kill Aura workflow and independent mouse-controlled camera.
 - Renderers consume snapshots; UI/HUD changes add no render-thread JNI.
 - Keep one canonical `build` directory and existing version/Forge compatibility.
@@ -73,6 +77,8 @@ capability based on
 Their material, capture lifecycle and license remain documented in
 [docs/liquid-ui.md](docs/liquid-ui.md). They are not active injector requirements.
 The redesign changes presentation only, not world-effect visibility or JNI acquisition.
+Snapshot HUDs use the shared rounded ImGui fill and font; their editor applies
+`CompactStyle` locally. HUD presentation adds no capture, blur or new renderer.
 
 ## Verification limits
 
@@ -84,7 +90,12 @@ fixed footer and title controls. Hidden native HWND/swapchain checks cover alpha
 control ink, hidden initialization, resize and rounded clipping.
 
 Current images under `.impeccable/review/compact-client/` and
-`.impeccable/review/compact-injector/` use synthetic fixtures. The two injector
+`.impeccable/review/compact-injector/` use synthetic fixtures. Seven HUD images
+under `.impeccable/review/compact-hud/` likewise use the native ImGui/D3D11 WARP
+renderer with synthetic fixtures; `hud-catalog.png` is a test gallery of all
+19 elements, not a production layout. HUD input/layout, style/font and clipping
+checks, `combat_hud`, `rockstar_features` and `portable_client` passed; the portable
+EXE and ZIP were rebuilt. The two injector
 `launcher-native-*` images are hidden swapchain readbacks before OS clipping.
 These images do not establish live desktop composition or Minecraft appearance.
 Historical explicit `--live` and `--live-sta` probes passed WGC startup, the full

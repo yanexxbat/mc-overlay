@@ -12,7 +12,8 @@ minus 24 Pixel. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
 Start/Diagnose-Sidebar und festem Start-/Schließen-Footer.
 Layoutdetails: [compact-ui.md](compact-ui.md). Injector und Bedienung:
 [launcher.md](launcher.md). Der erhaltene frühere Glasrenderer steht in
-[liquid-ui.md](liquid-ui.md). HUD und Welt-Visuals behalten ihre bisherigen Styles.
+[liquid-ui.md](liquid-ui.md). Das HUD verwendet nun dasselbe kompakte Theme;
+Welt-Visuals behalten ihre bisherigen Styles.
 
 Der Client komponiert seine dunkle Oberfläche direkt mit Alpha 0,88 über das
 Spiel. **Settings → Overlay → Menu material** zeigt **Translucent dark / 88%
@@ -109,6 +110,15 @@ Equipment, Status effects, Coordinates, Performance, Compass, Reach indicator,
 Watermark, Active modules, Keybinds und die ergänzten Rockstar-/Status-Widgets.
 Active modules und Keybinds zeigen aktive Module und vergebene Modul-Binds.
 
+Alle 19 Snapshot-Elemente und das optionale Combat-Debug-HUD verwenden eingebettetes
+Inter mit 14 Pixeln sowie eine einzelne anthrazitfarbene Flaeche mit 8 Pixel Rundung,
+ohne Rahmen, Zierstreifen oder Schatten. Ruhige Ueberschriften und Trennlinien,
+korallfarbene aktive Zustaende und gruene/amberrote/rote Statusfarben halten die
+Informationen lesbar. Lange Namen, Item-/Effect- und Keybind-Texte bleiben durch
+Zeilen-Clipping auch bei Skalierung innerhalb des Elements. Der Reach-Readout
+hat eine dunkle Flaeche zwischen offenen Fadenkreuzklammern; der Name clippt vor
+der getrennten HP-/Distanz-Spalte.
+
 Element anklicken und ziehen. Die Toolbar wählt auch verdeckte Elemente aus und
 stellt **Enabled** sowie **Scale** (0,65–1,60 ×) ein. **Reset layout** entfernt alle
 manuellen Positionen/Skalen. **Done**, **Esc** oder der Editor-Bind beendet den
@@ -116,6 +126,11 @@ Editor. Leere und deaktivierte Elemente erhalten eine erkennbare Vorschau.
 Auf Viewports unter 640 px Breite oder 480 px Höhe zeigt der Editor nur das
 ausgewählte Element; die Auswahl erreicht weiterhin alle Module. Das normale
 HUD zeigt weiterhin die aktivierten Elemente.
+Die lokal mit `CompactStyle` gestaltete Toolbar ist maximal 540 Pixel breit,
+begrenzt auf Viewport minus 24 Pixel, mit 14 × 10 Pixel Innenabstand. Ihre Hoehe
+betraegt regulaer 90 Pixel und in der kleinen Ansicht 110 Pixel. Eine korallfarbene
+Outline markiert die Auswahl; ein Disabled-Badge erscheint nur beim ausgewaehlten
+deaktivierten Element. Positionen, Skalierung und Sichtbarkeit speichern wie bisher.
 
 Unter dem jeweiligen HUD-Element-Tab lassen sich dieselben Positionen und Skalen
 auch numerisch einstellen.
@@ -149,6 +164,9 @@ Suche samt leerem Trefferzustand und Wiederherstellung, Style-/Font-/Window-Stac
 Drag/Viewport-Grenzen, kleine Viewports und Slider einschließlich sichtbarer
 Strg-Eingabe. Bestehende Keybind-, HUD-, Renderer-, Launcher- und portable
 Build-Prüfungen bestehen ebenfalls.
+Die aktualisierten nativen HUD-Pruefungen fuer Eingabe/Layout, Style-/Font-Stacks
+und Text-Clipping sowie `combat_hud`, `rockstar_features` und `portable_client`
+bestanden. Die portable `mcov.exe` und das Share-ZIP wurden neu gebaut.
 
 Aktuelle native WARP-Vorschauen liegen unter
 `.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
@@ -160,6 +178,15 @@ Die aktuellen kompakten Injector-Vorschauen stehen in
 `.impeccable/review/compact-injector/`; die nativen Bilder sind versteckte
 Swapchain-Ausgaben, keine Desktop-Aufnahmen. Die weiterhin gültigen Tests des
 erhaltenen früheren Glas-/Capture-Renderers stehen in [liquid-ui.md](liquid-ui.md).
+
+Die sieben aktuellen HUD-Belege liegen unter `.impeccable/review/compact-hud/`:
+`modular-hud.png`, `modular-hud-editor.png`, `modular-hud-small.png`,
+`rockstar-hud.png`, `hud-catalog.png`, `hud-scene.png` und `hud-long-values.png`.
+Sie verwenden den echten nativen ImGui/D3D11-WARP-Renderer mit synthetischen
+Fixtures, keine Live-Minecraft-Aufnahme. `hud-catalog.png` ist eine Test-Galerie
+aller 19 Elemente und kein Produktionslayout. Alle sieben Belege sind gueltig;
+die unabhaengige Impeccable-Abschlusspruefung bestaetigt den behobenen Material-Fix
+ohne Regression. Vorhandene Client-/Injector-Bilder und Testbelege bleiben gueltig.
 
 Crystal Macro und Anchor Macro laufen bei aktivierter Funktion, solange die normale
 Platzieren-/Benutzen-Taste gehalten wird. Der Modul-Bind steuert die Aktivierung.

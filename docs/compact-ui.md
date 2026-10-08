@@ -1,4 +1,4 @@
-# Kompaktes, transparentes Client- und Injector-Theme
+# Kompaktes, transparentes Client-, Injector- und HUD-Theme
 
 Die visuelle Referenz ist `design/reference-translucent-menu.png`, der vom Benutzer
 bereitgestellte Screenshot. Er ersetzt das erste Cyan-Beispiel und das bisherige
@@ -13,6 +13,10 @@ aufgerufen. `src/common/compact_style.hpp` stellt `ApplyCustomStyle()` bereit.
 `CompactStyle` wendet das Theme lokal an und stellt danach Style und Font wieder her.
 Der Injector verwendet dasselbe freigegebene Theme und denselben lokalen
 `CompactStyle`; die fruehere Lavender-/Liquid-Glass-Darstellung ist abgeloest.
+Die 19 Snapshot-HUD-Elemente und das optionale Combat-Debug-HUD verwenden nun
+dieselbe Gestaltung. `src/common/compact_theme.hpp` zentralisiert ihre Zeichentokens;
+der HUD-Editor verwendet `CompactStyle` lokal. Welt-ESP, Aura, Partikel und Hats
+behalten ihre Gestaltung.
 
 ## Layout und Bedienung
 
@@ -54,6 +58,29 @@ gemeinsamen DisabledAlpha. Native Titelleisten-Drag, Minimieren/Schliessen,
 asynchroner Start, Instanzauswahl, JDK, Logs und Packaging bleiben erhalten.
 Weitere Bedienung und Laufzeitdetails: [launcher.md](launcher.md).
 
+## HUD
+
+Alle Elemente verwenden den gemeinsamen 14-Pixel-Inter-`MenuFont` und einen
+einzelnen gerundeten Fill (8 Pixel), ohne Border, Stripe oder Schatten.
+Ueberschriften und Divider bleiben ruhig; aktive Zustaende sind korallfarben.
+Positive Rueckmeldung ist gruen, Warnung amber und Gefahr rot. Die Zeichentokens
+verwenden Surface RGBA(34,34,41,224), Text (236,236,239), Muted (174,174,184),
+Accent (239,139,112), AccentActive (255,163,136), Separator weiss mit Alpha 17,
+Track weiss mit Alpha 12 und Pressed coral mit Alpha 46. Positive (165,199,173),
+Warning (232,187,115) und Danger (242,128,128) tragen semantisches Feedback.
+
+Die F6-Toolbar ist maximal 540 Pixel breit oder Viewport minus 24, mit 14 x 10
+Pixel Padding. Ihre Hoehe ist regulaer 90 Pixel und 110 bei Viewport-Breite unter
+640 oder Hoehe unter 480 Pixeln. In der kleinen Editoransicht wird nur das
+ausgewaehlte Element gezeigt; die Auswahl erreicht alle 19. Auswahloutline coral,
+Disabled-Badge nur am ausgewaehlten deaktivierten Element. Drag, Reset, Tasten und
+Positions-/Skalen-/Sichtbarkeits-Persistenz bleiben erhalten.
+
+Zeilen-Clipping begrenzt lange Name-/Item-/Effect-/Keybind-Texte auch nach Skalierung.
+Der Reach-Readout verwendet die Surface unter offenen Fadenkreuzklammern; sein
+Name clippt vor einer getrennten HP-/Distanz-Spalte. Das HUD bleibt ein
+Snapshot-Verbraucher ohne Render-Thread-JNI, Desktop-Capture, Blur oder neuen Renderer.
+
 ## Material und Leistung
 
 Anthrazit `#222229` mit Alpha 0.88 wird direkt ueber die transparente
@@ -90,3 +117,14 @@ lesbare Controls, Resize und Fensterregion. Alle neun Bilder unter
 Dateien sind versteckte Swapchain-Ausgaben vor OS-Clipping; sie beweisen keine
 Live-Desktop-Komposition oder Minecraft-Optik. `mcov`, `mcov_injector`, native/UI-
 Checks und das portable ZIP mit exakten Payloads bestehen.
+
+Die sieben HUD-Bilder unter `.impeccable/review/compact-hud/` sind
+`modular-hud.png`, `modular-hud-editor.png`, `modular-hud-small.png`,
+`rockstar-hud.png`, `hud-catalog.png`, `hud-scene.png` und `hud-long-values.png`.
+Alle verwenden den echten nativen ImGui/D3D11-WARP-Renderer mit synthetischen
+Fixtures und sind keine Live-Minecraft-Captures. `hud-catalog.png` ist die
+Test-Galerie aller 19 Elemente, kein Produktionslayout. Alle sieben sind gueltig;
+die unabhaengige Impeccable-Abschlusspruefung meldet den Material-Fix als behoben
+und keine Fixregression. Native HUD-Eingabe-/Layout-/Style-/Font-/Clip-Checks,
+`combat_hud`, `rockstar_features` und `portable_client` bestanden; `mcov.exe`
+und ZIP wurden neu gebaut. Alte Client-/Injector-Bilder und Testbelege bleiben erhalten.
