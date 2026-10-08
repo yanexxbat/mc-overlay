@@ -398,7 +398,7 @@
       },
       {
         "name": "compact-launcher-sidebar",
-        "value": "620px viewport width; 142px sidebar above, 112px below"
+        "value": "620px viewport width; 142px sidebar at or above, 112px below"
       }
     ],
     "nativeShell": {
@@ -415,7 +415,6 @@
         -1,
         -1
       ],
-      "exteriorInset": "12px",
       "regionCornerDiameter": "24px",
       "firstFrameBeforeShow": true,
       "liquidGlassIntegrated": false
@@ -489,8 +488,8 @@
       "kind": "button",
       "refersTo": "button-primary",
       "description": "Injector action stays outside scrolling content at 34px high. Enabled ink is near-black; busy or absent selection uses soft-white disabled ink and 0.48 alpha.",
-      "html": "<div class=\"ds-primary-examples\"><button class=\"ds-primary-action\">Client starten</button><button class=\"ds-primary-action\" disabled>Verbindung wird vorbereitet...</button></div>",
-      "css": ".ds-primary-examples{display:grid;gap:6px;width:280px}.ds-primary-action{font:500 14px Inter,sans-serif;color:#221B1B;background:#EF8B70;border:0;border-radius:4px;padding:3px 7px;height:34px;width:100%}.ds-primary-action:hover:not(:disabled){background:#FFA388}.ds-primary-action:active:not(:disabled){background:#DC7D64}.ds-primary-action:focus-visible{outline:1px solid #FFA388;outline-offset:2px}.ds-primary-action:disabled{color:#ECECEF;opacity:.48}"
+      "html": "<button class=\"ds-primary-action\">Client starten</button>",
+      "css": ".ds-primary-action{font:500 14px Inter,sans-serif;color:#221B1B;background:#EF8B70;border:0;border-radius:4px;padding:3px 7px;height:34px;width:280px}.ds-primary-action:hover:not(:disabled){background:#FFA388}.ds-primary-action:active:not(:disabled){background:#DC7D64}.ds-primary-action:focus-visible{outline:1px solid #FFA388;outline-offset:2px}.ds-primary-action:disabled{color:#ECECEF;opacity:.48}"
     },
     {
       "name": "Compact injector root",
