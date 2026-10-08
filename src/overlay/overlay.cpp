@@ -1010,16 +1010,22 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
         draw->AddLine(corners[i], ImVec2(corners[i].x, corners[i].y + arm * dy[i]), colour, 2.0f);
     }
 
-    char label[96];
+    const char* name=rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true);
+    char values[48];
     if (snapshot.targetMaxHealth > 0.0f) {
-        std::snprintf(label, sizeof(label), "%s   %.0f/%.0f   %.1fm",
-                      rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true), snapshot.targetHealth,
-                      snapshot.targetMaxHealth, snapshot.targetDistance);
+        std::snprintf(values,sizeof(values),"%.0f/%.0f   %.1fm",snapshot.targetHealth,snapshot.targetMaxHealth,snapshot.targetDistance);
     } else {
-        std::snprintf(label, sizeof(label), "%s   %.1fm", rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true), snapshot.targetDistance);
+        std::snprintf(values,sizeof(values),"%.1fm",snapshot.targetDistance);
     }
-    const ImVec2 size = ImGui::CalcTextSize(label);
-    DrawHudText(draw, cx - size.x * 0.5f, cy + radius + 8.0f, style::compact::Text, label);
+    const auto nameSize=ImGui::CalcTextSize(name),valueSize=ImGui::CalcTextSize(values);
+    const float width=std::min(kPanelWidth-16,nameSize.x+valueSize.x+26);
+    const ImVec2 low{cx-width*.5f,cy+radius+4},high{cx+width*.5f,cy+radius+12+valueSize.y};
+    DrawHudPanel(*draw,low,high);
+    const float valueX=std::max(low.x+8,high.x-8-valueSize.x);
+    draw->PushClipRect({low.x+8,low.y+4},{std::max(low.x+8,valueX-10),low.y+4+nameSize.y},true);
+    DrawHudText(draw,low.x+8,low.y+4,style::compact::Text,name);
+    draw->PopClipRect();
+    DrawHudText(draw,valueX,low.y+4,style::compact::Text,values);
 }
 
 // ---------------------------------------------------------------------------
