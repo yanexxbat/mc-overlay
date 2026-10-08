@@ -1,4 +1,4 @@
-# Kompaktes, transparentes Client-Menue
+# Kompaktes, transparentes Client- und Injector-Theme
 
 Die visuelle Referenz ist `design/reference-translucent-menu.png`, der vom Benutzer
 bereitgestellte Screenshot. Er ersetzt das erste Cyan-Beispiel und das bisherige
@@ -11,7 +11,8 @@ Das produktive Menue liegt in `src/overlay/control_panel.cpp`: `RenderMenu()` wi
 ueber den bestehenden kompatiblen `Render()`-Einstieg von `Overlay::DrawMenu()`
 aufgerufen. `src/common/compact_style.hpp` stellt `ApplyCustomStyle()` bereit.
 `CompactStyle` wendet das Theme lokal an und stellt danach Style und Font wieder her.
-Der Launcher behaelt seine separate Liquid-Glass-Darstellung.
+Der Injector verwendet dasselbe freigegebene Theme und denselben lokalen
+`CompactStyle`; die fruehere Lavender-/Liquid-Glass-Darstellung ist abgeloest.
 
 ## Layout und Bedienung
 
@@ -40,6 +41,19 @@ Der Launcher behaelt seine separate Liquid-Glass-Darstellung.
   Enable und Run action im Header sind an die vorhandenen Module gebunden.
   HUD-Editor, Keybinds, Friend-Listen und Minecraft/JNI-Logik bleiben erhalten.
 
+## Injector
+
+Der Launcher oeffnet mit 640 x 640 Pixeln und 12 Pixel Aussenabstand.
+Die Start/Diagnose-Sidebar ist 142 Pixel breit, unter 620 Pixel Viewport-Breite
+112 Pixel. Kleine selbst gezeichnete Icons und 14-Pixel-Inter entsprechen dem
+Client. Die echte Instanzliste zeigt PID/Java/Client-Status und den vollstaendigen
+Fenstertitel im Tooltip. Status, JDK-Auswahl und Diagnose scrollen; der
+34-Pixel-Startbutton und Schliessen-Footer bleiben fest erreichbar, auch bei
+480 x 380. Aktiver Starttext ist fast schwarz, deaktivierter Text weiss mit dem
+gemeinsamen DisabledAlpha. Native Titelleisten-Drag, Minimieren/Schliessen,
+asynchroner Start, Instanzauswahl, JDK, Logs und Packaging bleiben erhalten.
+Weitere Bedienung und Laufzeitdetails: [launcher.md](launcher.md).
+
 ## Material und Leistung
 
 Anthrazit `#222229` mit Alpha 0.88 wird direkt ueber die transparente
@@ -47,10 +61,16 @@ Overlay-Ausgabe komponiert. Die Sidebar ist leicht dunkler. Text `#ECECEF`,
 Sekundaertext `#AEAEB8`, Akzent `#EF8B70`, aktiv `#FFA388`. Kleine Controls haben
 4 Pixel Rundung; Child-Style 8, Popups 6 Pixel. Fenster- und Frame-Border sind 0.
 
-Der Client zeichnet gewoehnliche ImGui-Geometrie und benoetigt weder eine
-Desktop-Aufnahme noch Blur oder Refraction. Der bestehende Glasrenderer bleibt
-im Client inaktiv. Die eingestellte Capture-Affinity gilt auch bei offenem Menue.
+Client und Injector zeichnen gewoehnliche ImGui-Geometrie und benoetigen weder
+eine Desktop-Aufnahme noch Blur oder Refraction. Der bestehende Glasrenderer bleibt
+im Client inaktiv. `FlatApp` hat LiquidGlass-Member, Initialisierung, BeginFrame,
+Rendern und Shutdown entfernt. Der native Injector loescht RGBA auf 0 und verwendet
+DWM-Margins −1 sowie eine Fensterregion mit 24 Pixel Eckdurchmesser passend zum
+12-Pixel-Radius. Der erste Frame wird vor `ShowWindow` praesentiert.
+Die eingestellte Capture-Affinity des Clients gilt auch bei offenem Menue.
 Settings > Overlay zeigt Translucent dark / 88% opacity und Not required an.
+Material, Lizenz und historische Capture-Tests des weiterhin vorhandenen
+Glasrenderers stehen in [liquid-ui.md](liquid-ui.md).
 
 ## Verifikation
 
@@ -61,3 +81,12 @@ Offscreen-Vorschauen mit synthetischem Hintergrund beweisen die ImGui-Darstellun
 und Alpha-Komposition; sie sind keine Live-Aufnahme aus Minecraft.
 Aktuelle Ansichten:
 `.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
+
+Die aktuellen Injector-Checks bestehen fuer Auswahl, Start, Verhinderung doppelter
+Starts, beide Sidebar-Tabs, feste Footer und Titel-Minimieren/Schliessen. Der native
+versteckte HWND-/Swapchain-Check prueft Panel-Alpha, transparente Aussenraender,
+lesbare Controls, Resize und Fensterregion. Alle neun Bilder unter
+`.impeccable/review/compact-injector/` sind freigegeben. Die `launcher-native-*`
+Dateien sind versteckte Swapchain-Ausgaben vor OS-Clipping; sie beweisen keine
+Live-Desktop-Komposition oder Minecraft-Optik. `mcov`, `mcov_injector`, native/UI-
+Checks und das portable ZIP mit exakten Payloads bestehen.

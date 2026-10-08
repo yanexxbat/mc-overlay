@@ -21,8 +21,13 @@ im selben Fenster durch `SectionScope` auf den gewaehlten Abschnitt begrenzt.
 Die zwei Child-Bereiche Navigation/Content und nativen Tab-/Eingabe-IDs bleiben
 Teil des produktiven Renderers. Der Adapter erfindet keine Modulwerte.
 
-Das direkte `ApplyCustomStyle()` veraendert den globalen Style. Beim Client
-wird es deshalb durch `CompactStyle` lokal verwendet; ein erneuter globaler
+Das direkte `ApplyCustomStyle()` veraendert den globalen Style. Client und Injector
+verwenden es deshalb durch `CompactStyle` lokal; ein erneuter globaler
 Theme-Aufruf pro Frame ist nicht erforderlich. Fonts/Backend-Initialisierung
 bleiben beim vorhandenen Lifecycle. Weitere Layout-, Performance- und
 Bedienungsdetails stehen in [compact-ui.md](compact-ui.md).
+
+`src/injector/launcher_ui.cpp` verwendet das gleiche freigegebene Theme fuer
+Start/Diagnose, Instanzauswahl und feste Aktionen. Sein `FlatApp`-Lifecycle
+komponiert direkt transparent und bindet LiquidGlass nicht mehr ein; Details
+stehen in [launcher.md](launcher.md).

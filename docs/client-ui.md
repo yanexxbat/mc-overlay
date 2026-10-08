@@ -8,8 +8,10 @@ native Felder und Slider mit sichtbaren Werten halten Einstellungen lesbar.
 verschiebt das Menü; **Center** zentriert es, **Reset** setzt die aktuelle Kategorie
 zurück. Die Größe beträgt bis zu 1040 × 520 UI-Pixel, begrenzt auf den Viewport
 minus 24 Pixel. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
-112 Pixel. Der Launcher behält seine separate Liquid-Glass-Darstellung.
-Layoutdetails: [compact-ui.md](compact-ui.md). Launcher-Material und Capture:
+112 Pixel. Der Injector verwendet dasselbe freigegebene kompakte Theme mit
+Start/Diagnose-Sidebar und festem Start-/Schließen-Footer.
+Layoutdetails: [compact-ui.md](compact-ui.md). Injector und Bedienung:
+[launcher.md](launcher.md). Der erhaltene frühere Glasrenderer steht in
 [liquid-ui.md](liquid-ui.md). HUD und Welt-Visuals behalten ihre bisherigen Styles.
 
 Der Client komponiert seine dunkle Oberfläche direkt mit Alpha 0,88 über das
@@ -154,8 +156,10 @@ Sie zeigen die echte ImGui-Ausgabe mit direkter Alpha-Komposition vor synthetisc
 Hintergrund. Sie sind keine Minecraft-Screenshots und prüfen keine Live-Optik,
 Attach-/Fokus-Verbindung zum Spiel oder sämtliche GPUs. Ältere Glas-/Rasterbilder
 unter `.impeccable/review/` dokumentieren den abgelösten Client, nicht diese Ansicht.
-Die weiterhin gültigen Launcher-/Glas-Capture-Tests stehen in
-[liquid-ui.md](liquid-ui.md).
+Die aktuellen kompakten Injector-Vorschauen stehen in
+`.impeccable/review/compact-injector/`; die nativen Bilder sind versteckte
+Swapchain-Ausgaben, keine Desktop-Aufnahmen. Die weiterhin gültigen Tests des
+erhaltenen früheren Glas-/Capture-Renderers stehen in [liquid-ui.md](liquid-ui.md).
 
 Crystal Macro und Anchor Macro laufen bei aktivierter Funktion, solange die normale
 Platzieren-/Benutzen-Taste gehalten wird. Der Modul-Bind steuert die Aktivierung.
