@@ -141,7 +141,7 @@ void Overlay::DrawBind(keys::Action a,bool inlineRow) {
         const ImVec2 check=ImGui::GetItemRectMin();
         ImGui::SetCursorScreenPos({check.x-94,check.y});
     }
-    if(ImGui::Button(label.c_str(),{inlineRow?88.f:150.f,0})) {
+    if(ImGui::Button(label.c_str(),{inlineRow?88.f:std::min(150.f,ImGui::GetContentRegionAvail().x),0})) {
         captureAction_=captureAction_==index?-1:index; captureModifier_=0; captureArmed_=false; capturePrevious_=keyInput_; preferenceStatus_.clear();
     }
     if(ImGui::IsItemHovered()) ImGui::SetTooltip("Click, then press a key. Esc cancels. Backspace / Delete clears.");
@@ -151,6 +151,26 @@ void Overlay::DrawKeybindSettings() {
     ImGui::TextWrapped("Click a binding and press a key or mouse button. Ctrl / Shift / Alt combinations work too.");
     if(captureAction_>=0) ImGui::Text("Binding: %s  (Esc cancels)",keys::kNames[captureAction_]);
     if(!preferenceStatus_.empty()) ImGui::TextWrapped("%s",preferenceStatus_.c_str());
+    if(ImGui::GetContentRegionAvail().x<420) {
+        // Match the desktop table's ID scope so resize retains widget identity.
+        ImGui::PushID("keybind_editor");
+        for(int i=0;i<keys::kCount;++i) {
+            const auto a=static_cast<keys::Action>(i); ImGui::PushID(i);
+            ImGui::TextWrapped("%s",keys::kNames[i]);
+            DrawBind(a); ImGui::SameLine();
+            if(keys::System(a)) { ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("Toggle"); }
+            else {
+                int mode=int(bindings_[i].mode); const char* modes[]={"Toggle","Hold"};
+                ImGui::SetNextItemWidth(-1);
+                if(ImGui::Combo("##mode",&mode,modes,2)) {
+                    bindings_[i].mode=static_cast<keys::Mode>(mode);
+                    preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500;
+                }
+            }
+            ImGui::Spacing(); ImGui::PopID();
+        }
+        ImGui::PopID(); return;
+    }
     if(ImGui::BeginTable("keybind_editor",3,ImGuiTableFlags_Borders|ImGuiTableFlags_SizingStretchProp)) {
         ImGui::TableSetupColumn("Module",ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Key",ImGuiTableColumnFlags_WidthFixed,150);

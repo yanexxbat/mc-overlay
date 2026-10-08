@@ -20,13 +20,15 @@ camera/entity projection stability.
 
 ## Confirmed constraints
 
-- The latest request replaces the classic menu with Liquid Glass based on
-  [poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11).
-  Preserve actual module controls, keybinds and HUD behavior. Categories live on
-  the left; module tiles toggle on left-click and open independent draggable
-  settings on right-click. Settings-only tiles and action tiles retain their
-  real operation rather than presenting invented toggle state.
-- The launcher shares the client menu's visual system and performs Minecraft
+- The latest client direction follows the user-supplied
+  `design/reference-translucent-menu.png`: compact translucent anthracite,
+  narrow left categories, searchable module tabs and muted coral controls.
+  The 76 real sections render inside the main window. Tabs select settings;
+  the header and available Quick toggles operate real modules and actions.
+  Preserve actual controls, keybinds and HUD behavior. The spacious cyan example,
+  large module tile grid and independent module settings window are superseded.
+- The launcher retains its separate Liquid Glass visual system based on
+  [poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11) and performs Minecraft
   selection, connection and overlay startup. Technical diagnostics remain separate
   from the primary start action.
 - Keep the simplified Kill Aura workflow and independent mouse-controlled camera.
@@ -38,7 +40,7 @@ camera/entity projection stability.
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Support keyboard/mouse bindings, modifier chords, Toggle/Hold operation and
   movable/scalable HUD elements. All existing sections remain reachable through
-  category tiles and their settings windows.
+  category module tabs and their in-window controls.
 - Preserve the clean rounded entity ESP, configurable Target Aura and Target
   Marker, soft particles/trails and the glowing friend/self hats.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
@@ -51,23 +53,30 @@ HUD positions, per-element scale/visibility, keybinds, Rockstar module parameter
 and world/server-scoped waypoints save in `client-settings.ini`. Existing
 combat/ESP/Aura settings and friend UUID relations retain their session behavior.
 
-The glass material captures the desktop only while the menu or launcher is
-visible. DXGI Desktop Duplication runs first; after 750 ms without a usable frame,
+The client menu composites an 88%-opaque dark ImGui fill directly over the
+transparent overlay. It requires no desktop capture, blur or refraction; the
+client glass renderer receives visibility false. The configured overlay capture
+preference applies while the menu is open. Settings → Overlay reports
+`Translucent dark / 88% opacity` and `Not required`.
+
+The launcher's separate glass material captures the desktop only while its
+glass surface is visible. DXGI Desktop Duplication runs first; after 750 ms without a usable frame,
 Windows Graphics Capture attempts monitor capture on the overlay's render device.
-Closing the menu, disabling capture, supplying a fixture texture or changing the
+Closing/minimizing the launcher, disabling capture, supplying a fixture texture or changing the
 monitor stops capture sessions. Temporary Windows capture exclusion prevents
-recursive feedback, and closure restores the configured overlay capture preference.
-Unavailable capture uses a stable tinted fallback. Settings → Overlay reports
-the actual material and capture state. This is presentation behavior, not a change
+recursive feedback, and closure restores its prior capture affinity.
+Unavailable capture uses a stable tinted fallback. This is presentation behavior, not a change
 to world-effect visibility or JNI data acquisition.
 
 ## Verification limits
 
 Offscreen D3D11 WARP checks exercise the real shaders, UI input, small viewports,
-HUD/keybind behavior and portable packaging. An explicit native `--live` probe
+HUD/keybind behavior and portable packaging. Current compact-client review images
+under `.impeccable/review/compact-client/` use synthetic backgrounds and direct
+alpha compositing; they do not establish live Minecraft appearance. An explicit native `--live` probe
 passed WGC startup, the full LiquidGlass runtime, capture pause, display-affinity
 restoration and live capture after reopening on this host without saving desktop
-images or attaching to a JVM. Synthetic review images establish material
-and layout behavior, not live Minecraft appearance. These checks do not establish
+images or attaching to a JVM. These glass checks concern the retained renderer
+and launcher, not a client capture requirement. These checks do not establish
 live Minecraft capture/attach behavior on every GPU or runtime. Existing compatibility details
 remain in [docs/compatibility.md](docs/compatibility.md).

@@ -323,6 +323,22 @@ void SearchChecks(mcov::Overlay& overlay) {
     Require(!mcov::OverlayUiCheck::Menu(overlay).search[0],"Category navigation retained a stale search");
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
 }
+void CompactKeybindChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    SelectSubTab(overlay,Page::Settings,"",2,4,{480,360});
+    auto frame=[&] { Draw(overlay,Page::Settings,0,{480,360}); };
+    auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+    // The native row has a full-width label above a binding and mode.
+    const float row=14+20+3*6;
+    const ImVec2 p{content->DC.CursorStartPos.x+50,content->DC.CursorStartPos.y+3*row+20+10};
+    auto& io=ImGui::GetIO(); io.AddMousePosEvent(p.x,p.y); frame();
+    io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+    Require(mcov::OverlayUiCheck::Capture(overlay)==mcov::keys::Index(mcov::keys::Action::KillAura),"Compact binding did not enter real key capture");
+    mcov::OverlayUiCheck::Input(overlay,{},true);
+    mcov::keys::Input cancel{}; cancel[VK_ESCAPE]=true; mcov::OverlayUiCheck::Input(overlay,cancel,true);
+    mcov::OverlayUiCheck::Input(overlay,{},true); io.AddMousePosEvent(-100,-100); frame(); frame();
+    SaveFrame(device,context,output/"compact-keybinds.png");
+    mcov::OverlayUiCheck::Center(overlay);
+}
 void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     // Kontrollierter Hintergrund: keine Desktop-Aufnahme, keine Spiel-/Benutzerdaten.
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
@@ -766,6 +782,7 @@ int main(int argc,char** argv) {
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
         SearchChecks(overlay);
+        CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 SelectSubTab(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
