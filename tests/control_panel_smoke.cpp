@@ -713,7 +713,7 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
-        if(previewGlass) previewGlass->BeginFrame(nullptr,size,true,false);
+        if(previewGlass) previewGlass->BeginFrame(nullptr,size,false,false);
         auto& ctx=*ImGui::GetCurrentContext(); const auto before=ImGui::GetStyle();
         const int colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size,windows=ctx.CurrentWindowStack.Size,fonts=ctx.FontStack.Size;
         auto actions=mcov::launcher::Render(view,size);
@@ -726,11 +726,11 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     auto screenshot=[&](const char* name,ImVec2 size) {
         frame(size); frame(size); SaveFrame(device,context,output/name);
     };
-    screenshot("launcher-empty.png",{640,520});
+    screenshot("launcher-empty.png",{640,640});
     view.instances={{1234,"Minecraft* 1.21.11","Java 21",false,false},
                     {5678,"Minecraft 26.2 - Sehr langer Fenstertitel mit Profil und Server","Java 25",true,true}};
     view.selected=0;
-    screenshot("launcher-ready.png",{640,520});
+    screenshot("launcher-ready.png",{640,640});
     screenshot("launcher-small.png",{480,380});
     view.busy=true; view.phase="Agent verbinden und Live-Daten pruefen...";
     screenshot("launcher-busy.png",{640,520});
@@ -740,6 +740,7 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     view.tab=1; view.diagnostic="Verbindung zu PID 1234 konnte nicht vorbereitet werden.";
     view.log="[INFO] Minecraft gefunden\n[WARN] Ein passendes JDK 21 fehlt.";
     screenshot("launcher-diagnose.png",{480,380});
+    screenshot("launcher-diagnose-desktop.png",{640,640});
     // Echte Eingabe prueft den einzigen Start-Button; der Test startet keinen Prozess.
     view.tab=0; view.error=view.needsJdk=false;
     frame({640,520}); auto* content=Child("/launcher_content");

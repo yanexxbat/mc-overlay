@@ -99,7 +99,9 @@ Actions Render(View& v,ImVec2 size) {
         ImGui::TextDisabled("Windows x64");
         ImGui::EndChild();
     }
-    ImGui::SameLine(0,20); ImGui::BeginGroup();
+    ImGui::SameLine(0,20);
+    const float contentX=ImGui::GetCursorPosX();
+    ImGui::BeginGroup();
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x-16);
     const float footer=v.tab==0?66.f:36.f;
     const ImVec2 contentSize{width,std::max(1.f,ImGui::GetContentRegionAvail().y-footer)};
@@ -109,7 +111,7 @@ Actions Render(View& v,ImVec2 size) {
         if(v.tab==0) {
             ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Minecraft auswaehlen");
             const float refreshWidth=ImGui::CalcTextSize("Aktualisieren").x+14;
-            if(ImGui::GetContentRegionAvail().x>=refreshWidth+12) ImGui::SameLine(0,12);
+            if(ImGui::GetItemRectMax().x+refreshWidth+12<=ImGui::GetCursorScreenPos().x+width) ImGui::SameLine(0,12);
             ImGui::BeginDisabled(v.busy);
             if(ImGui::SmallButton("Aktualisieren")) a.refresh=true;
             ImGui::EndDisabled();
@@ -134,7 +136,7 @@ Actions Render(View& v,ImVec2 size) {
             ImGui::TextWrapped("%s",v.diagnostic.empty()?"Noch kein Verbindungsversuch. Waehle unter Start deine Minecraft-Instanz aus.":v.diagnostic.c_str());
             if(ImGui::Button("Protokollordner oeffnen")) a.openLogs=true;
             const float copyWidth=ImGui::CalcTextSize("Protokoll kopieren").x+14;
-            if(ImGui::GetContentRegionAvail().x>=copyWidth+9) ImGui::SameLine();
+            if(ImGui::GetItemRectMax().x+copyWidth+9<=ImGui::GetCursorScreenPos().x+width) ImGui::SameLine();
             if(ImGui::Button("Protokoll kopieren")) ImGui::SetClipboardText((v.diagnostic+"\n"+v.log).c_str());
             control_panel::Section("Protokoll");
             ImGui::TextWrapped("%s",v.log.empty()?"Noch keine Eintraege.":v.log.c_str());
@@ -155,7 +157,7 @@ Actions Render(View& v,ImVec2 size) {
         }
         ImGui::EndDisabled();
     }
-    ImGui::TextDisabled("mcov"); ImGui::SameLine(std::max(0.f,width-80));
+    ImGui::TextDisabled("mcov"); ImGui::SameLine(contentX+std::max(0.f,width-80));
     if(ImGui::Button("Schliessen",{80,22})) a.close=true;
     ImGui::EndGroup(); ImGui::End(); return a;
 }
