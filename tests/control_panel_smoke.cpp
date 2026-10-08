@@ -931,11 +931,23 @@ int main(int argc,char** argv) {
         mcov::CopyField(hudScene.effects[1].name,"Strength"); hudScene.effects[1].durationTicks=900;
         for(int i=0;i<mcov::kSlotCount;++i) { hudScene.equipment[i].present=1; mcov::CopyField(hudScene.equipment[i].name,"Diamond item"); hudScene.equipment[i].maxDamage=300; hudScene.equipment[i].damage=i*30; }
         binds[auraKey]={0x4B,0,mcov::keys::Mode::Toggle}; hud.performance=true;
-        auto hudFrame=[&](ImVec2 size,bool edit=true) {
+        auto hudFrame=[&](ImVec2 size,bool edit=true,bool backdrop=false) {
             io.DisplaySize=size; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            if(backdrop) {
+                // Controlled game-like color field; no desktop or Minecraft capture.
+                auto& d=*ImGui::GetBackgroundDrawList();
+                d.AddRectFilled({0,0},{size.x,size.y*.46f},IM_COL32(125,171,202,255));
+                for(int y=int(size.y*.46f);y<int(size.y);y+=80) for(int x=0;x<int(size.x);x+=110) {
+                    const bool alternate=(x/110+y/80)%2;
+                    d.AddRectFilled({float(x),float(y)},{std::min(size.x,float(x+110)),std::min(size.y,float(y+80))},alternate?IM_COL32(66,109,65,255):IM_COL32(77,124,75,255));
+                }
+                d.AddRectFilled({size.x*.28f,size.y*.17f},{size.x*.34f,size.y*.69f},IM_COL32(89,72,53,255));
+                d.AddRectFilled({size.x*.69f,size.y*.26f},{size.x*.78f,size.y*.63f},IM_COL32(91,78,64,255));
+            }
             const auto before=ImGui::GetStyle(); const auto vars=ctx.StyleVarStack.Size,colors=ctx.ColorStack.Size,fonts=ctx.FontStack.Size;
             mcov::OverlayUiCheck::Telemetry(overlay,hudScene);
             mcov::OverlayUiCheck::DrawHud(overlay,hudScene,edit);
+            Require(ctx.ErrorCountCurrentFrame==0,"HUD generated an ImGui error");
             Require(vars==ctx.StyleVarStack.Size&&colors==ctx.ColorStack.Size&&fonts==ctx.FontStack.Size&&
                     std::memcmp(&before,&ImGui::GetStyle(),sizeof(ImGuiStyle))==0,"HUD editor leaked global style or fonts"); ImGui::Render();
         };
@@ -960,6 +972,7 @@ int main(int argc,char** argv) {
         Require(hud.layout[2].scale>scaleBefore,"Compact HUD scale is not keyboard operable");
         io.AddMousePosEvent(-100,-100);
         hud.layout[2]={}; hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"modular-hud.png");
+        hudFrame({1280,800},false,true); SaveFrame(device.Get(),context.Get(),output/"hud-scene.png");
         hud.extras.fill(true); extra[mcov::rockstar::Feature::Notifications].enabled=extra[mcov::rockstar::Feature::DetectPlayer].enabled=true;
         mcov::keys::Input hudKeys{}; hudKeys[0x57]=hudKeys[1]=true; pack.Input(hudKeys,true,double(GetTickCount64())/1000);
         pack.Notify("Wings enabled",double(GetTickCount64())/1000); pack.Notify("Waypoint saved",double(GetTickCount64())/1000);
@@ -971,6 +984,7 @@ int main(int argc,char** argv) {
         hudFrame({1280,800},false);
         // All nineteen real widgets, isolated into a synthetic catalog for visual coverage.
         const auto galleryHud=hud; const auto galleryExtra=extra;
+        const bool galleryWatermark=mcov::OverlayUiCheck::Settings(overlay).showWatermark;
         io.DisplaySize={1440,1100}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
         auto& galleryDraw=*ImGui::GetBackgroundDrawList();
         ImGui::PushFont(mcov::style::MenuFont());
@@ -989,7 +1003,25 @@ int main(int argc,char** argv) {
             for(int c=command;c<galleryDraw.CmdBuffer.Size-1;++c) { auto& clip=galleryDraw.CmdBuffer[c].ClipRect; clip={clip.x+shift.x,clip.y+shift.y,clip.z+shift.x,clip.w+shift.y}; }
         }
         ImGui::Render(); SaveFrame(device.Get(),context.Get(),output/"hud-catalog.png");
-        hud=galleryHud; extra=galleryExtra;
+        hud=galleryHud; extra=galleryExtra; mcov::OverlayUiCheck::Settings(overlay).showWatermark=galleryWatermark;
+        // Exercise the new per-row clipping at a saved scale with long values.
+        const auto edgeHud=hud; const auto edgeBinds=binds; const auto edgeScene=hudScene;
+        for(int j=0;j<mcov::kHudModules;++j) mcov::OverlayUiCheck::HudElement(overlay,j,false);
+        for(auto kind:{mcov::HudModule::Equipment,mcov::HudModule::Effects,mcov::HudModule::Keybinds}) {
+            const int index=int(kind); mcov::OverlayUiCheck::HudElement(overlay,index,true);
+            hud.layout[index]={{kind==mcov::HudModule::Keybinds?.95f:.05f,kind==mcov::HudModule::Effects?.8f:.1f},1.3f,true};
+        }
+        mcov::CopyField(hudScene.equipment[0].name,"A very long equipment name that must stay in its value column");
+        mcov::CopyField(hudScene.effects[0].name,"A very long effect name that must preserve its timer");
+        binds[auraKey]={0x2D,mcov::keys::Ctrl|mcov::keys::Shift|mcov::keys::Alt,mcov::keys::Mode::Toggle};
+        hudFrame({960,600},false); hudFrame({960,600},false);
+        SaveFrame(device.Get(),context.Get(),output/"hud-long-values.png");
+        const auto keyRect=mcov::OverlayUiCheck::HudRects(overlay)[int(mcov::HudModule::Keybinds)];
+        bool innerClip=false;
+        for(const auto& cmd:ImGui::GetBackgroundDrawList()->CmdBuffer)
+            innerClip|=cmd.ElemCount&&cmd.ClipRect.x>=keyRect.min.x&&cmd.ClipRect.z<keyRect.max.x-8&&cmd.ClipRect.y>=keyRect.min.y&&cmd.ClipRect.w<=keyRect.max.y;
+        Require(innerClip,"Scaled HUD lost its inner value-column clipping");
+        hud=edgeHud; binds=edgeBinds; hudScene=edgeScene; mcov::OverlayUiCheck::Settings(overlay).showWatermark=galleryWatermark;
         extra={}; pack.ResetWorld();
         hud={}; binds=mcov::keys::Defaults(); io.AddMousePosEvent(-100,-100);
         EspChecks(overlay,device.Get(),context.Get(),output);
