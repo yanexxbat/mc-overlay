@@ -345,7 +345,7 @@ All 19 snapshot HUD elements and the optional Combat debug HUD share compact
 tokens and the 14-pixel `MenuFont`. Active modules and pressed keys use coral;
 health, friends and durability use semantic feedback. Long name, item, effect
 and keybind text is clipped within its row, including after element scaling.
-The Reach readout has an anthracite surface inside open crosshair brackets;
+The Reach readout has an anthracite surface below the open crosshair brackets;
 its name clips before the separate health/distance column.
 
 Nineteen HUD elements retain visibility, position, scale, drag previews and reset.

@@ -77,7 +77,7 @@ Disabled-Badge nur am ausgewaehlten deaktivierten Element. Drag, Reset, Tasten u
 Positions-/Skalen-/Sichtbarkeits-Persistenz bleiben erhalten.
 
 Zeilen-Clipping begrenzt lange Name-/Item-/Effect-/Keybind-Texte auch nach Skalierung.
-Der Reach-Readout verwendet die Surface unter offenen Fadenkreuzklammern; sein
+Der Reach-Readout verwendet die Surface unterhalb der offenen Fadenkreuzklammern; sein
 Name clippt vor einer getrennten HP-/Distanz-Spalte. Das HUD bleibt ein
 Snapshot-Verbraucher ohne Render-Thread-JNI, Desktop-Capture, Blur oder neuen Renderer.
 

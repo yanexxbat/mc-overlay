@@ -116,7 +116,7 @@ ohne Rahmen, Zierstreifen oder Schatten. Ruhige Ueberschriften und Trennlinien,
 korallfarbene aktive Zustaende und gruene, amberfarbene sowie rote Statusfarben halten die
 Informationen lesbar. Lange Namen, Item-/Effect- und Keybind-Texte bleiben durch
 Zeilen-Clipping auch bei Skalierung innerhalb des Elements. Der Reach-Readout
-hat eine dunkle Flaeche zwischen offenen Fadenkreuzklammern; der Name clippt vor
+hat eine dunkle Flaeche unterhalb der offenen Fadenkreuzklammern; der Name clippt vor
 der getrennten HP-/Distanz-Spalte.
 
 Element anklicken und ziehen. Die Toolbar wählt auch verdeckte Elemente aus und
