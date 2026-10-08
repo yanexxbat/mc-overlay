@@ -754,8 +754,10 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     view.busy=false;
     auto click=[&](ImVec2 p,ImVec2 size=ImVec2(640,520)) {
         io.AddMousePosEvent(p.x,p.y); frame(size);
-        io.AddMouseButtonEvent(0,true); frame(size);
-        io.AddMouseButtonEvent(0,false); return frame(size);
+        io.AddMouseButtonEvent(0,true); const auto pressed=frame(size);
+        io.AddMouseButtonEvent(0,false); auto released=frame(size);
+        released.close|=pressed.close; released.minimize|=pressed.minimize;
+        return released;
     };
     Require(click({572,495}).close,"Launcher footer close is clipped or unresponsive");
     Require(click({580,33}).minimize,"Launcher minimize did not respond");
@@ -1032,7 +1034,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 76 module tabs, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and glass launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 76 module tabs, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
