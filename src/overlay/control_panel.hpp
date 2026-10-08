@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <span>
+#include <array>
 #include "imgui.h"
 
 namespace mcov::control_panel {
@@ -19,7 +20,9 @@ struct Placement {
 };
 struct State {
     Page page = Page::Combat;
-    int theme = 0; // Liquid glass; fuer bestehende Theme-Aufrufer beibehalten.
+    int theme = 0; // Compatibility with existing callers; one compact client theme.
+    std::array<int,7> selectedSections{};
+    char search[64]{};
     bool reduceMotion = false;
     bool positioned = false;
     bool dragging = false;
@@ -60,7 +63,7 @@ private:
     int previous_;
 };
 
-// Gemeinsame Liquid-Glass-Navigation; Bedienelemente bleiben rendererunabhaengig.
+// Compact translucent client navigation; controls remain renderer independent.
 // presentation state only. The caller owns all real module settings and actions.
 Actions Render(State& state, const Status& status, void* owner, Content content,
                Catalog catalog=nullptr,Activate activate=nullptr);
@@ -68,7 +71,7 @@ const char* ThemeName(int index);
 float Scale();
 bool MotionAllowed(const State& state);
 void Section(const char* label);
-// SectionScope waehlt im Modulfenster direkt die vorhandenen Einstellungen.
+// SectionScope selects the existing controls directly inside the client window.
 // Ohne Scope bleibt die native Tab-Navigation fuer bestehende Aufrufer erhalten.
 int SubTabs(const char* id, const char* const* labels, int count, int selected,
             bool selectNext = false);
