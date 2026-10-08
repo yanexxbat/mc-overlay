@@ -1,12 +1,306 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-08T05:49:58.4240649+00:00",
-  "title": "Design System: mcov Liquid Glass",
+  "generatedAt": "2026-10-08T20:07:51.626Z",
+  "title": "Design System: mcov Compact Client",
   "extensions": {
     "colorMeta": {
       "primary": {
         "role": "primary",
-        "displayName": "Primary",
+        "displayName": "Muted coral",
+        "tonalRamp": [
+          "oklch(15% 0.1285 35.98)",
+          "oklch(26% 0.1285 35.98)",
+          "oklch(37% 0.1285 35.98)",
+          "oklch(48% 0.1285 35.98)",
+          "oklch(59% 0.1285 35.98)",
+          "oklch(70% 0.1285 35.98)",
+          "oklch(81% 0.1285 35.98)",
+          "oklch(95% 0.1285 35.98)"
+        ]
+      },
+      "primary-active": {
+        "role": "primary",
+        "displayName": "Warm coral",
+        "tonalRamp": [
+          "oklch(15% 0.1163 37.11)",
+          "oklch(26% 0.1163 37.11)",
+          "oklch(37% 0.1163 37.11)",
+          "oklch(48% 0.1163 37.11)",
+          "oklch(59% 0.1163 37.11)",
+          "oklch(70% 0.1163 37.11)",
+          "oklch(81% 0.1163 37.11)",
+          "oklch(95% 0.1163 37.11)"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Soft white",
+        "tonalRamp": [
+          "oklch(15% 0.0040 286.32)",
+          "oklch(26% 0.0040 286.32)",
+          "oklch(37% 0.0040 286.32)",
+          "oklch(48% 0.0040 286.32)",
+          "oklch(59% 0.0040 286.32)",
+          "oklch(70% 0.0040 286.32)",
+          "oklch(81% 0.0040 286.32)",
+          "oklch(95% 0.0040 286.32)"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted gray",
+        "tonalRamp": [
+          "oklch(15% 0.0142 286.05)",
+          "oklch(26% 0.0142 286.05)",
+          "oklch(37% 0.0142 286.05)",
+          "oklch(48% 0.0142 286.05)",
+          "oklch(59% 0.0142 286.05)",
+          "oklch(70% 0.0142 286.05)",
+          "oklch(81% 0.0142 286.05)",
+          "oklch(95% 0.0142 286.05)"
+        ]
+      },
+      "navigation-text": {
+        "role": "neutral",
+        "displayName": "Quiet navigation gray",
+        "tonalRamp": [
+          "oklch(15% 0.0139 286.09)",
+          "oklch(26% 0.0139 286.09)",
+          "oklch(37% 0.0139 286.09)",
+          "oklch(48% 0.0139 286.09)",
+          "oklch(59% 0.0139 286.09)",
+          "oklch(70% 0.0139 286.09)",
+          "oklch(81% 0.0139 286.09)",
+          "oklch(95% 0.0139 286.09)"
+        ]
+      },
+      "navigation-selected-text": {
+        "role": "neutral",
+        "displayName": "Warm navigation text",
+        "tonalRamp": [
+          "oklch(15% 0.0450 38.76)",
+          "oklch(26% 0.0450 38.76)",
+          "oklch(37% 0.0450 38.76)",
+          "oklch(48% 0.0450 38.76)",
+          "oklch(59% 0.0450 38.76)",
+          "oklch(70% 0.0450 38.76)",
+          "oklch(81% 0.0450 38.76)",
+          "oklch(95% 0.0450 38.76)"
+        ]
+      },
+      "surface-window": {
+        "role": "neutral",
+        "displayName": "Translucent anthracite",
+        "tonalRamp": [
+          "oklch(15% 0.0131 285.44)",
+          "oklch(26% 0.0131 285.44)",
+          "oklch(37% 0.0131 285.44)",
+          "oklch(48% 0.0131 285.44)",
+          "oklch(59% 0.0131 285.44)",
+          "oklch(70% 0.0131 285.44)",
+          "oklch(81% 0.0131 285.44)",
+          "oklch(95% 0.0131 285.44)"
+        ]
+      },
+      "surface-sidebar": {
+        "role": "neutral",
+        "displayName": "Dark sidebar overlay",
+        "tonalRamp": [
+          "oklch(15% 0.0119 285.26)",
+          "oklch(26% 0.0119 285.26)",
+          "oklch(37% 0.0119 285.26)",
+          "oklch(48% 0.0119 285.26)",
+          "oklch(59% 0.0119 285.26)",
+          "oklch(70% 0.0119 285.26)",
+          "oklch(81% 0.0119 285.26)",
+          "oklch(95% 0.0119 285.26)"
+        ]
+      },
+      "surface-child": {
+        "role": "neutral",
+        "displayName": "Transparent child",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-popup": {
+        "role": "neutral",
+        "displayName": "Dark popup",
+        "tonalRamp": [
+          "oklch(15% 0.0129 285.51)",
+          "oklch(26% 0.0129 285.51)",
+          "oklch(37% 0.0129 285.51)",
+          "oklch(48% 0.0129 285.51)",
+          "oklch(59% 0.0129 285.51)",
+          "oklch(70% 0.0129 285.51)",
+          "oklch(81% 0.0129 285.51)",
+          "oklch(95% 0.0129 285.51)"
+        ]
+      },
+      "surface-control": {
+        "role": "neutral",
+        "displayName": "Quiet control fill",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-control-hover": {
+        "role": "neutral",
+        "displayName": "Hover control fill",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-control-active": {
+        "role": "neutral",
+        "displayName": "Active control fill",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-button-hover": {
+        "role": "neutral",
+        "displayName": "Button hover fill",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-button-active": {
+        "role": "neutral",
+        "displayName": "Coral activity tint",
+        "tonalRamp": [
+          "oklch(15% 0.1285 35.98)",
+          "oklch(26% 0.1285 35.98)",
+          "oklch(37% 0.1285 35.98)",
+          "oklch(48% 0.1285 35.98)",
+          "oklch(59% 0.1285 35.98)",
+          "oklch(70% 0.1285 35.98)",
+          "oklch(81% 0.1285 35.98)",
+          "oklch(95% 0.1285 35.98)"
+        ]
+      },
+      "surface-navigation-selected": {
+        "role": "neutral",
+        "displayName": "Quiet selected navigation",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-tab": {
+        "role": "neutral",
+        "displayName": "Quiet tab fill",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "surface-tab-selected": {
+        "role": "neutral",
+        "displayName": "Coral selected tab",
+        "tonalRamp": [
+          "oklch(15% 0.1285 35.98)",
+          "oklch(26% 0.1285 35.98)",
+          "oklch(37% 0.1285 35.98)",
+          "oklch(48% 0.1285 35.98)",
+          "oklch(59% 0.1285 35.98)",
+          "oklch(70% 0.1285 35.98)",
+          "oklch(81% 0.1285 35.98)",
+          "oklch(95% 0.1285 35.98)"
+        ]
+      },
+      "surface-value": {
+        "role": "neutral",
+        "displayName": "Dark slider value",
+        "tonalRamp": [
+          "oklch(15% 0.0129 285.49)",
+          "oklch(26% 0.0129 285.49)",
+          "oklch(37% 0.0129 285.49)",
+          "oklch(48% 0.0129 285.49)",
+          "oklch(59% 0.0129 285.49)",
+          "oklch(70% 0.0129 285.49)",
+          "oklch(81% 0.0129 285.49)",
+          "oklch(95% 0.0129 285.49)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Quiet popup border",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "separator": {
+        "role": "neutral",
+        "displayName": "Quiet separator",
+        "tonalRamp": [
+          "oklch(15% 0.0000 0.00)",
+          "oklch(26% 0.0000 0.00)",
+          "oklch(37% 0.0000 0.00)",
+          "oklch(48% 0.0000 0.00)",
+          "oklch(59% 0.0000 0.00)",
+          "oklch(70% 0.0000 0.00)",
+          "oklch(81% 0.0000 0.00)",
+          "oklch(95% 0.0000 0.00)"
+        ]
+      },
+      "launcher-primary": {
+        "role": "primary",
+        "displayName": "Launcher lavender",
         "tonalRamp": [
           "oklch(15% 0.1583 276.93)",
           "oklch(26% 0.1583 276.93)",
@@ -18,9 +312,9 @@
           "oklch(95% 0.1583 276.93)"
         ]
       },
-      "primary-ink": {
+      "launcher-primary-ink": {
         "role": "primary",
-        "displayName": "Primary ink",
+        "displayName": "Launcher pale lavender",
         "tonalRamp": [
           "oklch(15% 0.0992 279.50)",
           "oklch(26% 0.0992 279.50)",
@@ -32,23 +326,9 @@
           "oklch(95% 0.0992 279.50)"
         ]
       },
-      "primary-grab-active": {
-        "role": "primary",
-        "displayName": "Primary grab active",
-        "tonalRamp": [
-          "oklch(15% 0.0340 280.28)",
-          "oklch(26% 0.0340 280.28)",
-          "oklch(37% 0.0340 280.28)",
-          "oklch(48% 0.0340 280.28)",
-          "oklch(59% 0.0340 280.28)",
-          "oklch(70% 0.0340 280.28)",
-          "oklch(81% 0.0340 280.28)",
-          "oklch(95% 0.0340 280.28)"
-        ]
-      },
-      "text": {
+      "launcher-text": {
         "role": "neutral",
-        "displayName": "Text",
+        "displayName": "Launcher cool white",
         "tonalRamp": [
           "oklch(15% 0.0147 281.96)",
           "oklch(26% 0.0147 281.96)",
@@ -60,9 +340,9 @@
           "oklch(95% 0.0147 281.96)"
         ]
       },
-      "text-muted": {
+      "launcher-text-muted": {
         "role": "neutral",
-        "displayName": "Text muted",
+        "displayName": "Launcher muted cool white",
         "tonalRamp": [
           "oklch(15% 0.0225 272.04)",
           "oklch(26% 0.0225 272.04)",
@@ -74,9 +354,9 @@
           "oklch(95% 0.0225 272.04)"
         ]
       },
-      "surface-window": {
+      "launcher-surface-window": {
         "role": "neutral",
-        "displayName": "Surface window",
+        "displayName": "Launcher night blue",
         "tonalRamp": [
           "oklch(15% 0.0324 270.33)",
           "oklch(26% 0.0324 270.33)",
@@ -88,9 +368,9 @@
           "oklch(95% 0.0324 270.33)"
         ]
       },
-      "surface-child": {
+      "launcher-surface-child": {
         "role": "neutral",
-        "displayName": "Surface child",
+        "displayName": "Launcher dark inset",
         "tonalRamp": [
           "oklch(15% 0.0274 267.73)",
           "oklch(26% 0.0274 267.73)",
@@ -102,9 +382,9 @@
           "oklch(95% 0.0274 267.73)"
         ]
       },
-      "surface-popup": {
+      "launcher-surface-popup": {
         "role": "neutral",
-        "displayName": "Surface popup",
+        "displayName": "Launcher popup",
         "tonalRamp": [
           "oklch(15% 0.0441 267.32)",
           "oklch(26% 0.0441 267.32)",
@@ -116,9 +396,9 @@
           "oklch(95% 0.0441 267.32)"
         ]
       },
-      "surface-control": {
+      "launcher-surface-button": {
         "role": "neutral",
-        "displayName": "Surface control",
+        "displayName": "Launcher button fill",
         "tonalRamp": [
           "oklch(15% 0.0689 271.33)",
           "oklch(26% 0.0689 271.33)",
@@ -130,9 +410,9 @@
           "oklch(95% 0.0689 271.33)"
         ]
       },
-      "surface-control-hover": {
+      "launcher-surface-button-hover": {
         "role": "neutral",
-        "displayName": "Surface control hover",
+        "displayName": "Launcher button hover",
         "tonalRamp": [
           "oklch(15% 0.0689 271.33)",
           "oklch(26% 0.0689 271.33)",
@@ -144,79 +424,9 @@
           "oklch(95% 0.0689 271.33)"
         ]
       },
-      "surface-control-active": {
+      "launcher-border": {
         "role": "neutral",
-        "displayName": "Surface control active",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "surface-button": {
-        "role": "neutral",
-        "displayName": "Surface button",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "surface-button-hover": {
-        "role": "neutral",
-        "displayName": "Surface button hover",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "surface-tab": {
-        "role": "neutral",
-        "displayName": "Surface tab",
-        "tonalRamp": [
-          "oklch(15% 0.0689 271.33)",
-          "oklch(26% 0.0689 271.33)",
-          "oklch(37% 0.0689 271.33)",
-          "oklch(48% 0.0689 271.33)",
-          "oklch(59% 0.0689 271.33)",
-          "oklch(70% 0.0689 271.33)",
-          "oklch(81% 0.0689 271.33)",
-          "oklch(95% 0.0689 271.33)"
-        ]
-      },
-      "surface-tab-selected": {
-        "role": "neutral",
-        "displayName": "Surface tab selected",
-        "tonalRamp": [
-          "oklch(15% 0.1583 276.93)",
-          "oklch(26% 0.1583 276.93)",
-          "oklch(37% 0.1583 276.93)",
-          "oklch(48% 0.1583 276.93)",
-          "oklch(59% 0.1583 276.93)",
-          "oklch(70% 0.1583 276.93)",
-          "oklch(81% 0.1583 276.93)",
-          "oklch(95% 0.1583 276.93)"
-        ]
-      },
-      "border": {
-        "role": "neutral",
-        "displayName": "Border",
+        "displayName": "Launcher light edge",
         "tonalRamp": [
           "oklch(15% 0.0755 269.86)",
           "oklch(26% 0.0755 269.86)",
@@ -227,46 +437,40 @@
           "oklch(81% 0.0755 269.86)",
           "oklch(95% 0.0755 269.86)"
         ]
-      },
-      "separator": {
-        "role": "neutral",
-        "displayName": "Separator",
-        "tonalRamp": [
-          "oklch(15% 0.0591 274.61)",
-          "oklch(26% 0.0591 274.61)",
-          "oklch(37% 0.0591 274.61)",
-          "oklch(48% 0.0591 274.61)",
-          "oklch(59% 0.0591 274.61)",
-          "oklch(70% 0.0591 274.61)",
-          "oklch(81% 0.0591 274.61)",
-          "oklch(95% 0.0591 274.61)"
-        ]
       }
     },
     "typographyMeta": {
       "title": {
-        "displayName": "mcov heading",
-        "purpose": "The existing larger semibold title font."
+        "displayName": "Compact client heading",
+        "purpose": "Client mcov/category header at the same 14px size as its controls."
       },
       "body": {
         "displayName": "Control body",
-        "purpose": "Native menu/launcher settings and actions."
+        "purpose": "Native client and launcher settings, tabs and actions."
       },
       "label": {
         "displayName": "Section label",
         "purpose": "Semibold grouping labels."
+      },
+      "launcher-title": {
+        "displayName": "Launcher heading",
+        "purpose": "The separate launcher retains the larger semibold mcov heading."
       }
     },
     "shadows": [
       {
-        "name": "root-soft-shadow",
+        "name": "launcher-soft-shadow",
         "value": "0 9px 20px rgba(0,0,0,0.22)",
-        "purpose": "Visual approximation of the native material offset/radius/strength; HLSL remains normative."
+        "purpose": "Launcher only: visual approximation of native material offset/radius/strength; HLSL remains normative. The compact client adds no shader shadow."
       }
     ],
     "nativeMaterial": {
-      "source": "src/common/liquid_glass.cpp and third_party/glass/backdrop.cpp",
-      "tintRgb": [0.045, 0.050, 0.063],
+      "source": "Launcher only: src/common/liquid_glass.cpp and third_party/glass/backdrop.cpp",
+      "tintRgb": [
+        0.045,
+        0.05,
+        0.063
+      ],
       "tintOpacity": 0.56,
       "blurMix": 0.78,
       "saturation": 0.9,
@@ -283,12 +487,12 @@
         "value": "620px root width"
       },
       {
-        "name": "module-grid-two-columns",
-        "value": "410px available grid width"
+        "name": "quick-toggle-columns",
+        "value": "660px available content width; category has more than two toggle modules"
       },
       {
-        "name": "module-grid-three-columns",
-        "value": "620px available grid width"
+        "name": "compact-keybind-rows",
+        "value": "420px available content width"
       },
       {
         "name": "compact-hud-editor-width",
@@ -302,107 +506,123 @@
   },
   "components": [
     {
-      "name": "Button",
+      "name": "Compact button",
       "kind": "button",
       "refersTo": "button",
-      "description": "Static HTML preview of the native ImGui button states.",
+      "description": "Visual translation of native compact button states; small footer actions use the same palette.",
       "html": "<button class=\"ds-button\">Center</button>",
-      "css": ".ds-button{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.10);border:0;border-radius:8px;padding:6px 10px}.ds-button:hover{background:rgba(192,207,255,.21)}.ds-button:active{background:rgba(129,140,248,.50)}.ds-button:focus-visible{outline:2px solid #B2B9FF;outline-offset:2px}"
+      "css": ".ds-button{font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(255,255,255,.045);border:0;border-radius:4px;padding:3px 7px}.ds-button:hover{background:rgba(255,255,255,.09)}.ds-button:active{background:rgba(239,139,112,.18)}.ds-button:focus-visible{outline:1px solid #FFA388;outline-offset:1px}"
     },
     {
-      "name": "Numeric input",
+      "name": "Search and numeric input",
       "kind": "input",
       "refersTo": "input",
-      "description": "Visual translation of visible native direct-entry fields; no web runtime is used in mcov.",
-      "html": "<input class=\"ds-input\" aria-label=\"Reach\" value=\"3.0\">",
-      "css": ".ds-input{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.09);padding:6px 10px;border:0;border-radius:8px;width:140px}.ds-input:hover{background:rgba(192,207,255,.17)}.ds-input:focus-visible{background:rgba(192,207,255,.23);outline:2px solid #B2B9FF;outline-offset:2px}"
+      "description": "Native search and Ctrl-click numeric entry share compact dark field styling; this is a visual web translation.",
+      "html": "<input class=\"ds-input\" aria-label=\"Search modules\" placeholder=\"Search\">",
+      "css": ".ds-input{font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(255,255,255,.045);padding:3px 7px;border:0;border-radius:4px;width:122px}.ds-input::placeholder{color:#AEAEB8}.ds-input:hover{background:rgba(255,255,255,.085)}.ds-input:focus-visible{background:rgba(255,255,255,.12);outline:1px solid #FFA388;outline-offset:1px}"
     },
     {
       "name": "Category sidebar",
       "kind": "nav",
       "refersTo": "category-navigation",
-      "description": "Visual translation of left-side native category buttons; 146px sidebar, 98px below 620px root width.",
-      "html": "<nav class=\"ds-categories\" aria-label=\"Categories\"><button class=\"ds-category ds-category-selected\" aria-current=\"page\">Combat</button><button class=\"ds-category\">Visuals</button><button class=\"ds-category\">Blocks</button></nav>",
-      "css": ".ds-categories{display:flex;flex-direction:column;gap:6px;width:146px}.ds-category{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.04);padding:7px 4px;height:40px;border:0;border-radius:10px}.ds-category-selected{background:rgba(129,140,248,.36)}.ds-category:hover{background:rgba(192,207,255,.21)}.ds-category:active{background:rgba(129,140,248,.50)}.ds-category:focus-visible{outline:2px solid #B2B9FF;outline-offset:2px}"
+      "description": "Native 150px sidebar, or 112px below 620px root width; the navigation child has 10px insets. Selected category uses warm text and coral icon.",
+      "html": "<nav class=\"ds-categories\" aria-label=\"Categories\"><button class=\"ds-category ds-category-selected\" aria-current=\"page\"><svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><circle cx=\"10\" cy=\"10\" r=\"5.5\"/><path d=\"M2 10h16M10 2v16\"/></svg>Combat</button><button class=\"ds-category\">Visuals</button><button class=\"ds-category\">Blocks</button></nav>",
+      "css": ".ds-categories{display:flex;flex-direction:column;gap:6px;width:130px;padding:10px;background:rgba(21,21,27,.22)}.ds-category{position:relative;text-align:left;font:500 14px Inter,sans-serif;color:#C2C2CC;background:transparent;padding:4px 0 4px 32px;height:29px;border:0;border-radius:4px}.ds-category-selected{color:#F5D0C4;background:rgba(255,255,255,.065)}.ds-category svg{position:absolute;left:5px;top:4px;width:20px;height:20px;fill:none;stroke:#EF8B70;stroke-width:1.25}.ds-category:hover{background:rgba(255,255,255,.09)}.ds-category:active{background:rgba(239,139,112,.18)}.ds-category:focus-visible{outline:1px solid #FFA388;outline-offset:1px}"
     },
     {
-      "name": "Module tile",
-      "kind": "button",
-      "refersTo": "module-tile",
-      "description": "Static translation of a genuine toggle tile: left-click toggles and right-click opens or raises independent settings. Native tiles show actual state and available binding.",
-      "html": "<button class=\"ds-module ds-module-enabled\" aria-pressed=\"true\"><strong>Kill Aura</strong><span class=\"ds-module-state\">Enabled</span><span class=\"ds-module-binding\">Key: Unbound</span></button>",
-      "css": ".ds-module{position:relative;display:block;width:210px;height:96px;text-align:left;font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.065);border:1px solid rgba(192,207,255,.10);border-radius:12px;padding:0}.ds-module strong{position:absolute;left:14px;top:16px;font-weight:600}.ds-module-state{position:absolute;left:28px;top:41px;color:#D7DCEC}.ds-module-state:before{content:\"\";position:absolute;left:-13px;top:5px;width:6px;height:6px;border-radius:50%;background:rgba(215,220,236,.65)}.ds-module-binding{position:absolute;left:14px;top:69px;color:#D7DCEC}.ds-module-enabled{background:rgba(129,140,248,.22);border-color:rgba(178,185,255,.38)}.ds-module-enabled .ds-module-state:before{background:#98DEC3}.ds-module:hover{background:rgba(192,207,255,.14)}.ds-module-enabled:hover,.ds-module-enabled:active{background:rgba(129,140,248,.32)}.ds-module:focus-visible{outline:2px solid #B2B9FF;outline-offset:0}"
+      "name": "Module tabs",
+      "kind": "nav",
+      "refersTo": "module-tab",
+      "description": "Tabs select real module settings inside the main window. Selection does not toggle the module; native overflow arrows provide horizontal scrolling.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Combat modules\"><button class=\"ds-tab ds-tab-selected\" role=\"tab\" aria-selected=\"true\">Kill Aura</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Aim Assist</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Friends</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;width:330px;overflow:auto}.ds-tab{font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(255,255,255,.035);padding:3px 7px;border:0;border-radius:5px 5px 0 0;white-space:nowrap}.ds-tab-selected{background:rgba(239,139,112,.16)}.ds-tab:hover{background:rgba(255,255,255,.09)}.ds-tab:active{background:rgba(239,139,112,.18)}.ds-tab:focus-visible{outline:1px solid #FFA388;outline-offset:-1px}"
     },
     {
-      "name": "Content panel",
+      "name": "Checkbox row",
+      "kind": "input",
+      "description": "Label and real native checkbox occupy separate columns; clicking the label toggles the value. Quick toggles use this row pattern.",
+      "html": "<label class=\"ds-check-row\"><span>Auto Totem</span><input class=\"ds-check\" type=\"checkbox\" checked></label>",
+      "css": ".ds-check-row{display:flex;align-items:center;justify-content:space-between;width:260px;gap:12px;font:500 14px Inter,sans-serif;color:#ECECEF;padding:4px 3px}.ds-check{appearance:none;position:relative;width:20px;height:20px;margin:0;border:0;border-radius:4px;background:rgba(255,255,255,.045)}.ds-check:hover{background:rgba(255,255,255,.085)}.ds-check:active{background:rgba(255,255,255,.12)}.ds-check:checked:after{content:\"\";position:absolute;left:6px;top:3px;width:6px;height:11px;border:solid #EF8B70;border-width:0 2px 2px 0;transform:rotate(45deg)}.ds-check:focus-visible{outline:1px solid #FFA388;outline-offset:1px}"
+    },
+    {
+      "name": "Filled native slider",
+      "kind": "custom",
+      "description": "Visual translation of compact coral fill and centered dark value lozenge. Production uses ImGui SliderScalar with mouse/keyboard input and visible Ctrl-click direct entry.",
+      "html": "<div class=\"ds-slider-row\"><span>Reach</span><div class=\"ds-slider-frame\" role=\"slider\" aria-label=\"Reach\" aria-valuemin=\"1\" aria-valuemax=\"6\" aria-valuenow=\"3\" tabindex=\"0\"><span class=\"ds-slider-fill\"></span><span class=\"ds-slider-value\">3.0 m</span></div></div>",
+      "css": ".ds-slider-row{display:flex;align-items:center;justify-content:space-between;gap:16px;width:320px;font:500 14px Inter,sans-serif;color:#ECECEF}.ds-slider-frame{position:relative;width:160px;height:23px;border-radius:4px;background:rgba(255,255,255,.045)}.ds-slider-fill{position:absolute;inset:0 auto 0 0;width:40%;border-radius:4px;background:#EF8B70}.ds-slider-value{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:0 4px;border-radius:3px;background:rgba(37,37,44,.72);white-space:nowrap}.ds-slider-frame:hover{background:rgba(255,255,255,.085)}.ds-slider-frame:active .ds-slider-fill{background:#FFA388}.ds-slider-frame:focus-visible{outline:1px solid #FFA388;outline-offset:0}"
+    },
+    {
+      "name": "Content surface",
       "kind": "card",
       "refersTo": "content-panel",
-      "description": "The dark inset surface used for the scrolling module grid and independently scrolling settings content.",
-      "html": "<section class=\"ds-panel\"><strong>Settings</strong><p>Readable controls inside the glass root.</p></section>",
-      "css": ".ds-panel{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(16,21,34,.24);border-radius:14px;padding:13px;width:270px}.ds-panel strong{font-weight:600}.ds-panel p{color:#D7DCEC;margin:8px 0 0}"
+      "description": "Transparent scrolling content within the same client root; there is no separate settings window or inset glass material.",
+      "html": "<section class=\"ds-content\"><strong>Aim Assist</strong><hr><p>Existing module settings</p></section>",
+      "css": ".ds-content{font:500 14px Inter,sans-serif;color:#ECECEF;background:transparent;border-radius:8px;width:260px}.ds-content strong{font-weight:600}.ds-content hr{border:0;border-top:1px solid rgba(255,255,255,.065);margin:8px 0}.ds-content p{color:#AEAEB8;margin:6px 0 0}"
     },
     {
-      "name": "Slider",
-      "kind": "input",
-      "description": "Visual-only translation of the native thin rail, pale grab and separate value label.",
-      "html": "<label class=\"ds-slider-label\">Reach <span>3.0 m</span><input class=\"ds-slider\" aria-label=\"Reach slider\" type=\"range\" min=\"1\" max=\"6\" value=\"3\"></label>",
-      "css": ".ds-slider-label{display:block;width:250px;font:500 14px Inter,sans-serif;color:#F3F4FF}.ds-slider-label span{float:right;color:#B2B9FF}.ds-slider{appearance:none;display:block;width:100%;height:4px;margin:12px 0;background:rgba(200,213,255,.13);border-radius:2px}.ds-slider::-webkit-slider-thumb{appearance:none;width:11px;height:11px;border-radius:50%;background:#EDF0FF}.ds-slider::-moz-range-thumb{width:11px;height:11px;border:0;border-radius:50%;background:#EDF0FF}.ds-slider:hover::-webkit-slider-thumb{box-shadow:0 0 0 4px rgba(178,185,255,.09)}.ds-slider:focus-visible{outline:2px solid #B2B9FF;outline-offset:6px}"
-    },
-    {
-      "name": "Glass root",
+      "name": "Compact client root",
       "kind": "custom",
-      "description": "Static approximation of the shared root/settings material; each native window has an independent retained pane image. Live blur/refraction is native D3D11, not this CSS.",
-      "html": "<section class=\"ds-glass\"><strong>mcov</strong><p>Liquid glass</p></section>",
-      "css": ".ds-glass{font:500 14px Inter,sans-serif;color:#F3F4FF;width:260px;padding:16px;border-radius:22px;background:rgba(25,32,51,.98);border:1px solid rgba(210,222,255,.18);box-shadow:0 9px 20px rgba(0,0,0,.22)}.ds-glass strong{font-size:22.1px;font-weight:600}.ds-glass p{margin:8px 0 0;color:#D7DCEC}"
+      "refersTo": "client-root",
+      "description": "Static visual approximation of the directly alpha-composited native client root, normally 1040x520 and viewport-clamped. No blur, refraction or desktop capture.",
+      "html": "<section class=\"ds-client-root\"><strong>mcov</strong><p>Translucent dark / 88% opacity</p></section>",
+      "css": ".ds-client-root{font:500 14px Inter,sans-serif;color:#ECECEF;width:280px;padding:14px 16px;border-radius:12px;background:rgba(34,34,41,.88);border:0}.ds-client-root strong{font-weight:600}.ds-client-root p{margin:6px 0 0;color:#AEAEB8}"
     },
     {
-      "name": "Independent settings window",
+      "name": "Launcher button",
+      "kind": "button",
+      "refersTo": "launcher-button",
+      "description": "Separate launcher control palette and spacing; the native main action remains outside its scrolling child.",
+      "html": "<button class=\"ds-launcher-button\">Client starten</button>",
+      "css": ".ds-launcher-button{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.10);border:0;border-radius:8px;padding:6px 10px}.ds-launcher-button:hover{background:rgba(192,207,255,.21)}.ds-launcher-button:active{background:rgba(129,140,248,.50)}.ds-launcher-button:focus-visible{outline:2px solid #B2B9FF;outline-offset:2px}"
+    },
+    {
+      "name": "Launcher glass root",
       "kind": "custom",
-      "description": "Static native-window approximation, up to 480x610 and viewport-clamped. Position and close are independent; category changes preserve selected module and scroll. Different module selection resets scroll; the same module is raised without resetting it.",
-      "html": "<section class=\"ds-settings\"><header class=\"ds-settings-header\"><strong>Kill Aura</strong><button class=\"ds-settings-close\" aria-label=\"Close settings\">X</button></header><div class=\"ds-settings-content\"><span>Enable Kill Aura</span><p>Existing module controls</p></div></section>",
-      "css": ".ds-settings{font:500 14px Inter,sans-serif;color:#F3F4FF;width:320px;border-radius:22px;background:rgba(25,32,51,.98);border:1px solid rgba(210,222,255,.18);box-shadow:0 9px 20px rgba(0,0,0,.22);padding:16px}.ds-settings-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.ds-settings-header strong{font-size:22.1px;font-weight:600}.ds-settings-close{font:500 14px Inter,sans-serif;color:#F3F4FF;background:rgba(192,207,255,.10);border:0;border-radius:8px;width:27px;height:27px}.ds-settings-close:hover{background:rgba(192,207,255,.21)}.ds-settings-close:active{background:rgba(129,140,248,.50)}.ds-settings-close:focus-visible{outline:2px solid #B2B9FF;outline-offset:2px}.ds-settings-content{background:rgba(16,21,34,.24);border-radius:14px;padding:13px;max-height:180px;overflow:auto}.ds-settings-content p{color:#D7DCEC;margin:8px 0 0}"
+      "description": "Static approximation of the retained launcher material. Native D3D11 supplies capture-backed blur/refraction; this CSS does not reproduce it.",
+      "html": "<section class=\"ds-launcher-glass\"><strong>mcov</strong><p>Liquid Glass launcher</p></section>",
+      "css": ".ds-launcher-glass{font:500 14px Inter,sans-serif;color:#F3F4FF;width:260px;padding:16px;border-radius:22px;background:rgba(25,32,51,.98);border:1px solid rgba(210,222,255,.18);box-shadow:0 9px 20px rgba(0,0,0,.22)}.ds-launcher-glass strong{font-size:22.1px;font-weight:600}.ds-launcher-glass p{margin:8px 0 0;color:#D7DCEC}"
     }
   ],
   "narrative": {
-    "northStar": "Liquid Glass",
-    "overview": "Mode: Operate. The user's latest visual authority is\n[poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11), replacing\nthe earlier classic dark/violet menu. This system describes the implemented\nnative Windows control surface, not a web dashboard or a copy of the reference\ndemo's content.\n\nA dark, neutral-tinted glass root provides blur, restrained refraction and subtle\nlight edges. Crisp Inter text and quiet translucent controls keep real settings\nreadable over changing game imagery. The client menu and launcher share this\nmaterial; existing world effects, entity ESP and modular HUD retain their own\nvisuals and behavior.",
+    "northStar": "Compact Translucent Controls",
+    "overview": "The client follows the user's `design/reference-translucent-menu.png`: a wide, compact anthracite menu with a narrow sidebar, module tabs and a muted coral accent. This supersedes the spacious cyan example and the client's Liquid Glass tile grid. The reference supplies visual direction; mcov retains its real module names, settings and actions.\n\nThe client uses direct alpha compositing over the game viewport. Small native controls and modest headings keep settings dense and readable. The launcher remains a separate Liquid Glass surface with its existing lavender palette, backdrop capture and larger heading. HUD and world effects retain their styles.",
     "keyCharacteristics": [
-      "A softly rounded glass root with calmer, inset setting surfaces.",
-      "Seven left-side categories, a responsive module grid and independent settings glass.",
-      "Visible values, conventional checkbox interaction and keyboard-editable sliders.",
-      "A primary launcher action that remains outside its scrolling details.",
-      "Scoped style/font changes and a deterministic capture fallback."
+      "Compact anthracite client root with restrained coral interaction states.",
+      "Seven categories, searchable module tabs and settings within one window.",
+      "Native keyboard input, visible slider values and real module state.",
+      "Local style/font ownership and direct transparency without client capture.",
+      "A separate launcher whose main action stays outside scrolling content."
     ],
     "rules": [
       {
-        "name": "The Readable Glass Rule",
-        "body": "Root refraction and blur remain behind text and controls. Dense settings use the darker inset content surface; they do not inherit a more transparent root merely to emphasize the effect.",
+        "name": "The Material Scope Rule",
+        "body": "Client transparency uses the compact palette; launcher glass uses its own tokens and renderer. Neither changes HUD/world style. ",
         "section": "colors"
       },
       {
         "name": "The Local Type Rule",
-        "body": "`LiquidStyle` pushes the menu font and restores it on scope exit. Do not change global font defaults to restyle the menu or launcher.",
+        "body": "`CompactStyle` and `LiquidStyle` push their menu font and restore the prior style and font on scope exit. ",
         "section": "typography"
       },
       {
         "name": "The Layer Order Rule",
-        "body": "World effects and HUD precede the menu glass; controls and text follow it. `RenderTexture()` plus the root's `AddImage` retain this order. Each window's own image retains that order when windows overlap. The glass pass introduces no JVM calls and does not replace world-depth handling.",
+        "body": "World effects and HUD draw before client controls. UI presentation adds no render-thread JNI and does not replace world-depth handling. ",
         "section": "elevation"
       }
     ],
     "dos": [
-      "**Do** reuse the shared glass root and scoped `LiquidStyle` for client controls.",
-      "**Do** preserve real module names, section identities, keybinds and input behavior.",
+      "**Do** use scoped `CompactStyle` for client controls and `LiquidStyle` for the launcher.",
+      "**Do** preserve real module names, section identities, keybinds and native input behavior.",
+      "**Do** keep module tabs outside content scroll and provide search recovery.",
       "**Do** keep the launcher start action outside scrolling content.",
-      "**Do** keep HUD/ESP rendering styles and JNI acquisition separate from menu material.",
-      "**Do** report live versus fallback material and the actual Background capture state under Settings → Overlay."
+      "**Do** report direct client transparency and preserve its configured capture preference."
     ],
     "donts": [
-      "**Don't** globally replace the HUD/ESP style or fonts during a menu redesign.",
-      "**Don't** capture an unexcluded glass window into its own backdrop.",
+      "**Don't** reintroduce the rejected spacious cyan client or large module tile grid.",
+      "**Don't** describe client transparency as live desktop capture or Liquid Glass blur.",
+      "**Don't** globally restyle HUD/ESP or add render-thread JNI during menu work.",
       "**Don't** require loose shader/font/DLL files beside the portable EXE.",
-      "**Don't** claim offscreen WARP previews validate live Minecraft capture on every GPU.",
-      "**Don't** reintroduce reference-demo controls as placeholders for mcov modules."
+      "**Don't** claim synthetic WARP images validate live Minecraft appearance or attach behavior."
     ]
   }
 }
