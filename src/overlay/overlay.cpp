@@ -21,6 +21,7 @@
 #include <cwchar>
 
 #include "../common/flat_style.hpp"
+#include "../common/compact_style.hpp"
 #include "../common/log.hpp"
 #include "render_math.hpp"
 #include "aura_projection.hpp"
@@ -557,7 +558,9 @@ bool Overlay::RunFrame() {
             if(rockstarConfig_.Enabled(rockstar::Feature::NameProtect)&&debug.target) {
                 debug.target->name={}; std::copy_n("Target",7,debug.target->name.data());
             }
+            ImGui::PushFont(style::MenuFont());
             combat::CombatHud::Draw(*ImGui::GetBackgroundDrawList(),debug,combatMenu_.Store().Read().values.hud,ImGui::GetIO().DisplaySize);
+            ImGui::PopFont();
         }
         if (haveSnapshot_) {
             if(depthActive_) { depth::Scope scope(depthRenderer_.Tags()); DrawEsp(visualSnapshot); }
@@ -765,21 +768,23 @@ float Overlay::DrawEquipmentPanel(const WorldSnapshot& snapshot, float x, float 
     const float height     = 24.0f + visible * lineHeight;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
-    DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "EQUIPMENT");
+    style::compact::Heading(*draw,{x,y},kPanelWidth,"Equipment");
 
     float row = y + 24.0f;
     for (int slot = 0; slot < static_cast<int>(kSlotCount); ++slot) {
         const ItemSnapshot& item = snapshot.equipment[slot];
         if (!item.present) continue;
 
-        DrawHudText(draw, x + 10.0f, row, style::kMuted, kSlotNames[slot]);
+        DrawHudText(draw, x + 10.0f, row, style::compact::Muted, kSlotNames[slot]);
 
         char label[64];
         if (item.count > 1) std::snprintf(label, sizeof(label), "%s x%d", item.name, item.count);
         else                std::snprintf(label, sizeof(label), "%s", item.name);
 
         const ImVec2 size = ImGui::CalcTextSize(label);
-        DrawHudText(draw, x + kPanelWidth - 10.0f - size.x, row, style::kText, label);
+        draw->PushClipRect({x+76,row},{x+kPanelWidth-10,row+ImGui::GetTextLineHeight()},true);
+        DrawHudText(draw, std::max(x+76,x+kPanelWidth-10-size.x), row, style::compact::Text, label);
+        draw->PopClipRect();
 
         // Durability bar. maxDamage == 0 means "no durability", which is not the
         // same as full - those items get no bar at all.
@@ -790,15 +795,15 @@ float Overlay::DrawEquipmentPanel(const WorldSnapshot& snapshot, float x, float 
             const float barY = row + ImGui::GetTextLineHeight() + 2.0f;
             const float barW = kPanelWidth - 20.0f;
             draw->AddRectFilled(ImVec2(x + 10.0f, barY), ImVec2(x + 10.0f + barW, barY + 3.0f),
-                                style::kBackground, 1.5f);
+                                style::compact::Track, 1.5f);
 
-            ImU32 colour = IM_COL32(90, 200, 110, 255);
+            ImU32 colour = style::compact::Accent;
             if (clamped < hud_.durabilityWarn) {
                 // Pulse so a nearly-broken tool is hard to miss.
                 const float pulse = 0.55f + 0.45f * std::sin(static_cast<float>(ImGui::GetTime()) * 6.0f);
-                colour = IM_COL32(230, static_cast<int>(60 * pulse), 60, 255);
+                colour = IM_COL32(242,128,128,static_cast<int>(160+95*pulse));
             } else if (clamped < 0.5f) {
-                colour = IM_COL32(225, 190, 70, 255);
+                colour = style::compact::Warning;
             }
             draw->AddRectFilled(ImVec2(x + 10.0f, barY),
                                 ImVec2(x + 10.0f + barW * clamped, barY + 3.0f), colour, 1.5f);
@@ -816,7 +821,7 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
     const float height     = 24.0f + snapshot.effectCount * lineHeight + 4.0f;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
-    DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "EFFECTS");
+    style::compact::Heading(*draw,{x,y},kPanelWidth,"Status effects");
 
     float row = y + 24.0f;
     for (std::uint32_t i = 0; i < snapshot.effectCount && i < kMaxEffects; ++i) {
@@ -840,12 +845,14 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
 
         // Warn when an effect is about to lapse.
         const bool expiring = effect.durationTicks >= 0 && effect.durationTicks < 200; // <10s
-        const ImU32 colour  = expiring ? IM_COL32(240, 150, 70, 255) : IM_COL32(150, 210, 255, 255);
+        const ImU32 colour  = expiring ? style::compact::Warning : style::compact::Text;
 
-        DrawHudText(draw, x + 10.0f, row, colour, name);
         const ImVec2 size = ImGui::CalcTextSize(timing);
+        draw->PushClipRect({x+10,row},{x+kPanelWidth-18-size.x,row+ImGui::GetTextLineHeight()},true);
+        DrawHudText(draw, x + 10.0f, row, colour, name);
+        draw->PopClipRect();
         DrawHudText(draw, x + kPanelWidth - 10.0f - size.x, row,
-                   expiring ? colour : style::kText, timing);
+                   expiring ? colour : style::compact::Text, timing);
         row += lineHeight;
     }
     return height + kPanelGap;
@@ -857,13 +864,13 @@ float Overlay::DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, floa
     const float height     = 24.0f + 4 * lineHeight + 4.0f;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
-    DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "POSITION");
+    style::compact::Heading(*draw,{x,y},kPanelWidth,"Coordinates");
 
     char line[96];
     float row = y + 24.0f;
 
     std::snprintf(line, sizeof(line), "XYZ   %.1f  %.1f  %.1f", snapshot.posX, snapshot.posY, snapshot.posZ);
-    DrawHudText(draw, x + 10.0f, row, style::kText, line);
+    DrawHudText(draw, x + 10.0f, row, style::compact::Text, line);
     row += lineHeight;
 
     // Chunk-local coordinates, the same numbers F3 shows.
@@ -871,7 +878,7 @@ float Overlay::DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, floa
     const int blockZ = static_cast<int>(std::floor(snapshot.posZ));
     std::snprintf(line, sizeof(line), "Chunk %d %d  (%d %d)",
                   blockX >> 4, blockZ >> 4, blockX & 15, blockZ & 15);
-    DrawHudText(draw, x + 10.0f, row, style::kMuted, line);
+    DrawHudText(draw, x + 10.0f, row, style::compact::Muted, line);
     row += lineHeight;
 
     // The 1:8 overworld/nether ratio, in whichever direction is useful.
@@ -881,11 +888,11 @@ float Overlay::DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, floa
     } else {
         std::snprintf(line, sizeof(line), "Nether %.0f  ~  %.0f", snapshot.posX / 8.0f, snapshot.posZ / 8.0f);
     }
-    DrawHudText(draw, x + 10.0f, row, IM_COL32(200, 160, 120, 255), line);
+    DrawHudText(draw, x + 10.0f, row, style::compact::Accent, line);
     row += lineHeight;
 
     std::snprintf(line, sizeof(line), "Facing %s  %.0f deg", FacingName(snapshot.yawDeg), YawToBearing(snapshot.yawDeg));
-    DrawHudText(draw, x + 10.0f, row, style::kMuted, line);
+    DrawHudText(draw, x + 10.0f, row, style::compact::Muted, line);
 
     return height + kPanelGap;
 }
@@ -895,14 +902,14 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
     const float height = 132.0f;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
-    DrawHudText(draw, x + 10.0f, y + 6.0f, style::kMuted, "TELEMETRY");
+    style::compact::Heading(*draw,{x,y},kPanelWidth,"Performance");
 
     char line[96];
     const float latest = frameMsHistory_[(historyCursor_ + kHistory - 1) % kHistory];
     std::snprintf(line, sizeof(line), "%d fps   %.1f ms", snapshot.fps >= 0 ? snapshot.fps
                                                                             : static_cast<int>(ImGui::GetIO().Framerate),
                   latest);
-    DrawHudText(draw, x + 10.0f, y + 22.0f, style::kText, line);
+    DrawHudText(draw, x + 10.0f, y + 22.0f, style::compact::Text, line);
 
     // ImGui's plot widgets need a window; on the background draw list we render
     // the series by hand, which also lets the two graphs share one panel.
@@ -911,7 +918,7 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
         for (int i = 0; i < kHistory; ++i) maxValue = std::max(maxValue, values[i]);
         if (maxValue <= 0.0f) return;
 
-        draw->AddRectFilled(ImVec2(px, py), ImVec2(px + pw, py + ph), style::kBackground, 3.0f);
+        draw->AddRectFilled(ImVec2(px, py), ImVec2(px + pw, py + ph), style::compact::Track, 3.0f);
         ImVec2 previous;
         for (int i = 0; i < kHistory; ++i) {
             const int   index = (historyCursor_ + i) % kHistory;
@@ -922,19 +929,19 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
         }
         char scale[32];
         std::snprintf(scale, sizeof(scale), "%.0f", maxValue);
-        draw->AddText(ImVec2(px + 3.0f, py + 1.0f), style::kMuted, scale);
+        draw->AddText(ImVec2(px + 3.0f, py + 1.0f), style::compact::Muted, scale);
     };
 
-    plot(frameMsHistory_, x + 10.0f, y + 40.0f, kPanelWidth - 20.0f, 34.0f, IM_COL32(120, 200, 255, 255), 20.0f);
+    plot(frameMsHistory_, x + 10.0f, y + 40.0f, kPanelWidth - 20.0f, 34.0f, style::compact::Accent, 20.0f);
 
     if (snapshot.heapMaxBytes > 0) {
         const float usedMb = static_cast<float>(snapshot.heapUsedBytes) / (1024.0f * 1024.0f);
         const float maxMb  = static_cast<float>(snapshot.heapMaxBytes) / (1024.0f * 1024.0f);
         std::snprintf(line, sizeof(line), "heap %.0f / %.0f MB", usedMb, maxMb);
-        DrawHudText(draw, x + 10.0f, y + 78.0f, style::kText, line);
-        plot(heapHistory_, x + 10.0f, y + 94.0f, kPanelWidth - 20.0f, 30.0f, IM_COL32(180, 140, 255, 255), maxMb * 0.25f);
+        DrawHudText(draw, x + 10.0f, y + 78.0f, style::compact::Text, line);
+        plot(heapHistory_, x + 10.0f, y + 94.0f, kPanelWidth - 20.0f, 30.0f, style::compact::Muted, maxMb * 0.25f);
     } else {
-        DrawHudText(draw, x + 10.0f, y + 78.0f, IM_COL32(120, 130, 150, 255), "heap unavailable");
+        DrawHudText(draw, x + 10.0f, y + 78.0f, style::compact::Muted, "heap unavailable");
     }
 
     return height + kPanelGap;
@@ -965,7 +972,7 @@ void Overlay::DrawCompassStrip(const WorldSnapshot& snapshot,float stripWidth) {
         if (px < left + 6.0f || px > left + stripWidth - 6.0f) continue;
 
         const bool cardinal = (mark.label[1] == '\0');
-        const ImU32 colour  = cardinal ? style::kText : style::kMuted;
+        const ImU32 colour  = cardinal ? style::compact::Text : style::compact::Muted;
 
         const ImVec2 size = ImGui::CalcTextSize(mark.label);
         DrawHudText(draw, px - size.x * 0.5f, top + 4.0f, colour, mark.label);
@@ -975,7 +982,7 @@ void Overlay::DrawCompassStrip(const WorldSnapshot& snapshot,float stripWidth) {
     // Centre pointer.
     const float centre = left + stripWidth * 0.5f;
     draw->AddTriangleFilled(ImVec2(centre - 4.0f, top - 1.0f), ImVec2(centre + 4.0f, top - 1.0f),
-                            ImVec2(centre, top + 5.0f), style::kAccent);
+                            ImVec2(centre, top + 5.0f), style::compact::Accent);
 }
 
 void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
@@ -987,7 +994,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
     // Minecraft sets targetedEntity only for entities inside the interaction
     // range, so its presence alone means "you can hit this right now".
     const float pulse  = 0.6f + 0.4f * std::sin(static_cast<float>(ImGui::GetTime()) * 7.0f);
-    const ImU32 colour = IM_COL32(90, 240, 130, static_cast<int>(210 * pulse));
+    const ImU32 colour = IM_COL32(239,139,112,static_cast<int>(210*pulse));
 
     // Four corner brackets around the crosshair.
     const float radius = 13.0f;
@@ -1012,7 +1019,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
         std::snprintf(label, sizeof(label), "%s   %.1fm", rockstar::Pack::DisplayName(snapshot.targetName,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true), snapshot.targetDistance);
     }
     const ImVec2 size = ImGui::CalcTextSize(label);
-    DrawHudText(draw, cx - size.x * 0.5f, cy + radius + 8.0f, IM_COL32(200, 250, 215, 255), label);
+    DrawHudText(draw, cx - size.x * 0.5f, cy + radius + 8.0f, style::compact::Text, label);
 }
 
 // ---------------------------------------------------------------------------
