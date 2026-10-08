@@ -42,32 +42,45 @@ The default **END** binding quits the overlay, **INSERT** opens its menu and
 
 ## Presentation and diagnostics
 
-The injector shares `LiquidStyle` and `LiquidGlass` with the client: a rounded
-neutral dark glass root, GPU backdrop blur/refraction, subtle light edges and embedded
-Inter controls. The launcher opens at 640 × 640. The primary 40-pixel start action
-stays outside scrolling content so smaller windows retain it. Capture failure
-uses a stable tinted fallback; temporary Windows capture exclusion prevents the
-glass from capturing itself. DXGI capture runs first; after 750 ms without a
-usable frame, WGC attempts monitor capture on the launcher's render device.
-Closing the window ends capture and restores its previous display affinity.
-[Material behavior](liquid-ui.md) describes capture restoration and live/fallback
-status. The standard Windows SDK `windowsapp` library adds no portable runtime
-files beside `mcov.exe` and optional `START.txt`.
+The injector uses the same approved compact design as the client. Scoped
+`CompactStyle` restores the previous ImGui style and font after drawing. Embedded
+Inter is 14 pixels, the root is anthracite `#222229` at alpha 0.88 with a 12-pixel
+radius, and the sidebar adds `#15151B` at alpha 0.22. Controls use the shared
+small radii and coral accent `#EF8B70`. This presentation replaces the launcher's
+lavender Liquid Glass surface.
 
-The native shell has an opaque render base beneath the shader material, with
-zero DWM frame-extension margins. A Windows rounded region clips the outer
-12-pixel padding to the glass panel's 22-pixel corners. Initialization stays
-hidden; `Run` draws the first frame before showing the window. Minimizing ends
-desktop capture until the launcher returns. Backend, render-target, resize and
-presentation failures are reported instead of leaving a silently blank window.
+The launcher opens at 640 × 640. Its left **Start / Diagnose** sidebar is
+142 pixels wide, or 112 pixels below 620 pixels viewport width, with simple
+authored icons. **Start** contains the native selectable Minecraft list,
+refresh, phase/status and JDK recovery. Long instance titles and PID/Java/client
+details remain clipped to their row; hovering reveals the full text in a tooltip.
+The list and content scroll while the 34-pixel primary action and close footer
+remain fixed. Enabled primary text is near-black (`#221B1B`); disabled text is
+soft white (`#ECECEF`) under the shared disabled alpha. Busy or absent selection
+disables the action. **Diagnose** contains connection details, copy/open-folder
+actions and logs, with its own fixed close footer. Actions wrap when needed.
+The layout is also covered at 480 × 380.
 
-The main page contains instance selection, refresh, one primary start action,
-phase/status and recovery actions. Technical logs live under **Diagnose**,
-with copy and open-folder actions. Connection runs on a worker; the native
-window remains draggable and responsive. Duplicate launcher/overlay instances
-are prevented by named mutexes. An initialized overlay signals a readiness event
-before the launcher reports success. Client discovery never falls back to a
-different game process when the selected instance disappears.
+The native shell clears to transparent RGBA (0, 0, 0, 0) and extends DWM over
+the client area using margins of −1. A Windows rounded region clips the outer
+12-pixel margin with a 24-pixel corner diameter matching the panel radius.
+Initialization stays hidden; `Run` presents the first frame before `ShowWindow`.
+Resize updates the render target and region. Native title drag and close/minimize
+behavior remain unchanged. Backend, render-target, resize and presentation
+failures are reported instead of leaving a silently blank window.
+
+`FlatApp` no longer owns, initializes, begins frames for, renders or shuts down
+LiquidGlass. The injector requires no desktop capture, blur or refraction.
+[Retained material](liquid-ui.md) documents the legacy/standalone glass renderer,
+historical capture checks and license. Its standard Windows SDK `windowsapp`
+library adds no loose runtime files to the portable package.
+
+Connection runs on a worker; the native window remains draggable and responsive.
+Duplicate launcher/overlay instances are prevented by named mutexes. An
+initialized overlay signals a readiness event before the launcher reports
+success. Client discovery never falls back to a different game process when the
+selected instance disappears. Launch, JDK selection, logs and packaging semantics
+are unchanged by this presentation redesign.
 
 ## Verification
 
@@ -75,22 +88,40 @@ different game process when the selected instance disappears.
 the current executable, then copies its EXE into an otherwise empty folder. It verifies
 the GUI subsystem and exact embedded payloads, tests paths with spaces/Unicode,
 idempotent extraction, concurrent corruption repair, and early rejection of
-invalid overlay PIDs. `control_panel` renders the actual launcher offscreen at
-640 x 520 and 480 x 380, including empty, selected, busy, missing-JDK and diagnostic
-states, and checks style restoration and button input. `liquid_glass` also runs
-the real material and Dual Kawase blur shaders with synthetic inputs on WARP,
-checking pixels, clipping, layering and resize. These checks do not attach to
-Minecraft. Synthetic glass-grid/settings review images under `.impeccable/review`
-exercise the real material with synthetic GPU input, not Minecraft screenshots.
-The explicit native `mcov_backdrop_capture_check --live` probe passed WGC startup,
-the full LiquidGlass runtime, capture pause, display-affinity restoration and
-live capture after reopening on this host without saving desktop images or using
-a JVM. Live Minecraft appearance and attach/focus behavior still need a real game session.
+invalid overlay PIDs. It passed against the current `mcov.exe` and exact payloads.
+The `mcov` and `mcov_injector` builds, native/UI checks and share ZIP passed.
+
+`control_panel` renders the actual compact launcher offscreen at 640 × 640,
+640 × 520 and 480 × 380, covering empty, selected, busy, missing-JDK and diagnostic
+states. `LauncherChecks` checks style/font/window-stack restoration, selection,
+start, running-instance action, duplicate-start prevention, both sidebar tabs,
+fixed close footers and title minimize/close. These checks simulate input and do
+not start processes or attach to Minecraft.
 
 `launcher_window` adds a real hidden HWND and swapchain check at 640 × 640 and
-480 × 380: opaque background, foreground controls, resize, rounded window region
-and presentation. It performs no desktop capture and attaches to no JVM.
-`launcher-native-start.png` and `launcher-native-diagnose.png` under
-`.impeccable/review` are swapchain readbacks before OS clipping; they are not
-desktop screenshots and do not prove user-visible desktop composition.
-The capture probe also passed `--live-sta`, using the launcher's STA COM mode.
+480 × 380: translucent panel alpha, transparent margins, foreground control ink,
+hidden initialization, resize, rounded window region and presentation. It
+requires the fixture to remain invisible. It performs no desktop capture and
+attaches to no JVM.
+
+The nine current review images are in `.impeccable/review/compact-injector/`:
+
+| Image | Size | Evidence |
+| --- | --- | --- |
+| `launcher-ready.png`, `launcher-empty.png` | 640 × 640 | Synthetic selected/empty UI states |
+| `launcher-small.png` | 480 × 380 | Synthetic compact Start layout |
+| `launcher-busy.png`, `launcher-error.png` | 640 × 520 | Synthetic busy/JDK recovery states |
+| `launcher-diagnose.png` | 480 × 380 | Synthetic compact diagnostics |
+| `launcher-diagnose-desktop.png` | 640 × 640 | Synthetic full-size diagnostics |
+| `launcher-native-start.png` | 640 × 640 | Hidden HWND swapchain readback |
+| `launcher-native-diagnose.png` | 480 × 380 | Hidden HWND swapchain readback after resize |
+
+Independent finish review accepted all nine images with a ship disposition and
+no material findings. Synthetic images show the real UI against fixture input;
+native images are readbacks before OS clipping. Neither proves live desktop
+composition or Minecraft appearance. Live Minecraft attach/focus behavior still
+needs a real game session.
+
+Retained `liquid_glass` shader and historical opt-in `--live`/`--live-sta` capture
+checks are described in [liquid-ui.md](liquid-ui.md). They validate the retained
+legacy renderer, not an active compact injector capture requirement.
