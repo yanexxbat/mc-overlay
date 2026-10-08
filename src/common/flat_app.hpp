@@ -3,7 +3,6 @@
 
 #include <functional>
 #include <string>
-#include "liquid_glass.hpp"
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -46,7 +45,6 @@ private:
     void EndFrameInternal();
 
     std::function<void()> draw_;
-    LiquidGlass glass_;
     float noDrag_[4] = {};
     bool hasNoDrag_ = false;
     void* hwnd_ = nullptr;

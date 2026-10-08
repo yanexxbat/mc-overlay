@@ -2,7 +2,7 @@
 #include "flat_style.hpp"
 
 namespace mcov::style {
-// Reference-led client palette. Kept local so the launcher and HUD retain theirs.
+// Shared client/launcher palette, scoped so HUD and world effects retain theirs.
 inline void ApplyCustomStyle(ImGuiStyle& s) {
     s.Alpha=1; s.DisabledAlpha=.48f;
     s.WindowPadding={16,14}; s.FramePadding={7,3}; s.ItemSpacing={9,6};

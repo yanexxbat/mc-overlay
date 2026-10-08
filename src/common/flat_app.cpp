@@ -117,9 +117,8 @@ bool FlatApp::CreateAppWindow(const wchar_t* title, std::string* error) {
     // So the window procedure can reach us for hit-testing and move-time frames.
     ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
 
-    // Das Glas entsteht im Shader. Die Startoberflaeche braucht keine komplett
-    // transparente DWM-Scheibe: ein opaker Untergrund verhindert leere Fenster.
-    const MARGINS margins{0, 0, 0, 0};
+    // Match the overlay: DWM composites the panel alpha, keeping text opaque.
+    const MARGINS margins{-1, -1, -1, -1};
     ::DwmExtendFrameIntoClientArea(hwnd, &margins);
     if(!::SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA)) {
         if(error) *error="SetLayeredWindowAttributes failed";
@@ -131,7 +130,7 @@ bool FlatApp::CreateAppWindow(const wchar_t* title, std::string* error) {
 
 void FlatApp::UpdateWindowRegion() {
     // Windows schneidet die transparenten Aussenraender zuverlaessig aus.
-    const auto region=::CreateRoundRectRgn(12,12,width_-11,height_-11,44,44);
+    const auto region=::CreateRoundRectRgn(12,12,width_-11,height_-11,24,24);
     if(region&&!::SetWindowRgn(static_cast<HWND>(hwnd_),region,TRUE)) ::DeleteObject(region);
     // Bei Erfolg gehoert die Region Windows, deshalb dann kein DeleteObject.
 }
@@ -206,13 +205,11 @@ bool FlatApp::Initialize(const wchar_t* title, int width, int height, std::strin
         Shutdown(); return false;
     }
     style::LoadFonts();
-    glass_.Initialize(device_,context_);
 
     return true;
 }
 
 void FlatApp::Shutdown() {
-    glass_.Shutdown();
     if (ImGui::GetCurrentContext()) {
         if(ImGui::GetIO().BackendRendererUserData) ImGui_ImplDX11_Shutdown();
         if(ImGui::GetIO().BackendPlatformUserData) ImGui_ImplWin32_Shutdown();
@@ -277,7 +274,6 @@ void FlatApp::Run(std::function<void()> draw) {
         }
         if (closing_) break;
         if(::IsIconic(static_cast<HWND>(hwnd_))) {
-            glass_.BeginFrame(hwnd_,{float(width_),float(height_)},false);
             ::MsgWaitForMultipleObjects(0,nullptr,FALSE,100,QS_ALLINPUT); continue;
         }
         RenderFrame();
@@ -293,8 +289,6 @@ void FlatApp::RenderFrame() {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
-
-    glass_.BeginFrame(hwnd_,{float(width_),float(height_)},true,::IsWindowVisible(static_cast<HWND>(hwnd_))!=FALSE);
 
     draw_();
     EndFrameInternal();
@@ -313,11 +307,10 @@ void FlatApp::Panel(float x0, float y0, float x1, float y1, float rounding) {
 
 void FlatApp::DrawFrame() {
     ImGui::Render();
-    glass_.RenderTexture();
 
     if (backBuffer_) {
         context_->OMSetRenderTargets(1, &backBuffer_, nullptr);
-        const float clear[4] = {.045f, .050f, .063f, 1.0f};
+        const float clear[4] = {0, 0, 0, 0};
         context_->ClearRenderTargetView(backBuffer_, clear);
 
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
