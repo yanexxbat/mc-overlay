@@ -202,6 +202,7 @@ void Overlay::DrawHudEditor() {
     const bool compact=size.x<640||size.y<480;
     const float width=std::min(540.f,size.x-24),height=compact?110.f:90.f;
     ImGui::SetCursorScreenPos({(size.x-width)*.5f,size.y-height-12});
+    {
     style::StyleScope toolbar;
     toolbar.Color(ImGuiCol_ChildBg,style::compact::Surface);
     toolbar.Var(ImGuiStyleVar_WindowPadding,ImVec2(14,10));
@@ -219,6 +220,8 @@ void Overlay::DrawHudEditor() {
     ImGui::SetNextItemWidth(std::max(80.f,available-104-ImGui::GetStyle().ItemSpacing.x-ImGui::CalcTextSize("Scale").x-ImGui::GetStyle().ItemInnerSpacing.x));
     if(ImGui::SliderFloat("Scale",&hud_.layout[hudSelected_].scale,.65f,1.6f,"%.2f x")) preferencesDirty_=true;
     ImGui::SameLine(); if(ImGui::Button("Reset layout",{104,0})) { hud_.layout={}; preferencesDirty_=true; }
-    ImGui::EndChild(); ImGui::End();
+    ImGui::EndChild();
+    }
+    ImGui::End();
 }
 } // namespace mcov
