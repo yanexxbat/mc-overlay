@@ -1,47 +1,45 @@
-# Liquid-Glass-Menü, modulares HUD und Keybinds
+# Kompaktes Client-Menü, modulares HUD und Keybinds
 
-Das Menü und der Injector verwenden das gewünschte Liquid-Glass-Material aus
-[liquidDX11](https://github.com/poncippg-spec/liquidDX11): dunkel neutral getönt,
-abgerundet, mit Hintergrundunschärfe, dezenter Brechung und weichen Lichtkanten.
-Inter, ruhigere Felder und Slider mit separater Wertanzeige halten Einstellungen
-lesbar. **Strg-Klick** auf einen Slider erlaubt die direkte Zahleneingabe.
-**Combat, Visuals, Blocks, HUD, Stats, Settings, Misc** enthalten die bestehenden
-Funktionen als Kategorien links. Der Titelbalken verschiebt das Menü; **Center**
-zentriert es, **Reset** setzt die aktuelle Kategorie zurück. Das Menü ist bis zu
-900 × 680 UI-Pixel groß und passt sich dem Viewport an. Die Modulkacheln stehen
-in ein bis drei Spalten; kleine Viewports scrollen das Raster. Material,
-Capture-Fallback und Technik:
+Das Client-Menü folgt `design/reference-translucent-menu.png`: kompakt,
+anthrazitfarben, transparent und mit gedämpftem Korallorange. Kleine Inter-Texte,
+native Felder und Slider mit sichtbaren Werten halten Einstellungen lesbar.
+**Strg-Klick** auf einen Slider erlaubt die direkte Zahleneingabe.
+**Combat, Visuals, Blocks, HUD, Stats, Settings, Misc** stehen links. Der Header
+verschiebt das Menü; **Center** zentriert es, **Reset** setzt die aktuelle Kategorie
+zurück. Die Größe beträgt bis zu 1040 × 520 UI-Pixel, begrenzt auf den Viewport
+minus 24 Pixel. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
+112 Pixel. Der Launcher behält seine separate Liquid-Glass-Darstellung.
+Layoutdetails: [compact-ui.md](compact-ui.md). Launcher-Material und Capture:
 [liquid-ui.md](liquid-ui.md). HUD und Welt-Visuals behalten ihre bisherigen Styles.
 
-**Settings → Overlay → Menu material** zeigt **live backdrop** oder
-**fallback backdrop**. Daneben nennt **Background capture** die aktive Quelle
-(**Live / DXGI Desktop Duplication** oder **Live / Windows Graphics Capture**),
-den Wartezustand oder den Fehler. Ohne nutzbares DXGI-Bild versucht das Menü nach
-750 ms Windows Graphics Capture. Beim Schließen endet die Capture-Sitzung und
-die konfigurierte Capture-Ausschlussoption gilt wieder.
+Der Client komponiert seine dunkle Oberfläche direkt mit Alpha 0,88 über das
+Spiel. **Settings → Overlay → Menu material** zeigt **Translucent dark / 88%
+opacity**, **Background capture** zeigt **Not required**. Der Client benötigt
+keine Desktop-Aufnahme, Unschärfe oder Brechung. **Exclude from screen capture**
+gilt auch bei geöffnetem Menü.
 
 ## Kategorien, Module und Einstellungen
 
-Eine Kategorie links auswählen, dann die gewünschte Modulkachel bedienen.
-**Linksklick** schaltet ein echtes Modul an oder aus; die Kachel zeigt **Enabled**
-oder **Disabled** und, soweit vorhanden, die Belegung. **Rechtsklick** öffnet die
-bisherigen Einstellungen des Moduls in einem zweiten, unabhängig verschiebbaren
-Glasfenster. Jeder Rechtsklick bringt dieses Fenster nach vorn, auch für das
-bereits ausgewählte Modul. Alle 76 bisherigen Bereiche bleiben erreichbar.
+Eine Kategorie links und einen Modul-Tab oben auswählen. Alle 76 bisherigen
+Bereiche bleiben erreichbar. Tabs wählen Einstellungen; sie schalten kein Modul
+um. Überlaufende Tabs lassen sich mit den nativen ImGui-Pfeilen horizontal
+scrollen. **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied
+zwischen Groß- und Kleinschreibung. Bei null Treffern stellt **Clear search** die
+Tabs wieder her. Ein Kategorienwechsel leert die Suche.
 
-Das Einstellungsfenster ist bis zu 480 × 610 UI-Pixel groß, hat einen eigenen
-Titelbalken, **X** zum Schließen und einen scrollbaren Inhalt. Beide Fenster
-passen in den Viewport mit 24 Pixel Größenreserve. Ein Kategorienwechsel setzt
-das Modulraster nach oben, lässt aber das Einstellungsfenster beim ausgewählten
-Modul samt Scrollposition. Ein anderes Modul beginnt mit seinen Einstellungen
-oben; ein erneuter Rechtsklick auf dasselbe behält die Scrollposition. **Close** im
-Hauptfenster schließt auch die Einstellungen.
+Jede Kategorie behält ihren ausgewählten Abschnitt. Kategorie- und Modulwechsel
+setzen den Content-Scroll zurück. Die Tabs stehen außerhalb dieses Scrollbereichs.
+Einstellungen bleiben im Hauptfenster; ein zweites Modulfenster ist nicht nötig.
+Ab 660 Pixel Content-Breite und bei mehr als zwei Toggle-Modulen teilt eine
+60/40-Tabelle Detailregler links und **Quick toggles** für andere Module rechts.
+Bei kleineren Fenstern stehen die Details in einer Spalte.
 
-**Friends**, **Entity filters**, **Block types** und alle Kacheln unter **Stats**
-und **Settings** öffnen auch per Linksklick ihre Einstellungen. Sie zeigen
-**Open settings** statt eines erfundenen Aktivierungszustands. **HUD → Editor**
-und **Misc → Panic** sind Aktionen: Linksklick startet den Editor bzw. Panic;
-Rechtsklick öffnet ihren bestehenden Einstellungsbereich.
+Der **Enabled**-Schalter im Header zeigt und ändert den echten Zustand des
+aktuellen Moduls. **Quick toggles** und vorhandene Aktivierungsschalter wirken auf
+dieselben Modulwerte. **Friends**, **Entity filters**, **Block types**, **Stats**
+und **Settings** zeigen ihre tatsächlichen Einstellungen ohne erfundenen
+Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Aktion;
+**Run action** im Header startet sie direkt.
 
 - **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends, Crystal Macro, Anchor Macro, Hit sounds. Diagnostics
   bleibt innerhalb von Kill Aura eingeklappt.
@@ -53,7 +51,7 @@ Rechtsklick öffnet ihren bestehenden Einstellungsbereich.
   und Sichtbarkeitsfilter liegen unter Entity filters.
 - **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers, Chunkfinder,
   Storage ESP, Beacon radius und Chunk borders.
-- **HUD:** Editor und eine Kachel pro HUD-Element mit Sichtbarkeit, Position, Skalierung
+- **HUD:** Editor und ein Tab pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
 - **Settings:** Overlay, Focus, Keybinds, Agent.
@@ -62,7 +60,7 @@ Rechtsklick öffnet ihren bestehenden Einstellungsbereich.
 
 ## Keybinds
 
-**Settings → Keybinds** per Links- oder Rechtsklick öffnen: dort steht jede
+**Settings → Keybinds** als Modul-Tab auswählen: dort steht jede
 Belegung. Klick auf das Tastenfeld, dann die
 gewünschte Taste oder Mouse 1–5 drücken. Strg/Shift/Alt-Kombinationen sind erlaubt.
 Ein einzelner Modifier wird beim Loslassen erfasst, damit er zunächst noch Teil
@@ -97,8 +95,8 @@ mit ihrem bisherigen Cooldown-/Ziel-Lock-Verhalten weiter.
 
 ## HUD-Editor
 
-**Linksklick auf HUD → Editor** oder standardmäßig **F6** öffnet den Editor.
-Alternativ rechtsklicken und **Open HUD editor** wählen. Jedes Element
+**HUD → Editor → Run action**, **Open HUD editor** in den Einstellungen oder
+standardmäßig **F6** öffnet den Editor. Jedes Element
 hat eigene Position, Sichtbarkeit und Skalierung. Die 19 Elemente umfassen
 Equipment, Status effects, Coordinates, Performance, Compass, Reach indicator,
 Watermark, Active modules, Keybinds und die ergänzten Rockstar-/Status-Widgets.
@@ -112,7 +110,7 @@ Auf Viewports unter 640 px Breite oder 480 px Höhe zeigt der Editor nur das
 ausgewählte Element; die Auswahl erreicht weiterhin alle Module. Das normale
 HUD zeigt weiterhin die aktivierten Elemente.
 
-Unter HUD lassen sich dieselben Positionen und Skalen nach Rechtsklick auf die Elementkachel
+Unter dem jeweiligen HUD-Element-Tab lassen sich dieselben Positionen und Skalen
 auch numerisch einstellen.
 Positionen sind im verfügbaren Bildschirmweg normalisiert; Auflösungswechsel
 behalten die Anker, und Ziehen/Skalierung bleibt innerhalb des Viewports. Frei
@@ -139,19 +137,20 @@ Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
 Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
 bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
 
-Geprüft: reale Menüeingaben, Tastenerfassung/Konflikte, Toggle/Hold/Fokus,
-Store-Änderung, Speichern/Laden, HUD-Ziehen und kleine Viewports. D3D11-WARP-
-Vorschauen liegen unter `build/ui-preview/classic-*.png` und `modular-hud*.png`.
-Die historischen `classic-*.png`-Dateinamen zeigen jetzt das Liquid-Glass-Menü.
-Die aktuellen Raster-/Einstellungsansichten liegen zusätzlich unter
-`.impeccable/review/{glass-grid-desktop,glass-settings-desktop,glass-grid-compact,glass-settings-compact}.png`.
-Sie zeigen das echte GPU-Material über synthetischen Texturen und sind keine
-Minecraft-Screenshots. Die älteren Review-Bilder verwenden den WARP-Fallback.
-Der ausdrücklich aktivierte native `mcov_backdrop_capture_check --live`-Test hat
-auf diesem Host WGC-Start, vollständige LiquidGlass-Laufzeit, Capture-Pause,
-Wiederherstellung der Display-Affinität und Live-Capture nach erneutem Öffnen
-bestanden, ohne Desktopbilder zu speichern oder eine JVM anzubinden. Die Live-Optik im Spiel
-und Attach/Fokus sind damit weiterhin nicht geprüft.
+Geprüft: alle 76 Modul-Tabs, reale Toggle-Aktionen, Tastaturbedienung,
+Suche samt leerem Trefferzustand und Wiederherstellung, Style-/Font-/Window-Stack,
+Drag/Viewport-Grenzen, kleine Viewports und Slider einschließlich sichtbarer
+Strg-Eingabe. Bestehende Keybind-, HUD-, Renderer-, Launcher- und portable
+Build-Prüfungen bestehen ebenfalls.
+
+Aktuelle native WARP-Vorschauen liegen unter
+`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop}.png`.
+Sie zeigen die echte ImGui-Ausgabe mit direkter Alpha-Komposition vor synthetischem
+Hintergrund. Sie sind keine Minecraft-Screenshots und prüfen keine Live-Optik,
+Attach-/Fokus-Verbindung zum Spiel oder sämtliche GPUs. Ältere Glas-/Rasterbilder
+unter `.impeccable/review/` dokumentieren den abgelösten Client, nicht diese Ansicht.
+Die weiterhin gültigen Launcher-/Glas-Capture-Tests stehen in
+[liquid-ui.md](liquid-ui.md).
 
 Crystal Macro und Anchor Macro laufen bei aktivierter Funktion, solange die normale
 Platzieren-/Benutzen-Taste gehalten wird. Der Modul-Bind steuert die Aktivierung.

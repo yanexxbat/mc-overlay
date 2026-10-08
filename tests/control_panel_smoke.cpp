@@ -328,11 +328,13 @@ void CompactKeybindChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     auto frame=[&] { Draw(overlay,Page::Settings,0,{480,360}); };
     auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
     // The native row has a full-width label above a binding and mode.
-    const float row=14+20+3*6;
-    const ImVec2 p{content->DC.CursorStartPos.x+50,content->DC.CursorStartPos.y+3*row+20+10};
+    constexpr const char* hint="Click a binding and press a key or mouse button. Ctrl / Shift / Alt combinations work too.";
+    auto* font=mcov::style::MenuFont();
+    const float hintHeight=font->CalcTextSizeA(font->FontSize,1e9f,content->WorkRect.GetWidth(),hint).y;
+    const ImVec2 p{content->DC.CursorStartPos.x+50,content->DC.CursorStartPos.y+hintHeight+6+20+10};
     auto& io=ImGui::GetIO(); io.AddMousePosEvent(p.x,p.y); frame();
     io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
-    Require(mcov::OverlayUiCheck::Capture(overlay)==mcov::keys::Index(mcov::keys::Action::KillAura),"Compact binding did not enter real key capture");
+    Require(mcov::OverlayUiCheck::Capture(overlay)==mcov::keys::Index(mcov::keys::Action::Menu),"Compact binding did not enter real key capture");
     mcov::OverlayUiCheck::Input(overlay,{},true);
     mcov::keys::Input cancel{}; cancel[VK_ESCAPE]=true; mcov::OverlayUiCheck::Input(overlay,cancel,true);
     mcov::OverlayUiCheck::Input(overlay,{},true); io.AddMousePosEvent(-100,-100); frame(); frame();
