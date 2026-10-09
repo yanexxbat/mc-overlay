@@ -66,7 +66,7 @@ Widget. Im unabhaengigen Fenster stehen Saved configs, Config name, Save config
 bzw. Overwrite config, Load selected und Refresh. Die vorhandenen nativen Listen,
 Felder, Buttons und Statusfarben bleiben erhalten; der kleine Viewport scrollt.
 Listen- und Pfadtexte werden nativ begrenzt, der vollstaendige Text erscheint im
-Tooltip. Die Liste wird beim Oeffnen und mit Refresh gelesen, nicht pro Frame.
+Tooltip. Die Liste wird beim ersten Oeffnen und mit Refresh gelesen, nicht pro Frame.
 Benannte Profile liegen in `configs/<Name>.ini`, automatische Teil-Einstellungen
 in `client-settings.ini`, jeweils neben `mcov.exe`. Load selected uebernimmt ein
 vollstaendig geprueftes Profil einschliesslich Modulzustaenden; beim Start wird
