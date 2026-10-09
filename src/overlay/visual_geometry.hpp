@@ -18,6 +18,25 @@ struct ProjectedFace {
     std::array<ScreenPoint, 12> points{};
     int count = 0;
 };
+inline bool ClipLine(ScreenPoint& a, ScreenPoint& b, float width, float height,
+                     float& first, float& last) noexcept {
+    if (!std::isfinite(a.x) || !std::isfinite(a.y) || !std::isfinite(b.x) ||
+        !std::isfinite(b.y) || !std::isfinite(width) || !std::isfinite(height) ||
+        width < 1 || height < 1) return false;
+    const float dx=b.x-a.x,dy=b.y-a.y;
+    const float ps[4]={-dx,dx,-dy,dy},qs[4]={a.x,width-a.x,a.y,height-a.y};
+    first=0; last=1;
+    for (int i=0;i<4;++i) {
+        if (std::abs(ps[i])<1e-8f) { if (qs[i]<0) return false; }
+        else {
+            const float t=qs[i]/ps[i];
+            if (ps[i]<0) first=std::max(first,t); else last=std::min(last,t);
+        }
+    }
+    if (first>last) return false;
+    b={a.x+dx*last,a.y+dy*last}; a={a.x+dx*first,a.y+dy*first};
+    return true;
+}
 inline bool Finite(WorldPoint p) noexcept {
     return std::isfinite(p.x) && std::isfinite(p.y) && std::isfinite(p.z);
 }

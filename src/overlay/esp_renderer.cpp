@@ -219,7 +219,6 @@ void Tracer(ImDrawList& draw, const EntitySnapshot& entity, const CameraProjecti
     // Anchor to the real feet, never the viewport-clamped bounding rectangle.
     ScreenPoint foot;
     if (!projection.Point({entity.x,entity.y,entity.z},foot)) return;
-    if (foot.x<0 || foot.y<0 || foot.x>viewport.x || foot.y>viewport.y) return;
     ImVec2 start{.5f,1.f};
     switch (config.tracerOrigin) {
         case EspTracerOrigin::Center: start={.5f,.5f}; break;
@@ -227,9 +226,14 @@ void Tracer(ImDrawList& draw, const EntitySnapshot& entity, const CameraProjecti
         case EspTracerOrigin::Custom: start={Safe(config.customTracerOrigin.x,.5f,0,1),Safe(config.customTracerOrigin.y,1,0,1)}; break;
         default: break;
     }
-    visual::DrawGradientLine(draw,{origin.x+start.x*viewport.x,origin.y+start.y*viewport.y},
-        {origin.x+foot.x,origin.y+foot.y},Color(config.tracerColor,Safe(config.tracerStartAlpha,.08f,0,1)),
-        Color(config.tracerEndColor,Safe(config.tracerColor[3],1,0,1)),Safe(config.tracerThickness,1.25f,.5f,4));
+    ScreenPoint first{start.x*viewport.x,start.y*viewport.y},last=foot;
+    float low=0,high=1;
+    if (!visual::ClipLine(first,last,viewport.x,viewport.y,low,high)) return;
+    const ImU32 firstColor=Color(config.tracerColor,Safe(config.tracerStartAlpha,.08f,0,1));
+    const ImU32 lastColor=Color(config.tracerEndColor,Safe(config.tracerColor[3],1,0,1));
+    visual::DrawGradientLine(draw,{origin.x+first.x,origin.y+first.y},
+        {origin.x+last.x,origin.y+last.y},visual::Mix(firstColor,lastColor,low),
+        visual::Mix(firstColor,lastColor,high),Safe(config.tracerThickness,1.25f,.5f,4));
 }
 void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
                float center,ImTextureID texture,ImVec2 origin,ImVec2 viewport,const VisualSettings& config) {
