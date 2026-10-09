@@ -32,11 +32,12 @@ bool HasHealth(const EntitySnapshot& e) {
 }
 class ClipScope final {
     ImDrawList& draw_;
+    bool active_;
 public:
-    ClipScope(ImDrawList& draw, ImVec2 origin, ImVec2 size) : draw_(draw) {
-        draw_.PushClipRect(origin,{origin.x+size.x,origin.y+size.y},true);
+    ClipScope(ImDrawList& draw, ImVec2 origin, ImVec2 size, bool active=true) : draw_(draw),active_(active) {
+        if (active_) draw_.PushClipRect(origin,{origin.x+size.x,origin.y+size.y},true);
     }
-    ~ClipScope() { draw_.PopClipRect(); }
+    ~ClipScope() { if (active_) draw_.PopClipRect(); }
     ClipScope(const ClipScope&) = delete;
     ClipScope& operator=(const ClipScope&) = delete;
 };
@@ -299,7 +300,10 @@ void NameTag(ImDrawList& draw,ImFont& font,float size,const EntitySnapshot& e,Sc
     const ImVec2 lo{std::clamp(center-width*.5f,origin.x+3,std::max(origin.x+3,origin.x+viewport.x-width-3)),top};
     if (gear) Equipment(draw,font,e,{0,top-25},lo.x+width*.5f,texture,origin,viewport,config);
     draw.AddRectFilled(lo,{lo.x+width,lo.y+height},IM_COL32(14,14,18,215),5);
-    ClipScope clip(draw,{lo.x+padding,lo.y},{std::max(1.f,width-padding*2),height});
+    // Normal tags already fit the viewport and need no individual scissor
+    // command. Only unusually narrow viewports/overflowing fixed fields clip.
+    ClipScope clip(draw,{lo.x+padding,lo.y},{std::max(1.f,width-padding*2),height},
+                   fixed+TextWidth(font,size,name.data())>maxWidth);
     float x=lo.x+padding;
     const auto field=[&](const char* text,ImU32 color) {
         Label(draw,font,size,{x,lo.y+3},color,text,config); x+=TextWidth(font,size,text)+gap;
