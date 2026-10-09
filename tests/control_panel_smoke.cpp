@@ -47,7 +47,7 @@ struct OverlayUiCheck {
     static void CloseDetails(Overlay& o) { o.menu_.settingsOpen=false; }
     static int Modules(const Overlay& o,Page page,std::span<control_panel::ModuleView> out) { return o.ReadModules(page,out); }
     static void ReduceMotion(Overlay& o,bool value) { o.menu_.reduceMotion=value; }
-    static void Center(Overlay& o) { o.menu_.positioned=false; }
+    static void Center(Overlay& o) { o.menu_.positioned=false; o.menu_.settingsPlacement.positioned=false; }
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
     static void ResetVisuals(Overlay& o) { o.ResetMenuPage(Page::Visuals); }
     static void AllowCombat(Overlay& o) { o.combat_.aimLock=o.combat_.triggerbot=true; }
@@ -323,10 +323,11 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     auto* pane=ImGui::FindWindowByName("mcov module settings");
     const auto rootOriginal=root->Pos,paneOriginal=pane->Pos;
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+    const float dragX=paneOriginal.x>30?-25.f:25.f;
     const ImVec2 paneGrip{paneOriginal.x+80,paneOriginal.y+20};
     io.AddMousePosEvent(paneGrip.x,paneGrip.y); frame(); io.AddMouseButtonEvent(0,true); frame();
-    io.AddMousePosEvent(paneGrip.x-25,paneGrip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
-    Require(pane->Pos.x==paneOriginal.x-25&&pane->Pos.y==paneOriginal.y+15,"Settings window drag lost its offset");
+    io.AddMousePosEvent(paneGrip.x+dragX,paneGrip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
+    Require(pane->Pos.x==paneOriginal.x+dragX&&pane->Pos.y==paneOriginal.y+15,"Settings window drag lost its offset");
     Require(root->Pos.x==rootOriginal.x&&root->Pos.y==rootOriginal.y,"Dragging settings moved the module grid");
     io.AddMousePosEvent(pane->Pos.x+pane->Size.x-27,pane->Pos.y+22); frame();
     io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame(); frame();
