@@ -108,10 +108,14 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     }
     state.position={std::clamp(state.position.x,0.f,std::max(0.f,work.x-size.x)),std::clamp(state.position.y,0.f,std::max(0.f,work.y-size.y))};
     const ImVec2 pos{std::floor(viewport->WorkPos.x+state.position.x),std::floor(viewport->WorkPos.y+state.position.y)};
-    ImGui::SetNextWindowPos(pos); ImGui::SetNextWindowSize(size);
     constexpr auto flags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
         ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoScrollWithMouse;
     bool openSettings=false;
+    // On compact viewports, avoid compositing two sets of UI text through each
+    // other. Closing details returns to the grid on the next frame.
+    const bool compactDetails=state.settingsOpen&&state.page==state.renderedPage&&work.x<1260;
+    if(!compactDetails) {
+    ImGui::SetNextWindowPos(pos); ImGui::SetNextWindowSize(size);
     if(!ImGui::Begin("mcov control panel",nullptr,flags)) { ImGui::End(); return actions; }
     auto& draw=*ImGui::GetWindowDrawList();
     const float sidebar=size.x>=620?150.f:112.f;
@@ -225,6 +229,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     ImGui::End();
     if(actions.close) state.settingsOpen=false;
     state.renderedPage=state.page; state.pageAlpha=1; state.animateNextPage=false;
+    }
 
     if(state.settingsOpen&&catalog&&content) {
         std::array<ModuleView,64> details{};

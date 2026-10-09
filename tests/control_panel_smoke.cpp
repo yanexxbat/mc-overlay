@@ -223,8 +223,14 @@ void Draw(mcov::Overlay& overlay,Page page,int theme,ImVec2 size,bool preserveSt
     Require(after.WindowPadding.x==before.WindowPadding.x && after.FrameRounding==before.FrameRounding,
             "Menu theme changed global sizing");
     auto* window=ImGui::FindWindowByName("mcov control panel");
-    Require(window && window->Pos.x>=0 && window->Pos.y>=0 &&
+    Require(window,"Menu window is missing");
+    if(window->Active) Require(window->Pos.x>=0 && window->Pos.y>=0 &&
             window->Pos.x+window->Size.x<=size.x && window->Pos.y+window->Size.y<=size.y,"Menu escaped the viewport");
+    if(mcov::OverlayUiCheck::Menu(overlay).settingsOpen) {
+        auto* pane=ImGui::FindWindowByName("mcov module settings");
+        Require(pane&&pane->Pos.x>=0&&pane->Pos.y>=0&&pane->Pos.x+pane->Size.x<=size.x&&pane->Pos.y+pane->Size.y<=size.y,
+            "Settings window escaped the viewport");
+    }
     ImGui::Render(); Require(ImGui::GetDrawData()->TotalVtxCount>0,"Empty control panel");
 }
 ImGuiWindow* Child(const char* name) {
@@ -341,7 +347,14 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     mcov::OverlayUiCheck::CloseDetails(overlay); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
     SaveFrame(device,context,output/"module-grid-small.png");
     OpenModuleSettings(overlay,Page::Combat,"",1,8,{480,360});
+    Require(!ImGui::FindWindowByName("mcov control panel")->Active,"Compact settings still have text from the grid behind them");
     SaveFrame(device,context,output/"module-settings-small.png");
+    auto* smallPane=ImGui::FindWindowByName("mcov module settings");
+    io.AddMousePosEvent(smallPane->Pos.x+smallPane->Size.x-27,smallPane->Pos.y+22); Draw(overlay,Page::Combat,0,{480,360});
+    io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Combat,0,{480,360});
+    io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
+    Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&ImGui::FindWindowByName("mcov control panel")->Active,
+        "Compact settings close did not restore the module grid");
     mcov::OverlayUiCheck::Center(overlay);
     OpenModuleSettings(overlay,Page::Combat,"",1,8,{1920,1080});
     SaveFrame(device,context,output/"module-settings-large.png");

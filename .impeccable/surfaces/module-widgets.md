@@ -28,8 +28,9 @@ remain within their existing approved scope.
   when another module is selected.
 - The main window targets 740x520; settings target 480x580. Each clamps to the
   viewport minus 24px. The grid uses one to three columns. Desktop initial
-  placement reserves room for settings; small viewports allow overlap, with the
-  settings close control always available to return to the grid.
+  placement reserves room for settings. Below 1260px viewport width, the open
+  settings pane replaces the visible grid so transparent UI text cannot overlap;
+  its close control returns to the grid.
 
 ## Quality bar and verification
 
