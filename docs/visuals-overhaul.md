@@ -1,8 +1,9 @@
 # In-game visuals overhaul
 
 The C++20 renderer consumes the existing coherent `WorldSnapshot` and
-`CameraProjection`. The agent, IPC layout, menu drawing and HUD drawing are
-unchanged. `Overlay::PushScanRequest` also requests the existing cached entity
+`CameraProjection`. The agent, IPC layout, menu design and HUD drawing are
+unchanged. New style controls use the existing Visuals settings rows and widgets.
+`Overlay::PushScanRequest` also requests the existing cached entity
 details when armor bars are active; no game reads occur inside the renderer.
 
 ## Files
@@ -13,13 +14,29 @@ details when armor bars are active; no game reads occur inside the renderer.
 | `src/overlay/esp_renderer.cpp` | Entity filtering, render ordering, world labels and meters |
 | `src/overlay/visual_draw.hpp/.cpp` | AA corner brackets, RGBA gradients, outlines, bounded glow and outlined text |
 | `src/overlay/visual_geometry.hpp` | Cuboids, camera/viewport clipping and approximate humanoid highlight geometry |
+| `src/overlay/visual_preferences.hpp` | Validated style preference save/load without changing module activation |
 | `tests/esp_rendering.cpp` | Actual Direct3D 11 WARP pixel checks, state checks, load measurement and preview |
 
-## Configuration without menu changes
+## Configuration in the existing menu
 
 The existing menu switches still enable boxes, fills, tracers, health bars,
-names and distance labels. Advanced choices are fields on `VisualSettings`;
-this change does not add menu controls or persistence for those fields.
+names and distance labels. Advanced choices remain fields on `VisualSettings`
+and are exposed in the existing menu sections:
+
+- **Box ESP:** box style, corner length, outline thickness/rounding, filled boxes,
+  fill gradient and top/bottom opacity, target highlight mode, highlight opacity,
+  target glow, glow radius/opacity and target color.
+- **Health bars:** vertical/horizontal placement, thickness, health gradient and
+  its colors, armor bar and armor color. Armor shares the health-bars switch.
+- **Tracers:** bottom/center/top/custom origin, normalized custom X/Y, thickness,
+  origin/target colors and origin opacity.
+- **Name tags / Distance labels:** shared text outline and label size.
+
+Inactive dependent controls are disabled. The existing content scroll reaches
+all controls even at a 480x360 viewport. Style and filter choices are saved in
+`client-settings.ini`; module activation retains its previous startup behavior.
+Existing files without the new `visual-` rows still load normally. Reset restores
+the visual defaults. No navigation, theme, shared widget or HUD layout is changed.
 
 | Setting | Options / meaning |
 |---|---|
@@ -75,9 +92,12 @@ in-game FPS result or a hardware GPU timing guarantee.
 
 Build the existing CMake project with `MCOV_BUILD_ESP_CHECKS=ON`, then run
 `ctest --test-dir build --output-on-failure -R "esp_geometry|esp_rendering"`.
-The new check runs GPU pixel checks with Direct3D 11 WARP and writes a synthetic
+The new render check runs GPU pixel checks with Direct3D 11 WARP and writes a synthetic
 preview to `build/visual-preview/esp.bmp`. It checks RGBA gradients, health and
 armor fractions, all box modes, target-only highlights, transparent untouched
 pixels, near/viewport clipping, 16-bit vertex offsets, bounded strings and
 draw-list state. The existing menu/HUD, aura, depth and world-visual checks also
-passed. Live rendering in Minecraft has not been exercised in this task.
+passed. The menu check clicks the new mode/origin/placement controls, changes the
+custom origin and armor checkbox, verifies scrolling at desktop/small viewports,
+checks style save/load, rejects invalid modes and clamps out-of-range values.
+Live rendering in Minecraft has not been exercised in this task.
