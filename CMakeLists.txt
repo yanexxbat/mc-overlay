@@ -171,6 +171,7 @@ add_executable(mcov_overlay
     src/overlay/overlay_rockstar.cpp
     src/overlay/overlay_utilities.cpp
     src/overlay/esp_renderer.cpp
+    src/overlay/visual_draw.cpp
     src/overlay/item_icon_atlas_dx11.cpp
     src/overlay/control_panel.cpp
     src/overlay/overlay_modules.cpp
@@ -415,6 +416,7 @@ if(MCOV_BUILD_UI_CHECKS)
         tests/control_panel_smoke.cpp
         src/injector/launcher_ui.cpp
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
+        src/overlay/visual_draw.cpp
         src/overlay/overlay_modules.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_world_visuals.cpp

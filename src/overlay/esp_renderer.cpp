@@ -223,7 +223,7 @@ void Tracer(ImDrawList& draw, const EntitySnapshot& entity, const CameraProjecti
         Color(config.tracerEndColor),Safe(config.tracerThickness,1.25f,.5f,4));
 }
 void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
-               float center,ImTextureID texture,ImVec2 origin,ImVec2 viewport) {
+               float center,ImTextureID texture,ImVec2 origin,ImVec2 viewport,const VisualSettings& config) {
     constexpr float step=22,iconSize=16;
     int count=0;
     for (const auto& item:e.details.equipment) if (item.present) ++count;
@@ -253,7 +253,7 @@ void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
         if (!texture || !item.iconIndex || item.iconIndex>equipment_icons::kNames.size()) {
             draw.AddRectFilled(lo,hi,IM_COL32(28,28,36,220),3);
             draw.AddRect(lo,hi,IM_COL32(146,146,164,190),3);
-            Text(draw,font,11,{lo.x+4,lo.y+1},kMuted,"?");
+            Label(draw,font,11,{lo.x+4,lo.y+1},kMuted,"?",config);
         }
         if (item.maxDamage>0) {
             const float fraction=std::clamp(1.f-float(item.damage)/float(item.maxDamage),0.f,1.f);
@@ -263,7 +263,7 @@ void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
         }
         if (item.count>1) {
             char value[12]; std::snprintf(value,sizeof(value),"%d",std::min(item.count,999));
-            Text(draw,font,9,{hi.x-TextWidth(font,9,value),hi.y-8},kText,value);
+            Label(draw,font,9,{hi.x-TextWidth(font,9,value),hi.y-8},kText,value,config);
         }
         ++n;
     }
@@ -289,18 +289,18 @@ void NameTag(ImDrawList& draw,ImFont& font,float size,const EntitySnapshot& e,Sc
     const float top=std::clamp(rect.top-height-4,origin.y+(gear ? 28.f : 2.f),
                                std::max(origin.y+(gear ? 28.f : 2.f),origin.y+viewport.y-height-2));
     const ImVec2 lo{std::clamp(center-width*.5f,origin.x+3,std::max(origin.x+3,origin.x+viewport.x-width-3)),top};
-    if (gear) Equipment(draw,font,e,{0,top-25},lo.x+width*.5f,texture,origin,viewport);
+    if (gear) Equipment(draw,font,e,{0,top-25},lo.x+width*.5f,texture,origin,viewport,config);
     draw.AddRectFilled(lo,{lo.x+width,lo.y+height},IM_COL32(14,14,18,215),5);
     ClipScope clip(draw,{lo.x+padding,lo.y},{std::max(1.f,width-padding*2),height});
     float x=lo.x+padding;
     const auto field=[&](const char* text,ImU32 color) {
-        Text(draw,font,size,{x,lo.y+3},color,text); x+=TextWidth(font,size,text)+gap;
+        Label(draw,font,size,{x,lo.y+3},color,text,config); x+=TextWidth(font,size,text)+gap;
     };
     if (config.distanceText) field(distance,kMuted);
     if (ping) field(latency,e.details.ping<0 ? kMuted : e.details.ping>250 ? IM_COL32(248,101,116,255) :
                            e.details.ping>100 ? IM_COL32(244,202,113,255) : IM_COL32(112,231,151,255));
     field(name.data(),kText);
-    if (hp) field(health,IM_COL32(248,101,116,255));
+    if (hp) field(health,HealthColor(std::clamp(e.health/e.maxHealth,0.f,1.f),config));
 }
 void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
                 const EntitySnapshot& e, float labelSize, ImVec2 origin, ImVec2 viewport,bool protect) {
@@ -348,20 +348,28 @@ void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
         const float* rgba=(e.flags&kEntityIsPlayer) ? config.playerColor :
                           (e.flags&kEntityIsHostile) ? config.hostileColor : config.otherColor;
         const ImU32 color=Color(rgba);
+        const auto bounds=EntityBounds(e);
+        if (!visual::ValidBounds(bounds)) continue;
+        // Reuse the sampled rig for both skeleton and the target silhouette.
+        const bool selected=snapshot.hasTarget && e.entityId==snapshot.targetEntityId;
+        const bool haveRig=e.rigKind!=kRigNone && std::isfinite(e.yaw) && std::isfinite(e.headPitch) &&
+            std::isfinite(e.walkPhase) && std::isfinite(e.walkSpeed) && std::isfinite(e.modelHeight);
+        HumanoidRig rig{};
+        if (haveRig && (config.skeleton || (selected && config.boxEsp && config.targetHighlight==EspHighlight::Humanoid)))
+            rig=BuildHumanoidRig(e);
         ScreenRect rect;
-        if (!projection.Bounds(EntityBounds(e),rect)) {
-            if (config.skeleton) Skeleton(draw,e,projection,color,skeletonThickness,origin);
+        if (!projection.Bounds(bounds,rect)) {
+            if (config.skeleton && haveRig) Skeleton(draw,rig,projection,color,skeletonThickness,origin);
             continue;
         }
         rect={rect.left+origin.x,rect.top+origin.y,rect.right+origin.x,rect.bottom+origin.y};
-        const bool selected=snapshot.hasTarget && e.entityId==snapshot.targetEntityId;
         if (selected) { target=&e; targetRect=rect; }
-        if (config.boxEsp) Box(draw,rect,color,config);
-        if (config.skeleton) Skeleton(draw,e,projection,color,skeletonThickness,origin);
-        if (config.tracers)
-            draw.AddLine({origin.x+viewport.x*.5f,origin.y+viewport.y},
-                         {(rect.left+rect.right)*.5f,rect.bottom},Color(config.tracerColor),1.f);
-        if (config.healthBars && HasHealth(e)) HealthBar(draw,font,size,e,rect,config,origin,viewport);
+        if (selected && config.boxEsp) Highlight(draw,e,haveRig ? &rig : nullptr,snapshot,projection,rect,config,origin,viewport);
+        if (config.boxEsp) Box(draw,rect,visual::BoundsCuboid(bounds),snapshot,projection,
+                              color,config,selected,origin,viewport);
+        if (config.skeleton && haveRig) Skeleton(draw,rig,projection,color,skeletonThickness,origin);
+        if (config.tracers) Tracer(draw,e,projection,config,origin,viewport);
+        const float barOffset=config.healthBars ? HealthBar(draw,font,size,e,rect,config,origin,viewport) : 0.f;
         const float width=rect.right-rect.left,center=(rect.left+rect.right)*.5f;
         if (width>=24 && config.nameTags) {
             NameTag(draw,font,size,e,rect,config,origin,viewport,itemTexture);
@@ -369,7 +377,7 @@ void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
         // Beim Ziel steht die Entfernung schon oben in der kompakten Infozeile.
         if (width>=24 && !config.nameTags && config.distanceText && !(selected && config.targetInfo)) {
             char distance[32]; std::snprintf(distance,sizeof(distance),"%.1fm",e.distance);
-            CenteredText(draw,font,size,center,rect.bottom+4,kMuted,distance,origin,viewport);
+            CenteredText(draw,font,size,center,rect.bottom+4+barOffset,kMuted,distance,origin,viewport,config);
         }
     }
     if (config.targetInfo && target) {

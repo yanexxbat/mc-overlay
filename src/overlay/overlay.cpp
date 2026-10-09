@@ -1094,7 +1094,8 @@ void Overlay::PushScanRequest() {
     std::uint32_t flags = block->controlFlags.load(std::memory_order_acquire);
     if (combat_.autoTotem.enabled) flags |= kCtrlAutoTotem;
     else                   flags &= ~kCtrlAutoTotem;
-    const bool details=visuals_.targetInfo || (visuals_.nameTags && (visuals_.nameTagPing || visuals_.nameTagEquipment));
+    const bool details=visuals_.targetInfo || (visuals_.healthBars && visuals_.armorBars) ||
+        (visuals_.nameTags && (visuals_.nameTagPing || visuals_.nameTagEquipment));
     if (details) flags|=kCtrlEntityDetails;
     else flags&=~kCtrlEntityDetails;
     block->controlFlags.store(flags, std::memory_order_release);
