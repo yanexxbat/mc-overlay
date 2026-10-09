@@ -89,10 +89,11 @@ bool Overlay::SaveConfig(const std::string& name) {
     const auto file=directory/(name+".ini");
     if(!PlainFile(file,true)) return fail("This config name belongs to a folder or linked file. Choose another name.");
     const auto temporary=directory/(name+".ini.tmp-"+std::to_string(GetCurrentProcessId())+"-"+std::to_string(GetTickCount64()));
-    struct Cleanup { std::filesystem::path file; ~Cleanup() { std::error_code ignored; std::filesystem::remove(file,ignored); } } cleanup{temporary};
+    struct Cleanup { std::filesystem::path file; bool owned=false; ~Cleanup() { if(owned) { std::error_code ignored; std::filesystem::remove(file,ignored); } } } cleanup{temporary};
     {
         WinHandle handle(CreateFileW(temporary.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr));
         if(!handle) return fail("Cannot save config. Check folder permissions and free space, then retry.");
+        cleanup.owned=true;
         DWORD written=0;
         if(!WriteFile(handle.get(),text.data(),DWORD(text.size()),&written,nullptr)||written!=text.size()||!FlushFileBuffers(handle.get()))
             return fail("Config could not be written completely. Free space and retry; the previous file is kept.");
@@ -135,6 +136,7 @@ void Overlay::DrawConfigSettings() {
                     selectedConfig_=name; std::snprintf(configName_,sizeof(configName_),"%s",name.c_str());
                     configStatus_.clear(); configError_=false;
                 }
+                if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s",name.c_str());
                 ImGui::PopID();
             }
             ImGui::EndListBox();

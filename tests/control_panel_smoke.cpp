@@ -98,6 +98,7 @@ struct OverlayUiCheck {
     static void ConfigSnapshot(Overlay& o,const client_configs::Snapshot& c) { o.ApplyConfig(c); }
     static const auto& ConfigNames(const Overlay& o) { return o.configNames_; }
     static const auto& ConfigStatus(const Overlay& o) { return o.configStatus_; }
+    static void ClearConfigStatus(Overlay& o) { o.configStatus_.clear(); o.configError_=false; }
     static void RefreshConfigs(Overlay& o) { o.RefreshConfigs(); }
     static void DrawHud(Overlay& o,const WorldSnapshot& s,bool editing) {
         o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
@@ -926,6 +927,7 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     for(const char* name:{"../escape","C:\\escape","bad/name","CON","LPT9"," leading","trailing ","bad.name",""})
         Require(!Check::SaveConfig(overlay,name),"Unsafe config filename was accepted");
     Require(ValidName("PvP - My_setup 1"),"Ordinary profile name was rejected");
+    Check::ClearConfigStatus(overlay);
     OpenModuleSettings(overlay,Page::Settings,"",4,5);
     Draw(overlay,Page::Settings,0,{1280,800});
     SaveFrame(device,context,output/"configs-empty.png");
@@ -991,7 +993,7 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     ImGui::SetScrollY(Child("/content_"),10000); Draw(overlay,Page::Settings,0,{480,360}); Draw(overlay,Page::Settings,0,{480,360});
     SaveFrame(device,context,output/"configs-small-bottom.png");
     for(const auto& item:std::filesystem::directory_iterator(folder/"configs"))
-        Require(item.path().extension()!=L".tmp","Successful/failed writes left temporary config files");
+        Require(item.path().filename().string().find(".tmp-")==std::string::npos,"Successful/failed writes left temporary config files");
     Check::PrefPath(overlay,{});
 }
 int main(int argc,char** argv) {
