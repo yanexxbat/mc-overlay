@@ -952,13 +952,13 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     // Exercise the native Save and Load buttons through ImGui activation.
     Draw(overlay,Page::Settings,0,{1280,800});
     auto* content=Child("/content_");
-    ImGui::ActivateItem(content->GetID("Save config")); Draw(overlay,Page::Settings,0,{1280,800});
+    ImGui::GetCurrentContext()->NavNextActivateId=content->GetID("Save config"); Draw(overlay,Page::Settings,0,{1280,800});
     Require(std::filesystem::is_regular_file(folder/"configs"/"My setup.ini"),"Config Save button did not write beside client settings");
     std::string saved; Require(Encode(Check::ConfigSnapshot(overlay),saved),"Saved settings could not be serialized");
     Snapshot decoded; Require(Decode(saved,decoded),"Fresh profile did not pass its own parser");
     std::string reencoded; Require(Encode(decoded,reencoded)&&reencoded==saved,"Config schema did not round-trip every field");
     Check::ConfigSnapshot(overlay,Snapshot{});
-    ImGui::ActivateItem(content->GetID("Load selected")); Draw(overlay,Page::Settings,0,{1280,800});
+    ImGui::GetCurrentContext()->NavNextActivateId=content->GetID("Load selected"); Draw(overlay,Page::Settings,0,{1280,800});
     std::string restored; Require(Encode(Check::ConfigSnapshot(overlay),restored)&&restored==saved,"Config Load button did not restore all settings and activation states");
     Require(std::filesystem::is_regular_file(folder/"client-settings.ini"),"Automatic preferences did not stay beside the client");
     Check::ConfigName(overlay,"My setup");
