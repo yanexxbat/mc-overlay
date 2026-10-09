@@ -25,6 +25,7 @@ public:
     combat::ConfigStore& Store() { return store_; }
     const combat::ConfigStore& Store() const { return store_; }
     combat::FriendEnemyBook& Relations() { return relations_; }
+    const combat::FriendEnemyBook& Relations() const { return relations_; }
     // UUIDs stammen von Spielern, niemals von wiederverwendeten Entity-IDs.
     static std::optional<combat::Identity> ParseUuid(const char* text);
 private:
