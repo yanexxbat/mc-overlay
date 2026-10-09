@@ -5,6 +5,8 @@
 #include "common/equipment_icons.hpp"
 #include "overlay/menu_motion.hpp"
 #include "overlay/visual_preferences.hpp"
+#include "overlay/client_config.hpp"
+#include "common/client_paths.hpp"
 #include "injector/launcher_ui.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
@@ -18,6 +20,7 @@
 #include <memory>
 #include <stdexcept>
 #include <sstream>
+#include <fstream>
 #include <crtdbg.h>
 
 using Microsoft::WRL::ComPtr;
@@ -88,6 +91,14 @@ struct OverlayUiCheck {
     static void PrefPath(Overlay& o,const std::filesystem::path& path) { o.preferencesPath_=path; }
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
+    static void ConfigName(Overlay& o,const char* name) { std::snprintf(o.configName_,sizeof(o.configName_),"%s",name); }
+    static bool SaveConfig(Overlay& o,const std::string& name) { return o.SaveConfig(name); }
+    static bool LoadConfig(Overlay& o,const std::string& name) { return o.LoadConfig(name); }
+    static auto ConfigSnapshot(const Overlay& o) { return o.CaptureConfig(); }
+    static void ConfigSnapshot(Overlay& o,const client_configs::Snapshot& c) { o.ApplyConfig(c); }
+    static const auto& ConfigNames(const Overlay& o) { return o.configNames_; }
+    static const auto& ConfigStatus(const Overlay& o) { return o.configStatus_; }
+    static void RefreshConfigs(Overlay& o) { o.RefreshConfigs(); }
     static void DrawHud(Overlay& o,const WorldSnapshot& s,bool editing) {
         o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
         o.hudEditing_=editing; o.DrawHud(s); if(editing) o.DrawHudEditor();
@@ -311,17 +322,17 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==0,
         "Keyboard context action did not open module settings");
     mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,true);
-    ClickModule(overlay,Page::Settings,0,4,0);
+    ClickModule(overlay,Page::Settings,0,5,0);
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Settings-only widget did not open on left-click");
 }
 void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto& io=ImGui::GetIO();
-    OpenModuleSettings(overlay,Page::Settings,"",2,4);
+    OpenModuleSettings(overlay,Page::Settings,"",2,5);
     auto* content=Child("/content_"); ImGui::SetScrollY(content,150);
     Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
     Require(content->Scroll.y>0,"Settings window cannot scroll");
     // Closing/reopening the same module retains its scroll; a new module resets it.
-    OpenModuleSettings(overlay,Page::Settings,"",2,4);
+    OpenModuleSettings(overlay,Page::Settings,"",2,5);
     Require(content->Scroll.y>0,"Reopening the same module lost its scroll");
     OpenModuleSettings(overlay,Page::Visuals,"",0,26);
     Require(Child("/content_")->Scroll.y==0,"Changing module did not reset settings scroll");
@@ -394,7 +405,7 @@ void SearchChecks(mcov::Overlay& overlay) {
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
 }
 void CompactKeybindChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
-    OpenModuleSettings(overlay,Page::Settings,"",2,4,{480,360});
+    OpenModuleSettings(overlay,Page::Settings,"",2,5,{480,360});
     auto frame=[&] { Draw(overlay,Page::Settings,0,{480,360}); };
     auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
     // The native row has a full-width label above a binding and mode.
@@ -899,6 +910,86 @@ void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std:
     Require(click({412,354},{480,380}).close,"Compact footer close is unreachable");
     io.AddMousePosEvent(-100,-100);
 }
+void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using Check=mcov::OverlayUiCheck;
+    using namespace mcov::client_configs;
+    const auto folder=output/("config client-"+std::to_string(GetCurrentProcessId()));
+    std::filesystem::create_directories(folder);
+    auto storage=std::make_unique<mcov::Overlay>(); auto& overlay=*storage; Check::Seed(overlay);
+    Check::PrefPath(overlay,folder/"client-settings.ini");
+    // Portable root wins over the separately inherited runtime/cache directory.
+    auto env=[](const wchar_t* name) { const auto count=GetEnvironmentVariableW(name,nullptr,0); std::wstring value(count,L'\0'); if(count) { GetEnvironmentVariableW(name,value.data(),count); value.resize(count-1); } return value; };
+    const auto oldClient=env(L"MCOV_CLIENT_DIR"),oldData=env(L"MCOV_DATA_DIR");
+    SetEnvironmentVariableW(L"MCOV_CLIENT_DIR",folder.c_str()); SetEnvironmentVariableW(L"MCOV_DATA_DIR",(folder/L"cache").c_str());
+    Require(mcov::ClientDirectory()==folder&&mcov::ClientDataDirectory()==folder/L"cache","Portable configs followed the runtime cache instead of the client folder");
+    SetEnvironmentVariableW(L"MCOV_CLIENT_DIR",oldClient.empty()?nullptr:oldClient.c_str()); SetEnvironmentVariableW(L"MCOV_DATA_DIR",oldData.empty()?nullptr:oldData.c_str());
+    for(const char* name:{"../escape","C:\\escape","bad/name","CON","LPT9"," leading","trailing ","bad.name",""})
+        Require(!Check::SaveConfig(overlay,name),"Unsafe config filename was accepted");
+    Require(ValidName("PvP - My_setup 1"),"Ordinary profile name was rejected");
+    OpenModuleSettings(overlay,Page::Settings,"",4,5);
+    Draw(overlay,Page::Settings,0,{1280,800});
+    SaveFrame(device,context,output/"configs-empty.png");
+    Check::ConfigName(overlay,"My setup");
+    auto expected=Check::ConfigSnapshot(overlay);
+    expected.combat.aimFov=57; expected.combat.autoTotem.enabled=true;
+    expected.killAura.enabled=true; expected.killAura.target.playersOnly=true; expected.killAura.attack.range=4.25;
+    expected.visuals.boxEsp=false; expected.visuals.boxStyle=mcov::EspBoxStyle::Wire3D; expected.visuals.tracerThickness=.5f;
+    expected.aura.enabled=true; expected.aura.orbCount=7; expected.aura.endColor={.2f,.3f,.4f,.5f};
+    expected.marker.glow=1.75f; expected.world.ambient.enabled=true; expected.world.ambient.amount=91;
+    expected.hat.firstPerson=true; expected.friendHat.opacity=.5f;
+    expected.blocks.enabled=true; expected.blocks.mask=1u<<mcov::kBlockDiamond; expected.blocks.radius=36;
+    expected.chunks.enabled=true; expected.chunks.radius=44;
+    expected.crystal.enabled=true; expected.crystal.GrimConservative(); expected.anchor.minHealth=12;
+    expected.hud.layout[4]={{.7f,.8f},1.4f,true}; expected.hud.extras[2]=true;
+    expected.overlay.fovTrim=9; expected.overlay.vsync=false; expected.overlay.focusMode=mcov::FocusMode::UnlockForeground;
+    expected.reducedMotion=true;
+    expected.binds[mcov::keys::Index(mcov::keys::Action::BoxEsp)]={0x42,mcov::keys::Ctrl,mcov::keys::Mode::Hold};
+    expected.extra[mcov::rockstar::Feature::Wings].enabled=true; expected.extra[mcov::rockstar::Feature::Wings].size=1.8f;
+    expected.relations[0]={{0xf123456789abcdef,0xedcba98765432101},mcov::combat::Relation::Friend,true};
+    expected.waypoints[0].used=true; expected.waypoints[0].p={1,64,-2};
+    std::snprintf(expected.waypoints[0].label.data(),expected.waypoints[0].label.size(),"Home \"base\"");
+    Check::ConfigSnapshot(overlay,expected);
+    // Exercise the native Save and Load buttons through ImGui activation.
+    Draw(overlay,Page::Settings,0,{1280,800});
+    auto* content=Child("/content_");
+    ImGui::ActivateItem(content->GetID("Save config")); Draw(overlay,Page::Settings,0,{1280,800});
+    Require(std::filesystem::is_regular_file(folder/"configs"/"My setup.ini"),"Config Save button did not write beside client settings");
+    std::string saved; Require(Encode(Check::ConfigSnapshot(overlay),saved),"Saved settings could not be serialized");
+    Snapshot decoded; Require(Decode(saved,decoded),"Fresh profile did not pass its own parser");
+    std::string reencoded; Require(Encode(decoded,reencoded)&&reencoded==saved,"Config schema did not round-trip every field");
+    Check::ConfigSnapshot(overlay,Snapshot{});
+    ImGui::ActivateItem(content->GetID("Load selected")); Draw(overlay,Page::Settings,0,{1280,800});
+    std::string restored; Require(Encode(Check::ConfigSnapshot(overlay),restored)&&restored==saved,"Config Load button did not restore all settings and activation states");
+    Require(std::filesystem::is_regular_file(folder/"client-settings.ini"),"Automatic preferences did not stay beside the client");
+    Check::ConfigName(overlay,"My setup");
+    Require(Check::SaveConfig(overlay,"My setup"),"Existing profile could not be overwritten atomically");
+    Snapshot sentinel; sentinel.overlay.fovTrim=-7;
+    Require(!Decode(saved.substr(0,saved.size()/2),sentinel)&&sentinel.overlay.fovTrim==-7,"Truncated config partially changed its destination");
+    Require(!Decode(saved+"overlay.fovTrim 0\n",sentinel),"Duplicate config fields were accepted");
+    auto corrupt=saved; const auto range=corrupt.find("combat.aimFov 57\n");
+    Require(range!=std::string::npos,"Missing config test field"); corrupt.replace(range,std::strlen("combat.aimFov 57\n"),"combat.aimFov 999\n");
+    Require(!Decode(corrupt,sentinel),"Out-of-range config value was accepted");
+    { std::ofstream out(folder/"configs"/"Broken.ini",std::ios::binary); out<<corrupt; }
+    Require(!Check::LoadConfig(overlay,"Broken"),"Corrupt profile was applied");
+    std::string afterFailure; Require(Encode(Check::ConfigSnapshot(overlay),afterFailure)&&afterFailure==saved,"Failed load changed live settings");
+    OpenModuleSettings(overlay,Page::Settings,"",4,5); Draw(overlay,Page::Settings,0,{1280,800});
+    SaveFrame(device,context,output/"configs-error.png");
+    Require(Check::SaveConfig(overlay,std::string(48,'A')),"Maximum valid config name failed");
+    // A directory named like an existing file must not be overwritten.
+    std::filesystem::create_directory(folder/"configs"/"Folder.ini");
+    Require(!Check::SaveConfig(overlay,"Folder"),"Saving replaced a directory");
+    Require(Check::LoadConfig(overlay,"My setup"),"Valid profile could not be loaded after an error");
+    OpenModuleSettings(overlay,Page::Settings,"",4,5);
+    Draw(overlay,Page::Settings,0,{1280,800}); Draw(overlay,Page::Settings,0,{1280,800});
+    SaveFrame(device,context,output/"configs-desktop.png");
+    Draw(overlay,Page::Settings,0,{480,360}); Draw(overlay,Page::Settings,0,{480,360});
+    SaveFrame(device,context,output/"configs-small.png");
+    ImGui::SetScrollY(Child("/content_"),10000); Draw(overlay,Page::Settings,0,{480,360}); Draw(overlay,Page::Settings,0,{480,360});
+    SaveFrame(device,context,output/"configs-small-bottom.png");
+    for(const auto& item:std::filesystem::directory_iterator(folder/"configs"))
+        Require(item.path().extension()!=L".tmp","Successful/failed writes left temporary config files");
+    Check::PrefPath(overlay,{});
+}
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     _set_error_mode(_OUT_TO_STDERR);
@@ -930,12 +1021,13 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={8,26,7,20,3,4,8};
+        constexpr int sectionCounts[]={8,26,7,20,3,5,8};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
         SearchChecks(overlay);
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
+        ConfigChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 OpenModuleSettings(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
@@ -974,7 +1066,7 @@ int main(int argc,char** argv) {
         io.AddMousePosEvent(grip.x+55,grip.y+35); frame(Page::Settings); io.AddMouseButtonEvent(0,false); frame(Page::Settings);
         Require(panel->Pos.x==original.x+55&&panel->Pos.y==original.y+35,"Classic menu drag lost its offset");
         mcov::OverlayUiCheck::Center(overlay); frame(Page::Settings);
-        OpenModuleSettings(overlay,Page::Settings,"settings_sections",2,4);
+        OpenModuleSettings(overlay,Page::Settings,"settings_sections",2,5);
         auto& ctx=*ImGui::GetCurrentContext(); content=Child("/content_");
         SaveFrame(device.Get(),context.Get(),output/"classic-keybinds.png");
         auto* keysTable=ctx.Tables.GetByKey(content->GetID("keybind_editor"));
@@ -1245,7 +1337,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 76 module widgets, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 77 module widgets, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
