@@ -166,6 +166,7 @@ add_executable(mcov_overlay
     src/common/flat_style.cpp
     src/overlay/overlay.cpp
     src/overlay/overlay_input.cpp
+    src/overlay/overlay_configs.cpp
     src/overlay/overlay_hud.cpp
     src/overlay/overlay_world_visuals.cpp
     src/overlay/overlay_rockstar.cpp
@@ -419,6 +420,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/visual_draw.cpp
         src/overlay/overlay_modules.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
+        src/overlay/overlay_configs.cpp
         src/overlay/overlay_world_visuals.cpp
         src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
     src/overlay/overlay_utilities.cpp

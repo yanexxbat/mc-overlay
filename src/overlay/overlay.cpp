@@ -250,7 +250,7 @@ void Overlay::ApplyCaptureAffinity() {
 bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
     ImGui_ImplWin32_EnableDpiAwareness();
     target_ = target;
-    preferencesPath_=ClientDataDirectory()/L"client-settings.ini";
+    preferencesPath_=ClientDirectory()/L"client-settings.ini";
     LoadPreferences();
 
     if (!GetClientRectOnScreen(target_.window, windowX_, windowY_, windowW_, windowH_)) {
@@ -1726,7 +1726,7 @@ void Overlay::DrawStatsTab(const WorldSnapshot& snapshot) {
 }
 
 void Overlay::DrawSettingsTab() {
-    constexpr const char* sections[]={"Overlay","Focus","Keybinds","Agent"};
+    constexpr const char* sections[]={"Overlay","Focus","Keybinds","Agent","Configs"};
     settingsSection_=panel::SubTabs("settings_sections",sections,IM_ARRAYSIZE(sections),settingsSection_);
     if(settingsSection_==0) {
         if(panel::BeginRows("overlay_settings")) {
@@ -1765,6 +1765,8 @@ void Overlay::DrawSettingsTab() {
             ImGui::TextWrapped("Legacy attach input can crash GLFW games while the mouse is captured.");
     } else if(settingsSection_==2) {
         DrawKeybindSettings();
+    } else if(settingsSection_==4) {
+        DrawConfigSettings();
     } else {
         if(panel::BeginRows("agent_details")) {
             char pid[32]; std::snprintf(pid,sizeof(pid),"%u",target_.pid);

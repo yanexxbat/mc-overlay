@@ -25,7 +25,7 @@ constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleto
 constexpr Definition blocks[]={Module("Block ESP",Action::BlockEsp),{"Block types"},Option("Tracers",Flag::BlockTracers),
     Module("Chunkfinder",Action::ChunkFinder),Module("Storage ESP",Action::ChestEsp),Module("Beacon radius",Action::BeaconRadius),Module("Chunk borders",Action::ChunkBorders)};
 constexpr Definition stats[]={{"Local player"},{"Client"},{"Entities"}};
-constexpr Definition settings[]={{"Overlay"},{"Focus"},{"Keybinds"},{"Agent"}};
+constexpr Definition settings[]={{"Overlay"},{"Focus"},{"Keybinds"},{"Agent"},{"Configs"}};
 constexpr Definition misc[]={Module("Middle click friend",Action::MiddleFriend),Module("Death coordinates",Action::DeathCoordinates),
     Module("Detect players",Action::DetectPlayer),Module("Waypoints",Action::Waypoints),Module("Name protect",Action::NameProtect),
     Module("Module sounds",Action::ModuleSounds),Module("Notifications",Action::Notifications),{"Panic",Mode::Action,Action::Panic}};

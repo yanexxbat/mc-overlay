@@ -210,16 +210,17 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
     try {
         const auto root=Storage(); std::filesystem::create_directories(root);
         SetEnvironmentVariableW(L"MCOV_DATA_DIR",root.c_str());
+        const auto executableDir=std::filesystem::path(ExecutableDirectory());
+        SetEnvironmentVariableW(L"MCOV_CLIENT_DIR",executableDir.c_str());
         const auto jdkFile=root/L"launcher-jdk.txt";
         if(auto saved=LogTail(jdkFile); !saved.empty()) SetEnvironmentVariableW(L"MCOV_JDK_HOME",Wide(saved).c_str());
         log::Init("client",(root/L"mcov_client.log").wstring(),false);
 #ifdef MCOV_BUNDLED
-        // Bestehende lokale Binds/HUD beim ersten Start uebernehmen, nie ersetzen.
-        const auto executableDir=std::filesystem::path(ExecutableDirectory());
-        const auto savedSettings=root/L"client-settings.ini";
+        // Import existing preferences once; all future config writes stay portable.
+        const auto savedSettings=executableDir/L"client-settings.ini";
         std::error_code settingsError;
         if(!std::filesystem::exists(savedSettings,settingsError)) {
-            auto legacy=executableDir/L"client-settings.ini";
+            auto legacy=root/L"client-settings.ini";
             if(!std::filesystem::exists(legacy,settingsError)&&executableDir.filename()==L"client")
                 legacy=executableDir.parent_path()/L"bin"/L"client-settings.ini";
             if(std::filesystem::is_regular_file(legacy,settingsError)) {

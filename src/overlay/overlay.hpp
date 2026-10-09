@@ -41,6 +41,7 @@
 #include "hud_layout.hpp"
 #include "world_visuals.hpp"
 #include <filesystem>
+#include <vector>
 
 struct ID3D11Device;
 struct ID3D11DeviceContext;
@@ -50,6 +51,7 @@ struct ImDrawList;
 struct ImVec2;
 
 namespace mcov {
+namespace client_configs { struct Snapshot; }
 std::string BindName(keys::Bind bind);
 
 // The always-on HUD widgets, independent of the ImGui menu.
@@ -155,6 +157,12 @@ private:
     void SetHudEnabled(int module,bool enabled);
     void SavePreferences();
     void LoadPreferences();
+    void DrawConfigSettings();
+    void RefreshConfigs();
+    bool SaveConfig(const std::string& name);
+    bool LoadConfig(const std::string& name);
+    client_configs::Snapshot CaptureConfig() const;
+    void ApplyConfig(const client_configs::Snapshot& config);
 
     void DrawMenu();
     int ReadModules(control_panel::Page,std::span<control_panel::ModuleView>) const;
@@ -256,6 +264,10 @@ private:
     bool preferencesDirty_=false;
     std::uint64_t preferenceSaveAt_=0;
     std::string preferenceStatus_{};
+    std::vector<std::string> configNames_{};
+    char configName_[49]{};
+    std::string selectedConfig_{},configStatus_{};
+    bool configListReady_=false,configError_=false;
     int visualsSection_=0;
     int blocksSection_=0;
     int hudSection_=0;

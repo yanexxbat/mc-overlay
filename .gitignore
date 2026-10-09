@@ -6,6 +6,8 @@ out/
 *.log
 *.class
 imgui.ini
+configs/
+client-settings.ini
 CMakeSettings.json
 # Private GitHub backup: generated files and local credentials
 node_modules/
