@@ -56,7 +56,7 @@ public:
                 values_->erase(found);
             }
             if constexpr(!std::is_same_v<T,bool>)
-                if(!std::isfinite(static_cast<long double>(next))||next<low||next>high) valid=false;
+                if(!std::isfinite(static_cast<long double>(next))||next<static_cast<T>(low)||next>static_cast<T>(high)) valid=false;
             value=next;
             if(out_) *out_<<name<<' '<<value<<'\n';
         }
@@ -153,7 +153,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     Palette(a,"world.kills.colours",s.world.kills.colours); Palette(a,"world.crumbs.colours",s.world.crumbs.colours);
     Hat(a,"friendHat",s.friendHat); Hat(a,"hat.shape",s.hat.shape);
     FIELD(hat,enabled); FIELD(hat,firstPerson); FIELD(hat,auraColours); COLOR(hat,start); COLOR(hat,end);
-    FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKinds)-1); FIELD(blocks,radius,4,48);
+    FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKindCount)-1); FIELD(blocks,radius,4,48);
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
     FIELD(chunks,enabled); FIELD(chunks,blocks); FIELD(chunks,labels); FIELD(chunks,radius,4,48);
     FIELD(chunks,interval,200,3000); FIELD(chunks,minHints,1,32); FIELD(chunks,maxDraw,8,128); COLOR(chunks,color);
@@ -178,13 +178,13 @@ inline void Visit(Archive& a,Snapshot& s) {
         auto& b=s.binds[i]; const auto n="bind."+std::to_string(i);
         a.Value(n+".key",b.key,i<2?1:0,254); a.Value(n+".modifiers",b.modifiers,0,7); a.Value(n+".mode",b.mode,0,1);
         if(keys::System(static_cast<keys::Action>(i))&&b.mode!=keys::Mode::Toggle) a.valid=false;
-        if(keys::Conflict(s.binds,i)) a.valid=false;
     }
+    for(int i=0;i<keys::kCount;++i) if(keys::Conflict(s.binds,i)) a.valid=false;
     for(int i=0;i<rockstar::kCount;++i) {
         auto& c=s.extra.modules[i]; const auto n="module."+std::to_string(i);
         a.Value(n+".enabled",c.enabled); a.Value(n+".aura",c.auraColours); a.Value(n+".mode",c.mode,0,3);
-        a.Value(n+".range",c.range,1,256); a.Value(n+".size",c.size,.05,8);
-        a.Value(n+".lifetime",c.lifetime,.1,10); a.Value(n+".speed",c.speed,0,10);
+        a.Value(n+".range",c.range,0,256); a.Value(n+".size",c.size,.1,128);
+        a.Value(n+".lifetime",c.lifetime,.2,10); a.Value(n+".speed",c.speed,0,8);
         a.Value(n+".opacity",c.opacity,0,1); a.Value(n+".glow",c.glow,0,2);
         a.Color(n+".start",c.start); a.Color(n+".end",c.end);
     }
