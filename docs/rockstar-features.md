@@ -61,10 +61,12 @@ werden in der Zahl 29 nicht doppelt gezählt.
 ## Speicherung und Grenzen
 
 - Keybinds, alle 19 HUD-Platzierungen, Sichtbarkeit, neue Modulparameter und Wegpunkte
-  werden atomar in `%LOCALAPPDATA%/mcov/client-settings.ini` gespeichert. Alte
+  werden atomar in `client-settings.ini` neben der Client-EXE gespeichert. Alte
   Bind-/HUD-Indizes bleiben gültig; direkt gestartete Entwickler-Binaries verwenden
   ihre bisherige lokale Einstellungsdatei. Bestehende Features und UUID-Freunde
-  behalten ihr bisheriges Speicherverhalten.
+  behalten ihr bisheriges automatisches Speicherverhalten. Vollständige benannte
+  Profile unter **Settings > Configs** liegen in `configs/<Name>.ini` neben dem
+  Client und enthalten auch UUID-Freunde sowie die gespeicherten Modulzustände.
 - Seiten-Reset betrifft die Funktionen der jeweiligen Seite. Panic beendet auch
   vorher aktivierte Hold-Module: Loslassen der Taste aktiviert sie nicht erneut.
   Bewusstes Aktivieren eines Moduls setzt die Panic-Sperre zurück.
