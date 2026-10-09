@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-09T00:00:00Z",
+  "generatedAt": "2026-10-09T11:31:47Z",
   "title": "Design System: mcov Compact Controls",
   "extensions": {
     "colorMeta": {
@@ -387,7 +387,7 @@
     "typographyMeta": {
       "title": {
         "displayName": "Compact heading",
-        "purpose": "Client mcov/category, injector mcov/page and HUD headers at the shared 14px control size."
+        "purpose": "Client mcov/category, module widget and settings headings, injector mcov/page and HUD headers at the shared 14px control size."
       },
       "body": {
         "displayName": "Control body",
@@ -498,7 +498,7 @@
       "refersTo": "module-widget",
       "description": "Visual translation of native 66px module widgets with 8px rounding. Left-click/Space operates real toggles or actions; right-click/Menu/Shift+F10 opens independent settings without toggling. Settings-only widgets also open on left-click. Production uses 1–3 equal-width columns and binding tooltips.",
       "html": "<div class=\"ds-module-grid\" aria-label=\"Combat modules\"><button class=\"ds-module-widget\" aria-pressed=\"false\"><span class=\"ds-module-name\">Kill Aura</span><span class=\"ds-module-state\">Disabled</span><span class=\"ds-module-switch\" aria-hidden=\"true\"></span></button><button class=\"ds-module-widget ds-module-enabled\" aria-pressed=\"true\"><span class=\"ds-module-name\">Aim Assist</span><span class=\"ds-module-state\">Enabled</span><span class=\"ds-module-switch\" aria-hidden=\"true\"></span></button><button class=\"ds-module-widget\"><span class=\"ds-module-name\">Friends</span><span class=\"ds-module-state\">Open settings</span></button></div>",
-      "css": ".ds-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:348px;max-width:100%}.ds-module-widget{position:relative;height:66px;text-align:left;font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(255,255,255,.045);border:0;border-radius:8px;padding:12px}.ds-module-name{position:absolute;left:12px;right:12px;top:12px;font-weight:600;white-space:nowrap;overflow:hidden}.ds-module-state{position:absolute;left:12px;top:39px;color:#AEAEB8;white-space:nowrap}.ds-module-switch{position:absolute;right:12px;top:39px;width:26px;height:14px;border-radius:7px;background:rgba(255,255,255,.12)}.ds-module-switch:after{content:\"\";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:5px;background:#AEAEB8}.ds-module-widget:hover{background:rgba(255,255,255,.085)}.ds-module-enabled{background:rgba(239,139,112,.10)}.ds-module-enabled .ds-module-state{color:#EF8B70}.ds-module-enabled .ds-module-switch{background:rgba(239,139,112,.16)}.ds-module-enabled .ds-module-switch:after{left:14px;background:#EF8B70}.ds-module-enabled:hover{background:rgba(239,139,112,.16)}.ds-module-widget:active{background:rgba(239,139,112,.22)}.ds-module-widget:focus-visible{outline:1px solid #FFA388;outline-offset:-1px}"
+      "css": ".ds-module-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:348px;max-width:100%}.ds-module-widget{position:relative;height:66px;text-align:left;font:500 14px Inter,sans-serif;color:#ECECEF;background:rgba(255,255,255,.045);border:0;border-radius:8px;padding:12px}.ds-module-name{position:absolute;left:12px;right:12px;top:12px;font-weight:600;white-space:nowrap;overflow:hidden}.ds-module-state{position:absolute;left:12px;top:39px;color:#AEAEB8;white-space:nowrap}.ds-module-switch{position:absolute;right:12px;top:39px;width:26px;height:14px;border-radius:7px;background:rgba(255,255,255,.12)}.ds-module-switch:after{content:\"\";position:absolute;top:3px;left:3px;width:8px;height:8px;border-radius:4px;background:#AEAEB8}.ds-module-widget:hover{background:rgba(255,255,255,.085)}.ds-module-enabled{background:rgba(239,139,112,.10)}.ds-module-enabled .ds-module-state{color:#EF8B70}.ds-module-enabled .ds-module-switch{background:#EF8B70}.ds-module-enabled .ds-module-switch:after{left:15px;background:#25252C}.ds-module-enabled:hover{background:rgba(239,139,112,.16)}.ds-module-widget:active{background:rgba(239,139,112,.22)}.ds-module-widget:focus-visible{outline:1px solid #FFA388;outline-offset:-1px}"
     },
     {
       "name": "Checkbox row",
