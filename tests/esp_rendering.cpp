@@ -7,7 +7,9 @@
 #include <windows.h>
 #include <d3d11.h>
 #include <wrl/client.h>
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -198,7 +200,7 @@ void LoadChecks() {
     }
     VisualSettings config; config.tracers=config.filledBox=true; config.targetInfo=false;
     config.nameTagEquipment=false;
-    constexpr ImVec2 viewport{1280,720};
+    const ImVec2 viewport{1280,720};
     const CameraProjection projection(scene,viewport.x,viewport.y);
     for(int frame=0;frame<3;++frame) {
         auto& draw=Frame(viewport); EspRenderer::Draw(draw,scene,projection,config,viewport); ImGui::Render();
