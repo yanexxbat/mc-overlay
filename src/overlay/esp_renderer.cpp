@@ -1,7 +1,8 @@
 #include "esp_renderer.hpp"
+#include "visual_draw.hpp"
+#include "visual_geometry.hpp"
 #include "../common/flat_style.hpp"
 #include "../common/equipment_icons.hpp"
-#include "imgui_internal.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -16,13 +17,8 @@ constexpr ImU32 kMuted = IM_COL32(168, 172, 181, 255);
 constexpr ImU32 kLineShadow = IM_COL32(8, 8, 12, 100);
 constexpr ImU32 kTextShadow = IM_COL32(0, 0, 0, 190);
 
-float Safe(float value, float fallback, float low, float high) {
-    return std::clamp(std::isfinite(value) ? value : fallback, low, high);
-}
-ImU32 Color(const float rgba[4], float opacity = 1.f) {
-    return ImGui::ColorConvertFloat4ToU32({Safe(rgba[0],1,0,1), Safe(rgba[1],1,0,1),
-        Safe(rgba[2],1,0,1), Safe(rgba[3],1,0,1)*opacity});
-}
+using visual::Safe;
+using visual::Color;
 bool Visible(const EntitySnapshot& e, const VisualSettings& config) {
     if ((e.flags & kEntityIsSelf) || !std::isfinite(e.distance) || e.distance < 0 ||
         e.distance > Safe(config.maxDistance,128,1,4096)) return false;
@@ -51,6 +47,11 @@ void Text(ImDrawList& draw, ImFont& font, float size, ImVec2 at, ImU32 color, co
     draw.AddText(&font,size,{at.x+1,at.y+1},kTextShadow,text);
     draw.AddText(&font,size,at,color,text);
 }
+void Label(ImDrawList& draw, ImFont& font, float size, ImVec2 at, ImU32 color,
+           const char* text, const VisualSettings& config) {
+    if (config.textOutline) visual::RenderTextWithOutline(draw,font,size,at,color,text);
+    else Text(draw,font,size,at,color,text);
+}
 // Fester Stack-Puffer, begrenzte Snapshot-Strings und UTF-8-sichere Kürzung.
 using NameBuffer = std::array<char,kNameLen+4>;
 NameBuffer Name(ImFont& font, float size, const EntitySnapshot& e, float maxWidth,bool protect=false) {
@@ -71,29 +72,65 @@ NameBuffer Name(ImFont& font, float size, const EntitySnapshot& e, float maxWidt
     return result;
 }
 void CenteredText(ImDrawList& draw, ImFont& font, float size, float center, float y,
-                  ImU32 color, const char* text, ImVec2 origin, ImVec2 viewport) {
+                  ImU32 color, const char* text, ImVec2 origin, ImVec2 viewport,
+                  const VisualSettings& config) {
     const float width=TextWidth(font,size,text);
     const float x=std::clamp(center-width*.5f,origin.x+2,std::max(origin.x+2,origin.x+viewport.x-width-2));
     const float top=std::clamp(y,origin.y+2,std::max(origin.y+2,origin.y+viewport.y-size-2));
-    Text(draw,font,size,{x,top},color,text);
+    Label(draw,font,size,{x,top},color,text,config);
 }
-void Box(ImDrawList& draw, ScreenRect rect, ImU32 color, const VisualSettings& config) {
+void FillCuboid(ImDrawList& draw, const visual::Cuboid& cube, const WorldSnapshot& snapshot,
+                const CameraProjection& projection, ScreenRect rect, ImU32 top, ImU32 bottom,
+                ImVec2 origin, ImVec2 viewport) {
+    const WorldPoint camera{snapshot.camX,snapshot.camY,snapshot.camZ};
+    for (int face=0;face<6;++face) {
+        if (!visual::FacingCamera(cube,face,camera)) continue;
+        visual::ProjectedFace polygon;
+        if (!visual::ProjectFace(projection,cube,face,viewport.x,viewport.y,polygon)) continue;
+        ImVec2 points[12];
+        for (int i=0;i<polygon.count;++i)
+            points[i]={origin.x+polygon.points[i].x,origin.y+polygon.points[i].y};
+        visual::DrawGradientPolygon(draw,points,polygon.count,{rect.left,rect.top},
+                                    {rect.left,rect.bottom},top,bottom);
+    }
+}
+void WireBox(ImDrawList& draw, const visual::Cuboid& cube, const CameraProjection& projection,
+             ImU32 color, const VisualSettings& config, ImVec2 origin) {
+    const float thickness=Safe(config.boxThickness,1.6f,.5f,4);
+    for (const auto& edge:visual::Cuboid::edges) {
+        ScreenPoint a,b;
+        if (!projection.Segment(cube.points[edge[0]],cube.points[edge[1]],a,b)) continue;
+        const ImVec2 start{origin.x+a.x,origin.y+a.y},end{origin.x+b.x,origin.y+b.y};
+        draw.AddLine(start,end,visual::Alpha(kLineShadow,float((color>>IM_COL32_A_SHIFT)&255)/255.f),thickness+1.5f);
+        visual::DrawGradientLine(draw,start,end,visual::Mix(color,IM_COL32_WHITE,.12f),color,thickness);
+    }
+}
+void Box(ImDrawList& draw, ScreenRect rect, const visual::Cuboid& cube,
+         const WorldSnapshot& snapshot, const CameraProjection& projection,
+         ImU32 color, const VisualSettings& config, bool selected, ImVec2 origin, ImVec2 viewport) {
     const float rounding=std::min({Safe(config.boxRounding,7,0,16),
                                   (rect.right-rect.left)*.25f,(rect.bottom-rect.top)*.1f});
     const float thickness=Safe(config.boxThickness,1.6f,.5f,4);
+    const bool wire=config.boxStyle==EspBoxStyle::Wire3D;
+    const bool corners=config.boxStyle!=EspBoxStyle::Full2D;
+    const float fraction=Safe(config.cornerFraction,.28f,.08f,.45f);
     const ImVec2 lo{rect.left,rect.top},hi{rect.right,rect.bottom};
     if (config.filledBox) {
-        const auto alpha=unsigned(float((color>>IM_COL32_A_SHIFT)&255)*.055f);
-        draw.AddRectFilled(lo,hi,(color&~IM_COL32_A_MASK)|(alpha<<IM_COL32_A_SHIFT),rounding);
+        const float opacity=Safe(config.fillAlpha,.12f,0,1);
+        const ImU32 top=visual::Alpha(color,opacity);
+        const ImU32 bottom=visual::Alpha(color,config.fillGradient ?
+            Safe(config.fillBottomAlpha,.025f,0,1) : opacity);
+        if (wire) FillCuboid(draw,cube,snapshot,projection,rect,top,bottom,origin,viewport);
+        else visual::DrawGradientRect(draw,lo,hi,top,bottom,rounding);
     }
-    // Nur eine dezente Lesekante; keine breite schwarze Doppelbox.
-    draw.AddRect(lo,hi,kLineShadow,rounding,0,thickness+1.f);
-    draw.AddRect(lo,hi,color,rounding,0,thickness);
+    if (selected && config.targetGlow && !wire)
+        visual::DrawBoxGlow(draw,lo,hi,Color(config.targetColor),thickness,rounding,
+                            corners,fraction,config.glowRadius,config.glowOpacity);
+    if (wire) WireBox(draw,cube,projection,color,config,origin);
+    else visual::DrawBoxOutline(draw,lo,hi,color,thickness,rounding,corners,fraction);
 }
-void Skeleton(ImDrawList& draw, const EntitySnapshot& e, const CameraProjection& projection,
+void Skeleton(ImDrawList& draw, const HumanoidRig& rig, const CameraProjection& projection,
               ImU32 color, float thickness, ImVec2 origin) {
-    if (e.rigKind==kRigNone) return;
-    const auto rig=BuildHumanoidRig(e);
     for (const auto& edge:HumanoidRig::edges) {
         // Die geraden Schulter-/Hüftquerlinien reichen: keine zusätzlichen
         // Halsdiagonalen oder doppelt überzeichneten Hüftverbindungen.
@@ -105,26 +142,85 @@ void Skeleton(ImDrawList& draw, const EntitySnapshot& e, const CameraProjection&
         draw.AddLine(start,end,color,thickness);
     }
 }
-void HealthBar(ImDrawList& draw, ImFont& font, float fontSize, const EntitySnapshot& e,
+ImU32 HealthColor(float fraction,const VisualSettings& config) {
+    if (!config.healthGradient) return Color(config.healthColor);
+    const float t=Safe(fraction,0,0,1);
+    return t<.5f ? visual::Mix(Color(config.healthLow),Color(config.healthMiddle),t*2) :
+        visual::Mix(Color(config.healthMiddle),Color(config.healthColor),(t-.5f)*2);
+}
+void Meter(ImDrawList& draw, ImVec2 lo, ImVec2 hi, float fraction, bool horizontal,
+           ImU32 firstColor, ImU32 lastColor) {
+    draw.AddRectFilled({lo.x-1,lo.y-1},{hi.x+1,hi.y+1},IM_COL32(9,11,18,200),2.f);
+    draw.AddRectFilled(lo,hi,IM_COL32(31,35,44,190),1.f);
+    if (fraction<=0) return;
+    const ImVec2 fillLo=horizontal ? lo : ImVec2{lo.x,hi.y-(hi.y-lo.y)*fraction};
+    const ImVec2 fillHi=horizontal ? ImVec2{lo.x+(hi.x-lo.x)*fraction,hi.y} : hi;
+    const int first=draw.VtxBuffer.Size;
+    draw.AddRectFilled(fillLo,fillHi,IM_COL32_WHITE,1.f);
+    visual::ShadeGradient(draw,first,horizontal ? lo : ImVec2{lo.x,hi.y},
+                          horizontal ? hi : lo,firstColor,lastColor);
+}
+float HealthBar(ImDrawList& draw, ImFont& font, float fontSize, const EntitySnapshot& e,
                ScreenRect rect, const VisualSettings& config, ImVec2 origin, ImVec2 viewport) {
-    const float fraction=std::clamp(e.health/e.maxHealth,0.f,1.f);
+    const bool horizontal=config.barPlacement==EspBarPlacement::Horizontal;
+    const float thickness=Safe(config.barThickness,3,2,6);
     const float height=rect.bottom-rect.top;
-    const ImVec2 lo{rect.left-9.f,rect.top},hi{rect.left-6.f,rect.bottom};
-    draw.AddRectFilled({lo.x-1,lo.y-1},{hi.x+1,hi.y+1},IM_COL32(12,12,17,150),2.f);
-    if (fraction>0) {
-        const ImVec2 fill{lo.x,hi.y-height*fraction};
-        const int first=draw.VtxBuffer.Size;
-        const ImU32 accent=Color(config.healthColor);
-        const auto alpha=accent&IM_COL32_A_MASK;
-        draw.AddRectFilled(fill,hi,(kText&~IM_COL32_A_MASK)|alpha,1.5f);
-        // Verlauf auf der abgerundeten Geometrie; AA-Alpha an den Rändern bleibt erhalten.
-        ImGui::ShadeVertsLinearColorGradientKeepAlpha(&draw,first,draw.VtxBuffer.Size,
-            {lo.x,rect.top},{lo.x,rect.bottom},kText,accent);
+    const float width=rect.right-rect.left;
+    const bool health=HasHealth(e);
+    const bool armor=config.armorBars && (e.flags&kEntityIsLiving) && e.details.armorValue>0;
+    int rows=0;
+    if (health) {
+        const float fraction=std::clamp(e.health/e.maxHealth,0.f,1.f);
+        const ImVec2 lo=horizontal ? ImVec2{rect.left,rect.bottom+5} : ImVec2{rect.left-6-thickness,rect.top};
+        const ImVec2 hi=horizontal ? ImVec2{rect.right,lo.y+thickness} : ImVec2{rect.left-6,rect.bottom};
+        const ImU32 current=HealthColor(fraction,config);
+        // Use a short range around current HP, preserving HP-dependent color
+        // even on a partially filled bar instead of retaining green at low HP.
+        Meter(draw,lo,hi,fraction,horizontal,HealthColor(std::max(0.f,fraction-.22f),config),current);
+        ++rows;
+        if (!config.nameTags && !horizontal && height>=48 && width>=30) {
+            char value[24]; std::snprintf(value,sizeof(value),"%.0f",std::max(0.f,e.health));
+            CenteredText(draw,font,fontSize,(lo.x+hi.x)*.5f,rect.top-fontSize-4,current,value,origin,viewport,config);
+        }
     }
-    if (!config.nameTags && height>=48 && rect.right-rect.left>=30) {
-        char value[24]; std::snprintf(value,sizeof(value),"%.0f",std::max(0.f,e.health));
-        CenteredText(draw,font,fontSize,(lo.x+hi.x)*.5f,rect.top-fontSize-4,kText,value,origin,viewport);
+    if (armor) {
+        const float fraction=float(std::clamp(e.details.armorValue,0,20))/20.f;
+        const ImVec2 lo=horizontal ? ImVec2{rect.left,rect.bottom+5+rows*(thickness+3)} : ImVec2{rect.right+6,rect.top};
+        const ImVec2 hi=horizontal ? ImVec2{rect.right,lo.y+thickness} : ImVec2{lo.x+thickness,rect.bottom};
+        const ImU32 accent=Color(config.armorColor);
+        Meter(draw,lo,hi,fraction,horizontal,visual::Mix(accent,IM_COL32(54,87,164,255),.45f),accent);
+        ++rows;
     }
+    return horizontal && rows ? 5+rows*(thickness+3) : 0.f;
+}
+void Highlight(ImDrawList& draw, const EntitySnapshot& entity, const HumanoidRig* rig,
+               const WorldSnapshot& snapshot, const CameraProjection& projection, ScreenRect rect,
+               const VisualSettings& config, ImVec2 origin, ImVec2 viewport) {
+    if (config.targetHighlight==EspHighlight::Off) return;
+    const ImU32 top=Color(config.targetColor,Safe(config.highlightAlpha,.18f,0,.7f));
+    const ImU32 bottom=visual::Alpha(top,.35f);
+    if (config.targetHighlight==EspHighlight::Humanoid && rig) {
+        const auto model=visual::BuildHighlight(entity,*rig);
+        for (int i=0;i<model.count;++i)
+            FillCuboid(draw,model.parts[i],snapshot,projection,rect,top,bottom,origin,viewport);
+    } else FillCuboid(draw,visual::BoundsCuboid(EntityBounds(entity)),snapshot,projection,rect,top,bottom,origin,viewport);
+}
+void Tracer(ImDrawList& draw, const EntitySnapshot& entity, const CameraProjection& projection,
+            const VisualSettings& config, ImVec2 origin, ImVec2 viewport) {
+    // Anchor to the real feet, never the viewport-clamped bounding rectangle.
+    ScreenPoint foot;
+    if (!projection.Point({entity.x,entity.y,entity.z},foot)) return;
+    if (foot.x<0 || foot.y<0 || foot.x>viewport.x || foot.y>viewport.y) return;
+    ImVec2 start{.5f,1.f};
+    switch (config.tracerOrigin) {
+        case EspTracerOrigin::Center: start={.5f,.5f}; break;
+        case EspTracerOrigin::Top: start={.5f,0}; break;
+        case EspTracerOrigin::Custom: start={Safe(config.customTracerOrigin.x,.5f,0,1),Safe(config.customTracerOrigin.y,1,0,1)}; break;
+        default: break;
+    }
+    visual::DrawGradientLine(draw,{origin.x+start.x*viewport.x,origin.y+start.y*viewport.y},
+        {origin.x+foot.x,origin.y+foot.y},Color(config.tracerColor,Safe(config.tracerStartAlpha,.08f,0,1)),
+        Color(config.tracerEndColor),Safe(config.tracerThickness,1.25f,.5f,4));
 }
 void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
                float center,ImTextureID texture,ImVec2 origin,ImVec2 viewport) {
