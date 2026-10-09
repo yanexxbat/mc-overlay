@@ -949,6 +949,8 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     expected.waypoints[0].used=true; expected.waypoints[0].p={1,64,-2};
     std::snprintf(expected.waypoints[0].label.data(),expected.waypoints[0].label.size(),"Home \"base\"");
     Check::ConfigSnapshot(overlay,expected);
+    std::string preflight,invalidField;
+    if(!Encode(Check::ConfigSnapshot(overlay),preflight,&invalidField)) throw std::runtime_error("Profile schema rejected "+invalidField);
     // Exercise the native Save and Load buttons through ImGui activation.
     Draw(overlay,Page::Settings,0,{1280,800});
     auto* content=Child("/content_");

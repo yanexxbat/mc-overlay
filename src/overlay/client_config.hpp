@@ -37,6 +37,7 @@ class Archive {
     std::map<std::string,std::string>* values_{};
 public:
     bool valid=true;
+    std::string invalidField;
     explicit Archive(std::ostream& out):out_(&out) {}
     explicit Archive(std::map<std::string,std::string>& values):values_(&values) {}
     template<class T,class... Bounds> void Field(const std::string& name,T& value,const std::tuple<Bounds...>& bounds) {
@@ -59,8 +60,12 @@ public:
                 row>>std::ws; if(!row.eof()) valid=false;
                 values_->erase(found);
             }
-            if constexpr(!std::is_same_v<T,bool>)
-                if(!std::isfinite(static_cast<long double>(next))||next<static_cast<T>(low)||next>static_cast<T>(high)) valid=false;
+            if constexpr(std::is_floating_point_v<T>) {
+                if(!std::isfinite(next)||next<static_cast<T>(low)||next>static_cast<T>(high)) valid=false;
+            } else if constexpr(!std::is_same_v<T,bool>) {
+                if(static_cast<long double>(next)<low||static_cast<long double>(next)>high) valid=false;
+            }
+            if(!valid&&invalidField.empty()) invalidField=name;
             value=next;
             if(out_) *out_<<name<<' '<<value<<'\n';
         }
@@ -209,11 +214,11 @@ inline void Visit(Archive& a,Snapshot& s) {
 #undef FIELD
 }
 
-inline bool Encode(Snapshot s,std::string& text) {
+inline bool Encode(Snapshot s,std::string& text,std::string* invalidField=nullptr) {
     std::ostringstream out; out.imbue(std::locale::classic());
     out<<"mcov-config 1\n"<<std::setprecision(std::numeric_limits<double>::max_digits10);
     Archive archive(out); Visit(archive,s);
-    if(!archive.valid||!out) return false;
+    if(!archive.valid||!out) { if(invalidField) *invalidField=archive.invalidField; return false; }
     text=out.str(); return true;
 }
 inline bool Decode(const std::string& text,Snapshot& snapshot) {
