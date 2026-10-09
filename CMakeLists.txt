@@ -518,7 +518,7 @@ if(MCOV_BUILD_ESP_CHECKS)
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/esp_rendering.cpp src/overlay/esp_renderer.cpp src/overlay/visual_draw.cpp
         src/common/flat_style.cpp src/common/log.cpp)
-    target_include_directories(mcov_esp_render_check PRIVATE src)
+    target_include_directories(mcov_esp_render_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_esp_render_check PRIVATE mcov_settings imgui)
     add_test(NAME esp_rendering COMMAND mcov_esp_render_check "${CMAKE_BINARY_DIR}/visual-preview/esp.bmp")
     set_tests_properties(esp_rendering PROPERTIES TIMEOUT 30)
