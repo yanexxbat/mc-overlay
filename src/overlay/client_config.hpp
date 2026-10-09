@@ -5,6 +5,7 @@
 #include <sstream>
 #include <iomanip>
 #include <type_traits>
+#include <tuple>
 
 namespace mcov::client_configs {
 // User-facing settings only: no process handles, renderer history or game data.
@@ -38,6 +39,9 @@ public:
     bool valid=true;
     explicit Archive(std::ostream& out):out_(&out) {}
     explicit Archive(std::map<std::string,std::string>& values):values_(&values) {}
+    template<class T,class... Bounds> void Field(const std::string& name,T& value,const std::tuple<Bounds...>& bounds) {
+        std::apply([&](const auto... limits) { Value(name,value,limits...); },bounds);
+    }
     template<class T> void Value(const std::string& name,T& value,long double low=0,
                                 long double high=std::numeric_limits<T>::max()) {
         if constexpr(std::is_enum_v<T>) {
@@ -91,7 +95,7 @@ inline void Hat(Archive& a,const std::string& name,FriendHatConfig& c) {
 }
 inline void Visit(Archive& a,Snapshot& s) {
     // Stable field names keep profiles readable and independent of struct layout.
-#define FIELD(object,field,...) a.Value(#object "." #field,s.object.field __VA_OPT__(,) __VA_ARGS__)
+#define FIELD(object,field,...) a.Field(#object "." #field,s.object.field,std::tuple{__VA_ARGS__})
     FIELD(overlay,occludeWorldEffects); FIELD(overlay,fovTrim,-20,20);
     FIELD(overlay,clickThroughWhenIdle); FIELD(overlay,hideWhenUnfocused);
     FIELD(overlay,showWatermark); FIELD(overlay,vsync); FIELD(overlay,excludeFromCapture);
@@ -159,7 +163,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(chunks,interval,200,3000); FIELD(chunks,minHints,1,32); FIELD(chunks,maxDraw,8,128); COLOR(chunks,color);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
-#define MACRO(field,...) a.Value(n+#field,macro->field __VA_OPT__(,) __VA_ARGS__)
+#define MACRO(field,...) a.Field(n+#field,macro->field,std::tuple{__VA_ARGS__})
         MACRO(enabled); MACRO(restoreSlot); MACRO(intervalMs,100,500); MACRO(confirmationMs,100,2000);
         MACRO(separateDelays); MACRO(requireTotem); MACRO(strictConfirmation); MACRO(chargeWithOffhandFuel);
         MACRO(requireCrosshairHit); MACRO(placeMs,50,1000); MACRO(breakMs,50,1000); MACRO(chargeMs,50,1000);
