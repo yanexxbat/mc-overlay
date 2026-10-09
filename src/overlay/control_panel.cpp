@@ -270,9 +270,9 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                 if(ImGui::SmallButton("X##details_close")) state.settingsOpen=false;
                 settingsDraw.AddLine({detailPos.x+16,detailPos.y+42},{detailPos.x+detailSize.x-16,detailPos.y+42},ImGui::GetColorU32(ImGuiCol_Separator));
                 const bool changed=state.settingsPage!=state.renderedSettingsPage||state.settingsSection!=state.renderedSettingsSection;
-                ImGui::SetCursorScreenPos({detailPos.x+16,detailPos.y+52});
+                ImGui::SetCursorScreenPos({detailPos.x+24,detailPos.y+52});
                 if(changed) ImGui::SetNextWindowScroll({-1,0});
-                if(ImGui::BeginChild("content",{std::max(1.f,detailSize.x-32),std::max(1.f,detailSize.y-68)},ImGuiChildFlags_None,ImGuiWindowFlags_NoBackground)) {
+                if(ImGui::BeginChild("content",{std::max(1.f,detailSize.x-48),std::max(1.f,detailSize.y-68)},ImGuiChildFlags_None,ImGuiWindowFlags_NoBackground)) {
                     SectionScope section(state.settingsSection); content(owner,state.settingsPage);
                 }
                 ImGui::EndChild();
