@@ -20,13 +20,14 @@ camera/entity projection stability.
 
 ## Confirmed constraints
 
-- The latest client direction follows the user-supplied
-  `design/reference-translucent-menu.png`: compact translucent anthracite,
-  narrow left categories, searchable module tabs and muted coral controls.
-  The 76 real sections render inside the main window. Tabs select settings;
-  the header and available Quick toggles operate real modules and actions.
-  Preserve actual controls, keybinds and HUD behavior. The spacious cyan example,
-  large module tile grid and independent module settings window are superseded.
+- The latest client layout follows the user-supplied Paint sketch,
+  `design/reference-module-widgets.png`: narrow left categories and searchable
+  module widgets, with right-click opening settings in an independent window.
+  All 76 real sections remain reachable. Left-click or Space operates the real
+  toggle/action; settings-only widgets open their controls. Menu / Shift+F10
+  opens settings without toggling. The approved compact translucent anthracite,
+  muted coral, embedded Inter and rounded fills remain the visual identity.
+  This replaces the module tabs, inline settings and Quick toggles.
 - The injector uses the same approved compact coral design as the client:
   scoped `CompactStyle`, embedded Inter at 14 pixels, an 88%-opaque anthracite
   root and a narrow Start/Diagnose sidebar. It performs Minecraft selection,
@@ -45,7 +46,7 @@ camera/entity projection stability.
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Support keyboard/mouse bindings, modifier chords, Toggle/Hold operation and
   movable/scalable HUD elements. All existing sections remain reachable through
-  category module tabs and their in-window controls.
+  category module widgets and their independent settings controls.
 - Preserve the clean rounded entity ESP, configurable Target Aura and Target
   Marker, soft particles/trails and the glowing friend/self hats.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
@@ -89,8 +90,16 @@ checks cover selection, start, duplicate-start prevention, both sidebar tabs,
 fixed footer and title controls. Hidden native HWND/swapchain checks cover alpha,
 control ink, hidden initialization, resize and rounded clipping.
 
-Current images under `.impeccable/review/compact-client/` and
-`.impeccable/review/compact-injector/` use synthetic fixtures. Seven HUD images
+Current client images under `.impeccable/review/module-widgets/` use native
+ImGui/D3D11 WARP with synthetic fixtures at 1280 × 800, 1920 × 1080 and 480 × 360.
+The independent finish review opened all 11 images and returned **ship** with no
+material findings. Native checks cover real right-clicks for all 76 sections,
+actual toggle stores, Space / Shift+F10, independent drag/close, compact close
+returning to the grid, search recovery, settings controls, key capture,
+persistence and style/font ownership. Production build, native check and
+`portable_client` passed; `mcov.exe` and the share ZIP were updated.
+Earlier `.impeccable/review/compact-client/` tab images are historical.
+Current `.impeccable/review/compact-injector/` images use synthetic fixtures. Seven HUD images
 under `.impeccable/review/compact-hud/` likewise use the native ImGui/D3D11 WARP
 renderer with synthetic fixtures; `hud-catalog.png` is a test gallery of all
 19 elements, not a production layout. HUD input/layout, style/font and clipping

@@ -25,6 +25,8 @@ colors:
   surface-navigation-selected: "rgba(255,255,255,0.065)"
   surface-tab: "rgba(255,255,255,0.035)"
   surface-tab-selected: "rgba(239,139,112,0.16)"
+  surface-widget-enabled: "rgba(239,139,112,0.10)"
+  surface-widget-active: "rgba(239,139,112,0.22)"
   surface-value: "rgba(37,37,44,0.72)"
   surface-instance-list: "rgba(255,255,255,0.025)"
   border: "rgba(255,255,255,0.08)"
@@ -94,23 +96,42 @@ components:
     backgroundColor: "{colors.surface-navigation-selected}"
     textColor: "{colors.navigation-selected-text}"
     rounded: "{rounded.control}"
-  module-tab:
-    backgroundColor: "{colors.surface-tab}"
+  module-widget:
+    backgroundColor: "{colors.surface-control}"
     textColor: "{colors.text}"
-    typography: "{typography.body}"
-    rounded: "{rounded.tab}"
-  module-tab-selected:
+    typography: "{typography.title}"
+    rounded: "{rounded.child}"
+    padding: "12px"
+    height: "66px"
+  module-widget-hover:
+    backgroundColor: "{colors.surface-control-hover}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.child}"
+  module-widget-enabled:
+    backgroundColor: "{colors.surface-widget-enabled}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.child}"
+  module-widget-enabled-hover:
     backgroundColor: "{colors.surface-tab-selected}"
     textColor: "{colors.text}"
-    rounded: "{rounded.tab}"
+    rounded: "{rounded.child}"
+  module-widget-active:
+    backgroundColor: "{colors.surface-widget-active}"
+    textColor: "{colors.text}"
+    rounded: "{rounded.child}"
   content-panel:
     backgroundColor: "{colors.surface-child}"
     rounded: "{rounded.child}"
   client-root:
     backgroundColor: "{colors.surface-window}"
     rounded: "{rounded.window}"
-    width: "1040px"
+    width: "740px"
     height: "520px"
+  settings-root:
+    backgroundColor: "{colors.surface-window}"
+    rounded: "{rounded.window}"
+    width: "480px"
+    height: "580px"
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primary-ink}"
@@ -152,12 +173,13 @@ components:
 
 **Creative North Star: "Compact Translucent Controls"**
 
-The client follows the user's `design/reference-translucent-menu.png`: a wide,
-compact anthracite menu with a narrow sidebar, module tabs and a muted coral
-accent. The user approved this design and requested the same system on the
-injector and snapshot HUD. This replaces the spacious cyan example, the client's glass tile grid
-and the launcher's lavender Liquid Glass presentation. The reference supplies
-visual direction; mcov retains its real module names, settings and actions.
+The approved visual system is compact anthracite with a narrow sidebar and a
+muted coral accent, established by `design/reference-translucent-menu.png` and
+shared with the injector and snapshot HUD. The client's current layout follows
+the user's Paint sketch, `design/reference-module-widgets.png`: categories contain
+module widgets, and right-click opens an independent settings window. This
+replaces the client's module tabs, inline settings and Quick toggles. mcov
+retains its real module names, settings and actions.
 
 Client controls, injector and HUD editor use direct ImGui alpha compositing,
 scoped `CompactStyle`, embedded Inter and modest headings. Snapshot HUDs share
@@ -168,7 +190,7 @@ keep these operations consistent. World effects retain their styles.
 **Key Characteristics:**
 
 - Shared compact anthracite roots with restrained coral interaction states.
-- Seven categories, searchable module tabs and settings within one window.
+- Seven categories, searchable module widgets and independently movable settings.
 - Native keyboard input, visible slider values and real module state.
 - Local style/font ownership and direct transparency without backdrop capture.
 - Start/Diagnose navigation with a fixed launcher action and close footer.
@@ -183,7 +205,7 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
 ### Primary
 
 - **Muted coral** (`primary`): checkmarks, slider fill, active category icons and
-  selected tab tint, plus the launcher's main action. **Warm coral**
+  enabled widget tint, plus the launcher's main action. **Warm coral**
   (`primary-active`) marks slider activity, keyboard navigation, text links and
   primary-button hover, plus HUD selection and active states. **Pressed coral** (`primary-pressed`) marks that button's
   pressed state.
@@ -194,8 +216,10 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
   and supporting text. Navigation has its own quiet and selected text tones.
 - **Anthracite** (`surface-window`): client/injector roots and HUD panels. The sidebar adds its darker
   overlay; children remain transparent. Popups use a nearly opaque dark fill.
-- **Translucent white fills**: control, navigation and tab tokens distinguish
-  rest and hover. Coral tint marks active controls and selected module tabs.
+- **Translucent white fills**: control and navigation tokens distinguish rest
+  and hover. Module widgets reuse control fills; coral tint distinguishes enabled,
+  enabled-hover and pressed widget states. Retained tab tokens serve native tabs
+  used by other callers.
 - **Dark value lozenge** (`surface-value`): keeps numeric slider text legible
   across the filled and unfilled portions.
 - **Near-black primary ink** (`primary-ink`): enabled coral action text. Disabled
@@ -220,7 +244,7 @@ atlas entries remain intact.
 ### Hierarchy
 
 - **Title:** mcov, client category and launcher page headers.
-- **Body:** controls, module tabs, category names and supporting text.
+- **Body:** controls, widget state labels, category names and supporting text.
 - **Label:** section headings.
 
 **The Local Type Rule.** Both surfaces use `CompactStyle` to push their menu font
@@ -229,24 +253,27 @@ scope; snapshot HUD rendering pushes and restores the shared `MenuFont` locally.
 
 ## Layout
 
-The client targets 1040 × 520 UI pixels, clamps to the viewport minus 24 pixels
-and stays within it when dragged. The sidebar is 150 pixels wide, reducing to
-112 pixels below 620 pixels root width. It holds Search, the seven categories
-and connection status. Category changes clear search; each category retains its
-selected section.
+The client targets 740 × 520 UI pixels; the independent settings window targets
+480 × 580. Both clamp to the viewport minus 24 pixels and stay within it when
+dragged. Initial main-window placement reserves up to 496 pixels to the right
+for settings. The sidebar is 150 pixels wide, reducing to 112 pixels below
+620 pixels root width. It holds Search, seven categories and connection status.
+Category changes clear search and close details.
 
-All 76 existing sections are reached through module tabs above the scrolling
-content. Tabs scroll horizontally with native ImGui overflow arrows. Search
-matches category module names without case sensitivity; zero results show
-**Clear search**. Selecting a tab chooses settings without toggling the module.
-Category or module changes reset content scroll.
+All 76 existing sections are reached through a scrolling `module_grid` child.
+Its equal-width table uses one to three columns: floor of available width divided
+by 174 pixels, clamped to that range, with 5 × 5 pixel cell padding. Search matches
+category module names without case sensitivity; zero results show **Clear search**.
+Widgets are 66 pixels high. Their title starts at a 12-pixel inset; the second
+line starts 39 pixels from the top. Toggle indicators sit at the bottom right.
 
-There are two children: navigation and content. When content width is at least
-660 pixels and the category has more than two toggle modules, a 60/40 table puts
-details left and **Quick toggles** for other modules right. Otherwise content
-uses one column. The current module's real **Enabled** checkbox or **Run action**
-remains in the header. Center, category Reset and Close remain in the footer.
-There is no separate module settings window.
+Settings have their own draggable header, X close control and scrolling content
+inset 24 pixels horizontally and 52 pixels from the top. Selecting another module
+resets settings scroll; reopening the same module preserves it. On desktop both
+windows can remain visible side by side. Below 1260 pixels viewport width, open
+settings replace the visible grid; X returns to the grid. Center resets both
+placements, Reset operates on the current category, and Close closes the menu
+and details.
 
 The launcher opens at 640 × 640 with 12-pixel exterior insets and a 58-pixel native
 title strip. Its Start/Diagnose sidebar is 142 pixels wide, reducing to 112 pixels
@@ -291,7 +318,7 @@ presentation adds no render-thread JNI and does not replace world-depth handling
 ## Shapes
 
 Both surfaces use the shared rounded scale: modest root rounding, smaller
-controls and tabs, zero window, child and frame borders, and a one-pixel popup
+controls, 8-pixel module widgets, zero window, child and frame borders, and a one-pixel popup
 border. Scrollbars are six pixels wide. The launcher's native window region uses
 a 24-pixel corner diameter to match the 12-pixel panel radius and clips the outer
 transparent margin. Viewport resize updates that region.
@@ -304,7 +331,9 @@ selection adds a coral outline. A disabled badge appears on the selected element
 
 Small native buttons use neutral fills, coral activity and a warm keyboard cursor.
 Selected categories use a quiet white fill, warm text and coral line icons.
-Module tabs use the coral selected tint and native tab overflow behavior.
+Module widgets use shared neutral control fills at rest and hover. Enabled
+widgets use a quiet coral fill, the retained selected-tab tint on hover and a
+stronger coral fill while pressed. The native button supplies keyboard focus.
 
 ### Inputs and sliders
 
@@ -322,9 +351,14 @@ when the layout changes.
 
 ### Containers and module state
 
-Details render inside the main scrolling content. **Quick toggles** operate real
-modules in the current category. Settings-only sections expose their controls
-without invented enabled state; action sections retain their real action.
+Left-click or Space on a widget toggles the real module or runs its action.
+Settings-only widgets open their controls. Right-click, Menu or Shift+F10 opens
+the independent settings window without toggling. Widget status reads **Enabled**,
+**Disabled**, **Open settings** or **Run action**, and its tooltip includes the
+current binding when present. The details header retains the real **Enabled**
+checkbox or **Run action**. Settings-only sections expose their controls without
+invented enabled state. Existing controls, stores, key capture and native IDs
+remain the source of truth.
 `RenderMenu()` is production code; `Render()` is the compatible entry point.
 `ApplyCustomStyle()` is applied locally through `CompactStyle`.
 
@@ -367,13 +401,13 @@ their real behavior. See `docs/client-ui.md`, `docs/aura.md`,
 
 - **Do** use scoped `CompactStyle` for client, injector and HUD editor controls.
 - **Do** preserve real module names, section identities, keybinds and native input behavior.
-- **Do** keep module tabs outside content scroll and provide search recovery.
+- **Do** keep category widgets reachable, provide search recovery and preserve independent settings drag/close.
 - **Do** keep the launcher primary action and close footer outside scrolling content.
 - **Do** report direct client transparency and preserve its configured capture preference.
 
 ### Don't:
 
-- **Don't** reintroduce the rejected spacious cyan client or large module tile grid.
+- **Don't** reintroduce the superseded client tab strip, inline settings or Quick toggles.
 - **Don't** describe compact client, injector or HUD transparency as live desktop capture or Liquid Glass blur.
 - **Don't** restyle world ESP/effects or add render-thread JNI during compact UI work.
 - **Don't** require loose shader/font/DLL files beside the portable EXE.
