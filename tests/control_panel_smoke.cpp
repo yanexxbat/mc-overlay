@@ -238,7 +238,7 @@ ImGuiWindow* Child(const char* name) {
 ImGuiTable* ModuleGrid() {
     auto* grid=Child("/module_grid_");
     auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(grid->GetID("module_widgets"));
-    Require(table&&table->IsActive,"Module widget grid is missing"); return table;
+    Require(table&&grid->Active,"Module widget grid is missing"); return table;
 }
 ImVec2 ModulePoint(mcov::Overlay& overlay,Page page,int index,int count,ImVec2 viewport={1280,800}) {
     mcov::OverlayUiCheck::CloseDetails(overlay);
@@ -253,7 +253,7 @@ ImVec2 ModulePoint(mcov::Overlay& overlay,Page page,int index,int count,ImVec2 v
     table=ModuleGrid();
     const auto& column=table->Columns[index%columns];
     const ImVec2 point{(column.WorkMinX+column.WorkMaxX)*.5f,
-        table->OuterRect.Min.y+row*rowHeight+table->CellPaddingY+33};
+        table->OuterRect.Min.y+row*rowHeight+table->RowCellPaddingY+33};
     Require(Child("/module_grid_")->InnerClipRect.Contains(point),"Module widget is outside the clickable grid");
     return point;
 }
