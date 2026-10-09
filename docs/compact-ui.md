@@ -1,9 +1,12 @@
 # Kompaktes, transparentes Client-, Injector- und HUD-Theme
 
-Die visuelle Referenz ist `design/reference-translucent-menu.png`, der vom Benutzer
-bereitgestellte Screenshot. Er ersetzt das erste Cyan-Beispiel und das bisherige
-Kachel-Menue des Clients. Ziel ist eine breite, ruhige anthrazitfarbene Oberflaeche
-mit schmaler Sidebar, oberen Modul-Tabs, kleinen Reglern und gedaempftem Korallorange.
+Das bestaetigte visuelle Theme folgt `design/reference-translucent-menu.png`:
+eine ruhige anthrazitfarbene Oberflaeche mit schmaler Sidebar, kleinen Reglern
+und gedaempftem Korallorange. Das aktuelle Client-Layout folgt der vom Benutzer
+bereitgestellten Paint-Skizze `design/reference-module-widgets.png`: Module stehen
+direkt als Widgets in ihren Kategorien; Rechtsklick oeffnet ein zweites,
+unabhaengiges Settings-Fenster. Dies ersetzt Modul-Tabs, Inline-Settings und
+Quick toggles unter Beibehaltung des freigegebenen Themes.
 Echte mcov-Module bleiben erhalten; Bezeichnungen/Funktionen aus dem fremden
 Referenzprogramm werden nicht als neue Features uebernommen.
 
@@ -20,29 +23,42 @@ behalten ihre Gestaltung.
 
 ## Layout und Bedienung
 
-- Root: 1040 x 520 Pixel, auf den Viewport minus 24 Pixel begrenzt und beim Ziehen
-  im Viewport gehalten. Rahmenlos mit 12 Pixel Rundung und Alpha 0.88.
+- Hauptfenster: 740 x 520 Pixel, Settings: 480 x 580 Pixel. Beide sind auf den
+  Viewport minus 24 Pixel begrenzt und bleiben beim Ziehen darin. Rahmenlos mit
+  12 Pixel Rundung und Alpha 0.88. Die erste Hauptfenster-Platzierung reserviert
+  nach Moeglichkeit bis zu 496 Pixel rechts fuer Settings.
 - Sidebar: 150 Pixel, unter 620 Pixel Fensterbreite 112 Pixel. Sie enthaelt
   sieben Kategorien, eine Suche und einen leisen Verbindungsstatus.
-- Die 76 vorhandenen Module/Abschnitte sind direkt ueber obere Tabs erreichbar.
-  Ueberlaufende Tabs scrollen horizontal mit den nativen ImGui-Pfeilen.
+- Die 76 vorhandenen Module/Abschnitte stehen im scrollbaren `module_grid`-Child.
+  Ein Raster mit gleich breiten Spalten verwendet floor(verfuegbare Breite / 174),
+  begrenzt auf eine bis drei Spalten, und 5 x 5 Pixel Tabellen-Zellabstand.
+  Native Widgets sind 66 Pixel hoch und mit 8 Pixel Rundung gezeichnet.
 - Die Suche filtert die Modulnamen der Kategorie ohne Gross-/Kleinschreibung.
   Ein leerer Trefferzustand bietet Clear search. Kategorienwechsel leert die Suche.
-- Genau zwei Child-Bereiche: Navigation und Content. Die Tabs stehen oberhalb des
-  Content-Scrollbereichs und bleiben sichtbar. Jede Kategorie behaelt ihren
-  gewaehlten Abschnitt; ein Modul-/Kategorienwechsel setzt Content-Scroll zurueck.
-- Ab 660 Pixel Content-Breite und bei mehr als zwei Toggle-Modulen stehen links
-  Detailregler und rechts Quick toggles im Verhaeltnis 60/40
-  fuer andere Module derselben Kategorie. Bei schmaleren Fenstern bleiben alle
-  Abschnitte ueber Tabs und der aktuelle Enable-Schalter erreichbar.
+- Linksklick oder Space aktiviert das echte Toggle-/Action-Modul; Settings-only
+  oeffnet seine Details. Rechtsklick, Menu oder Shift+F10 oeffnet Settings ohne
+  Toggle. Der Widget-Titel beginnt bei x/y 12 mit Inter 14; die Statuszeile bei
+  y 39 zeigt Enabled, Disabled, Open settings oder Run action. Toggle-Indikator
+  unten rechts, vorhandene Belegung im Tooltip.
+- Widget-Ruhefarbe ist das vorhandene Control-Weiss mit Alpha .045, Hover .085.
+  Enabled verwendet Korall mit Alpha .10, Enabled-Hover das bestehende
+  Selected-Tab-Korall .16 und Pressed Korall .22.
+- Settings hat einen eigenen verschiebbaren Header, X-Schliessen und einen
+  scrollbaren Content-Child mit 24 Pixel horizontalem und 52 Pixel oberem Inset.
+  Ein anderes Modul setzt Settings-Scroll zurueck; dasselbe erneut oeffnen erhaelt
+  ihn. Kategorienwechsel schliesst Details und leert die Suche.
+- Desktop zeigt beide Fenster nebeneinander. Unter 1260 Pixel Viewport-Breite
+  ist bei offenen Settings nur dieses Fenster sichtbar; X bringt das Raster
+  zurueck und vermeidet ueberlagerte transparente Texte.
 - Labels und Werte haben eigene Tabellenspalten. Checkboxen und Farbfelder sitzen
   rechts; Labels schalten Checkboxen ebenfalls. Keybinds stehen vor der Checkbox.
   Native Slider unterstuetzen Maus, Tastatur und Ctrl-Klick zur Zahleneingabe.
 - Unter 420 Pixel Content-Breite steht in Keybinds jeder Modulname in einer
   eigenen Zeile ueber dem Tastenfeld und Toggle/Hold-Modus. Tastenfelder bleiben
   innerhalb der verfuegbaren Breite; Widget-IDs bleiben beim Layoutwechsel stabil.
-- Header ziehen, Center, kategorienbezogenes Reset und Close funktionieren weiter.
-  Enable und Run action im Header sind an die vorhandenen Module gebunden.
+- Beide Header lassen sich unabhaengig ziehen. Center setzt beide Platzierungen
+  zurueck, Reset die aktuelle Kategorie und Close schliesst Menue und Details.
+  Enabled und Run action im Settings-Header sind an die vorhandenen Module gebunden.
   HUD-Editor, Keybinds, Friend-Listen und Minecraft/JNI-Logik bleiben erhalten.
 
 ## Injector
@@ -101,13 +117,23 @@ Glasrenderers stehen in [liquid-ui.md](liquid-ui.md).
 
 ## Verifikation
 
-Der native D3D11/WARP-Check prueft alle 76 Modul-Tabs, echte Toggle-Aktionen,
-Tastaturbedienung, Suche, Style-/Font-/Window-Stack, Drag, kompakte Darstellung,
-Slider inklusive sichtbarer Ctrl-Eingabe, Keybinds, HUD und bestehende Renderer.
+Der native D3D11/WARP-Check prueft reale Rechtsklicks fuer alle 76 Abschnitte,
+Toggle-Aktionen gegen echte Stores, Space/Shift+F10, unabhaengiges Drag/Close,
+kleine Settings schliessen mit Rueckkehr zum Raster, Such-Wiederherstellung,
+Keybinds, Slider, Combos, Farben, Marker, Persistenz und Style-/Font-/Window-Stack
+ohne ImGui-Fehler. Produktionsbuild, nativer Check und `portable_client` bestanden;
+`mcov.exe` und Share-ZIP wurden aktualisiert.
 Offscreen-Vorschauen mit synthetischem Hintergrund beweisen die ImGui-Darstellung
 und Alpha-Komposition; sie sind keine Live-Aufnahme aus Minecraft.
-Aktuelle Ansichten:
-`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
+Die elf aktuellen Ansichten unter `.impeccable/review/module-widgets/` sind
+`combat-grid.png`, `visuals-grid.png`, `box-settings.png`, `aim-settings-scene.png`,
+`grid-small.png`, `settings-small.png`, `settings-large.png`,
+`keybinds-desktop.png`, `keybinds-small.png`, `keybinds-small-bottom.png` und
+`marker-settings.png`. Sie decken 1280 x 800, 1920 x 1080 und 480 x 360 ab;
+Aim Assist verwendet einen synthetischen hellen Hintergrund. Die unabhaengige
+Abschlusspruefung hat alle elf Bilder geoeffnet und **ship** ohne wesentliche
+Befunde bestaetigt. Die frueheren Tab-Bilder unter
+`.impeccable/review/compact-client/` sind historisch.
 
 Die aktuellen Injector-Checks bestehen fuer Auswahl, Start, Verhinderung doppelter
 Starts, beide Sidebar-Tabs, feste Footer und Titel-Minimieren/Schliessen. Der native
@@ -127,4 +153,5 @@ Test-Galerie aller 19 Elemente, kein Produktionslayout. Alle sieben sind gueltig
 die unabhaengige Impeccable-Abschlusspruefung meldet den Material-Fix als behoben
 und keine Fixregression. Native HUD-Eingabe-/Layout-/Style-/Font-/Clip-Checks,
 `combat_hud`, `rockstar_features` und `portable_client` bestanden; `mcov.exe`
-und ZIP wurden neu gebaut. Alte Client-/Injector-Bilder und Testbelege bleiben erhalten.
+und ZIP wurden neu gebaut. Injector-/HUD-Bilder bleiben aktuell; alte Client-Tab-
+Bilder bleiben als historische Belege erhalten.

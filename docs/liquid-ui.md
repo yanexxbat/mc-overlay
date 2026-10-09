@@ -69,7 +69,7 @@ tinted ImDrawList panel. Neither fallback invents live capture or reads world da
 - `src/injector/launcher_ui.cpp`: compact launcher navigation and real actions.
 - `src/common/flat_app.cpp`: transparent native injector shell and D3D11 lifecycle,
   without LiquidGlass integration.
-- `src/overlay/control_panel.cpp`: compact module tabs, two child areas and native inputs.
+- `src/overlay/control_panel.cpp`: compact module widgets, independent settings window and native inputs.
 - `src/overlay/overlay.cpp`: direct client compositing and inactive glass frame;
   `overlay_modules.cpp` ties catalog and activation to real module stores.
 - `src/common/liquid_style.hpp`: retained legacy style; not the active injector theme.

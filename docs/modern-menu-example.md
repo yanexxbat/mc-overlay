@@ -15,11 +15,13 @@ und das Menue zwischen `NewFrame()` und `Render()` zeichnen. Der Aufrufer setzt
 Close/Reset-Actions wie bisher um und besitzt die echten Modulwerte.
 
 `State::selectedSections` behaelt den gewaehlten Abschnitt je Kategorie;
-`State::search` filtert die Modulnamen der aktuellen Kategorie. Tabs waehlen den
-Abschnitt, `Activate` fuehrt echte Toggle-/Action-Operationen aus. Details werden
-im selben Fenster durch `SectionScope` auf den gewaehlten Abschnitt begrenzt.
-Die zwei Child-Bereiche Navigation/Content und nativen Tab-/Eingabe-IDs bleiben
-Teil des produktiven Renderers. Der Adapter erfindet keine Modulwerte.
+`State::search` filtert die Modul-Widgets der aktuellen Kategorie. Linksklick
+oder Space ruft `Activate` fuer echte Toggle-/Action-Operationen auf; Settings-only
+oeffnet Details. Rechtsklick, Menu oder Shift+F10 oeffnet unabhaengige Settings
+ohne Toggle. `State::settingsPage`/`settingsSection` und `settingsPlacement`
+halten Auswahl und Platzierung; `SectionScope` begrenzt den Content-Callback auf
+den gewaehlten Abschnitt im Settings-Fenster. Native Eingabe-IDs bleiben stabil.
+Der Adapter erfindet keine Modulwerte.
 
 Das direkte `ApplyCustomStyle()` veraendert den globalen Style. Client und Injector
 verwenden es deshalb durch `CompactStyle` lokal; ein erneuter globaler

@@ -1,13 +1,17 @@
 # Kompaktes Client-Menü, modulares HUD und Keybinds
 
-Das Client-Menü folgt `design/reference-translucent-menu.png`: kompakt,
+Das Client-Layout folgt der Paint-Skizze `design/reference-module-widgets.png`:
+Kategorien enthalten Modul-Widgets; Rechtsklick öffnet deren Einstellungen in
+einem unabhängigen Fenster. Das bestätigte Theme bleibt kompakt,
 anthrazitfarben, transparent und mit gedämpftem Korallorange. Kleine Inter-Texte,
 native Felder und Slider mit sichtbaren Werten halten Einstellungen lesbar.
 **Strg-Klick** auf einen Slider erlaubt die direkte Zahleneingabe.
 **Combat, Visuals, Blocks, HUD, Stats, Settings, Misc** stehen links. Der Header
-verschiebt das Menü; **Center** zentriert es, **Reset** setzt die aktuelle Kategorie
-zurück. Die Größe beträgt bis zu 1040 × 520 UI-Pixel, begrenzt auf den Viewport
-minus 24 Pixel. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
+verschiebt das Menü; **Center** ordnet beide Fenster neu an, **Reset** setzt die aktuelle Kategorie
+zurück. Das Hauptfenster beträgt bis zu 740 × 520 UI-Pixel, das Settings-Fenster
+bis zu 480 × 580; beide sind auf den Viewport minus 24 Pixel begrenzt.
+Die erste Platzierung lässt nach Möglichkeit bis zu 496 Pixel rechts für Settings
+frei. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
 112 Pixel. Der Injector verwendet dasselbe freigegebene kompakte Theme mit
 Start/Diagnose-Sidebar und festem Start-/Schließen-Footer.
 Layoutdetails: [compact-ui.md](compact-ui.md). Injector und Bedienung:
@@ -23,26 +27,28 @@ gilt auch bei geöffnetem Menü.
 
 ## Kategorien, Module und Einstellungen
 
-Eine Kategorie links und einen Modul-Tab oben auswählen. Alle 76 bisherigen
-Bereiche bleiben erreichbar. Tabs wählen Einstellungen; sie schalten kein Modul
-um. Überlaufende Tabs lassen sich mit den nativen ImGui-Pfeilen horizontal
-scrollen. **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied
-zwischen Groß- und Kleinschreibung. Bei null Treffern stellt **Clear search** die
-Tabs wieder her. Ein Kategorienwechsel leert die Suche.
+Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
+Raster mit einer bis drei Spalten. Alle 76 bisherigen Bereiche bleiben erreichbar.
+Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
+Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
+**Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
+Groß- und Kleinschreibung. Bei null Treffern stellt **Clear search** die Widgets
+wieder her. Ein Kategorienwechsel leert die Suche und schließt die Details.
 
-Jede Kategorie behält ihren ausgewählten Abschnitt. Kategorie- und Modulwechsel
-setzen den Content-Scroll zurück. Die Tabs stehen außerhalb dieses Scrollbereichs.
-Einstellungen bleiben im Hauptfenster; ein zweites Modulfenster ist nicht nötig.
-Ab 660 Pixel Content-Breite und bei mehr als zwei Toggle-Modulen teilt eine
-60/40-Tabelle Detailregler links und **Quick toggles** für andere Module rechts.
-Bei kleineren Fenstern stehen die Details in einer Spalte.
+**Linksklick** oder **Leertaste** schaltet ein echtes Toggle-Modul um oder führt
+seine Aktion aus. **Rechtsklick**, **Menü-Taste** oder **Shift+F10** öffnet die
+Einstellungen ohne Umschalten. Settings-only-Widgets öffnen diese auch per
+Linksklick. **Friends**, **Entity filters**, **Block types**, **Stats** und
+**Settings** zeigen ihre tatsächlichen Einstellungen ohne erfundenen
+Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Aktion.
 
-Der **Enabled**-Schalter im Header zeigt und ändert den echten Zustand des
-aktuellen Moduls. **Quick toggles** und vorhandene Aktivierungsschalter wirken auf
-dieselben Modulwerte. **Friends**, **Entity filters**, **Block types**, **Stats**
-und **Settings** zeigen ihre tatsächlichen Einstellungen ohne erfundenen
-Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Aktion;
-**Run action** im Header startet sie direkt.
+Die Einstellungen haben einen eigenen verschiebbaren Header, **X** zum Schließen
+und einen Scrollbereich. **Enabled** beziehungsweise **Run action** im Header
+wirkt auf dieselben echten Modulwerte wie das Widget. Ein Modulwechsel setzt den
+Settings-Scroll zurück; erneutes Öffnen desselben Moduls erhält ihn. Auf dem
+Desktop stehen Hauptfenster und Settings nebeneinander. Unter 1260 Pixel
+Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
+**X** führt zum Raster zurück. **Close** schließt Menü und Details.
 
 - **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends, Crystal Macro, Anchor Macro, Hit sounds. Diagnostics
   bleibt innerhalb von Kill Aura eingeklappt.
@@ -54,7 +60,7 @@ Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Akt
   und Sichtbarkeitsfilter liegen unter Entity filters.
 - **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers, Chunkfinder,
   Storage ESP, Beacon radius und Chunk borders.
-- **HUD:** Editor und ein Tab pro HUD-Element mit Sichtbarkeit, Position, Skalierung
+- **HUD:** Editor und ein Widget pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
 - **Settings:** Overlay, Focus, Keybinds, Agent.
@@ -63,7 +69,7 @@ Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Akt
 
 ## Keybinds
 
-**Settings → Keybinds** als Modul-Tab auswählen: dort steht jede
+**Settings → Keybinds** öffnen: dort steht jede
 Belegung. Klick auf das Tastenfeld, dann die
 gewünschte Taste oder Mouse 1–5 drücken. Strg/Shift/Alt-Kombinationen sind erlaubt.
 Ein einzelner Modifier wird beim Loslassen erfasst, damit er zunächst noch Teil
@@ -103,7 +109,8 @@ mit ihrem bisherigen Cooldown-/Ziel-Lock-Verhalten weiter.
 
 ## HUD-Editor
 
-**HUD → Editor → Run action**, **Open HUD editor** in den Einstellungen oder
+Linksklick auf **HUD → Editor**, **Run action** in dessen Settings,
+**Open HUD editor** in den Einstellungen oder
 standardmäßig **F6** öffnet den Editor. Jedes Element
 hat eigene Position, Sichtbarkeit und Skalierung. Die 19 Elemente umfassen
 Equipment, Status effects, Coordinates, Performance, Compass, Reach indicator,
@@ -132,7 +139,7 @@ betraegt regulaer 90 Pixel und in der kleinen Ansicht 110 Pixel. Eine korallfarb
 Outline markiert die Auswahl; ein Disabled-Badge erscheint nur beim ausgewaehlten
 deaktivierten Element. Positionen, Skalierung und Sichtbarkeit speichern wie bisher.
 
-Unter dem jeweiligen HUD-Element-Tab lassen sich dieselben Positionen und Skalen
+In den Einstellungen des jeweiligen HUD-Element-Widgets lassen sich dieselben Positionen und Skalen
 auch numerisch einstellen.
 Positionen sind im verfügbaren Bildschirmweg normalisiert; Auflösungswechsel
 behalten die Anker, und Ziehen/Skalierung bleibt innerhalb des Viewports. Frei
@@ -159,21 +166,30 @@ Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
 Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
 bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
 
-Geprüft: alle 76 Modul-Tabs, reale Toggle-Aktionen, Tastaturbedienung,
-Suche samt leerem Trefferzustand und Wiederherstellung, Style-/Font-/Window-Stack,
-Drag/Viewport-Grenzen, kleine Viewports und Slider einschließlich sichtbarer
-Strg-Eingabe. Bestehende Keybind-, HUD-, Renderer-, Launcher- und portable
-Build-Prüfungen bestehen ebenfalls.
+Geprüft: echte Rechtsklicks für alle 76 Abschnitte, reale Toggle-Stores,
+Leertaste und Shift+F10, unabhängiges Ziehen/Schließen beider Fenster,
+Schließen der kleinen Settings-Ansicht mit Rückkehr zum Raster, Suche samt
+Wiederherstellung, Keybinds, Slider, Combos, Farben, Marker, Persistenz und
+Style-/Font-/Window-Stack ohne ImGui-Fehler. Produktionsbuild, nativer Check
+und `portable_client` bestanden; `mcov.exe` und Share-ZIP sind aktualisiert.
+Bestehende HUD-, Renderer- und Launcher-Belege bleiben gültig.
 Die aktualisierten nativen HUD-Pruefungen fuer Eingabe/Layout, Style-/Font-Stacks
 und Text-Clipping sowie `combat_hud`, `rockstar_features` und `portable_client`
 bestanden. Die portable `mcov.exe` und das Share-ZIP wurden neu gebaut.
 
-Aktuelle native WARP-Vorschauen liegen unter
-`.impeccable/review/compact-client/{combat-desktop,aim-desktop,aim-compact,visuals-desktop,keybinds-desktop,keybinds-compact,keybinds-compact-bottom}.png`.
+Aktuelle native WARP-Vorschauen liegen unter `.impeccable/review/module-widgets/`:
+`combat-grid.png`, `visuals-grid.png`, `box-settings.png`, `aim-settings-scene.png`,
+`grid-small.png`, `settings-small.png`, `settings-large.png`,
+`keybinds-desktop.png`, `keybinds-small.png`, `keybinds-small-bottom.png` und
+`marker-settings.png`. Die unabhängige Abschlussprüfung hat alle elf Bilder
+geöffnet und mit **ship**, ohne wesentliche Befunde, freigegeben. Sie decken
+1280 × 800, 1920 × 1080 und 480 × 360 ab; Aim Assist zeigt einen synthetischen
+hellen Hintergrund.
 Sie zeigen die echte ImGui-Ausgabe mit direkter Alpha-Komposition vor synthetischem
 Hintergrund. Sie sind keine Minecraft-Screenshots und prüfen keine Live-Optik,
-Attach-/Fokus-Verbindung zum Spiel oder sämtliche GPUs. Ältere Glas-/Rasterbilder
-unter `.impeccable/review/` dokumentieren den abgelösten Client, nicht diese Ansicht.
+Attach-/Fokus-Verbindung zum Spiel oder sämtliche GPUs. Die früheren Tab-Bilder
+unter `.impeccable/review/compact-client/` sowie ältere Glas-/Rasterbilder
+dokumentieren historische Client-Layouts.
 Die aktuellen kompakten Injector-Vorschauen stehen in
 `.impeccable/review/compact-injector/`; die nativen Bilder sind versteckte
 Swapchain-Ausgaben, keine Desktop-Aufnahmen. Die weiterhin gültigen Tests des
@@ -186,7 +202,8 @@ Sie verwenden den echten nativen ImGui/D3D11-WARP-Renderer mit synthetischen
 Fixtures, keine Live-Minecraft-Aufnahme. `hud-catalog.png` ist eine Test-Galerie
 aller 19 Elemente und kein Produktionslayout. Alle sieben Belege sind gueltig;
 die unabhaengige Impeccable-Abschlusspruefung bestaetigt den behobenen Material-Fix
-ohne Regression. Vorhandene Client-/Injector-Bilder und Testbelege bleiben gueltig.
+ohne Regression. Injector-/HUD-Bilder und Testbelege bleiben gueltig; frühere
+Client-Tab-Bilder sind historische Belege.
 
 Crystal Macro und Anchor Macro laufen bei aktivierter Funktion, solange die normale
 Platzieren-/Benutzen-Taste gehalten wird. Der Modul-Bind steuert die Aktivierung.
