@@ -1317,23 +1317,55 @@ void Overlay::DrawVisualsTab() {
         "Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows"};
     visualsSection_=panel::SubTabs("visual_sections",sections,IM_ARRAYSIZE(sections),visualsSection_);
     if(visualsSection_>=17) { DrawRockstarSettings(static_cast<rockstar::Feature>(visualsSection_-17)); return; }
+    bool changed=false;
+    const auto enumRow=[&]<class Enum,std::size_t N>(const char* label,Enum& value,const char* const (&items)[N]) {
+        int index=static_cast<int>(value);
+        if(panel::ComboRow(label,&index,items,int(N))) { value=static_cast<Enum>(index); changed=true; }
+    };
     // Jede Funktion besitzt ihre Regler; gemeinsame Entity-Filter bleiben an einer Stelle.
     switch(visualsSection_) {
         case 0:
             if(panel::BeginRows("box_controls")) {
                 panel::CheckRow("Enable Box ESP",&visuals_.boxEsp); DrawBind(keys::Action::BoxEsp,true);
                 ImGui::BeginDisabled(!visuals_.boxEsp);
-                panel::CheckRow("Filled boxes",&visuals_.filledBox);
-                panel::SliderRow("Box thickness",&visuals_.boxThickness,.5f,4,"%.1f px");
-                panel::SliderRow("Box rounding",&visuals_.boxRounding,0,16,"%.0f px");
+                constexpr const char* boxes[]={"2D corners","2D full box","3D wire box"};
+                constexpr const char* highlights[]={"Off","Bounds","Humanoid"};
+                enumRow("Box style",visuals_.boxStyle,boxes);
+                changed|=panel::SliderRow("Box thickness",&visuals_.boxThickness,.5f,4,"%.1f px");
+                ImGui::BeginDisabled(visuals_.boxStyle==EspBoxStyle::Wire3D);
+                changed|=panel::SliderRow("Box rounding",&visuals_.boxRounding,0,16,"%.0f px");
+                ImGui::EndDisabled();
+                ImGui::BeginDisabled(visuals_.boxStyle!=EspBoxStyle::Corners2D);
+                changed|=panel::SliderRow("Corner length",&visuals_.cornerFraction,.08f,.45f,"%.2f");
+                ImGui::EndDisabled();
+                changed|=panel::CheckRow("Filled boxes",&visuals_.filledBox);
+                ImGui::BeginDisabled(!visuals_.filledBox);
+                changed|=panel::CheckRow("Fill gradient",&visuals_.fillGradient);
+                changed|=panel::SliderRow("Fill top opacity",&visuals_.fillAlpha,0,1,"%.2f");
+                ImGui::BeginDisabled(!visuals_.fillGradient);
+                changed|=panel::SliderRow("Fill bottom opacity",&visuals_.fillBottomAlpha,0,1,"%.2f");
+                ImGui::EndDisabled(); ImGui::EndDisabled();
+                enumRow("Target highlight",visuals_.targetHighlight,highlights);
+                ImGui::BeginDisabled(visuals_.targetHighlight==EspHighlight::Off);
+                changed|=panel::SliderRow("Highlight opacity",&visuals_.highlightAlpha,0,.7f,"%.2f");
+                ImGui::EndDisabled();
+                changed|=panel::CheckRow("Target glow",&visuals_.targetGlow);
+                ImGui::BeginDisabled(!visuals_.targetGlow);
+                changed|=panel::SliderRow("Glow radius",&visuals_.glowRadius,0,10,"%.1f px");
+                changed|=panel::SliderRow("Glow opacity",&visuals_.glowOpacity,0,1,"%.2f");
+                ImGui::EndDisabled();
+                ImGui::BeginDisabled(!visuals_.targetGlow&&visuals_.targetHighlight==EspHighlight::Off);
+                changed|=panel::ColorRow("Target colour",visuals_.targetColor);
+                ImGui::EndDisabled();
                 ImGui::EndDisabled(); ImGui::EndTable();
             }
+            ImGui::TextWrapped("Highlights and glow apply to the selected target. Humanoid highlights follow its sampled body pose.");
             break;
         case 1:
             if(panel::BeginRows("skeleton_controls")) {
                 panel::CheckRow("Enable skeleton",&visuals_.skeleton); DrawBind(keys::Action::Skeleton,true);
                 ImGui::BeginDisabled(!visuals_.skeleton);
-                panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
+                changed|=panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
                 ImGui::EndDisabled(); ImGui::EndTable();
             }
             break;
@@ -1341,10 +1373,11 @@ void Overlay::DrawVisualsTab() {
             if(panel::BeginRows("nametag_controls")) {
                 panel::CheckRow("Enable name tags",&visuals_.nameTags); DrawBind(keys::Action::NameTags,true);
                 ImGui::BeginDisabled(!visuals_.nameTags);
-                panel::CheckRow("Show HP",&visuals_.nameTagHealth);
-                panel::CheckRow("Player ping",&visuals_.nameTagPing);
-                panel::CheckRow("Armour / held items",&visuals_.nameTagEquipment);
-                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
+                changed|=panel::CheckRow("Show HP",&visuals_.nameTagHealth);
+                changed|=panel::CheckRow("Player ping",&visuals_.nameTagPing);
+                changed|=panel::CheckRow("Armour / held items",&visuals_.nameTagEquipment);
+                changed|=panel::CheckRow("Text outline (shared)",&visuals_.textOutline);
+                changed|=panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndDisabled(); ImGui::EndTable();
             }
             break;
@@ -1352,14 +1385,28 @@ void Overlay::DrawVisualsTab() {
             if(panel::BeginRows("health_controls")) {
                 panel::CheckRow("Enable health bars",&visuals_.healthBars);
                 ImGui::BeginDisabled(!visuals_.healthBars);
-                panel::ColorRow("Health accent",visuals_.healthColor);
+                constexpr const char* placement[]={"Vertical","Horizontal"};
+                enumRow("Bar placement",visuals_.barPlacement,placement);
+                changed|=panel::SliderRow("Bar thickness",&visuals_.barThickness,2,6,"%.1f px");
+                changed|=panel::CheckRow("Health gradient",&visuals_.healthGradient);
+                changed|=panel::ColorRow("Health accent",visuals_.healthColor);
+                ImGui::BeginDisabled(!visuals_.healthGradient);
+                changed|=panel::ColorRow("Low HP colour",visuals_.healthLow);
+                changed|=panel::ColorRow("Half HP colour",visuals_.healthMiddle);
+                ImGui::EndDisabled();
+                changed|=panel::CheckRow("Show armor bar",&visuals_.armorBars);
+                ImGui::BeginDisabled(!visuals_.armorBars);
+                changed|=panel::ColorRow("Armor colour",visuals_.armorColor);
+                ImGui::EndDisabled();
                 ImGui::EndDisabled(); ImGui::EndTable();
             }
+            ImGui::TextWrapped("Vertical bars place health on the left and armor on the right. Horizontal bars sit below the box. Armor shows protection points.");
             break;
         case 4:
             if(panel::BeginRows("distance_controls")) {
                 panel::CheckRow("Enable distance labels",&visuals_.distanceText);
-                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
+                changed|=panel::CheckRow("Text outline (shared)",&visuals_.textOutline);
+                changed|=panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
             }
             ImGui::TextWrapped("With name tags enabled, distance appears in the name strip. Otherwise it appears below the box.");
@@ -1368,14 +1415,24 @@ void Overlay::DrawVisualsTab() {
             if(panel::BeginRows("tracer_controls")) {
                 panel::CheckRow("Enable tracers",&visuals_.tracers);
                 ImGui::BeginDisabled(!visuals_.tracers);
-                panel::ColorRow("Tracer colour",visuals_.tracerColor);
+                constexpr const char* origins[]={"Bottom","Center","Top","Custom"};
+                enumRow("Line origin",visuals_.tracerOrigin,origins);
+                ImGui::BeginDisabled(visuals_.tracerOrigin!=EspTracerOrigin::Custom);
+                changed|=panel::SliderRow("Origin X",&visuals_.customTracerOrigin.x,0,1,"%.2f");
+                changed|=panel::SliderRow("Origin Y",&visuals_.customTracerOrigin.y,0,1,"%.2f");
+                ImGui::EndDisabled();
+                changed|=panel::SliderRow("Line thickness",&visuals_.tracerThickness,.5f,4,"%.1f px");
+                changed|=panel::ColorRow("Tracer colour",visuals_.tracerColor);
+                changed|=panel::ColorRow("Target-end colour",visuals_.tracerEndColor);
+                changed|=panel::SliderRow("Origin opacity",&visuals_.tracerStartAlpha,0,1,"%.2f");
                 ImGui::EndDisabled(); ImGui::EndTable();
             }
+            ImGui::TextWrapped("Lines fade from the chosen screen origin to the entity's feet. Tracer colour alpha controls the whole line.");
             break;
         case 6:
             if(panel::BeginRows("target_info_controls")) {
                 panel::CheckRow("Enable target info",&visuals_.targetInfo);
-                panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
+                changed|=panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
             }
             break;
@@ -1387,19 +1444,20 @@ void Overlay::DrawVisualsTab() {
                 MenuHeading(column==0 ? "Visible entities" : "Entity colours");
                 if(!panel::BeginRows(column==0 ? "visual_filters" : "visual_colours")) return;
                 if(column==0) {
-                    panel::CheckRow("Players",&visuals_.showPlayers);
-                    panel::CheckRow("Hostile mobs",&visuals_.showHostiles);
-                    panel::CheckRow("Other entities",&visuals_.showOther);
-                    panel::SliderRow("Max distance",&visuals_.maxDistance,8,512,"%.0f m");
+                    changed|=panel::CheckRow("Players",&visuals_.showPlayers);
+                    changed|=panel::CheckRow("Hostile mobs",&visuals_.showHostiles);
+                    changed|=panel::CheckRow("Other entities",&visuals_.showOther);
+                    changed|=panel::SliderRow("Max distance",&visuals_.maxDistance,8,512,"%.0f m");
                 } else {
-                    panel::ColorRow("Players",visuals_.playerColor);
-                    panel::ColorRow("Hostiles",visuals_.hostileColor);
-                    panel::ColorRow("Other entities",visuals_.otherColor);
+                    changed|=panel::ColorRow("Players",visuals_.playerColor);
+                    changed|=panel::ColorRow("Hostiles",visuals_.hostileColor);
+                    changed|=panel::ColorRow("Other entities",visuals_.otherColor);
                 }
                 ImGui::EndTable();
             });
             break;
     }
+    if(changed) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
 }
 
 void Overlay::DrawTargetAuraSettings() {

@@ -42,7 +42,7 @@ struct VisualSettings {
     float healthColor[4] = {.30f, .91f, .55f, 1.f};
     float tracerColor[4] = {.66f, .42f, 1.f, .45f};
 
-    // Render-only style configuration. No menu/HUD controls are introduced.
+    // Style controls live in the existing Visuals sections of the menu.
     EspBoxStyle boxStyle = EspBoxStyle::Corners2D;
     float cornerFraction = .28f;
     float fillAlpha = .12f;
