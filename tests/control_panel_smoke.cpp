@@ -4,6 +4,7 @@
 #include "common/flat_style.hpp"
 #include "common/equipment_icons.hpp"
 #include "overlay/menu_motion.hpp"
+#include "overlay/visual_preferences.hpp"
 #include "injector/launcher_ui.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
@@ -16,6 +17,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <sstream>
 #include <crtdbg.h>
 
 using Microsoft::WRL::ComPtr;
@@ -377,6 +379,63 @@ void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
         previewSceneImage.Reset(); previewScene.Reset();
     }
     mcov::OverlayUiCheck::CloseDetails(overlay); mcov::OverlayUiCheck::Center(overlay);
+}
+void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
+                      const std::filesystem::path& output) {
+    auto& c=mcov::OverlayUiCheck::Visuals(overlay);
+    auto& ctx=*ImGui::GetCurrentContext(); auto& io=ImGui::GetIO();
+    const auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+    const auto click=[&](ImVec2 p) {
+        io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
+        io.AddMouseButtonEvent(0,false); frame(); frame();
+    };
+    const auto table=[&](const char* name) {
+        auto* value=ctx.Tables.GetByKey(Child("/content_")->GetID(name));
+        Require(value!=nullptr,"New visual controls are missing"); return value;
+    };
+    const auto controlPoint=[&](const char* name,int row,float xFraction=.5f) {
+        const auto* t=table(name); const auto& column=t->Columns[1];
+        const float height=mcov::style::MenuFont()->FontSize+6;
+        return ImVec2{column.WorkMinX+(column.WorkMaxX-column.WorkMinX)*xFraction,
+                      t->OuterRect.Min.y+row*(height+2*t->RowCellPaddingY)+t->RowCellPaddingY+height*.5f};
+    };
+    const auto choose=[&](const char* name,int index) {
+        click(controlPoint(name,1));
+        Require(ctx.OpenPopupStack.Size>0&&ctx.OpenPopupStack.back().Window,"Visual mode combo did not open");
+        const auto* popup=ctx.OpenPopupStack.back().Window;
+        const float height=mcov::style::MenuFont()->FontSize;
+        click({popup->DC.CursorStartPos.x+30,popup->DC.CursorStartPos.y+index*(height+ctx.Style.ItemSpacing.y)+height*.5f});
+    };
+    mcov::OverlayUiCheck::ResetVisuals(overlay);
+    SelectSubTab(overlay,Page::Visuals,"",0,26); choose("box_controls",2);
+    Require(c.boxStyle==mcov::EspBoxStyle::Wire3D,"Box mode did not update the real renderer settings");
+    c.tracers=true; SelectSubTab(overlay,Page::Visuals,"",5,26); choose("tracer_controls",3);
+    Require(c.tracerOrigin==mcov::EspTracerOrigin::Custom,"Tracer origin did not update the real renderer settings");
+    click(controlPoint("tracer_controls",2,.92f));
+    Require(c.customTracerOrigin.x>.8f&&c.customTracerOrigin.x<=1,"Custom origin slider was not wired to the renderer");
+    SelectSubTab(overlay,Page::Visuals,"",3,26); choose("health_controls",1);
+    Require(c.barPlacement==mcov::EspBarPlacement::Horizontal,"Bar placement was not wired to the renderer");
+    const auto* t=table("health_controls");
+    const auto armorPoint=controlPoint("health_controls",7);
+    click({t->Columns[0].WorkMinX+25,armorPoint.y});
+    Require(!c.armorBars,"Armor checkbox did not update the real renderer settings");
+    io.AddMousePosEvent(-100,-100);
+    for(const auto size:{ImVec2{1280,800},ImVec2{480,360}}) {
+        for(int section:{0,2,3,4,5}) {
+            SelectSubTab(overlay,Page::Visuals,"",section,26,size);
+            auto* content=Child("/content_");
+            Draw(overlay,Page::Visuals,0,size); Draw(overlay,Page::Visuals,0,size);
+            SaveFrame(device,context,output/(std::string("visual-controls-")+std::to_string(section)+
+                (size.x<500?"-small.png":"-desktop.png")));
+            ImGui::SetScrollY(content,content->ScrollMax.y);
+            Draw(overlay,Page::Visuals,0,size); Draw(overlay,Page::Visuals,0,size);
+            const char* names[]={"box_controls","skeleton_controls","nametag_controls","health_controls","distance_controls","tracer_controls"};
+            Require(table(names[section])->OuterRect.Max.y<=content->InnerRect.Max.y+1,
+                    "New visual controls were unreachable by scrolling");
+            if(section==0) SaveFrame(device,context,output/(size.x<500?"visual-controls-box-bottom-small.png":"visual-controls-box-bottom-desktop.png"));
+        }
+    }
+    mcov::OverlayUiCheck::ResetVisuals(overlay); mcov::OverlayUiCheck::Center(overlay);
 }
 void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,
                       const std::filesystem::path& output) {
@@ -886,6 +945,12 @@ int main(int argc,char** argv) {
         auto& savedCrystal=mcov::OverlayUiCheck::Crystal(overlay); auto& savedAnchor=mcov::OverlayUiCheck::Anchor(overlay);
         savedCrystal.GrimConservative(); savedCrystal.requireTotem=true; savedCrystal.placeMs=350;
         savedAnchor.chargeWithOffhandFuel=true; savedAnchor.detonationSlot=8; savedAnchor.minHealth=9;
+        auto& savedVisuals=mcov::OverlayUiCheck::Visuals(overlay);
+        savedVisuals.boxStyle=mcov::EspBoxStyle::Wire3D; savedVisuals.fillAlpha=.31f; savedVisuals.fillBottomAlpha=.07f;
+        savedVisuals.barPlacement=mcov::EspBarPlacement::Horizontal; savedVisuals.armorBars=false; savedVisuals.barThickness=5;
+        savedVisuals.tracerOrigin=mcov::EspTracerOrigin::Custom; savedVisuals.customTracerOrigin={.25f,.75f};
+        savedVisuals.tracerEndColor[2]=.36f; savedVisuals.tracerThickness=2.5f; savedVisuals.textOutline=false;
+        savedVisuals.targetHighlight=mcov::EspHighlight::Bounds; savedVisuals.glowRadius=8; savedVisuals.targetColor[0]=.42f;
         binds[auraKey].mode=mcov::keys::Mode::Hold;
         auto& hud=mcov::OverlayUiCheck::Hud(overlay); hud.effects=false; hud.layout[2]={{.4f,.7f},1.3f,true};
         auto& extra=mcov::OverlayUiCheck::Rockstar(overlay); auto& pack=mcov::OverlayUiCheck::Pack(overlay);
@@ -896,10 +961,22 @@ int main(int argc,char** argv) {
         mcov::CopyField(markerScene.dimension,"Overworld"); mcov::CopyField(markerScene.serverAddress,"Local world");
         Require(pack.AddMarker(markerScene,"Home \"one\""),"test waypoint could not be saved");
         mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; extra={}; pack.ClearMarkers();
-        savedCrystal={}; savedAnchor={};
+        savedCrystal={}; savedAnchor={}; savedVisuals={};
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=true;
         mcov::OverlayUiCheck::Load(overlay);
         Require(!mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects,"World depth preference did not survive save/load");
+        Require(savedVisuals.boxStyle==mcov::EspBoxStyle::Wire3D&&savedVisuals.fillAlpha==.31f&&savedVisuals.fillBottomAlpha==.07f&&
+                savedVisuals.barPlacement==mcov::EspBarPlacement::Horizontal&&!savedVisuals.armorBars&&savedVisuals.barThickness==5&&
+                savedVisuals.tracerOrigin==mcov::EspTracerOrigin::Custom&&savedVisuals.customTracerOrigin.x==.25f&&savedVisuals.customTracerOrigin.y==.75f&&
+                savedVisuals.tracerEndColor[2]==.36f&&savedVisuals.tracerThickness==2.5f&&!savedVisuals.textOutline&&
+                savedVisuals.targetHighlight==mcov::EspHighlight::Bounds&&savedVisuals.glowRadius==8&&savedVisuals.targetColor[0]==.42f,
+                "Visual style preferences did not survive save/load");
+        std::istringstream invalidStyle("99 .28 1.6 7 1 1 .12 .025 1.1");
+        Require(!mcov::visual_preferences::Read("visual-box",invalidStyle,savedVisuals)&&savedVisuals.boxStyle==mcov::EspBoxStyle::Wire3D,
+                "Invalid visual mode partially replaced working preferences");
+        std::istringstream extremeBars("1 1 1 999");
+        Require(mcov::visual_preferences::Read("visual-bars",extremeBars,savedVisuals)&&savedVisuals.barThickness==6,
+                "Visual preference ranges were not clamped");
         Require(savedCrystal.strictConfirmation&&savedCrystal.requireCrosshairHit&&savedCrystal.requireTotem&&savedCrystal.placeMs==350&&savedCrystal.maxRange==3&&
                 savedAnchor.chargeWithOffhandFuel&&savedAnchor.detonationSlot==8&&savedAnchor.minHealth==9&&!savedAnchor.enabled&&!savedCrystal.enabled,
                 "combat settings must persist without auto-enabling modules");
@@ -919,6 +996,7 @@ int main(int argc,char** argv) {
         savedCrystal={}; savedAnchor={};
         for(auto size:{ImVec2(720,560),ImVec2(480,360)}) for(Page page:pages) { Draw(overlay,page,0,size); Draw(overlay,page,0,size); }
         SaveFrame(device.Get(),context.Get(),output/"classic-small.png");
+        VisualMenuChecks(overlay,device.Get(),context.Get(),output);
         MarkerMenuChecks(overlay,device.Get(),context.Get(),output);
         WorldVisualChecks(overlay,device.Get(),context.Get(),output);
         RockstarChecks(overlay,device.Get(),context.Get(),output);
