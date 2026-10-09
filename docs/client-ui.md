@@ -28,7 +28,7 @@ gilt auch bei geöffnetem Menü.
 ## Kategorien, Module und Einstellungen
 
 Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
-Raster mit einer bis drei Spalten. Alle 76 bisherigen Bereiche bleiben erreichbar.
+Raster mit einer bis drei Spalten. Alle 77 Bereiche bleiben erreichbar.
 Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
 Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
@@ -63,9 +63,33 @@ Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
 - **HUD:** Editor und ein Widget pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
-- **Settings:** Overlay, Focus, Keybinds, Agent.
+- **Settings:** Overlay, Focus, Keybinds, Agent, Configs.
 - **Misc:** Middle click friend, Death coordinates, Detect players, Waypoints,
   Name protect, Module sounds, Notifications und Panic.
+
+## Configs
+
+**Settings → Configs** öffnet die Profilverwaltung im unabhängigen Settings-Fenster.
+Unter **Config name** einen Namen eingeben und **Save config** wählen. Ein bereits
+vorhandener Name zeigt **Overwrite config** zum ausdrücklichen Ersetzen.
+Ein Profil unter **Saved configs** auswählen und **Load selected** drücken, um
+seine gespeicherten Modulzustände und Einstellungen zu übernehmen. Die Auswahl
+allein lädt nichts; beim Start wird kein benanntes Profil ausgewählt oder geladen.
+**Refresh** aktualisiert die Liste nach dem Kopieren einer Datei in den Configs-Ordner.
+
+Ein Profil enthält Modulzustände und Einstellungen einschließlich Visual-Farben,
+Combat, Makros und Blocks sowie HUD-Sichtbarkeit und Layout, Binds, Freunde und
+Wegpunkte. Es wird vollständig geprüft, bevor es angewendet wird; eine ungültige
+oder nicht unterstützte Datei lässt die aktuellen Einstellungen unverändert.
+Statusmeldungen zeigen erfolgreiche Aktionen und Fehler mit einem nächsten Schritt.
+
+Profile liegen in `configs/<Name>.ini` neben `mcov.exe`. Namen dürfen 1–48
+ASCII-Buchstaben, Ziffern, Leerzeichen, `-` oder `_` enthalten; führende und
+abschließende Leerzeichen sowie reservierte Windows-Namen sind ausgeschlossen.
+Dateien mit `.ini` oder `.INI` erscheinen nach **Refresh** in der Liste.
+Das Feld **Folder** zeigt den Speicherort; Hover zeigt den vollständigen Pfad.
+In kleinen Viewports scrollt das vorhandene Settings-Fenster bis zu allen Aktionen.
+Beim Verschieben des Clients `configs` und `client-settings.ini` mitnehmen.
 
 ## Keybinds
 
@@ -150,15 +174,20 @@ Triggerbot senden dann keine Eingaben.
 
 ## Speicherung und Technik
 
-`%LOCALAPPDATA%\mcov\client-settings.ini` enthält Binds, HUD-Konfiguration,
-Rockstar-Modulparameter und server-/dimensionsgebundene Wegpunkte
-beim Start über die portable `mcov.exe`. Direkte Entwickler-Starts verwenden
-weiterhin `build/bin/client-settings.ini` neben der Overlay-EXE. Änderungen werden verzögert
+`client-settings.ini` neben der portablen `mcov.exe` enthält die bisherigen
+automatischen Teil-Einstellungen, darunter Binds, HUD-Konfiguration,
+Rockstar-Modulparameter und server-/dimensionsgebundene Wegpunkte. Diese Datei
+ist kein vollständiges benanntes Profil; dafür **Settings → Configs** verwenden.
+Direkte Entwickler-Starts verwenden weiterhin `build/bin/client-settings.ini`
+neben der Overlay-EXE. Änderungen werden verzögert
 gespeichert, bestätigte Binds und das Beenden des Editors sofort. Eine temporäre
 Datei wird nach vollständigem Schreiben ersetzt. Fehler stehen im Keybind-Editor;
 ungültige/fehlende Werte fallen auf Defaults zurück. **Reset keybinds** stellt die
-drei System-Tasten und ungebundene Module wieder her. Combat/ESP/Aura-Einstellungen
-und Freunde werden durch diese Datei nicht automatisch aktiviert oder gespeichert.
+drei System-Tasten und ungebundene Module wieder her. Ohne lokale Datei importiert
+der portable Launcher bestehende automatische Einstellungen einmalig aus AppData;
+lokale Einstellungen werden dabei nicht ersetzt. Benannte Configs werden mit einer
+temporären Datei im selben `configs`-Ordner atomar gespeichert. Laufzeit-Helfer
+und Logs bleiben unter `%LOCALAPPDATA%\mcov`.
 
 `keybinds.hpp` trennt Eingabe-Zustand von Win32 und Moduländerungen.
 `hud_layout.hpp` kapselt Platzierung und Grenzen. `overlay_input.cpp` bindet echte
@@ -166,13 +195,20 @@ Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
 Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
 bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
 
-Geprüft: echte Rechtsklicks für alle 76 Abschnitte, reale Toggle-Stores,
+Geprüft: echte Rechtsklicks für alle 77 Abschnitte, reale Toggle-Stores,
 Leertaste und Shift+F10, unabhängiges Ziehen/Schließen beider Fenster,
 Schließen der kleinen Settings-Ansicht mit Rückkehr zum Raster, Suche samt
 Wiederherstellung, Keybinds, Slider, Combos, Farben, Marker, Persistenz und
 Style-/Font-/Window-Stack ohne ImGui-Fehler. Produktionsbuild, nativer Check
 und `portable_client` bestanden; `mcov.exe` und Share-ZIP sind aktualisiert.
 Bestehende HUD-, Renderer- und Launcher-Belege bleiben gültig.
+Configs-Prüfungen decken vollständige Profil-Roundtrips, lokale Speicherpfade,
+Save/Overwrite/Load/Refresh und unveränderte Einstellungen nach ungültigen Dateien ab.
+Die fünf nativen Vorschauen unter `.impeccable/review/configs/` heißen
+`configs-empty.png`, `configs-desktop.png`, `configs-error.png`, `configs-small.png`
+und `configs-small-bottom.png`. Sie zeigen 1280 × 800 sowie 480 × 360 mit
+synthetischen Fixtures; die Abschlussprüfung bestätigte **ship** nach dem
+Overwrite-Fix. Die portable EXE und ZIP wurden gegen die aktuellen Payloads geprüft.
 Die aktualisierten nativen HUD-Pruefungen fuer Eingabe/Layout, Style-/Font-Stacks
 und Text-Clipping sowie `combat_hud`, `rockstar_features` und `portable_client`
 bestanden. Die portable `mcov.exe` und das Share-ZIP wurden neu gebaut.

@@ -29,7 +29,7 @@ behalten ihre Gestaltung.
   nach Moeglichkeit bis zu 496 Pixel rechts fuer Settings.
 - Sidebar: 150 Pixel, unter 620 Pixel Fensterbreite 112 Pixel. Sie enthaelt
   sieben Kategorien, eine Suche und einen leisen Verbindungsstatus.
-- Die 76 vorhandenen Module/Abschnitte stehen im scrollbaren `module_grid`-Child.
+- Die 77 Module/Abschnitte stehen im scrollbaren `module_grid`-Child.
   Ein Raster mit gleich breiten Spalten verwendet floor(verfuegbare Breite / 174),
   begrenzt auf eine bis drei Spalten, und 5 x 5 Pixel Tabellen-Zellabstand.
   Native Widgets sind 66 Pixel hoch und mit 8 Pixel Rundung gezeichnet.
@@ -60,6 +60,18 @@ behalten ihre Gestaltung.
   zurueck, Reset die aktuelle Kategorie und Close schliesst Menue und Details.
   Enabled und Run action im Settings-Header sind an die vorhandenen Module gebunden.
   HUD-Editor, Keybinds, Friend-Listen und Minecraft/JNI-Logik bleiben erhalten.
+
+**Settings > Configs** ergaenzt die bestehende Settings-Kategorie als fuenftes
+Widget. Im unabhaengigen Fenster stehen Saved configs, Config name, Save config
+bzw. Overwrite config, Load selected und Refresh. Die vorhandenen nativen Listen,
+Felder, Buttons und Statusfarben bleiben erhalten; der kleine Viewport scrollt.
+Listen- und Pfadtexte werden nativ begrenzt, der vollstaendige Text erscheint im
+Tooltip. Die Liste wird beim Oeffnen und mit Refresh gelesen, nicht pro Frame.
+Benannte Profile liegen in `configs/<Name>.ini`, automatische Teil-Einstellungen
+in `client-settings.ini`, jeweils neben `mcov.exe`. Load selected uebernimmt ein
+vollstaendig geprueftes Profil einschliesslich Modulzustaenden; beim Start wird
+kein benanntes Profil automatisch ausgewaehlt oder geladen. Bedienung und
+Dateigrenzen: [client-ui.md](client-ui.md#configs).
 
 ## Injector
 
@@ -117,7 +129,7 @@ Glasrenderers stehen in [liquid-ui.md](liquid-ui.md).
 
 ## Verifikation
 
-Der native D3D11/WARP-Check prueft reale Rechtsklicks fuer alle 76 Abschnitte,
+Der native D3D11/WARP-Check prueft reale Rechtsklicks fuer alle 77 Abschnitte,
 Toggle-Aktionen gegen echte Stores, Space/Shift+F10, unabhaengiges Drag/Close,
 kleine Settings schliessen mit Rueckkehr zum Raster, Such-Wiederherstellung,
 Keybinds, Slider, Combos, Farben, Marker, Persistenz und Style-/Font-/Window-Stack
@@ -134,6 +146,13 @@ Aim Assist verwendet einen synthetischen hellen Hintergrund. Die unabhaengige
 Abschlusspruefung hat alle elf Bilder geoeffnet und **ship** ohne wesentliche
 Befunde bestaetigt. Die frueheren Tab-Bilder unter
 `.impeccable/review/compact-client/` sind historisch.
+
+Die fuenf Configs-Belege unter `.impeccable/review/configs/` zeigen leere,
+geladene und fehlerhafte Zustaende bei 1280 x 800 sowie den oberen/unteren
+Scrollbereich bei 480 x 360. Die Abschlusspruefung bestaetigte **ship** nach
+dem Overwrite-Fix. Native Checks pruefen Profil-Roundtrips, lokale Dateipfade,
+ausdrueckliches Ersetzen und unveraenderte Einstellungen bei ungueltigen Dateien.
+Portable EXE und ZIP bestehen mit den aktuellen eingebetteten Payloads.
 
 Die aktuellen Injector-Checks bestehen fuer Auswahl, Start, Verhinderung doppelter
 Starts, beide Sidebar-Tabs, feste Footer und Titel-Minimieren/Schliessen. Der native

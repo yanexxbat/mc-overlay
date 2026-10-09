@@ -23,15 +23,27 @@ The launcher does not install Java.
 - `%LOCALAPPDATA%\mcov\runtime\<package hash>`: embedded overlay, agent and helpers.
   Extraction verifies SHA-256, skips valid files, repairs corrupt files and
   serializes concurrent preparation. The hash changes when packaged files change.
-- `%LOCALAPPDATA%\mcov\client-settings.ini`: saved keybinds, HUD layout,
-  Rockstar feature parameters and server/dimension-scoped waypoints.
+- `client-settings.ini` beside `mcov.exe`: automatic preferences, including
+  keybinds, HUD layout, Rockstar parameters and server/dimension-scoped waypoints.
+- `configs/<name>.ini` beside `mcov.exe`: named profiles saved under
+  **Settings → Configs**, including module states and settings, bindings,
+  HUD layout, friend relations and waypoints.
 - `%LOCALAPPDATA%\mcov\launcher-jdk.txt`: selected JDK path.
 - `%LOCALAPPDATA%\mcov\mcov_client.log` and `mcov_overlay.log`: launcher/overlay logs.
 - `mcov_agent.log` beside the loaded DLL: agent log, also included under Diagnose.
 
-On the first portable start, existing keybind/HUD settings beside the launcher
-or in the build's sibling `bin` folder are imported if no portable settings exist.
-Existing portable settings are never replaced by this import.
+On the first portable start without local `client-settings.ini`, existing
+automatic preferences from `%LOCALAPPDATA%\mcov\client-settings.ini` are imported.
+The build's sibling `bin` folder is a fallback when starting from `build/client`.
+This import never replaces local settings. Runtime helpers and logs continue
+to use AppData independently of the client-folder configs.
+
+Open **Settings → Configs**, enter a name and choose **Save config**. An existing
+name changes the button to **Overwrite config**. Choose a profile in the list
+and press **Load selected** to restore its saved module states and settings;
+profiles are not selected or loaded automatically at startup. **Refresh** updates
+the list after copying a profile into `configs`. Copy `client-settings.ini` and
+the `configs` folder with the client to retain your setup.
 
 Closing the launcher leaves the overlay and Minecraft running. Closing during
 connection cancels the launcher's attach helper; it never terminates Minecraft.

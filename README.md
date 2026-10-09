@@ -10,6 +10,7 @@ Dear ImGui and Direct3D 11.
 - Combat and item-assist controls with friend management.
 - 19 HUD elements with individual visibility, drag-and-drop placement and scaling.
 - Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
+- Named configs saved beside the client.
 - A portable single-file client.
 
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**.
@@ -28,8 +29,11 @@ See [compatibility](docs/compatibility.md) for supported profiles and verificati
 | F6 | Open or close the HUD editor |
 | END | Quit the overlay |
 
-Bindings can be changed under **Settings → Keybinds**. HUD layouts, bindings and
-waypoints are saved in `%LOCALAPPDATA%\mcov\client-settings.ini`.
+Bindings can be changed under **Settings → Keybinds**. Automatic preferences
+save in `client-settings.ini` beside `mcov.exe`. Under **Settings → Configs**,
+enter a name and **Save config**, or choose a saved profile and **Load selected**.
+Profiles live in `configs/<name>.ini` beside the client; copy that folder and
+`client-settings.ini` when moving your setup.
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft

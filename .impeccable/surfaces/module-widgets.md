@@ -34,7 +34,7 @@ remain within their existing approved scope.
 
 ## Quality bar and verification
 
-All 76 sections remain reachable with real right-clicks, including rows below
+All 77 sections remain reachable with real right-clicks, including rows below
 the visible grid. Toggle states and bindings reflect the actual stores. Separate
 drag, close, search recovery, scroll behavior and keyboard operation must work.
 There must be no global style/font leakage, ImGui layout errors, unreachable

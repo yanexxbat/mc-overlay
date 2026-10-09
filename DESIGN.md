@@ -260,7 +260,7 @@ for settings. The sidebar is 150 pixels wide, reducing to 112 pixels below
 620 pixels root width. It holds Search, seven categories and connection status.
 Category changes clear search and close details.
 
-All 76 existing sections are reached through a scrolling `module_grid` child.
+All 77 sections are reached through a scrolling `module_grid` child.
 Its equal-width table uses one to three columns: floor of available width divided
 by 174 pixels, clamped to that range, with 5 × 5 pixel cell padding. Search matches
 category module names without case sensitivity; zero results show **Clear search**.

@@ -23,7 +23,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 76 real sections remain reachable. Left-click or Space operates the real
+  All 77 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -44,6 +44,10 @@ camera/entity projection stability.
   `START.txt` guide is the only other file in the share ZIP.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
+- Named profiles and automatic preferences live directly beside the portable
+  client. **Settings → Configs** saves, explicitly overwrites and loads profiles;
+  loading restores saved module states only after full validation. No named
+  profile is selected or loaded automatically at startup.
 - Support keyboard/mouse bindings, modifier chords, Toggle/Hold operation and
   movable/scalable HUD elements. All existing sections remain reachable through
   category module widgets and their independent settings controls.
@@ -55,9 +59,17 @@ camera/entity projection stability.
 
 ## Persistence and runtime boundaries
 
-HUD positions, per-element scale/visibility, keybinds, Rockstar module parameters
-and world/server-scoped waypoints save in `client-settings.ini`. Existing
-combat/ESP/Aura settings and friend UUID relations retain their session behavior.
+Automatic preferences remain partial and save in `client-settings.ini` beside
+`mcov.exe`, including HUD positions, per-element scale/visibility, keybinds,
+Rockstar parameters and world/server-scoped waypoints. Existing AppData preferences
+are imported once when local preferences are absent, without replacing local files.
+Runtime helpers and logs remain in `%LOCALAPPDATA%\mcov`.
+
+Named `configs/<name>.ini` profiles beside the client contain user-facing module
+states and settings, visual colors, combat and macro settings, blocks, HUD and
+layout, binds, friend UUID relations and waypoints. Profiles are self-contained,
+fully validated before application and saved atomically within the local folder.
+Copy `configs` and `client-settings.ini` with the client to retain the setup.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the
 transparent overlay. It requires no desktop capture, blur or refraction; the
@@ -93,12 +105,17 @@ control ink, hidden initialization, resize and rounded clipping.
 Current client images under `.impeccable/review/module-widgets/` use native
 ImGui/D3D11 WARP with synthetic fixtures at 1280 × 800, 1920 × 1080 and 480 × 360.
 The independent finish review opened all 11 images and returned **ship** with no
-material findings. Native checks cover real right-clicks for all 76 sections,
+material findings. Native checks cover real right-clicks for all 77 sections,
 actual toggle stores, Space / Shift+F10, independent drag/close, compact close
 returning to the grid, search recovery, settings controls, key capture,
 persistence and style/font ownership. Production build, native check and
 `portable_client` passed; `mcov.exe` and the share ZIP were updated.
 Earlier `.impeccable/review/compact-client/` tab images are historical.
+Five Configs captures under `.impeccable/review/configs/` cover empty, loaded,
+error and small scrolling states at 1280 × 800 and 480 × 360. The finish review
+returned **ship** after confirming the explicit-overwrite fix. Native profile
+round-trips, invalid-file preservation, local storage and portable exact-payload
+checks passed; HUD and Rockstar regression checks remained green.
 Current `.impeccable/review/compact-injector/` images use synthetic fixtures. Seven HUD images
 under `.impeccable/review/compact-hud/` likewise use the native ImGui/D3D11 WARP
 renderer with synthetic fixtures; `hud-catalog.png` is a test gallery of all

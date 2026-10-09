@@ -17,7 +17,15 @@ Wenn "JDK-Ordner auswaehlen" erscheint:
 Waehle einen installierten 64-Bit-JDK passend zu Minecrafts Java-Version.
 Ein JRE allein reicht zum Verbinden nicht. Der Client installiert Java nicht.
 
-Einstellungen, Logs und automatisch vorbereitete Hilfsdateien liegen unter:
+Einstellungen liegen in client-settings.ini neben mcov.exe.
+Benannte Profile liegen in configs\<Name>.ini neben mcov.exe.
+Unter Settings > Configs: Namen eingeben und "Save config" klicken.
+Ein vorhandener Name zeigt "Overwrite config" zum Ersetzen.
+Zum Laden ein Profil auswaehlen und "Load selected" klicken.
+Nach dem Kopieren eines Profils in configs auf "Refresh" klicken.
+Beim Verschieben des Clients client-settings.ini und configs mitnehmen.
+
+Logs, JDK-Auswahl und automatisch vorbereitete Hilfsdateien liegen unter:
 %LOCALAPPDATA%\mcov
 Neben mcov.exe musst du keine DLLs oder Tools ablegen.
 
