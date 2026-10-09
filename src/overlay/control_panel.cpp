@@ -95,8 +95,12 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     style::CompactStyle scoped; Actions actions;
     const auto* viewport=ImGui::GetMainViewport(); const auto work=viewport->WorkSize;
     if(work.x<180||work.y<180) return actions;
-    const ImVec2 size{std::floor(std::min(1040.f,work.x-24)),std::floor(std::min(520.f,work.y-24))};
-    if(!state.positioned) { state.position={(work.x-size.x)*.5f,(work.y-size.y)*.5f}; state.positioned=true; }
+    const ImVec2 size{std::floor(std::min(740.f,work.x-24)),std::floor(std::min(520.f,work.y-24))};
+    if(!state.positioned) {
+        // Reserve space for the independent settings pane on desktop viewports.
+        const float reserve=std::min(496.f,std::max(0.f,work.x-size.x-24));
+        state.position={(work.x-size.x-reserve)*.5f,(work.y-size.y)*.5f}; state.positioned=true;
+    }
     if(state.dragging) {
         const auto m=ImGui::GetIO().MousePos;
         state.position={m.x-viewport->WorkPos.x-state.dragOffset.x,m.y-viewport->WorkPos.y-state.dragOffset.y};
@@ -107,13 +111,14 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     ImGui::SetNextWindowPos(pos); ImGui::SetNextWindowSize(size);
     constexpr auto flags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|
         ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoScrollWithMouse;
+    bool openSettings=false;
     if(!ImGui::Begin("mcov control panel",nullptr,flags)) { ImGui::End(); return actions; }
     auto& draw=*ImGui::GetWindowDrawList();
     const float sidebar=size.x>=620?150.f:112.f;
     draw.AddRectFilled(pos,{pos.x+size.x,pos.y+size.y},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
     draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(0x15151B,.22f)),12,ImDrawFlags_RoundCornersLeft);
     draw.AddLine({pos.x+sidebar,pos.y+12},{pos.x+sidebar,pos.y+size.y-12},ImGui::GetColorU32(ImGuiCol_Separator));
-    ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-216),32});
+    ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-58),32});
     if(ImGui::IsItemActivated()) { state.dragging=true; const auto m=ImGui::GetIO().MousePos; state.dragOffset={m.x-pos.x,m.y-pos.y}; }
     if(ImGui::IsItemHovered()||state.dragging) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
     draw.AddCircle({pos.x+25,pos.y+23},6,ImGui::GetColorU32(ImGuiCol_CheckMark),20,1.5f);
@@ -132,83 +137,152 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
             selected.Var(ImGuiStyleVar_ButtonTextAlign,ImVec2(0,.5f)); selected.Var(ImGuiStyleVar_FramePadding,ImVec2(32,4));
             selected.Color(ImGuiCol_Button,active?style::Color(0xFFFFFF,.065f):ImVec4(0,0,0,0));
             selected.Color(ImGuiCol_Text,active?style::Color(0xF5D0C4):style::Color(0xC2C2CC));
-            if(ImGui::Button(kPages[i],{-1,29})) { state.page=static_cast<Page>(i); state.search[0]='\0'; }
+            if(ImGui::Button(kPages[i],{-1,29})) state.page=static_cast<Page>(i);
             Icon(*ImGui::GetWindowDrawList(),{p.x+15,p.y+14.5f},i,ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_TextDisabled));
         }
     }
     ImGui::EndChild();
     const bool pageChanged=state.page!=state.renderedPage;
-    if(pageChanged) ImGui::SetWindowFocus();
+    if(pageChanged) { state.search[0]='\0'; state.settingsOpen=false; ImGui::SetWindowFocus(); }
     std::array<ModuleView,64> modules{};
     const int count=catalog?std::clamp(catalog(owner,state.page,modules),0,int(modules.size())):0;
     int& selected=state.selectedSections[int(state.page)]; selected=std::clamp(selected,0,std::max(0,count-1));
     int matching=0;
-    for(int i=0;i<count;++i) if(Matches(modules[i].name,state.search)) { if(!matching&&!Matches(modules[selected].name,state.search)) selected=i; ++matching; }
-    ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+46});
-    ImGui::PushID(int(state.page));
-    if(count&&matching&&ImGui::BeginTabBar("module_tabs",ImGuiTabBarFlags_FittingPolicyScroll)) {
-        for(int i=0;i<count;++i) if(Matches(modules[i].name,state.search)) {
-            const bool force=(pageChanged||filterChanged)&&i==selected;
-            if(ImGui::BeginTabItem(modules[i].name,nullptr,force?ImGuiTabItemFlags_SetSelected:0)) { selected=i; ImGui::EndTabItem(); }
-            if(ImGui::IsItemHovered()&&modules[i].binding[0]) ImGui::SetTooltip("%s",modules[i].binding);
-        }
-        ImGui::EndTabBar();
-    }
-    ImGui::PopID();
-    const bool sectionChanged=pageChanged||selected!=state.renderedSettingsSection;
-    ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+84});
-    if(sectionChanged) ImGui::SetNextWindowScroll({-1,0});
-    if(ImGui::BeginChild("content",{std::max(1.f,size.x-sidebar-44),std::max(1.f,size.y-127)},ImGuiChildFlags_None,ImGuiWindowFlags_NoBackground)) {
+    for(int i=0;i<count;++i) if(Matches(modules[i].name,state.search)) ++matching;
+    ImGui::SetCursorScreenPos({pos.x+sidebar+17,pos.y+48});
+    if(pageChanged||filterChanged) ImGui::SetNextWindowScroll({-1,0});
+    if(ImGui::BeginChild("module_grid",{std::max(1.f,size.x-sidebar-34),std::max(1.f,size.y-106)},ImGuiChildFlags_None,ImGuiWindowFlags_NoBackground)) {
         if(catalog&&!matching) {
             ImGui::TextDisabled("No modules match your search.");
             if(ImGui::Button("Clear search")) state.search[0]='\0';
-        } else if(content) {
-            const int toggles=int(std::count_if(modules.begin(),modules.begin()+count,[](const ModuleView& m) { return m.mode==TileMode::Toggle; }));
-            const ImGuiID settingsId=ImGui::GetCurrentWindow()->IDStack.back();
-            if(activate&&toggles>2&&ImGui::GetContentRegionAvail().x>=660&&
-               ImGui::BeginTable("settings_columns",2,ImGuiTableFlags_SizingStretchProp)) {
-                ImGui::TableSetupColumn("Settings",ImGuiTableColumnFlags_WidthStretch,.60f);
-                ImGui::TableSetupColumn("Related modules",ImGuiTableColumnFlags_WidthStretch,.40f);
-                ImGui::TableNextColumn();
-                // Preserve existing widget IDs when switching to the compact one-column view.
-                ImGui::PushOverrideID(settingsId);
-                { SectionScope section(selected); content(owner,state.page); }
-                ImGui::PopID();
-                ImGui::TableNextColumn(); Section("Quick toggles");
-                if(BeginRows("quick_modules")) {
-                    for(int i=0;i<count;++i) if(i!=selected&&modules[i].mode==TileMode::Toggle) {
-                        bool enabled=modules[i].enabled;
-                        if(CheckRow(modules[i].name,&enabled)) activate(owner,state.page,i);
+        } else if(catalog) {
+            const int columns=std::clamp(int(ImGui::GetContentRegionAvail().x/174.f),1,3);
+            style::StyleScope grid;
+            grid.Var(ImGuiStyleVar_CellPadding,ImVec2(5,5));
+            if(ImGui::BeginTable("module_widgets",columns,ImGuiTableFlags_SizingStretchSame|ImGuiTableFlags_NoSavedSettings)) {
+                for(int i=0;i<count;++i) {
+                    const auto& module=modules[i]; if(!Matches(module.name,state.search)) continue;
+                    ImGui::TableNextColumn(); ImGui::PushID(i);
+                    const auto p=ImGui::GetCursorScreenPos(); const float width=ImGui::GetContentRegionAvail().x;
+                    const bool active=module.mode==TileMode::Toggle&&module.enabled;
+                    bool clicked=false,details=false;
+                    {
+                        style::StyleScope widget;
+                        widget.Var(ImGuiStyleVar_FrameRounding,8);
+                        widget.Color(ImGuiCol_Button,active?style::Color(0xEF8B70,.10f):style::Color(0xFFFFFF,.045f));
+                        widget.Color(ImGuiCol_ButtonHovered,active?style::Color(0xEF8B70,.16f):style::Color(0xFFFFFF,.085f));
+                        widget.Color(ImGuiCol_ButtonActive,style::Color(0xEF8B70,.22f));
+                        clicked=ImGui::Button("##module_widget",{width,66});
+                        details=ImGui::IsItemClicked(ImGuiMouseButton_Right)||
+                            (ImGui::IsItemFocused()&&(ImGui::IsKeyPressed(ImGuiKey_Menu)||
+                                (ImGui::GetIO().KeyShift&&ImGui::IsKeyPressed(ImGuiKey_F10))));
                     }
-                    ImGui::EndTable();
+                    const bool hovered=ImGui::IsItemHovered();
+                    auto& tile=*ImGui::GetWindowDrawList();
+                    tile.PushClipRect({p.x+12,p.y+10},{p.x+width-12,p.y+31},true);
+                    tile.AddText(style::MenuFont(true),14,{p.x+12,p.y+12},ImGui::GetColorU32(ImGuiCol_Text),module.name);
+                    tile.PopClipRect();
+                    const char* label=module.mode==TileMode::Toggle?(active?"Enabled":"Disabled"):
+                        module.mode==TileMode::Action?"Run action":"Open settings";
+                    tile.AddText({p.x+12,p.y+39},ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_TextDisabled),label);
+                    if(module.mode==TileMode::Toggle) {
+                        const ImVec2 a{p.x+width-38,p.y+39},b{p.x+width-12,p.y+53};
+                        tile.AddRectFilled(a,b,ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_FrameBgActive),7);
+                        tile.AddCircleFilled({active?b.x-7:a.x+7,a.y+7},4,ImGui::GetColorU32(active?style::Color(0x25252C):style::Color(0xAEAEB8)),12);
+                    }
+                    if(hovered) {
+                        ImGui::BeginTooltip(); ImGui::TextUnformatted(module.name);
+                        if(module.binding[0]) ImGui::TextDisabled("%s",module.binding);
+                        ImGui::TextDisabled("%s",module.mode==TileMode::Toggle?"Click to toggle. Right-click for settings.":
+                            module.mode==TileMode::Action?"Click to run. Right-click for settings.":"Click to open settings.");
+                        ImGui::EndTooltip();
+                    }
+                    if(clicked) {
+                        if(module.mode==TileMode::Settings) details=true;
+                        else if(activate) activate(owner,state.page,i);
+                    }
+                    if(details) {
+                        selected=i; state.settingsPage=state.page; state.settingsSection=i;
+                        state.settingsOpen=true; openSettings=true;
+                        std::snprintf(state.settingsLabel,sizeof(state.settingsLabel),"%s",module.name);
+                    }
+                    ImGui::PopID();
                 }
                 ImGui::EndTable();
-            } else { SectionScope section(catalog?selected:-1); content(owner,state.page); }
-        }
+            }
+        } else if(content) { SectionScope section(-1); content(owner,state.page); }
     }
     ImGui::EndChild();
-    // Current module's real state and actions. Tab clicks only select settings.
-    if(matching&&activate) {
-        const auto& module=modules[selected];
-        ImGui::SetCursorScreenPos({pos.x+size.x-169,pos.y+12});
-        if(module.mode==TileMode::Toggle) {
-            bool enabled=module.enabled;
-            if(ImGui::Checkbox("Enabled##module_enabled",&enabled)) activate(owner,state.page,selected);
-        } else if(module.mode==TileMode::Action&&ImGui::SmallButton("Run action")) activate(owner,state.page,selected);
-    }
     ImGui::SetCursorScreenPos({pos.x+18,pos.y+size.y-34});
     draw.AddCircleFilled({pos.x+22,pos.y+size.y-23},2.5f,ImGui::GetColorU32(status.connected?style::Color(0xA5C7AD):style::Color(0xEF8B70)),12);
     ImGui::SetCursorScreenPos({pos.x+32,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.connected?"Connected":"Offline");
-    ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-30});
-    ImGui::TextDisabled("%s",status.version);
+    ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-48}); ImGui::TextDisabled("Right-click a module for settings");
+    ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.version);
     ImGui::SameLine(std::max(sidebar+80,size.x-206));
-    if(ImGui::SmallButton("Center")) state.positioned=false;
+    if(ImGui::SmallButton("Center")) { state.positioned=false; state.settingsPlacement.positioned=false; }
     ImGui::SameLine(0,9); if(ImGui::SmallButton("Reset")) actions.reset=true;
     ImGui::SameLine(0,9); if(ImGui::SmallButton("Close")) actions.close=true;
     ImGui::End();
-    state.renderedPage=state.page; state.renderedSettingsSection=selected;
-    state.settingsPage=state.page; state.settingsSection=selected; state.settingsOpen=!actions.close;
-    state.pageAlpha=1; state.animateNextPage=false;
+    if(actions.close) state.settingsOpen=false;
+    state.renderedPage=state.page; state.pageAlpha=1; state.animateNextPage=false;
+
+    if(state.settingsOpen&&catalog&&content) {
+        std::array<ModuleView,64> details{};
+        const int detailCount=std::clamp(catalog(owner,state.settingsPage,details),0,int(details.size()));
+        if(state.settingsSection<0||state.settingsSection>=detailCount) state.settingsOpen=false;
+        else {
+            const auto& module=details[state.settingsSection];
+            auto& placement=state.settingsPlacement;
+            const ImVec2 detailSize{std::floor(std::min(480.f,work.x-24)),std::floor(std::min(580.f,work.y-24))};
+            if(!placement.positioned) {
+                float x=state.position.x+size.x+16;
+                if(x+detailSize.x>work.x-12) x=state.position.x>=detailSize.x+16?
+                    state.position.x-detailSize.x-16:work.x-detailSize.x-12;
+                placement.position={x,state.position.y}; placement.positioned=true;
+            }
+            if(placement.dragging) {
+                const auto m=ImGui::GetIO().MousePos;
+                placement.position={m.x-viewport->WorkPos.x-placement.offset.x,m.y-viewport->WorkPos.y-placement.offset.y};
+                if(!ImGui::IsMouseDown(0)) placement.dragging=false;
+            }
+            placement.position={std::clamp(placement.position.x,0.f,std::max(0.f,work.x-detailSize.x)),
+                std::clamp(placement.position.y,0.f,std::max(0.f,work.y-detailSize.y))};
+            const ImVec2 detailPos{std::floor(viewport->WorkPos.x+placement.position.x),std::floor(viewport->WorkPos.y+placement.position.y)};
+            ImGui::SetNextWindowPos(detailPos); ImGui::SetNextWindowSize(detailSize);
+            if(openSettings) ImGui::SetNextWindowFocus();
+            constexpr auto detailFlags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollWithMouse;
+            if(ImGui::Begin("mcov module settings",nullptr,detailFlags)) {
+                ImGui::SetCursorScreenPos({detailPos.x+8,detailPos.y+5});
+                ImGui::InvisibleButton("##drag",{std::max(1.f,detailSize.x-154),32});
+                if(ImGui::IsItemActivated()) { placement.dragging=true; const auto m=ImGui::GetIO().MousePos; placement.offset={m.x-detailPos.x,m.y-detailPos.y}; }
+                if(ImGui::IsItemHovered()||placement.dragging) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+                auto& settingsDraw=*ImGui::GetWindowDrawList();
+                settingsDraw.PushClipRect({detailPos.x+16,detailPos.y+12},{detailPos.x+detailSize.x-154,detailPos.y+34},true);
+                settingsDraw.AddText(style::MenuFont(true),14,{detailPos.x+16,detailPos.y+16},ImGui::GetColorU32(ImGuiCol_Text),module.name);
+                settingsDraw.PopClipRect();
+                ImGui::SetCursorScreenPos({detailPos.x+detailSize.x-141,detailPos.y+12});
+                if(module.mode==TileMode::Toggle&&activate) {
+                    bool enabled=module.enabled;
+                    if(ImGui::Checkbox("Enabled##module_enabled",&enabled)) activate(owner,state.settingsPage,state.settingsSection);
+                } else if(module.mode==TileMode::Action&&activate&&ImGui::SmallButton("Run action"))
+                    activate(owner,state.settingsPage,state.settingsSection);
+                ImGui::SetCursorScreenPos({detailPos.x+detailSize.x-34,detailPos.y+12});
+                if(ImGui::SmallButton("X##details_close")) state.settingsOpen=false;
+                settingsDraw.AddLine({detailPos.x+16,detailPos.y+42},{detailPos.x+detailSize.x-16,detailPos.y+42},ImGui::GetColorU32(ImGuiCol_Separator));
+                const bool changed=state.settingsPage!=state.renderedSettingsPage||state.settingsSection!=state.renderedSettingsSection;
+                ImGui::SetCursorScreenPos({detailPos.x+16,detailPos.y+52});
+                if(changed) ImGui::SetNextWindowScroll({-1,0});
+                if(ImGui::BeginChild("content",{std::max(1.f,detailSize.x-32),std::max(1.f,detailSize.y-68)},ImGuiChildFlags_None,ImGuiWindowFlags_NoBackground)) {
+                    SectionScope section(state.settingsSection); content(owner,state.settingsPage);
+                }
+                ImGui::EndChild();
+            }
+            ImGui::End();
+            state.renderedSettingsPage=state.settingsPage; state.renderedSettingsSection=state.settingsSection;
+        }
+    }
+    if(!state.settingsOpen) state.settingsPlacement.dragging=false;
+    state.settingsWasOpen=state.settingsOpen;
     return actions;
 }
 Actions Render(State& state,const Status& status,void* owner,Content content,Catalog catalog,Activate activate) {

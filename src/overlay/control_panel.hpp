@@ -73,7 +73,7 @@ const char* ThemeName(int index);
 float Scale();
 bool MotionAllowed(const State& state);
 void Section(const char* label);
-// SectionScope selects the existing controls directly inside the client window.
+// SectionScope selects the existing controls inside the independent settings pane.
 // Ohne Scope bleibt die native Tab-Navigation fuer bestehende Aufrufer erhalten.
 int SubTabs(const char* id, const char* const* labels, int count, int selected,
             bool selectNext = false);
