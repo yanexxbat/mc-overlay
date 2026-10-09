@@ -96,10 +96,11 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     const auto* viewport=ImGui::GetMainViewport(); const auto work=viewport->WorkSize;
     if(work.x<180||work.y<180) return actions;
     const ImVec2 size{std::floor(std::min(740.f,work.x-24)),std::floor(std::min(520.f,work.y-24))};
+    const float reserve=std::min(496.f,std::max(0.f,work.x-size.x-24));
+    const ImVec2 homePosition{(work.x-size.x-reserve)*.5f,(work.y-size.y)*.5f};
     if(!state.positioned) {
         // Reserve space for the independent settings pane on desktop viewports.
-        const float reserve=std::min(496.f,std::max(0.f,work.x-size.x-24));
-        state.position={(work.x-size.x-reserve)*.5f,(work.y-size.y)*.5f}; state.positioned=true;
+        state.position=homePosition; state.positioned=true;
     }
     if(state.dragging) {
         const auto m=ImGui::GetIO().MousePos;
@@ -223,7 +224,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-48}); ImGui::TextDisabled("Right-click a module for settings");
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.version);
     ImGui::SameLine(std::max(sidebar+80,size.x-206));
-    if(ImGui::SmallButton("Center")) { state.positioned=false; state.settingsPlacement.positioned=false; }
+    if(ImGui::SmallButton("Center")) { state.position=homePosition; state.settingsPlacement.positioned=false; }
     ImGui::SameLine(0,9); if(ImGui::SmallButton("Reset")) actions.reset=true;
     ImGui::SameLine(0,9); if(ImGui::SmallButton("Close")) actions.close=true;
     ImGui::End();

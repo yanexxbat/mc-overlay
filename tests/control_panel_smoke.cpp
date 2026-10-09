@@ -343,6 +343,13 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     io.AddMousePosEvent(grip.x,grip.y); frame(); io.AddMouseButtonEvent(0,true); frame();
     io.AddMousePosEvent(grip.x+35,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
     Require(root->Pos.x==original.x+35&&root->Pos.y==original.y+15,"Module grid drag lost its offset");
+    OpenModuleSettings(overlay,Page::Visuals,"",0,26);
+    const ImVec2 centerButton{root->Pos.x+root->Size.x-182,root->Pos.y+root->Size.y-23};
+    io.AddMousePosEvent(centerButton.x,centerButton.y); frame(); io.AddMouseButtonEvent(0,true); frame();
+    io.AddMouseButtonEvent(0,false); frame(); frame();
+    Require(root->Pos.x==22&&root->Pos.y==140,"Center did not restore the initial module grid placement");
+    Require(pane->Pos.x==root->Pos.x+root->Size.x+16&&pane->Pos.y==root->Pos.y,
+        "Center positioned settings relative to the old module grid");
     mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
     mcov::OverlayUiCheck::CloseDetails(overlay); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
     SaveFrame(device,context,output/"module-grid-small.png");
