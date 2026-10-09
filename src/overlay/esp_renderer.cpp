@@ -95,14 +95,22 @@ void FillCuboid(ImDrawList& draw, const visual::Cuboid& cube, const WorldSnapsho
     }
 }
 void WireBox(ImDrawList& draw, const visual::Cuboid& cube, const CameraProjection& projection,
-             ImU32 color, const VisualSettings& config, ImVec2 origin) {
+             ImU32 color, const VisualSettings& config, bool selected, ImVec2 origin) {
     const float thickness=Safe(config.boxThickness,1.6f,.5f,4);
     for (const auto& edge:visual::Cuboid::edges) {
         ScreenPoint a,b;
         if (!projection.Segment(cube.points[edge[0]],cube.points[edge[1]],a,b)) continue;
         const ImVec2 start{origin.x+a.x,origin.y+a.y},end{origin.x+b.x,origin.y+b.y};
+        if (selected && config.targetGlow) {
+            const float radius=Safe(config.glowRadius,5,0,10),opacity=Safe(config.glowOpacity,.45f,0,1);
+            for (int layer=3;layer>=1 && radius>0 && opacity>0;--layer) {
+                const float t=float(layer)/3;
+                draw.AddLine(start,end,Color(config.targetColor,opacity*(.16f+(1-t)*.2f)),thickness+radius*t*2);
+            }
+        }
         draw.AddLine(start,end,visual::Alpha(kLineShadow,float((color>>IM_COL32_A_SHIFT)&255)/255.f),thickness+1.5f);
-        visual::DrawGradientLine(draw,start,end,visual::Mix(color,IM_COL32_WHITE,.12f),color,thickness);
+        const ImU32 bright=(IM_COL32_WHITE&~IM_COL32_A_MASK)|(color&IM_COL32_A_MASK);
+        visual::DrawGradientLine(draw,start,end,visual::Mix(color,bright,.12f),color,thickness);
     }
 }
 void Box(ImDrawList& draw, ScreenRect rect, const visual::Cuboid& cube,
@@ -126,7 +134,7 @@ void Box(ImDrawList& draw, ScreenRect rect, const visual::Cuboid& cube,
     if (selected && config.targetGlow && !wire)
         visual::DrawBoxGlow(draw,lo,hi,Color(config.targetColor),thickness,rounding,
                             corners,fraction,config.glowRadius,config.glowOpacity);
-    if (wire) WireBox(draw,cube,projection,color,config,origin);
+    if (wire) WireBox(draw,cube,projection,color,config,selected,origin);
     else visual::DrawBoxOutline(draw,lo,hi,color,thickness,rounding,corners,fraction);
 }
 void Skeleton(ImDrawList& draw, const HumanoidRig& rig, const CameraProjection& projection,
@@ -220,7 +228,7 @@ void Tracer(ImDrawList& draw, const EntitySnapshot& entity, const CameraProjecti
     }
     visual::DrawGradientLine(draw,{origin.x+start.x*viewport.x,origin.y+start.y*viewport.y},
         {origin.x+foot.x,origin.y+foot.y},Color(config.tracerColor,Safe(config.tracerStartAlpha,.08f,0,1)),
-        Color(config.tracerEndColor),Safe(config.tracerThickness,1.25f,.5f,4));
+        Color(config.tracerEndColor,Safe(config.tracerColor[3],1,0,1)),Safe(config.tracerThickness,1.25f,.5f,4));
 }
 void Equipment(ImDrawList& draw,ImFont& font,const EntitySnapshot& e,ImVec2 at,
                float center,ImTextureID texture,ImVec2 origin,ImVec2 viewport,const VisualSettings& config) {
