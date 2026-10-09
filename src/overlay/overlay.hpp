@@ -159,7 +159,7 @@ private:
     void LoadPreferences();
     void DrawConfigSettings();
     void RefreshConfigs();
-    bool SaveConfig(const std::string& name);
+    bool SaveConfig(const std::string& name,bool overwrite=false);
     bool LoadConfig(const std::string& name);
     client_configs::Snapshot CaptureConfig() const;
     void ApplyConfig(const client_configs::Snapshot& config);

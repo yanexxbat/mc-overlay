@@ -92,7 +92,7 @@ struct OverlayUiCheck {
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
     static void ConfigName(Overlay& o,const char* name) { std::snprintf(o.configName_,sizeof(o.configName_),"%s",name); }
-    static bool SaveConfig(Overlay& o,const std::string& name) { return o.SaveConfig(name); }
+    static bool SaveConfig(Overlay& o,const std::string& name,bool overwrite=false) { return o.SaveConfig(name,overwrite); }
     static bool LoadConfig(Overlay& o,const std::string& name) { return o.LoadConfig(name); }
     static auto ConfigSnapshot(const Overlay& o) { return o.CaptureConfig(); }
     static void ConfigSnapshot(Overlay& o,const client_configs::Snapshot& c) { o.ApplyConfig(c); }
@@ -968,7 +968,22 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     std::string restored; Require(Encode(Check::ConfigSnapshot(overlay),restored)&&restored==saved,"Config Load button did not restore all settings and activation states");
     Require(std::filesystem::is_regular_file(folder/"client-settings.ini"),"Automatic preferences did not stay beside the client");
     Check::ConfigName(overlay,"My setup");
-    Require(Check::SaveConfig(overlay,"My setup"),"Existing profile could not be overwritten atomically");
+    Require(!Check::SaveConfig(overlay,"My setup"),"Save silently overwrote an existing profile");
+    Require(Check::SaveConfig(overlay,"My setup",true),"Explicitly requested overwrite failed");
+    // A newly copied uppercase file is absent from the cached UI list. Native
+    // Save must preserve it, discover it, then require the Overwrite action.
+    Check::ConfigName(overlay,"External"); Draw(overlay,Page::Settings,0,{1280,800});
+    Snapshot external; external.overlay.fovTrim=-7; std::string externalText;
+    Require(Encode(external,externalText),"External config fixture could not be serialized");
+    { std::ofstream out(folder/"configs"/"External.INI",std::ios::binary); out<<externalText; }
+    ImGui::FocusWindow(content); ImGui::GetCurrentContext()->NavNextActivateId=content->GetID("Save config");
+    Draw(overlay,Page::Settings,0,{1280,800});
+    auto readFile=[](const std::filesystem::path& path) { std::ifstream in(path,std::ios::binary); return std::string(std::istreambuf_iterator<char>(in),{}); };
+    Require(readFile(folder/"configs"/"External.INI")==externalText,"Cached-list collision silently replaced an external config");
+    Require(std::find(Check::ConfigNames(overlay).begin(),Check::ConfigNames(overlay).end(),"External")!=Check::ConfigNames(overlay).end(),"Uppercase .INI profile was not discovered");
+    Draw(overlay,Page::Settings,0,{1280,800}); ImGui::FocusWindow(content);
+    ImGui::GetCurrentContext()->NavNextActivateId=content->GetID("Overwrite config"); Draw(overlay,Page::Settings,0,{1280,800});
+    Require(readFile(folder/"configs"/"External.INI")==saved,"Explicit native overwrite did not replace the existing profile");
     Snapshot sentinel; sentinel.overlay.fovTrim=-7;
     Require(!Decode(saved.substr(0,saved.size()/2),sentinel)&&sentinel.overlay.fovTrim==-7,"Truncated config partially changed its destination");
     Require(!Decode(saved+"overlay.fovTrim 0\n",sentinel),"Duplicate config fields were accepted");

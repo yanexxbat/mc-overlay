@@ -69,7 +69,7 @@ void Overlay::RefreshConfigs() {
     auto iterator=std::filesystem::directory_iterator(directory,error);
     for(const auto end=std::filesystem::directory_iterator();!error&&iterator!=end;iterator.increment(error)) {
         const auto& path=iterator->path();
-        if(path.extension()==L".ini"&&PlainFile(path)) {
+        if(_wcsicmp(path.extension().c_str(),L".ini")==0&&PlainFile(path)) {
             const auto name=PathText(path.stem());
             if(client_configs::ValidName(name)) configNames_.push_back(name);
         }
@@ -79,7 +79,7 @@ void Overlay::RefreshConfigs() {
     if(error) { configError_=true; configStatus_="Cannot list configs. Check folder permissions, then Refresh."; }
     if(std::none_of(configNames_.begin(),configNames_.end(),[&](const auto& name){return SameName(name,selectedConfig_);})) selectedConfig_.clear();
 }
-bool Overlay::SaveConfig(const std::string& name) {
+bool Overlay::SaveConfig(const std::string& name,bool overwrite) {
     const auto fail=[&](const char* message) { configError_=true; configStatus_=message; return false; };
     if(!client_configs::ValidName(name)) return fail("Use 1-48 letters, numbers, spaces, - or _. Avoid reserved Windows names.");
     std::string text;
@@ -88,6 +88,11 @@ bool Overlay::SaveConfig(const std::string& name) {
     if(!PlainDirectory(directory,true)) return fail("Cannot create configs beside the client. Check folder permissions, then Save again.");
     const auto file=directory/(name+".ini");
     if(!PlainFile(file,true)) return fail("This config name belongs to a folder or linked file. Choose another name.");
+    const auto collision=[&] {
+        RefreshConfigs();
+        return fail("This config already exists. Use Overwrite config to replace it, or choose a new name.");
+    };
+    if(!overwrite&&GetFileAttributesW(file.c_str())!=INVALID_FILE_ATTRIBUTES) return collision();
     const auto temporary=directory/(name+".ini.tmp-"+std::to_string(GetCurrentProcessId())+"-"+std::to_string(GetTickCount64()));
     struct Cleanup { std::filesystem::path file; bool owned=false; ~Cleanup() { if(owned) { std::error_code ignored; std::filesystem::remove(file,ignored); } } } cleanup{temporary};
     {
@@ -98,8 +103,11 @@ bool Overlay::SaveConfig(const std::string& name) {
         if(!WriteFile(handle.get(),text.data(),DWORD(text.size()),&written,nullptr)||written!=text.size()||!FlushFileBuffers(handle.get()))
             return fail("Config could not be written completely. Free space and retry; the previous file is kept.");
     }
-    if(!MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
+    if(!MoveFileExW(temporary.c_str(),file.c_str(),MOVEFILE_WRITE_THROUGH|(overwrite?MOVEFILE_REPLACE_EXISTING:0))) {
+        const auto error=GetLastError();
+        if(!overwrite&&(error==ERROR_ALREADY_EXISTS||error==ERROR_FILE_EXISTS)) return collision();
         return fail("Config is locked or cannot be replaced. Close other editors, then retry.");
+    }
     selectedConfig_=name; std::snprintf(configName_,sizeof(configName_),"%s",name.c_str());
     configStatus_="Saved \""+name+"\"."; configError_=false; RefreshConfigs();
     return !configError_;
@@ -147,7 +155,7 @@ void Overlay::DrawConfigSettings() {
     const bool validName=client_configs::ValidName(configName_);
     const bool overwrite=std::any_of(configNames_.begin(),configNames_.end(),[&](const auto& name){return SameName(name,configName_);});
     ImGui::BeginDisabled(!validName);
-    if(ImGui::Button(overwrite?"Overwrite config":"Save config",{-1,0})) SaveConfig(configName_);
+    if(ImGui::Button(overwrite?"Overwrite config":"Save config",{-1,0})) SaveConfig(configName_,overwrite);
     ImGui::EndDisabled();
     const float width=std::max(1.f,(ImGui::GetContentRegionAvail().x-ImGui::GetStyle().ItemSpacing.x)*.5f);
     ImGui::BeginDisabled(selectedConfig_.empty());
