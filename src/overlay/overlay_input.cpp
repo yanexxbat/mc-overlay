@@ -1,4 +1,5 @@
 #include "overlay.hpp"
+#include "visual_preferences.hpp"
 #include "../common/flat_style.hpp"
 #include <windows.h>
 #include <fstream>
@@ -197,6 +198,7 @@ void Overlay::SavePreferences() {
       if(!out) { preferenceStatus_="Could not save client-settings.ini."; preferencesDirty_=false; return; }
       out<<"mcov-client 1\n"<<std::setprecision(9);
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
+      visual_preferences::Write(out,visuals_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
       for(int i=0;i<2;++i) {
           auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
@@ -236,6 +238,7 @@ void Overlay::LoadPreferences() {
                 bool direct; if(row>>direct) c.requireCrosshairHit=direct;
                 c.Clamp(); auto& current=i?anchorMacro_:crystalMacro_; c.enabled=current.enabled; current=c;
             }
+        } else if(tag.starts_with("visual-")) { visual_preferences::Read(tag,row,visuals_);
         } else if(tag=="world-depth") { int value; if(row>>value&&(value==0||value==1)) settings_.occludeWorldEffects=value==1;
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }
