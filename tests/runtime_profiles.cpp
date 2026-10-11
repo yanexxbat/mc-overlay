@@ -253,6 +253,26 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     // Die normale Entity.turn-Methode arbeitet nach Abschalten wieder unverändert.
     env->CallVoidMethod(player,turn,20.0,0.0); Healthy(env);
     Require(std::abs(view(cameraYaw)-9)<.001f,"normal mouse look was not restored");
+    // Spin nutzt dieselbe Kamera-Trennung, ohne Zielsuche oder Angriffe.
+    const auto beforeSpinAttacks=report.attacks;
+    request.spin.enabled=true; request.spin.direction=0;
+    step(8);
+    const auto spinningYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(report.spinStatus==mcov::combat::SpinStatus::Active&&report.attacks==beforeSpinAttacks&&
+        std::abs(mcov::combat::Wrap(spinningYaw-9))>1&&std::abs(view(cameraYaw)-9)<.001f,
+        "Spinbot failed to rotate independently without attacking");
+    request.inputAllowed=false; step();
+    const auto spinPausedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    Require(report.spinStatus==mcov::combat::SpinStatus::Paused&&std::abs(spinPausedYaw-9)<.001f,
+        "Spinbot retained rotation after input pause");
+    request.inputAllowed=true; step(2);
+    request.config.enabled=true; ++request.revision;
+    floating(player,b.clsPlayer,"testCooldown",0); step();
+    Require(report.debug.target&&report.spinStatus==mcov::combat::SpinStatus::CombatPriority,
+        "Spinbot overrode Kill Aura target rotation");
+    request.config.enabled=false; request.spin.enabled=false; ++request.revision; step();
+    Require(report.spinStatus==mcov::combat::SpinStatus::Disabled&&std::abs(view(cameraYaw)-9)<.001f,
+        "Disabling Spinbot disturbed camera restoration");
     const auto afterSilentAttacks=report.attacks;
     request.config.enabled=true; ++request.revision;
     request.inputAllowed=false;
@@ -285,6 +305,11 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.status==mcov::CombatBridgeStatus::SilentUnavailable && report.debug.silentUnavailable &&
             report.attacks==0 && std::abs(afterUnsupported-beforeUnsupported)<.001f,
             "missing silent hooks allowed visible rotation/attacks");
+    request.config.enabled=false; request.spin.enabled=true; ++request.revision; step(2);
+    Require(report.spinStatus==mcov::combat::SpinStatus::SilentUnavailable&&
+        std::abs(env->CallFloatMethod(player,b.mEntityYaw)-beforeUnsupported)<.001f,
+        "Spinbot ignored a missing independent camera hook");
+    Healthy(env);
     unsupported.Close(env); testCombat=nullptr;
     std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
 }

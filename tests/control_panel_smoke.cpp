@@ -365,7 +365,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
     mcov::OverlayUiCheck::CloseDetails(overlay); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
     SaveFrame(device,context,output/"module-grid-small.png");
-    OpenModuleSettings(overlay,Page::Combat,"",1,8,{480,360});
+    OpenModuleSettings(overlay,Page::Combat,"",1,9,{480,360});
     Require(!ImGui::FindWindowByName("mcov control panel")->Active,"Compact settings still have text from the grid behind them");
     SaveFrame(device,context,output/"module-settings-small.png");
     auto* smallPane=ImGui::FindWindowByName("mcov module settings");
@@ -375,7 +375,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&ImGui::FindWindowByName("mcov control panel")->Active,
         "Compact settings close did not restore the module grid");
     mcov::OverlayUiCheck::Center(overlay);
-    OpenModuleSettings(overlay,Page::Combat,"",1,8,{1920,1080});
+    OpenModuleSettings(overlay,Page::Combat,"",1,9,{1920,1080});
     SaveFrame(device,context,output/"module-settings-large.png");
     mcov::OverlayUiCheck::Center(overlay);
 }
@@ -451,7 +451,7 @@ void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
         Draw(overlay,Page::Combat,0,size); ImGui::SetScrollY(Child("/module_grid_"),0); Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
         const char* suffix=w<500?"small":"desktop";
         SaveFrame(device,context,output/(std::string("glass-scene-grid-")+suffix+".png"));
-        OpenModuleSettings(overlay,Page::Combat,"combat_sections",1,8,size);
+        OpenModuleSettings(overlay,Page::Combat,"combat_sections",1,9,size);
         Draw(overlay,Page::Combat,0,size); SaveFrame(device,context,output/(std::string("glass-scene-settings-")+suffix+".png"));
         previewSceneImage.Reset(); previewScene.Reset();
     }
@@ -934,6 +934,9 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     Check::ConfigName(overlay,"My setup");
     auto expected=Check::ConfigSnapshot(overlay);
     expected.combat.aimFov=57; expected.combat.autoTotem.enabled=true;
+    expected.combat.spin.enabled=true; expected.combat.spin.speed=555;
+    expected.combat.spin.direction=1; expected.combat.spin.pitchMode=3;
+    expected.binds[mcov::keys::Index(mcov::keys::Action::Spinbot)]={0x50,0,mcov::keys::Mode::Hold};
     expected.killAura.enabled=true; expected.killAura.target.playersOnly=true; expected.killAura.attack.range=4.25;
     expected.visuals.boxEsp=false; expected.visuals.boxStyle=mcov::EspBoxStyle::Wire3D; expected.visuals.tracerThickness=.5f;
     expected.aura.enabled=true; expected.aura.orbCount=7; expected.aura.endColor={.2f,.3f,.4f,.5f};
@@ -1305,7 +1308,7 @@ int main(int argc,char** argv) {
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
             const auto suffix=size.x<500?"-small.png":".png";
             for(int section:{3,5,6}) {
-                OpenModuleSettings(overlay,Page::Combat,"combat_sections",section,8,size);
+                OpenModuleSettings(overlay,Page::Combat,"combat_sections",section,9,size);
                 mcov::OverlayUiCheck::Center(overlay);
                 for(int i=0;i<20;++i) Draw(overlay,Page::Combat,0,size);
                 SaveFrame(device.Get(),context.Get(),output/(std::string("item-settings-")+std::to_string(section)+suffix));
