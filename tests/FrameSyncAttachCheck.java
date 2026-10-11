@@ -36,8 +36,9 @@ public final class FrameSyncAttachCheck {
                     if (method.getName().equals(profile.update()) && method.getReturnType() == void.class) update = method;
                 require(update != null, "Missing camera method " + profile.id());
                 Class<?> entity = Class.forName(profile.entity().replace('/', '.'), true, loader);
+                Class<?> local = Class.forName(profile.localPlayer().replace('/', '.'), true, loader);
                 targets.add(new Target(profile.id() + suffix, client.getConstructor().newInstance(),
-                        camera.getConstructor().newInstance(), frame, update, entity.getConstructor().newInstance(),
+                        camera.getConstructor().newInstance(), frame, update, local.getConstructor().newInstance(),
                         entity.getDeclaredMethod(profile.turn(), double.class, double.class),
                         camera.getDeclaredMethod("testCameraYaw", entity, float.class),
                         camera.getDeclaredMethod("testCameraPitch", entity, float.class)));
@@ -69,6 +70,15 @@ public final class FrameSyncAttachCheck {
                         "Loaded silent pitch hook missing " + target.id());
                 require(target.entity().getClass().getField("testYaw").getFloat(target.entity())==0,
                         "Loaded turn hook changed player combat yaw " + target.id());
+                FrameProfiles.Profile p=null;
+                for(FrameProfiles.Profile candidate:FrameProfiles.PROFILES)
+                    if(target.id().equals(candidate.id()) || target.id().equals(candidate.id()+"-field-camera")) p=candidate;
+                require(p!=null,"Profile missing");
+                signal.getField("movementEnabled").setBoolean(null,true);
+                target.entity().getClass().getMethod(p.localStep()).invoke(target.entity());
+                require(Math.abs(target.entity().getClass().getField("testMovementYaw").getFloat(target.entity())-18)<.001f,
+                    "Loaded movement scope was not retransformed "+target.id());
+                signal.getField("movementEnabled").setBoolean(null,false);
                 signal.getField("silentPlayer").set(null, null);
                 target.turn().invoke(target.entity(), 20d, 20d);
                 require(Math.abs((float)target.yaw().invoke(target.camera(), target.entity(), .5f)-3)<.001f,

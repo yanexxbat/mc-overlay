@@ -199,7 +199,7 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             stack_type='java/util/Map' if special[0]=='world_states' else special[3][1:-1]
             stack_map=u2(1)+bytes([64+offset])+b'\x07'+u2(cp.cls(stack_type))
             nested=u2(1)+u2(cp.utf('StackMapTable'))+u4(len(stack_map))+stack_map
-        attr = u2(8) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
+        attr = u2(12) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
         compiled_methods.append(u2(9 if static else 1) + u2(cp.utf(method)) + u2(cp.utf(desc)) + u2(1) +
                                 u2(code_name) + u4(len(attr)) + attr)
     return (b'\xca\xfe\xba\xbe' + u2(0) + u2(61) + u2(len(cp.entries) + 1) + b''.join(cp.entries) +
