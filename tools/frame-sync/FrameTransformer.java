@@ -5,6 +5,7 @@ import java.lang.instrument.Instrumentation;
 import java.security.ProtectionDomain;
 import java.util.Map;
 import java.util.Set;
+import java.util.HashSet;
 import jdk.internal.org.objectweb.asm.ClassReader;
 import jdk.internal.org.objectweb.asm.ClassVisitor;
 import jdk.internal.org.objectweb.asm.ClassWriter;
@@ -48,16 +49,26 @@ final class FrameTransformer implements ClassFileTransformer {
             boolean[] changed = {false};
             boolean[] cameraAxes={false,false};
             long[] turnBits={0};
+            Set<String> movementMethods=new HashSet<>();
             reader.accept(new ClassVisitor(Opcodes.ASM8, writer) {
                 @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
                     MethodVisitor next = super.visitMethod(access, method, descriptor, signature, exceptions);
                     int role = FrameProfiles.role(name, method, descriptor);
+                    boolean concrete=(access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE))==0;
+                    int movementAxis=concrete ? FrameProfiles.movementAxis(name,method,descriptor) : 0;
+                    int movementPart=concrete ? FrameProfiles.movementPart(name,method,descriptor) : 0;
                     boolean depthPass=DepthProfiles.worldPass(name,method,descriptor);
-                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass) return next;
+                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
+                    if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
                     if (role != 0) changed[0] = true;
                     return new MethodVisitor(Opcodes.ASM8, next) {
+                        final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
                         @Override public void visitCode() {
                             super.visitCode();
+                            if(movementPart!=0) {
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","beginMovement","()V",false);
+                                super.visitLabel(movementStart);
+                            }
                             if (role == 5) {
                                 // Nur übernommene Macro-Platzierungen unterdrücken Vanilla-Use.
                                 Label vanilla=new Label();
@@ -96,6 +107,15 @@ final class FrameTransformer implements ClassFileTransformer {
                             } else super.visitMethodInsn(opcode,owner,callee,desc,iface);
                         }
                         @Override public void visitInsn(int opcode) {
+                            if(movementAxis!=0 && opcode==Opcodes.FRETURN) {
+                                // Nur im Physik-Scope liefert der Getter die Kamera. Außerhalb
+                                // bleiben Modell, Netzwerk und Combat bei der echten Rotation.
+                                super.visitVarInsn(Opcodes.ALOAD,0);
+                                super.visitInsn(Opcodes.SWAP);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal",movementAxis==1 ? "movementYaw" : "movementPitch","(Ljava/lang/Object;F)F",false);
+                            }
+                            if(movementPart!=0 && opcode==Opcodes.RETURN)
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                             if (role == 3 && opcode == Opcodes.RETURN) {
                                 // Erst nach Vanilla-Movement und Modell-Updates:
                                 // neue Zielpositionen, kein anschließendes Überschreiben.
@@ -106,12 +126,30 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "cameraReady", "()V", false);
                             super.visitInsn(opcode);
                         }
+                        @Override public void visitMaxs(int stack,int locals) {
+                            if(movementPart!=0) {
+                                // Letzter Handler: vorhandene Minecraft-/Mod-Catches behalten
+                                // Vorrang. Auch eine Exception aus einem Callee beendet den Scope.
+                                super.visitLabel(movementEnd);
+                                super.visitTryCatchBlock(movementStart,movementEnd,movementHandler,null);
+                                super.visitLabel(movementHandler);
+                                // Keine Locals im Handler nötig; originale Stack-Maps bleiben erhalten.
+                                super.visitFrame(Opcodes.F_FULL,0,null,1,new Object[]{"java/lang/Throwable"});
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
+                                super.visitInsn(Opcodes.ATHROW);
+                            }
+                            super.visitMaxs(stack,locals);
+                        }
                     };
                 }
             }, 0);
             // Preserve stack-map frames; markers have no arguments/new locals.
             if(cameraAxes[0] && cameraAxes[1]) signals.getMethod("markCamera",long.class).invoke(null,FrameProfiles.cameraMask(name));
             if(turnBits[0]!=0) signals.getMethod("markTurn",long.class).invoke(null,turnBits[0]);
+            for(int part=1;part<=4;++part) {
+                long mask=FrameProfiles.movementMask(name,movementMethods,part);
+                if(mask!=0) signals.getMethod("markMovement",int.class,long.class).invoke(null,part,mask);
+            }
             return changed[0] ? writer.toByteArray() : null;
         } catch (Throwable error) {
             failure = "Frame marker for " + name + ": " + error;
