@@ -128,11 +128,11 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             entity,yaw,pitch,nested,move,vec,axes=special[1:]
             code=b''
             if nested:
-                owner,method,descriptor=nested
+                owner,nested_method,descriptor=nested
                 code+=b'\x2a'
                 if descriptor.startswith('(L'):
                     code+=b'\xbb'+u2(cp.cls(vec))+b'\x59\xb7'+u2(cp.ref(10,vec,'<init>','()V'))
-                code+=b'\xb7'+u2(cp.ref(10,owner,method,descriptor))
+                code+=b'\xb7'+u2(cp.ref(10,owner,nested_method,descriptor))
             if desc.startswith('(L'):
                 # Nested scope + a read after its return catches premature cleanup.
                 code+=b'\x2a\x0c\x2b\xb6'+u2(cp.ref(10,entity,move,'(FL'+vec+';)V'))
