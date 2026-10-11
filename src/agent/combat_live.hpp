@@ -139,6 +139,10 @@ public:
             const auto now=GetTickCount64(); ++tick_;
             CombatRequest request;
             const bool read=channel_->combatRequest.Read(request);
+            auto spin=read?request.spin:combat::SpinConfig{};
+            if(!combat::Valid(spin)) spin={};
+            spinRequested_=spin.enabled;
+            spinStatus_=spin.enabled?combat::SpinStatus::Paused:combat::SpinStatus::Disabled;
             if(read && request.sentAtMs && request.revision!=revision_) {
                 const auto next=combat::MakeKillAuraConfig(request.config);
                 if(!config_.Publish(next)) throw std::runtime_error("combat configuration");
@@ -154,7 +158,7 @@ public:
             const auto cfg=config_.Read().values;
             if(failed_) { EndSilent(); Report(CombatBridgeStatus::Error); return; }
             const auto flags=channel_->controlFlags.load(std::memory_order_acquire);
-            if(!read || !cfg.enabled || !CombatLeaseValid(request,now) || (flags&(kCtrlRequestUnload|kCtrlPauseSampling))) {
+            if(!read || (!cfg.enabled&&!spin.enabled) || !CombatLeaseValid(request,now) || (flags&(kCtrlRequestUnload|kCtrlPauseSampling))) {
                 EndSilent();
                 report_.debug=assist_.Step(frame_);
                 Report(cfg.enabled ? CombatBridgeStatus::Paused : CombatBridgeStatus::Disabled); return;
@@ -185,7 +189,10 @@ public:
             frame_.gameAttackReach=reach_ ? Double(player_,reach_) : (Boolean(mode_,farReach_) ? 6.0 : 3.0);
             frame_.inputAllowed=true;
             if(crosshair_) if(auto target=Object(client,crosshair_)) frame_.crosshairId=Id(target);
-            count_=0; auto iterable=CallObject(level,entities_);
+            count_=0;
+            // Der Spinbot braucht keine Entity-Suche und erzeugt keine Angriffe.
+            if(cfg.enabled) {
+            auto iterable=CallObject(level,entities_);
             if(!iterable) { Pause(CombatBridgeStatus::NoWorld); return; }
             auto iter=CallObject(iterable,iterator_);
             if(!iter) { Pause(CombatBridgeStatus::NoWorld); return; }
@@ -220,10 +227,20 @@ public:
                 }
                 refs_[count_]=object; entitiesData_[count_++]=e;
             }
+            }
             frame_.entities={entitiesData_.data(),count_};
-            frame_.attackHitId=RayTarget(frame_.observedRotation,std::min(cfg.attack.range,*frame_.gameAttackReach));
+            if(cfg.enabled) frame_.attackHitId=RayTarget(frame_.observedRotation,std::min(cfg.attack.range,*frame_.gameAttackReach));
             report_.debug=assist_.Step(frame_);
-            if(!report_.debug.target) EndSilent();
+            bool spinning=false;
+            if(spin.enabled) {
+                if(!silentSupported_) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::SilentUnavailable; }
+                else if(report_.debug.target) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::CombatPriority; }
+                else if(auto pose=spinbot_.Step(spin,Rotation(player_),frame_.cameraRotation,frame_.dt)) {
+                    ApplyRotation(*pose); spinning=true; spinStatus_=combat::SpinStatus::Active;
+                    report_.debug.current=Rotation(player_);
+                }
+            } else spinbot_.Reset();
+            if(!report_.debug.target&&!spinning) EndSilent();
             else if(cameraDetached_) {
                 const auto applied=Rotation(player_);
                 SyncModelRotation(player_,applied,frame_.observedRotation);
@@ -256,11 +273,7 @@ public:
         auto entity=refs_[index];
         if(!Boolean(entity,alive_) || Identity(entity)!=command.identity) return false;
         if(command.kind==combat::CommandKind::Pose) {
-            const auto previous=Rotation(player_);
-            const float yaw=Float(player_,yaw_);
-            env_->CallVoidMethod(player_,setYaw_,static_cast<jfloat>(yaw+combat::Wrap(command.pose.rotation.yaw-yaw))); Check();
-            env_->CallVoidMethod(player_,setPitch_,static_cast<jfloat>(command.pose.rotation.pitch)); Check();
-            SyncModelRotation(player_,Rotation(player_),previous);
+            ApplyRotation(command.pose.rotation);
             return true;
         }
         const auto cfg=config_.Read().values;
@@ -275,6 +288,13 @@ public:
         return true;
     }
 private:
+    void ApplyRotation(combat::Angles pose) {
+        const auto previous=Rotation(player_);
+        const float yaw=Float(player_,yaw_);
+        env_->CallVoidMethod(player_,setYaw_,static_cast<jfloat>(yaw+combat::Wrap(pose.yaw-yaw))); Check();
+        env_->CallVoidMethod(player_,setPitch_,static_cast<jfloat>(pose.pitch)); Check();
+        SyncModelRotation(player_,Rotation(player_),previous);
+    }
     void SyncModelRotation(jobject player,combat::Angles applied,combat::Angles previous) {
         const auto yaw=static_cast<jfloat>(applied.yaw);
         const auto oldYaw=static_cast<jfloat>(applied.yaw+combat::Wrap(previous.yaw-applied.yaw));
@@ -301,6 +321,7 @@ private:
         return {yaw,pitch};
     }
     void EndSilent(bool restore=true) {
+        spinbot_.Reset();
         if(!cameraDetached_) return;
         auto player=env_->GetStaticObjectField(signal_,silentPlayer_); Check();
         if(player && restore) {
@@ -364,6 +385,11 @@ private:
         frame_.inputAllowed=false; report_.debug=assist_.Step(frame_); Report(s);
     }
     void Report(CombatBridgeStatus status) {
+        if(spinRequested_) {
+            if(status==CombatBridgeStatus::Error) spinStatus_=combat::SpinStatus::Error;
+            else if(status==CombatBridgeStatus::NoWorld) spinStatus_=combat::SpinStatus::NoWorld;
+        }
+        report_.spinStatus=spinStatus_;
         report_.sampledAtMs=GetTickCount64(); report_.tick=tick_; report_.status=status;
         if(channel_) channel_->combatReport.Publish(report_);
     }
@@ -371,6 +397,9 @@ private:
     combat::ConfigStore config_;
     combat::FriendEnemyBook relations_;
     combat::CombatAssist assist_;
+    combat::Spinbot spinbot_;
+    combat::SpinStatus spinStatus_{};
+    bool spinRequested_{};
     SharedBlock* channel_{};
     CombatReport report_{};
     std::array<combat::Entity,kMaxEntities> entitiesData_{};

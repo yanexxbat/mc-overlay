@@ -47,9 +47,7 @@ public:
         if(c.pitchMode==1) pitch=89;
         else if(c.pitchMode==2) pitch=-89;
         else if(c.pitchMode==3) pitch+=std::sin(time_*2*kPi*c.pitchFrequency)*c.pitchAmplitude;
-        // Zeitphase begrenzen; mehrere Wochen Laufzeit verlieren keine Winkelpraezision.
         time_+=dt;
-        if(time_>3600) time_=std::fmod(time_,2*c.reverseSeconds);
         return Angles{yaw,std::clamp(pitch,-89.0,89.0)};
     }
 private:
