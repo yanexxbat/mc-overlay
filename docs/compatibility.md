@@ -185,7 +185,14 @@ See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
 require IPC v20 and a full Minecraft restart after upgrading. Spinbot shares the
-existing silent camera hooks and stays disabled when those hooks are unavailable.
+existing silent camera hooks. Its movement correction uses audited Entity,
+LivingEntity, Player and LocalPlayer physics scopes; only getters inside those
+scopes use camera yaw/pitch. Model/network getters outside keep the spin angles.
+All eleven profiles test forward/sideways/diagonal acceleration, sprint-jump yaw,
+travel pitch, nested/exception cleanup, foreign entities and pause/priority gates.
+Dynamic attach also retransforms already loaded movement methods. Spinbot stays
+disabled if camera or movement hooks are unavailable. These fixtures do not
+replace movement testing in a running Minecraft client.
 
 ## Reproduce the checks
 

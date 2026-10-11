@@ -14,11 +14,11 @@ struct SpinConfig {
 enum class SpinStatus : std::uint32_t { Disabled, Active, Paused, CombatPriority, NoWorld, SilentUnavailable, Error };
 inline const char* SpinStatusText(SpinStatus status) {
     switch(status) {
-        case SpinStatus::Active:return "Spinning / independent camera";
+        case SpinStatus::Active:return "Spinning / camera-relative movement";
         case SpinStatus::Paused:return "Paused - close menus and focus Minecraft";
         case SpinStatus::CombatPriority:return "Kill Aura has rotation priority";
         case SpinStatus::NoWorld:return "Join a world";
-        case SpinStatus::SilentUnavailable:return "Camera hook missing - restart Minecraft";
+        case SpinStatus::SilentUnavailable:return "Camera or movement hook missing - restart Minecraft";
         case SpinStatus::Error:return "Stopped - reconnect with injector";
         default:return "Off";
     }

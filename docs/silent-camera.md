@@ -56,6 +56,15 @@ Entities und der abgeschaltete Modus behalten ihre ursprünglichen Deltas.
 
 ## Thread, Pause und Lebensdauer
 
+Spinbot ergänzt eine automatische, getrennte Movement-Korrektur: In den
+auditierten Physik-Scopes (`moveRelative`, `travel`, `jumpFromGround`, lokale
+`aiStep`) liefern Entity-Yaw/Pitch-Getter die ruhige View-Richtung. Außerhalb
+bleiben sie bei den echten Modell-/Netzwerkwinkeln. Verschachtelung und Exceptions
+räumen den Thread-Scope auf; Pause, Abschalten, Close oder Kill-Aura-Priorität
+deaktivieren das Movement-Gate. Pro Physik-Thread entsteht einmal ein Zähler,
+keine zusätzlichen JNI-Abfragen im Renderthread. Ohne vollständige Hooks bleibt
+Spinbot gesperrt. Die ursprüngliche Kill-Aura-Bewegungslogik bleibt unabhängig.
+
 Die Kamera- und Mouse-Wrapper rufen kein JNI auf und erzeugen keine Objekte.
 JNI läuft für Combat nur im Client-Tick. Die externe ImGui-Anwendung publiziert
 Config/Lease und liest Diagnosen; der ESP-Sampler liest die fertig berechnete
