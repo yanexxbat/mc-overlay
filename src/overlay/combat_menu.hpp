@@ -5,7 +5,7 @@
 namespace mcov {
 class CombatMenu {
 public:
-    enum class Section { KillAura, AimAssist, Triggerbot, AutoTotem, Friends, CrystalMacro, AnchorMacro, HitSounds, Debug };
+    enum class Section { KillAura, AimAssist, Triggerbot, AutoTotem, Friends, CrystalMacro, AnchorMacro, HitSounds, Spinbot, Debug };
     CombatMenu() { store_.Publish(combat::MakeKillAuraConfig({})); }
     Section DrawNavigation();
     float NavigationHeight() const { return navigationHeight_; }

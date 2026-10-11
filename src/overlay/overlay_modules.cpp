@@ -13,7 +13,8 @@ constexpr Definition Module(const char* name,Action a) { return {name,Mode::Togg
 constexpr Definition Option(const char* name,Flag flag) { return {name,Mode::Toggle,Action::Count,flag}; }
 constexpr Definition combat[]={Module("Kill Aura",Action::KillAura),Module("Aim Assist",Action::AimAssist),
     Module("Triggerbot",Action::Triggerbot),Module("Auto Totem",Action::AutoTotem),{"Friends"},
-    Module("Crystal Macro",Action::CrystalMacro),Module("Anchor Macro",Action::AnchorMacro),Module("Hit sounds",Action::HitSounds)};
+    Module("Crystal Macro",Action::CrystalMacro),Module("Anchor Macro",Action::AnchorMacro),Module("Hit sounds",Action::HitSounds),
+    Module("Spinbot",Action::Spinbot)};
 constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleton",Action::Skeleton),Module("Name tags",Action::NameTags),
     Option("Health bars",Flag::Health),Option("Distance labels",Flag::Distance),Option("Tracers",Flag::Tracers),Option("Target info",Flag::TargetInfo),
     Module("Target aura",Action::TargetAura),Module("Target marker",Action::TargetMarker),Module("Trails",Action::Trails),

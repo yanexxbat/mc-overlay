@@ -123,6 +123,9 @@ inline void Visit(Archive& a,Snapshot& s) {
     COLOR(visuals,healthColor); COLOR(visuals,healthLow); COLOR(visuals,healthMiddle); COLOR(visuals,armorColor);
     COLOR(visuals,tracerColor); COLOR(visuals,tracerEndColor); COLOR(visuals,targetColor);
     FIELD(combat,triggerbot); FIELD(combat,aimLock); FIELD(combat,aimKey,1,254);
+    FIELD(combat,spin.enabled); FIELD(combat,spin.speed,30,1800); FIELD(combat,spin.direction,0,2);
+    FIELD(combat,spin.reverseSeconds,.5,10); FIELD(combat,spin.pitchMode,0,3);
+    FIELD(combat,spin.pitchAmplitude,0,80); FIELD(combat,spin.pitchFrequency,.1,3);
     FIELD(combat,aimFov,2,90); FIELD(combat,aimRange,1,8); FIELD(combat,aimGain,.02,1);
     FIELD(combat,aimMaxStep,2,80); FIELD(combat,aimPlayersOnly); FIELD(combat,autoTotem.enabled);
     FIELD(combat,autoTotem.retryMs,50,500); FIELD(combat,cps,1,20); FIELD(combat,jitter,0,.9);

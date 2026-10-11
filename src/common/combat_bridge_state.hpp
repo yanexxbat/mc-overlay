@@ -1,5 +1,6 @@
 #pragma once
 #include "../combat/target_selector.hpp"
+#include "../combat/spinbot.hpp"
 #include <atomic>
 #include <cstring>
 #include <type_traits>
@@ -49,6 +50,7 @@ inline const char* CombatBridgeText(CombatBridgeStatus s) {
 struct CombatRequest {
     std::uint64_t sentAtMs{}, revision{};
     combat::Config config{};
+    combat::SpinConfig spin{};
     combat::Relations relations{};
     double verticalFov{70}, viewportHeight{1080};
     bool inputAllowed{};
@@ -57,6 +59,7 @@ struct CombatReport {
     std::uint64_t sampledAtMs{}, attacks{}, tick{};
     CombatBridgeStatus status{};
     combat::DebugSnapshot debug{};
+    combat::SpinStatus spinStatus{};
 };
 inline bool CombatLeaseValid(const CombatRequest& r,std::uint64_t now) {
     return r.sentAtMs && r.sentAtMs<=now && now-r.sentAtMs<=kCombatLeaseMs && r.inputAllowed;

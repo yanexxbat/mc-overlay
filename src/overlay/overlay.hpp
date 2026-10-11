@@ -78,6 +78,7 @@ struct ChunkFinderSettings {
 };
 
 struct CombatSettings {
+    combat::SpinConfig spin{};
     bool  triggerbot    = false;
 
     // Aim lock: nudges the mouse toward the best target while a key is held.

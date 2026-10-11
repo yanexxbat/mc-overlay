@@ -1107,6 +1107,7 @@ void Overlay::PushCombatRequest() {
     CombatRequest request;
     request.sentAtMs=::GetTickCount64(); request.revision=version.revision;
     request.config=version.values; request.relations=combatMenu_.Relations().Read();
+    request.spin=combat_.spin;
     request.verticalFov=haveSnapshot_ && lastSnapshot_.fovDeg>1 ? lastSnapshot_.fovDeg : 70;
     request.viewportHeight=std::max(1.f,ImGui::GetIO().DisplaySize.y);
     request.inputAllowed=!menuVisible_&&!hudEditing_ && IsForegroundWindowOwnedBy(target_.pid);
@@ -1531,6 +1532,28 @@ void Overlay::DrawCombatTab() {
     if(section==CombatMenu::Section::CrystalMacro) { DrawItemAssistSettings(1); return; }
     if(section==CombatMenu::Section::AnchorMacro) { DrawItemAssistSettings(2); return; }
     if(section==CombatMenu::Section::HitSounds) { DrawRockstarSettings(rockstar::Feature::HitSounds); return; }
+    if(section==CombatMenu::Section::Spinbot) {
+        ImGui::TextWrapped("Spin the player while the camera stays independent. Kill Aura takes priority while tracking a target.");
+        auto& spin=combat_.spin;
+        if(panel::BeginRows("spinbot_controls")) {
+            panel::CheckRow("Enable Spinbot",&spin.enabled); DrawBind(keys::Action::Spinbot,true);
+            panel::SliderRow("Rotation speed",&spin.speed,30,1800,"%.0f deg/s");
+            const char* directions[]={"Clockwise","Counterclockwise","Alternating"};
+            panel::ComboRow("Direction",&spin.direction,directions,IM_ARRAYSIZE(directions));
+            if(spin.direction==2) panel::SliderRow("Reverse after",&spin.reverseSeconds,.5f,10,"%.1f s");
+            const char* pitchModes[]={"Camera pitch","Look down","Look up","Wave"};
+            panel::ComboRow("Pitch",&spin.pitchMode,pitchModes,IM_ARRAYSIZE(pitchModes));
+            if(spin.pitchMode==3) {
+                panel::SliderRow("Wave amplitude",&spin.pitchAmplitude,0,80,"%.0f deg");
+                panel::SliderRow("Wave frequency",&spin.pitchFrequency,.1f,3,"%.1f Hz");
+            }
+            const bool fresh=combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs;
+            panel::ValueRow("Status",fresh?combat::SpinStatusText(combatReport_.spinStatus):"Connect with the injector");
+            ImGui::EndTable();
+        }
+        ImGui::TextWrapped("Close the menu to run. F5 shows the spinning player; mouse look stays usable. Toggle or Hold can be set under Settings / Keybinds.");
+        return;
+    }
     const bool auraActive=combatMenu_.Store().Read().values.enabled;
     if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura is enabled.");
     ImGui::BeginDisabled(auraActive);

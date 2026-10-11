@@ -30,6 +30,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
     switch(a) {
         case keys::Action::KillAura:return combatMenu_.Store().Read().values.enabled;
         case keys::Action::AimAssist:return combat_.aimLock;
+        case keys::Action::Spinbot:return combat_.spin.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
@@ -62,6 +63,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
     switch(a) {
         case keys::Action::KillAura: { auto c=combatMenu_.Store().Read().values; c.enabled=value; combatMenu_.Store().Publish(c); break; }
         case keys::Action::AimAssist:combat_.aimLock=value;break;
+        case keys::Action::Spinbot:combat_.spin.enabled=value;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
