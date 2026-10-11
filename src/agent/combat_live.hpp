@@ -241,13 +241,13 @@ public:
                 }
             } else spinbot_.Reset();
             if(!report_.debug.target&&!spinning) EndSilent();
-            else if(cameraDetached_) {
+            else if(report_.debug.target&&cameraDetached_) {
                 const auto applied=Rotation(player_);
                 SyncModelRotation(player_,applied,frame_.observedRotation);
                 report_.debug.current=applied;
                 report_.debug.error=combat::AngularDistance(applied,report_.debug.target->desired);
             }
-            Report(failed_ ? CombatBridgeStatus::Error : report_.debug.silentUnavailable ? CombatBridgeStatus::SilentUnavailable : report_.debug.target ? CombatBridgeStatus::Active : CombatBridgeStatus::NoTarget);
+            Report(failed_ ? CombatBridgeStatus::Error : report_.debug.silentUnavailable ? CombatBridgeStatus::SilentUnavailable : report_.debug.target ? CombatBridgeStatus::Active : cfg.enabled?CombatBridgeStatus::NoTarget:CombatBridgeStatus::Disabled);
         } catch(...) {
             if(env->ExceptionCheck()) env->ExceptionClear();
             failed_=true; frame_.inputAllowed=false;

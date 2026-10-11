@@ -1032,7 +1032,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
 // Triggerbot
 // ---------------------------------------------------------------------------
 void Overlay::UpdateTriggerbot(const WorldSnapshot& snapshot) {
-    if(combatMenu_.Store().Read().values.enabled) return;
+    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled) return;
     if (!combat_.triggerbot) return;
 
     // Never while our own menu is up - the injected click would land on the UI.
@@ -1181,7 +1181,7 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
 // Aim lock
 // ---------------------------------------------------------------------------
 void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
-    if(combatMenu_.Store().Read().values.enabled) return;
+    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled) return;
     if (!combat_.aimLock || menuVisible_ || hudEditing_) return;
     if (!IsForegroundWindowOwnedBy(target_.pid)) return;
     if (!(::GetAsyncKeyState(combat_.aimKey) & 0x8000)) return;
@@ -1554,8 +1554,8 @@ void Overlay::DrawCombatTab() {
         ImGui::TextWrapped("Close the menu to run. F5 shows the spinning player; mouse look stays usable. Toggle or Hold can be set under Settings / Keybinds.");
         return;
     }
-    const bool auraActive=combatMenu_.Store().Read().values.enabled;
-    if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura is enabled.");
+    const bool auraActive=combatMenu_.Store().Read().values.enabled||combat_.spin.enabled;
+    if(auraActive) ImGui::TextWrapped("This module is paused while Kill Aura or Spinbot is enabled.");
     ImGui::BeginDisabled(auraActive);
     if(section==CombatMenu::Section::AimAssist) {
         if(panel::BeginRows("aim_controls")) {
