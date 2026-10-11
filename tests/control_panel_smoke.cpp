@@ -965,6 +965,17 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     std::string saved; Require(Encode(Check::ConfigSnapshot(overlay),saved),"Saved settings could not be serialized");
     Snapshot decoded; Require(Decode(saved,decoded),"Fresh profile did not pass its own parser");
     std::string reencoded; Require(Encode(decoded,reencoded)&&reencoded==saved,"Config schema did not round-trip every field");
+    const auto spinBind="bind."+std::to_string(mcov::keys::Index(mcov::keys::Action::Spinbot))+".";
+    std::istringstream oldIn(saved); std::ostringstream oldOut; std::string oldLine;
+    while(std::getline(oldIn,oldLine))
+        if(!oldLine.starts_with("combat.spin.")&&!oldLine.starts_with(spinBind)) oldOut<<oldLine<<'\n';
+    Snapshot migrated;
+    Require(Decode(oldOut.str(),migrated)&&!migrated.combat.spin.enabled&&
+        migrated.binds[mcov::keys::Index(mcov::keys::Action::Spinbot)].key==0&&migrated.combat.aimFov==expected.combat.aimFov,
+        "Old config did not retain its settings with Spinbot disabled");
+    const auto field=saved.find("combat.spin.speed "); const auto fieldEnd=saved.find('\n',field);
+    auto incomplete=saved; incomplete.erase(field,fieldEnd-field+1);
+    Require(!Decode(incomplete,migrated),"Incomplete new Spinbot config was accepted");
     Check::ConfigSnapshot(overlay,Snapshot{});
     ImGui::FocusWindow(content);
     ImGui::GetCurrentContext()->NavNextActivateId=content->GetID("Load selected"); Draw(overlay,Page::Settings,0,{1280,800});
@@ -1361,7 +1372,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 77 module widgets, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 78 module widgets, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

@@ -18,6 +18,8 @@ Sekunden, Kamera-Pitch. **Rotation speed** erlaubt 30–1800 Grad/s;
 in einer begrenzten Welle. Die Blickrichtung und F5-Kamera bleiben unabhängig.
 Der Modul-Keybind ist zunächst ungebunden; Toggle/Hold ist unter Settings →
 Keybinds verfügbar. Config-Profile speichern Parameter und Bind.
+Ältere Profile bleiben lesbar und ergänzen Spinbot ausgeschaltet mit ungebundenem
+Keybind; die bisherigen Bind-Indizes bleiben unverändert.
 
 `src/combat/spinbot.hpp` berechnet die Winkel ohne Allokationen anhand der
 Client-Tick-Zeit. `MinecraftCombat` schreibt sie nur auf diesem Thread über die

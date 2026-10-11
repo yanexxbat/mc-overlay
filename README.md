@@ -8,6 +8,7 @@ Dear ImGui and Direct3D 11.
 - Compact translucent menu and launcher, with a matching HUD.
 - Entity and block visuals, target effects, particles and waypoints.
 - Combat and item-assist controls with friend management.
+- Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
 - 19 HUD elements with individual visibility, drag-and-drop placement and scaling.
 - Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
 - Named configs saved beside the client.

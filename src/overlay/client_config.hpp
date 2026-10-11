@@ -234,6 +234,24 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         const auto split=line.find(' ');
         if(split==std::string::npos||!values.emplace(line.substr(0,split),line.substr(split+1)).second) return false;
     }
+    // Vollstaendige Profile vor Spinbot behalten alle alten Binds/Module.
+    // Nur wenn der gesamte neue Block fehlt, die ausgeschalteten Defaults
+    // ergaenzen; teilweise beschaedigte neue Profile bleiben ein Fehler.
+    const auto spinBind="bind."+std::to_string(keys::Index(keys::Action::Spinbot))+".";
+    const bool hasSpin=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("combat.spin.")||entry.first.starts_with(spinBind);
+    });
+    if(!hasSpin) {
+        std::string defaults;
+        if(!Encode(Snapshot{},defaults)) return false;
+        std::istringstream defaultsIn(defaults);
+        while(std::getline(defaultsIn,line)) {
+            const auto split=line.find(' ');
+            if(split==std::string::npos) continue;
+            const auto key=line.substr(0,split);
+            if(key.starts_with("combat.spin.")||key.starts_with(spinBind)) values.emplace(key,line.substr(split+1));
+        }
+    }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

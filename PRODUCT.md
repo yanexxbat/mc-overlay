@@ -23,7 +23,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 77 real sections remain reachable. Left-click or Space operates the real
+  All 78 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
