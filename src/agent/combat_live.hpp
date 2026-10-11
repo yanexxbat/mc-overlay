@@ -88,6 +88,14 @@ public:
         enabled_=jvm::TryField(env,signal_,"combatEnabled","Z",true);
         if(!enabled_) return false;
         silentPlayer_=jvm::TryField(env,signal_,"silentPlayer","Ljava/lang/Object;",true);
+        movementEnabled_=jvm::TryField(env,signal_,"movementEnabled","Z",true);
+        const auto movementBits=jvm::TryField(env,signal_,"movementProfiles","J",true);
+        if(movementEnabled_ && movementBits) {
+            const auto movements=env->GetStaticLongField(signal_,movementBits);
+            if(env->ExceptionCheck()) env->ExceptionClear();
+            else for(std::size_t i=0;i<std::size(mappings::kRuntimeProfiles);++i) if(std::strcmp(b.set->id,mappings::kRuntimeProfiles[i].set->id)==0)
+                movementSupported_=(static_cast<std::uint64_t>(movements)&(std::uint64_t{1}<<i))!=0;
+        }
         viewYaw_=jvm::TryField(env,signal_,"viewYaw","F",true); viewPitch_=jvm::TryField(env,signal_,"viewPitch","F",true);
         const auto cameraBits=jvm::TryField(env,signal_,"cameraProfiles","J",true),turnBits=jvm::TryField(env,signal_,"turnProfiles","J",true);
         if(silentPlayer_ && viewYaw_ && viewPitch_ && yawOld_ && pitchOld_ && cameraBits && turnBits) {
@@ -114,6 +122,8 @@ public:
         const std::scoped_lock lock(mutex_);
         ready_=false;
         if(signal_ && enabled_) env->SetStaticBooleanField(signal_,enabled_,JNI_FALSE);
+        if(env->ExceptionCheck()) env->ExceptionClear();
+        if(signal_ && movementEnabled_) env->SetStaticBooleanField(signal_,movementEnabled_,JNI_FALSE);
         if(env->ExceptionCheck()) env->ExceptionClear();
         // Close kann auf dem Sampler/VM-Shutdown laufen: hier keine Entity schreiben.
         if(signal_ && silentPlayer_) env->SetStaticObjectField(signal_,silentPlayer_,nullptr);
@@ -233,13 +243,16 @@ public:
             report_.debug=assist_.Step(frame_);
             bool spinning=false;
             if(spin.enabled) {
-                if(!silentSupported_) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::SilentUnavailable; }
+                if(!silentSupported_ || !movementSupported_) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::SilentUnavailable; }
                 else if(report_.debug.target) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::CombatPriority; }
                 else if(auto pose=spinbot_.Step(spin,Rotation(player_),frame_.cameraRotation,frame_.dt)) {
                     ApplyRotation(*pose); spinning=true; spinStatus_=combat::SpinStatus::Active;
                     report_.debug.current=Rotation(player_);
                 }
             } else spinbot_.Reset();
+            // Nur Spin nutzt die Kamera für Physik. Umschalten/Pause setzt das
+            // Java-Gate am Client-Tick zurück; der Renderthread greift nicht auf JNI zu.
+            SetMovement(spinning);
             if(!report_.debug.target&&!spinning) EndSilent();
             else if(report_.debug.target&&cameraDetached_) {
                 const auto applied=Rotation(player_);
@@ -310,8 +323,8 @@ private:
     void BeginSilent(combat::Angles camera) {
         env_->SetStaticFloatField(signal_,viewYaw_,static_cast<jfloat>(camera.yaw)); Check();
         env_->SetStaticFloatField(signal_,viewPitch_,static_cast<jfloat>(camera.pitch)); Check();
-        // Erst nach den Winkeln publizieren. Nur die Camera-Getter nutzen diesen Wert;
-        // Entity-Getter, Modell und Vanilla-Movement sehen weiter die Combat-Rotation.
+        // Erst nach den Winkeln publizieren. Camera und aktivierte Spin-Physik
+        // nutzen die View; außerhalb des Physik-Scopes bleibt die echte Rotation.
         env_->SetStaticObjectField(signal_,silentPlayer_,player_); Check();
         cameraDetached_=true;
     }
@@ -322,6 +335,7 @@ private:
     }
     void EndSilent(bool restore=true) {
         spinbot_.Reset();
+        SetMovement(false);
         if(!cameraDetached_) return;
         auto player=env_->GetStaticObjectField(signal_,silentPlayer_); Check();
         if(player && restore) {
@@ -338,6 +352,9 @@ private:
         env_->SetStaticObjectField(signal_,silentPlayer_,nullptr); Check();
         cameraDetached_=false;
         if(player) env_->DeleteLocalRef(player);
+    }
+    void SetMovement(bool active) {
+        if(movementEnabled_) { env_->SetStaticBooleanField(signal_,movementEnabled_,active?JNI_TRUE:JNI_FALSE); Check(); }
     }
     void Check() {
         if(env_->ExceptionCheck()) {
@@ -411,7 +428,7 @@ private:
     jweak playerIdentity_{};
     jclass signal_{},entityClass_{},livingClass_{},playerClass_{};
     jfieldID enabled_{},playerField_{},levelField_{},screenField_{},guiField_{},modeField_{},crosshair_{};
-    jfieldID silentPlayer_{},viewYaw_{},viewPitch_{},yawOld_{},pitchOld_{};
+    jfieldID silentPlayer_{},viewYaw_{},viewPitch_{},yawOld_{},pitchOld_{},movementEnabled_{};
     jfieldID bodyYaw_{},bodyYawOld_{},headYaw_{},headYawOld_{};
     jfieldID minimum_[3]{},maximum_[3]{},vecFields_[3]{};
     jmethodID x_{},y_{},z_{},id_{},name_{},health_{},uuid_{},uuidHigh_{},uuidLow_{},yaw_{},pitch_{};
@@ -420,6 +437,6 @@ private:
     std::uint64_t revision_{~std::uint64_t{}},worldSerial_{},tick_{};
     double previousTime_{};
     bool ready_{},failed_{};
-    bool silentSupported_{},cameraDetached_{};
+    bool silentSupported_{},movementSupported_{},cameraDetached_{};
 };
 } // namespace mcov::agent

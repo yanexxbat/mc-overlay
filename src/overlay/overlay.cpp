@@ -1533,7 +1533,7 @@ void Overlay::DrawCombatTab() {
     if(section==CombatMenu::Section::AnchorMacro) { DrawItemAssistSettings(2); return; }
     if(section==CombatMenu::Section::HitSounds) { DrawRockstarSettings(rockstar::Feature::HitSounds); return; }
     if(section==CombatMenu::Section::Spinbot) {
-        ImGui::TextWrapped("Spin the player while the camera stays independent. Kill Aura takes priority while tracking a target.");
+        ImGui::TextWrapped("Spin the player while camera and movement stay independent. WASD, sprint jumps and flight follow your view. Kill Aura takes priority while tracking a target.");
         auto& spin=combat_.spin;
         if(panel::BeginRows("spinbot_controls")) {
             panel::CheckRow("Enable Spinbot",&spin.enabled); DrawBind(keys::Action::Spinbot,true);
