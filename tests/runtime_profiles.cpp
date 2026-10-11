@@ -255,21 +255,63 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(std::abs(view(cameraYaw)-9)<.001f,"normal mouse look was not restored");
     // Spin nutzt dieselbe Kamera-Trennung, ohne Zielsuche oder Angriffe.
     const auto beforeSpinAttacks=report.attacks;
-    request.spin.enabled=true; request.spin.direction=0;
+    request.spin.enabled=true; request.spin.direction=0; request.spin.pitchMode=1;
     step(8);
     const auto spinningYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
     Require(report.spinStatus==mcov::combat::SpinStatus::Active&&report.attacks==beforeSpinAttacks&&
         std::abs(mcov::combat::Wrap(spinningYaw-9))>1&&std::abs(view(cameraYaw)-9)<.001f,
         "Spinbot failed to rotate independently without attacking");
+    // Tatsächliche instrumentierte Physik-Getter: Vorwärts/seitwärts/diagonal
+    // bleiben kamera-relativ, unabhängig von Spin-Yaw und dem Down-Pitch.
+    auto movementSignal=env->FindClass("mcov/FrameSignal"); Healthy(env);
+    const auto movementGate=field(movementSignal,"movementEnabled","Z",true);
+    const auto viewYawField=field(movementSignal,"viewYaw","F",true);
+    Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_TRUE,"Spinbot did not enable movement correction"); Healthy(env);
+    auto movementInput=NewObject(env,b.clsVec3);
+    const auto relative=jvm::TryMethod(env,b.clsEntity,g.movementRelative.name,g.movementRelative.signature,false);
+    const auto jump=jvm::TryMethod(env,b.clsLiving,g.movementJump.name,g.movementJump.signature,false);
+    auto localClass=LoadClass(env,loader,set.classes.localPlayer);
+    const auto localStep=jvm::TryMethod(env,localClass,g.movementLocalStep.name,g.movementLocalStep.signature,false);
+    for(float cameraAngle : {-179.f,-90.f,0.f,60.f,179.f}) {
+        env->SetStaticFloatField(movementSignal,viewYawField,cameraAngle); Healthy(env);
+        for(float modelAngle : {-170.f,0.f,90.f,179.f}) {
+            floating(player,b.clsEntity,"testYaw",modelAngle);
+            for(const auto input : {combat::Vec3{0,.25,1},combat::Vec3{1,0,0},combat::Vec3{0,0,-1},combat::Vec3{.5,0,.5}}) {
+                real(movementInput,b.clsVec3,set.fieldVecX.name,input.x);
+                real(movementInput,b.clsVec3,set.fieldVecY.name,input.y);
+                real(movementInput,b.clsVec3,set.fieldVecZ.name,input.z);
+                env->CallVoidMethod(player,relative,.1f,movementInput); Healthy(env);
+                const double angle=cameraAngle/combat::kDegrees;
+                const auto actualX=env->GetDoubleField(player,field(b.clsEntity,"testMoveX","D")); Healthy(env);
+                const auto actualZ=env->GetDoubleField(player,field(b.clsEntity,"testMoveZ","D")); Healthy(env);
+                const auto actualY=env->GetDoubleField(player,field(b.clsEntity,"testMoveY","D")); Healthy(env);
+                Require(std::abs(actualX-(input.x*std::cos(angle)-input.z*std::sin(angle))*.1)<1e-7 &&
+                    std::abs(actualZ-(input.z*std::cos(angle)+input.x*std::sin(angle))*.1)<1e-7 &&
+                    std::abs(actualY-input.y*.1)<1e-7,"Spinbot changed camera-relative movement or acceleration");
+            }
+            env->CallVoidMethod(player,jump); Healthy(env);
+            Require(std::abs(env->GetFloatField(player,field(b.clsEntity,"testMovementYaw","F"))-cameraAngle)<.001f,
+                "Sprint jump followed spin instead of camera"); Healthy(env);
+            env->CallVoidMethod(player,localStep); Healthy(env);
+            Require(std::abs(env->GetFloatField(player,field(b.clsEntity,"testMovementPitch","F"))-3)<.001f,
+                "Flight/swim movement followed spin pitch"); Healthy(env);
+            const auto actualModel=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+            Require(std::abs(actualModel-modelAngle)<.001f,"Physics correction leaked into model/network rotation");
+        }
+    }
+    env->SetStaticFloatField(movementSignal,viewYawField,9); Healthy(env);
+    floating(player,b.clsEntity,"testYaw",spinningYaw);
     request.inputAllowed=false; step();
     const auto spinPausedYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
     Require(report.spinStatus==mcov::combat::SpinStatus::Paused&&std::abs(spinPausedYaw-9)<.001f,
         "Spinbot retained rotation after input pause");
+    Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Input pause retained movement correction"); Healthy(env);
     request.inputAllowed=true; step(2);
     request.config.enabled=true; ++request.revision;
     floating(player,b.clsPlayer,"testCooldown",0); step();
     Require(report.debug.target&&report.spinStatus==mcov::combat::SpinStatus::CombatPriority,
         "Spinbot overrode Kill Aura target rotation");
+    Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Combat priority retained Spinbot movement correction"); Healthy(env);
     request.config.enabled=false; request.spin.enabled=false; ++request.revision; step();
     Require(report.spinStatus==mcov::combat::SpinStatus::Disabled&&std::abs(view(cameraYaw)-9)<.001f,
         "Disabling Spinbot disturbed camera restoration");
@@ -311,6 +353,16 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
         "Spinbot ignored a missing independent camera hook");
     Healthy(env);
     unsupported.Close(env); testCombat=nullptr;
+    const auto movementBits=field(movementSignal,"movementProfiles","J",true);
+    const auto savedMovement=env->GetStaticLongField(movementSignal,movementBits); Healthy(env);
+    env->SetStaticLongField(movementSignal,movementBits,0); Healthy(env);
+    mcov::agent::MinecraftCombat unsupportedMovement;
+    Require(unsupportedMovement.Install(env,b,block.get(),reinterpret_cast<void*>(&TestCombatTick)),"movement diagnostic bridge did not install");
+    env->SetStaticLongField(movementSignal,movementBits,savedMovement); Healthy(env);
+    testCombat=&unsupportedMovement; step(2);
+    Require(report.spinStatus==mcov::combat::SpinStatus::SilentUnavailable &&
+        env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Spinbot started without safe movement hooks"); Healthy(env);
+    unsupportedMovement.Close(env); testCombat=nullptr;
     std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
 }
 void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) {

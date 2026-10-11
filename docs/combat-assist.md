@@ -32,8 +32,18 @@ Angriffe gegen die getrennte Spielerrotation arbeiten.
 Menü, HUD-Editor, Minecraft-GUI, Fokusverlust, fehlende Welt und abgelaufene
 Eingabe-Lease pausieren am nächsten Client-Tick. Ausschalten oder Panic stellt
 die Spielerrotation auf die unabhängige Blickrichtung zurück. Ohne passende
-Kamera-Hooks bleibt Spinbot gesperrt und meldet dies im Statusfeld.
+Kamera- und Movement-Hooks bleibt Spinbot gesperrt und meldet dies im Statusfeld.
 Nach diesem IPC-v20-Update Minecraft vollständig neu starten und erneut injecten.
+
+Die Bewegungskorrektur ist automatisch aktiv, solange Spinbot tatsächlich dreht.
+WASD, Sprint-Sprung sowie Schwimm-/Flugrichtung verwenden die unabhängige
+Kamera-Yaw/Pitch. Die Java-Bridge begrenzt den Getter-Ersatz auf auditierte
+`moveRelative`, `travel`, `jumpFromGround` und lokale `aiStep`-Scopes; auch
+verschachtelte Aufrufe und Exceptions räumen den Thread-Scope auf. Außerhalb
+bleiben Modell-, Combat- und Netzwerk-Getter unverändert. Keine zusätzlichen
+JNI-Aufrufe im Renderthread; ein ThreadLocal-Zähler wird einmal pro Physik-Thread
+angelegt. Instrumentierte JNI-Fixtures testen die Richtungen und Pausen über
+alle elf Profile; ein Test im laufenden Minecraft bleibt separat nötig.
 
 Die Silent-Kamera ist implementiert; echte Serverkorrektur-Ereignisse bleiben offen. Die Entity behält die tatsächliche Zielrotation für ihr Modell und die normale Vanilla-Movement-Pipeline; Vanilla sendet die normalen Spielpakete. Die Live-Kill-Aura richtet sich direkt in jedem Client-Tick aus. Der erste Treffer ist bei freiem Ray und bereitem Cooldown im selben Tick möglich; danach bestimmt der Spiel-Cooldown das Tempo. Auf einem 20-Hz-Client werden Zielpositionen alle 50 ms nachgeführt. Details zu Hooks, Rückgabe und Grenzen stehen in [silent-camera.md](silent-camera.md).
 
