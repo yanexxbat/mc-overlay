@@ -29,6 +29,7 @@ struct GeometryProfile {
     Member attackCooldown, attackReach, farReach, attackEntity, swingHand;
     Member mainHand, pickBlocks, hitLocation, entityAlive;
     Member turn, viewYaw, viewPitch, yawOld;
+    Member movementRelative, movementTravel, movementJump, movementPlayerTravel, movementPlayerJump, movementLocalStep;
     const char* crystalClass;
     const char* blockHitClass;
     const char* pillarClass;

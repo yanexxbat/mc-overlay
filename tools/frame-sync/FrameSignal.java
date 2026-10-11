@@ -18,12 +18,30 @@ public final class FrameSignal {
     }
     private static final double ENTITY_TURN_SCALE = 0.15; // Vanilla Entity.turn, nach Maussensitivität.
     // Kamera und Mouse-Look bleiben in Java: keine JNI-Abfrage pro Kameraframe.
-    // Das Combat-Modell behält seine echte Rotation für normales Movement/Rendern.
+    // Das Modell behält seine echte Rotation; Spin-Movement nutzt separat die Kamera.
     public static volatile Object silentPlayer;
     public static volatile float viewYaw, viewPitch;
     public static volatile long cameraProfiles, turnProfiles;
     public static synchronized void markCamera(long mask) { cameraProfiles |= mask; }
     public static synchronized void markTurn(long mask) { turnProfiles |= mask; }
+    public static volatile boolean movementEnabled;
+    public static volatile long movementProfiles;
+    private static final long[] movementParts = new long[4];
+    public static synchronized void markMovement(int part, long mask) {
+        movementParts[part - 1] |= mask;
+        movementProfiles = movementParts[0] & movementParts[1] & movementParts[2] & movementParts[3];
+    }
+    // Einmal pro Physik-Thread angelegt, keine Allokationen pro Tick. Verschachtelte
+    // travel/moveRelative/jump-Aufrufe teilen denselben Ausnahme-sicheren Scope.
+    private static final ThreadLocal<int[]> movementDepth = ThreadLocal.withInitial(() -> new int[1]);
+    public static void beginMovement() { ++movementDepth.get()[0]; }
+    public static void endMovement() { --movementDepth.get()[0]; }
+    public static float movementYaw(Object entity, float original) {
+        return movementEnabled && entity == silentPlayer && movementDepth.get()[0] > 0 ? viewYaw : original;
+    }
+    public static float movementPitch(Object entity, float original) {
+        return movementEnabled && entity == silentPlayer && movementDepth.get()[0] > 0 ? viewPitch : original;
+    }
     public static float cameraYaw(Object entity, float partial, float original) {
         return entity == silentPlayer ? viewYaw : original;
     }

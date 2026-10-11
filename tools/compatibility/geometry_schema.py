@@ -119,6 +119,14 @@ def geometry_schema(version):
     add('turn', entity, 'turn', '(DD)V', 'methods')
     add('viewYaw', entity, 'getViewYRot', '(F)F', 'methods')
     add('viewPitch', entity, 'getViewXRot', '(F)F', 'methods')
+    # Physik-Scopes: Richtung korrigieren, ohne Modell-/Netzwerk-Rotation zu ersetzen.
+    add('movementRelative', entity, 'moveRelative', '(FLnet/minecraft/world/phys/Vec3;)V', 'methods')
+    add('movementTravel', living, 'travel', '(Lnet/minecraft/world/phys/Vec3;)V', 'methods')
+    add('movementJump', living, 'jumpFromGround', '()V', 'methods')
+    add('movementPlayerTravel', player, 'travel', '(Lnet/minecraft/world/phys/Vec3;)V', 'methods')
+    if not modern:
+        add('movementPlayerJump', player, 'jumpFromGround', '()V', 'methods')
+    add('movementLocalStep', 'net/minecraft/client/player/LocalPlayer', 'aiStep', '()V', 'methods')
     add('yawOld', entity, 'yRotO', 'F')
     if version == '26.2':
         add('updateCamera', camera, 'update', '(Lnet/minecraft/client/DeltaTracker;)V', 'methods')
