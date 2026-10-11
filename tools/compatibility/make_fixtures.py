@@ -66,6 +66,9 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
                     code+=b'\x2a'+load+b'\xb5'+u2(cp.ref(9,name,field,field_desc))
             if ('testStepY','I') in fields:
                 code+=b'\x2a\x04\xb5'+u2(cp.ref(9,name,'testStepY','I'))
+            if ('testMovementGuard','Ljava/lang/Object;') in fields:
+                code+=b'\x2a\xbb'+u2(cp.cls('java/lang/Object'))+b'\x59\xb7'+u2(cp.ref(10,'java/lang/Object','<init>','()V'))
+                code+=b'\xb5'+u2(cp.ref(9,name,'testMovementGuard','Ljava/lang/Object;'))
             code += b'\xb1'
         elif special and special[0]=='world_states':
             pos,get_y,state=special[1:]
@@ -121,6 +124,34 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
                 code += b'\x2a\x59\xb4'+u2(cp.ref(9,name,backing,'F'))+load
                 code += b'\x14'+u2(cp.number('D',.15))+b'\x6b\x90\x62\xb5'+u2(cp.ref(9,name,backing,'F'))
             code += b'\xb1'
+        elif special and special[0] == 'movement':
+            entity,yaw,pitch,nested,move,vec,axes=special[1:]
+            code=b''
+            if nested:
+                owner,method,descriptor=nested
+                code+=b'\x2a'
+                if descriptor.startswith('(L'):
+                    code+=b'\xbb'+u2(cp.cls(vec))+b'\x59\xb7'+u2(cp.ref(10,vec,'<init>','()V'))
+                code+=b'\xb7'+u2(cp.ref(10,owner,method,descriptor))
+            if desc.startswith('(L'):
+                # Nested scope + a read after its return catches premature cleanup.
+                code+=b'\x2a\x0c\x2b\xb6'+u2(cp.ref(10,entity,move,'(FL'+vec+';)V'))
+            for getter,backing in [(yaw,'testMovementYaw'),(pitch,'testMovementPitch')]:
+                code+=b'\x2a\x2a\xb6'+u2(cp.ref(10,entity,getter,'()F'))+b'\xb5'+u2(cp.ref(9,entity,backing,'F'))
+            if desc.startswith('(F'):
+                # Synthetischer Vanilla-Eingabevektor: X/Z rotieren, Y bleibt unabhängig.
+                def component(field): return b'\x2c\xb4'+u2(cp.ref(9,vec,field,'D'))
+                angle=b'\x2a\xb6'+u2(cp.ref(10,entity,yaw,'()F'))+b'\x8d\x14'+u2(cp.number('D',3.141592653589793/180))+b'\x6b'
+                sin=angle+b'\xb8'+u2(cp.ref(10,'java/lang/Math','sin','(D)D'))
+                cos=angle+b'\xb8'+u2(cp.ref(10,'java/lang/Math','cos','(D)D'))
+                for backing,expression in [
+                    ('testMoveX',component(axes[0])+cos+b'\x6b'+component(axes[2])+sin+b'\x6b\x67'),
+                    ('testMoveZ',component(axes[2])+cos+b'\x6b'+component(axes[0])+sin+b'\x6b\x63'),
+                    ('testMoveY',component(axes[1]))]:
+                    code+=b'\x2a'+expression+b'\x23\x8d\x6b\xb5'+u2(cp.ref(9,entity,backing,'D'))
+            # Eine Exception aus einem Callee (kein explizites ATHROW im Scope).
+            code+=b'\x2a\xb4'+u2(cp.ref(9,entity,'testMovementGuard','Ljava/lang/Object;'))
+            code+=b'\xb8'+u2(cp.ref(10,'java/util/Objects','requireNonNull','(Ljava/lang/Object;)Ljava/lang/Object;'))+b'\x57\xb1'
         elif special and special[0] == 'camera_view':
             owner,getter,orbit=special[1:]
             code=b'\x2b\x24\xb6'+u2(cp.ref(10,owner,getter,'(F)F'))
@@ -322,6 +353,21 @@ def generate(profiles_path, output):
             cls(core['entity'])['specials'][tuple(member)]=('instance_field',backing,'F')
         member=geometry['members']['turn']
         cls(core['entity'])['specials'][tuple(member)]=('turn',)
+        for backing in ('testMovementYaw','testMovementPitch'):
+            add(core['entity'],'fields',backing,'F')
+        for backing in ('testMoveX','testMoveY','testMoveZ'):
+            add(core['entity'],'fields',backing,'D')
+        add(core['entity'],'fields','testMovementGuard','Ljava/lang/Object;')
+        for key in ('movementRelative','movementTravel','movementJump','movementPlayerTravel','movementPlayerJump','movementLocalStep'):
+            if key not in geometry['members']: continue
+            member=geometry['members'][key]; owner=geometry['owners'][key]
+            nested=None
+            if key=='movementPlayerTravel': nested=(core['livingEntity'],*geometry['members']['movementTravel'])
+            if key=='movementPlayerJump': nested=(core['livingEntity'],*geometry['members']['movementJump'])
+            if key=='movementLocalStep': nested=(core['player'],*geometry['members']['movementPlayerTravel'])
+            cls(owner)['specials'][tuple(member)]=('movement',core['entity'],profile['members']['methodEntityYaw'][0],
+                geometry['members']['headPitch'][0],nested,geometry['members']['movementRelative'][0],core['vec3'],
+                [profile['members'][field][0] for field in ('fieldVecX','fieldVecY','fieldVecZ')])
         member=geometry['members']['clientTick']; owner=geometry['owners']['clientTick']
         add(owner,'fields','testVanillaTickDone','Z',True)
         cls(owner)['specials'][tuple(member)]=('tick_done',)
