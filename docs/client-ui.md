@@ -50,7 +50,7 @@ Desktop stehen Hauptfenster und Settings nebeneinander. Unter 1260 Pixel
 Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
 **X** führt zum Raster zurück. **Close** schließt Menü und Details.
 
-- **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends, Crystal Macro, Anchor Macro, Hit sounds. Diagnostics
+- **Combat:** Kill Aura, Aim Assist, Triggerbot, Auto Totem, Friends, Crystal Macro, Anchor Macro, Hit sounds, Spinbot. Diagnostics
   bleibt innerhalb von Kill Aura eingeklappt.
 - **Visuals:** Box ESP, Skeleton, Name tags, Health bars, Distance labels, Tracers,
   Target info, Target aura, Target marker, Trails, Hit particles, Ambient particles,

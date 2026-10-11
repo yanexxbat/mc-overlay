@@ -184,7 +184,8 @@ These are synthetic call-site tests, not a live Minecraft renderer test.
 See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v19 and a full Minecraft restart after upgrading.
+require IPC v20 and a full Minecraft restart after upgrading. Spinbot shares the
+existing silent camera hooks and stays disabled when those hooks are unavailable.
 
 ## Reproduce the checks
 

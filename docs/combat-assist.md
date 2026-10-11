@@ -6,7 +6,32 @@
 
 **Die Kill Aura ist mit Minecraft verbunden.** `src/agent/combat_live.hpp` erfasst UUIDs, aktuelle Hitboxen, Sichtbarkeit, Cooldown und Reichweite und führt Rotation sowie `MultiPlayerGameMode.attack`/Hand-Swing synchron auf dem instrumentierten Client-Tick aus. Die Rotation ist immer still: Die Maus-Blickrichtung bleibt unabhängig von der Combat-Rotation des Spielers, auch ohne Preset oder nach Reset. Es gibt keine umschaltbare Kamera-Einstellung. Auch die F5-Kameraposition wird aus dieser Blickrichtung berechnet. Die bisherigen Mausmodule pausieren während Kill Aura aktiv ist. `sent` zählt lokal ausgeführte Aufträge, keine Serverbestätigungen; das HUD zählt keine einzelnen Netzwerkpakete.
 
-Der Renderprozess erhält keine JNI-Handles. IPC v19 überträgt Config/UUID-Relations und eine begrenzte Eingabe-Lease in atomaren Mailboxes; der Client-Tick publiziert Diagnosen zurück. Vor jedem Angriff prüft der Adapter Cooldown, UUID, Lebensstatus, Reichweite, Ausrichtung, LOS und den nächsten Entity-Treffer vor dem Block-Ray-Ende erneut. Für 1.20.1 gilt die Vanilla-Pick-Reichweite (3, im Creative-Fernmodus 6); neuere Profile lesen `entityInteractionRange`. Welt- und Player-Referenzwechsel erhöhen die Generation, auch beim Respawn. JNI-Fehler stoppen das Modul bis zu einer Config-Revision.
+Der Renderprozess erhält keine JNI-Handles. IPC v20 überträgt Config/UUID-Relations, Spinbot-Werte und eine begrenzte Eingabe-Lease in atomaren Mailboxes; der Client-Tick publiziert Diagnosen zurück. Vor jedem Angriff prüft der Adapter Cooldown, UUID, Lebensstatus, Reichweite, Ausrichtung, LOS und den nächsten Entity-Treffer vor dem Block-Ray-Ende erneut. Für 1.20.1 gilt die Vanilla-Pick-Reichweite (3, im Creative-Fernmodus 6); neuere Profile lesen `entityInteractionRange`. Welt- und Player-Referenzwechsel erhöhen die Generation, auch beim Respawn. JNI-Fehler stoppen das Modul bis zu einer Config-Revision.
+
+## Spinbot
+
+Unter **Combat → Spinbot** aktiviert Linksklick das Modul; Rechtsklick öffnet
+die Einstellungen. Standard: 720 Grad/s, wechselnde Drehrichtung alle drei
+Sekunden, Kamera-Pitch. **Rotation speed** erlaubt 30–1800 Grad/s;
+**Direction** bietet rechts, links und wechselnd mit weichem Übergang.
+**Pitch** behält den Kamera-Pitch bei oder dreht das Modell nach oben/unten bzw.
+in einer begrenzten Welle. Die Blickrichtung und F5-Kamera bleiben unabhängig.
+Der Modul-Keybind ist zunächst ungebunden; Toggle/Hold ist unter Settings →
+Keybinds verfügbar. Config-Profile speichern Parameter und Bind.
+
+`src/combat/spinbot.hpp` berechnet die Winkel ohne Allokationen anhand der
+Client-Tick-Zeit. `MinecraftCombat` schreibt sie nur auf diesem Thread über die
+vorhandenen Yaw/Pitch-Setter und synchronisiert Kopf-/Körperinterpolation.
+Spinbot allein sucht keine Ziele und greift nicht an. Ein gültiges Kill-Aura-Ziel
+hat Vorrang; ohne Ziel kann Spinbot weiterdrehen. Aim Assist und Triggerbot
+pausieren bei aktiviertem Spinbot, damit keine Mausrotation oder Kreuzhaar-
+Angriffe gegen die getrennte Spielerrotation arbeiten.
+
+Menü, HUD-Editor, Minecraft-GUI, Fokusverlust, fehlende Welt und abgelaufene
+Eingabe-Lease pausieren am nächsten Client-Tick. Ausschalten oder Panic stellt
+die Spielerrotation auf die unabhängige Blickrichtung zurück. Ohne passende
+Kamera-Hooks bleibt Spinbot gesperrt und meldet dies im Statusfeld.
+Nach diesem IPC-v20-Update Minecraft vollständig neu starten und erneut injecten.
 
 Die Silent-Kamera ist implementiert; echte Serverkorrektur-Ereignisse bleiben offen. Die Entity behält die tatsächliche Zielrotation für ihr Modell und die normale Vanilla-Movement-Pipeline; Vanilla sendet die normalen Spielpakete. Die Live-Kill-Aura richtet sich direkt in jedem Client-Tick aus. Der erste Treffer ist bei freiem Ray und bereitem Cooldown im selben Tick möglich; danach bestimmt der Spiel-Cooldown das Tempo. Auf einem 20-Hz-Client werden Zielpositionen alle 50 ms nachgeführt. Details zu Hooks, Rückgabe und Grenzen stehen in [silent-camera.md](silent-camera.md).
 

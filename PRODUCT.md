@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v19. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v20. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering introduces no render-thread JNI calls.
 
 ## User and purpose
