@@ -255,6 +255,7 @@ target_link_libraries(mcov_injector PRIVATE
 # ---------------------------------------------------------------------------
 add_library(mcov_agent SHARED
     src/agent/agent_main.cpp
+    src/agent/base_texture_gl.cpp
     src/agent/jvm_interface.cpp
     src/common/ipc.cpp
     src/common/log.cpp)
@@ -304,6 +305,8 @@ if(Java_JAVAC_EXECUTABLE)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_CLASSES} ${MCOV_SIGNAL_CLASSES} ${MCOV_TOOLS_DIR}
         COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_SIGNAL_CLASSES}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
             --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
             -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
@@ -312,6 +315,7 @@ if(Java_JAVAC_EXECUTABLE)
         COMMAND ${Java_JAR_EXECUTABLE} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
             --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
         DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
+            tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java
         COMMENT "Compiling Java frame synchronization helpers (Java 17 bytecode)"
         VERBATIM)
     add_custom_target(mcov_frame_agent ALL DEPENDS ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar)
