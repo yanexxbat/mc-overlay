@@ -38,7 +38,7 @@ int StashFinder::Update(const WorldSnapshot& s,const StashSettings& c) {
     }
     if(!c.enabled||!s.dimension[0]) return 0;
     if(mask_!=c.mask||minimum_!=c.minContainers) { count_=0; scan_=0; mask_=c.mask; minimum_=c.minContainers; }
-    if(!s.blockScanComplete||!s.blockScanId||s.blockScanId==scan_||!c.mask||(s.blockScanMask&c.mask)!=c.mask) return 0;
+    if(!s.blockScanComplete||!s.blockScanId||s.blockScanId==scan_||!c.mask||(s.blockScanMask&c.mask)!=c.mask||s.blockScanRadius<static_cast<unsigned>(c.radius)) return 0;
     if(s.blockScanId<scan_) { count_=0; } // Reattached agent starts a new session.
     scan_=s.blockScanId;
     std::array<Stash,kMaxBlocks> chunks{}; int chunkCount=0;

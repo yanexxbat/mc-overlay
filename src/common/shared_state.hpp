@@ -128,7 +128,7 @@ inline std::int8_t ClassifyBlock(std::string_view key) {
     for(std::uint8_t kind=0;kind<kBlockKindCount;++kind) {
         const std::string_view match=BlockKindKey(kind);
         if(kind<kBlockChest) {
-            if(name==match||(name.starts_with("deepslate_")&&name.substr(10)==match)) return static_cast<std::int8_t>(kind);
+            if(name==match||(name.size()>match.size()&&name.ends_with(match)&&name[name.size()-match.size()-1]=='_')) return static_cast<std::int8_t>(kind);
         } else if(kind==kBlockShulker) {
             if(name==match||name.ends_with("_shulker_box")) return static_cast<std::int8_t>(kind);
         } else if(name==match) return static_cast<std::int8_t>(kind);
