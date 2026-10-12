@@ -73,6 +73,8 @@ struct OverlayUiCheck {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
+    static smp::Config& Smp(Overlay& o) { return o.smpConfig_; }
+    static smp::StashFinder& Stashes(Overlay& o) { return o.stashFinder_; }
     static items::MacroConfig& Crystal(Overlay& o) { return o.crystalMacro_; }
     static items::MacroConfig& Anchor(Overlay& o) { return o.anchorMacro_; }
     static items::Request ItemRequest(const Overlay& o,bool allowed) { return o.BuildItemRequest(1000,allowed,false); }
@@ -325,6 +327,35 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
     mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,true);
     ClickModule(overlay,Page::Settings,0,5,0);
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Settings-only widget did not open on left-click");
+}
+void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned; mcov::OverlayUiCheck::Seed(overlay);
+    auto& c=mcov::OverlayUiCheck::Smp(overlay);
+    c.stash.enabled=c.spawner.enabled=true; c.stash.minContainers=3;
+    auto scene=std::make_unique<mcov::WorldSnapshot>(); mcov::CopyField(scene->dimension,"Overworld"); mcov::CopyField(scene->serverAddress,"Local world");
+    scene->blockScanId=1; scene->blockScanMask=mcov::smp::kStorageMask; scene->blockScanRadius=32; scene->blockScanComplete=1;
+    for(int i=0;i<12;++i) { auto& b=scene->blocks[scene->blockCount++]; b.x=float(i%4); b.y=64; b.z=float(i/4); b.kind=mcov::kBlockChest; }
+    scene->blockScanY=64; Require(mcov::OverlayUiCheck::Stashes(overlay).Update(*scene,c.stash)==1,"SMP UI discovery fixture failed");
+    scene->fovDeg=70; scene->health=scene->maxHealth=20; mcov::OverlayUiCheck::Snapshot(overlay,*scene);
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        const auto suffix=size.x>500?"desktop.png":"small.png";
+        for(int index:{4,7,8}) {
+            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,9,size);
+            auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
+            auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+            const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":"smp-spawner-";
+            SaveFrame(device,context,output/(name+suffix));
+            Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
+        }
+    }
+    // Saved preferences use the same typed SMP schema as named profiles.
+    c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
+    mcov::OverlayUiCheck::PrefPath(overlay,output/"smp-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
+    Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers,
+        "Automatic preferences lost SMP colours/filters/settings");
+    for(const auto action:{mcov::keys::Action::StashFinder,mcov::keys::Action::SpawnerEsp}) mcov::OverlayUiCheck::SetModule(overlay,action,true);
+    mcov::OverlayUiCheck::Panic(overlay);
+    Require(!c.stash.enabled&&!c.spawner.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty(),"Panic left an SMP module or stash marker active");
 }
 void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto& io=ImGui::GetIO();
@@ -1056,13 +1087,14 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={8,26,7,20,3,5,8};
+        constexpr int sectionCounts[]={9,26,9,20,3,5,8};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
         SearchChecks(overlay);
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
+        SmpUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 OpenModuleSettings(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);
@@ -1326,7 +1358,7 @@ int main(int argc,char** argv) {
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,7,size); mcov::OverlayUiCheck::Center(overlay);
+            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,9,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
@@ -1372,7 +1404,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 78 module widgets, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 80 module widgets, SMP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
