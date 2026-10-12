@@ -707,7 +707,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const auto& storage=rockstarConfig_[rockstar::Feature::ChestEsp];
     smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storage.enabled,storage.range,storage.opacity,storage.glow,
         {width,height},auraBlend_.GlowTexture());
-    smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
+    if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
     if (!entitiesEnabled) return;
 
     auto visualConfig=visuals_; visualConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);

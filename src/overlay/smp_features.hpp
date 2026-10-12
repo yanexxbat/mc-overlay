@@ -58,6 +58,7 @@ public:
     int Update(const WorldSnapshot& snapshot,const StashSettings& settings);
     std::span<const Stash> Finds() const { return {finds_.data(),static_cast<std::size_t>(count_)}; }
     bool Full() const { return count_==kMaxFinds; }
+    bool Matches(const WorldSnapshot& s) const { return !std::strncmp(dimension_.data(),s.dimension,kNameLen)&&!std::strncmp(server_.data(),s.serverAddress,kAddrLen); }
     const Stash* Latest() const { return count_?&finds_[count_-1]:nullptr; }
 private:
     std::array<Stash,kMaxFinds> finds_{};
