@@ -16,7 +16,7 @@ public final class BaseTextureBridge {
     private static Builder builder;
     private static long requested=Long.MIN_VALUE,serial,nextRefresh,levelReady;
     private static double[] bounds;
-    private static int region,x,y,z,scanned,blocks,skipped;
+    private static int region,x,y,z,scanned,blocks,skipped,atlasId;
     private static double originX,originY,originZ;
     private static boolean limited;
     private static Mesh completed;
@@ -60,9 +60,10 @@ public final class BaseTextureBridge {
         if(now<levelReady) return null;
         Object dispatcher=symbols.call("blocks",client);
         int atlas=texture(textures,symbols.get("blocksAtlas",null));
-        if(manager!=textures) { requested=Long.MIN_VALUE; manager=textures; }
-        if(requested!=revision||bounds==null||!Arrays.equals(bounds,requestedBounds)||builder==null&&now>=nextRefresh) {
-            requested=revision; bounds=requestedBounds.clone(); completed=requestedBounds.length==0?null:completed;
+        boolean changed=requested!=revision||bounds==null||!Arrays.equals(bounds,requestedBounds)||manager!=textures||atlasId!=atlas;
+        if(changed||builder==null&&now>=nextRefresh) {
+            if(changed) completed=null;
+            requested=revision; bounds=requestedBounds.clone(); manager=textures; atlasId=atlas;
             originX=Math.floor(bounds[0]); originY=Math.floor(bounds[1]); originZ=Math.floor(bounds[2]);
             builder=new Builder(symbols,manager); region=0; scanned=blocks=skipped=0; limited=false;
             pose=symbols.type("Pose").getConstructor().newInstance(); random=symbols.call("random",null,0L);
@@ -108,7 +109,7 @@ public final class BaseTextureBridge {
                             symbols.call("extractEntity",entityRenderer,entity,stateData,partial,camPos,null);
                             symbols.call("identity",pose); symbols.call("translate",pose,bx-originX,by-originY,bz-originZ);
                             symbols.call("submitEntity",entityRenderer,stateData,pose,builder.collector,cameraState); builder.finish();
-                        } catch(InvocationTargetException error) { ++skipped; builder.discardPending(); }
+                        } catch(InvocationTargetException error) { builder.discardPending(); }
                         if(builder.count()==checkpoint) ++skipped;
                     }
                 }
@@ -163,11 +164,12 @@ public final class BaseTextureBridge {
     }
     static final class Group {
         float[] data=new float[4096]; int size;
-        void add(float[] vertex) { if(size+STRIDE>data.length) data=Arrays.copyOf(data,Math.min(MAX_VERTICES*STRIDE,Math.max(size+STRIDE,data.length*2))); System.arraycopy(vertex,0,data,size,STRIDE); size+=STRIDE; }
+        void add(float[] vertex,int offset) { if(size+STRIDE>data.length) data=Arrays.copyOf(data,Math.min(MAX_VERTICES*STRIDE,Math.max(size+STRIDE,data.length*2))); System.arraycopy(vertex,offset,data,size,STRIDE); size+=STRIDE; }
     }
     static final class Builder implements InvocationHandler {
         final Symbols s; final Object textureManager,consumer,collector;
         final Map<Integer,Group> groups=new LinkedHashMap<>();
+        static final int[] TRIANGLES={0,1,2,0,2,3};
         final float[] vertex=new float[STRIDE],quad=new float[STRIDE*4];
         Group group; int corners,vertices; boolean pending; double dx,dy,dz;
         Builder(Symbols s,Object manager) {
@@ -183,7 +185,7 @@ public final class BaseTextureBridge {
             if(!pending) return; pending=false;
             System.arraycopy(vertex,0,quad,corners++*STRIDE,STRIDE);
             if(corners==4) {
-                if(!full()) for(int index:new int[]{0,1,2,0,2,3}) { group.add(Arrays.copyOfRange(quad,index*STRIDE,(index+1)*STRIDE)); ++vertices; }
+                if(!full()) for(int index:TRIANGLES) { group.add(quad,index*STRIDE); ++vertices; }
                 corners=0;
             }
         }
