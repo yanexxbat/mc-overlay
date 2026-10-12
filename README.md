@@ -7,6 +7,7 @@ Dear ImGui and Direct3D 11.
 
 - Compact translucent menu and launcher, with a matching HUD.
 - Entity and block visuals, target effects, particles and waypoints.
+- Storage ESP with individual block colours, Stash Finder and Spawner ESP.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
 - 19 HUD elements with individual visibility, drag-and-drop placement and scaling.
@@ -38,7 +39,13 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent.
+when replacing an already loaded agent. The SMP update uses IPC v21; restart an
+already running Minecraft instance before reattaching with the updated client.
+
+Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
+or **Spawner ESP** to configure them. Scans use loaded client blocks within a
+4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
+stash counting, saved waypoints and scan limits.
 
 ## Build
 
@@ -55,6 +62,7 @@ The portable client is written to `build/client/mcov.exe`; the shareable package
 
 - [Launcher and troubleshooting](docs/launcher.md)
 - [Menu, HUD and keybinds](docs/client-ui.md)
+- [SMP features and block colours](docs/smp-features.md)
 - [Version compatibility](docs/compatibility.md)
 - [Third-party notices](THIRD-PARTY-NOTICES.md)
 

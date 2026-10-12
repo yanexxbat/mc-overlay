@@ -28,7 +28,7 @@ gilt auch bei geöffnetem Menü.
 ## Kategorien, Module und Einstellungen
 
 Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
-Raster mit einer bis drei Spalten. Alle 77 Bereiche bleiben erreichbar.
+Raster mit einer bis drei Spalten. Alle 80 Bereiche bleiben erreichbar.
 Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
 Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
@@ -59,13 +59,21 @@ Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
   und Offscreen arrows. Gemeinsame Entity-Farben
   und Sichtbarkeitsfilter liegen unter Entity filters.
 - **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers, Chunkfinder,
-  Storage ESP, Beacon radius und Chunk borders.
+  Storage ESP, Beacon radius, Chunk borders, Stash Finder und Spawner ESP.
 - **HUD:** Editor und ein Widget pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
 - **Settings:** Overlay, Focus, Keybinds, Agent, Configs.
 - **Misc:** Middle click friend, Death coordinates, Detect players, Waypoints,
   Name protect, Module sounds, Notifications und Panic.
+
+**Storage ESP** bietet 13 auswählbare Container-Typen mit jeweils eigener
+RGBA-Farbe sowie Namen/Distanz und Tracern. **Stash Finder** zählt standardmäßig
+mindestens acht Chest-/Trapped-Chest-/Shulker-/Barrel-Blöcke pro Chunk und
+ermöglicht das Kopieren oder Speichern einer Entdeckung als Wegpunkt.
+**Spawner ESP** hat eigene Farbe, Labels und Tracer. Die Einstellungen liegen
+weiterhin unter **Blocks** und öffnen sich per Rechtsklick im unabhängigen Fenster.
+Bedienung, Scan-Grenzen und Zählregeln: [SMP-Funktionen](smp-features.md).
 
 ## Configs
 
@@ -116,7 +124,8 @@ dieselben Widget-IDs.
 Belegbare Module: Kill Aura, Aim Assist, Triggerbot, Auto Totem, Box ESP, Skeleton,
 Name tags, Block ESP, Target Aura, Target Marker, Trails, Hit particles,
 Ambient particles, Hit bubbles, Kill effect, BreadCrumbs, China hat, Crystal Macro,
-Anchor Macro, Chunkfinder, Rockstar-Funktionen und gesamtes HUD. Die wichtigsten
+Anchor Macro, Chunkfinder, Storage ESP, Stash Finder, Spawner ESP,
+Rockstar-Funktionen und gesamtes HUD. Die wichtigsten
 Module bieten zusätzlich ein Tastenfeld direkt neben ihrem Aktivierungsschalter.
 
 **Toggle** schaltet einmal pro Tastendruck um. **Hold** aktiviert bis zum Loslassen;
@@ -176,7 +185,7 @@ Triggerbot senden dann keine Eingaben.
 
 `client-settings.ini` neben der portablen `mcov.exe` enthält die bisherigen
 automatischen Teil-Einstellungen, darunter Binds, HUD-Konfiguration,
-Rockstar-Modulparameter und server-/dimensionsgebundene Wegpunkte. Diese Datei
+Rockstar-Modulparameter, alle SMP-Einstellungen und server-/dimensionsgebundene Wegpunkte. Diese Datei
 ist kein vollständiges benanntes Profil; dafür **Settings → Configs** verwenden.
 Direkte Entwickler-Starts verwenden weiterhin `build/bin/client-settings.ini`
 neben der Overlay-EXE. Änderungen werden verzögert
@@ -194,6 +203,24 @@ und Logs bleiben unter `%LOCALAPPDATA%\mcov`.
 Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
 Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
 bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
+
+Die aktuelle SMP-Erweiterung verwendet IPC v21 für zusätzliche Blocktypen und
+zusammenhängende Metadaten abgeschlossener Scans. Bereits laufendes Minecraft
+vor erneutem Attach mit dem aktualisierten Client und Agent vollständig neu starten.
+Alle SMP-Einstellungen und Binds speichern automatisch und in benannten Configs.
+Vollständige ältere Configs ohne SMP-Block erhalten Defaults und ungebundene neue
+Aktionen; teilweise vorhandene oder ungültige SMP-Daten lassen das gesamte
+benannte Profil vor dem Anwenden scheitern. Entdeckungen bleiben auf die Session
+beschränkt; **Save waypoint** speichert den Ort dauerhaft im bestehenden Store.
+Details und Grenzen stehen in [SMP-Funktionen](smp-features.md).
+
+Für SMP bestanden alle 24 verfügbaren Regressionsprüfungen über die abschließenden
+Läufe; der isolierte `frame_attach`-Fixture-Test erforderte nach einem Windows-
+Pipe-Zugriffsfehler einen Lauf außerhalb der Sandbox. Die nativen UI-Prüfungen
+decken auch echte Klicks auf Typbezeichnungen und das Öffnen des Farbwählers ab.
+Die sechs Vorschauen unter `.impeccable/review/smp/` zeigen synthetische Fixtures
+mit dem echten ImGui/D3D11-WARP-Renderer. Die portable EXE und ZIP wurden neu
+gebaut. Live-Minecraft-Scans, Optik und Attach wurden für SMP nicht geprüft.
 
 Geprüft: echte Rechtsklicks für alle 77 Abschnitte, reale Toggle-Stores,
 Leertaste und Shift+F10, unabhängiges Ziehen/Schließen beider Fenster,

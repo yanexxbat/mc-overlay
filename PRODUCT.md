@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v20. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v21. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering introduces no render-thread JNI calls.
 
 ## User and purpose
@@ -23,7 +23,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 78 real sections remain reachable. Left-click or Space operates the real
+  All 80 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -53,6 +53,11 @@ camera/entity projection stability.
   category module widgets and their independent settings controls.
 - Preserve the clean rounded entity ESP, configurable Target Aura and Target
   Marker, soft particles/trails and the glowing friend/self hats.
+- SMP controls extend the existing **Blocks** category: Storage ESP selects
+  13 storage block types with independent RGBA colours, labels and tracers;
+  Stash Finder records container clusters by chunk; Spawner ESP has its own
+  colour, labels and tracers. Right-click opens the same independent settings
+  window. These controls preserve the incumbent compact visual system.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.
@@ -65,11 +70,28 @@ Rockstar parameters and world/server-scoped waypoints. Existing AppData preferen
 are imported once when local preferences are absent, without replacing local files.
 Runtime helpers and logs remain in `%LOCALAPPDATA%\mcov`.
 
+All SMP settings and their module bindings also persist in automatic preferences
+and named profiles. Stash discoveries are session data, scoped to the current
+server and dimension; **Save waypoint** retains a location through the existing
+waypoint store. Complete older profiles without an SMP block receive SMP defaults
+and unbound new actions. A partly present or invalid SMP block rejects a named
+profile before any settings apply.
+
 Named `configs/<name>.ini` profiles beside the client contain user-facing module
 states and settings, visual colors, combat and macro settings, blocks, HUD and
 layout, binds, friend UUID relations and waypoints. Profiles are self-contained,
 fully validated before application and saved atomically within the local folder.
 Copy `configs` and `client-settings.ini` with the client to retain the setup.
+
+Block scans cover a cube with a 4–48 block radius and only blocks available in
+the client world. Each result set is bounded to 1024 matching blocks. Stash Finder
+evaluates successful completed scans, defaults to eight chest, trapped-chest,
+shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
+It keeps at most 128 discoveries and the highest observed count for each chunk.
+Truncated scans report lower-bound counts. The scan does not reveal inventory
+contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
+IPC v21 changes the shared layout: restart already running Minecraft before
+reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the
 transparent overlay. It requires no desktop capture, blur or refraction; the
@@ -94,6 +116,17 @@ Snapshot HUDs use the shared rounded ImGui fill and font; their editor applies
 `CompactStyle` locally. HUD presentation adds no capture, blur or new renderer.
 
 ## Verification limits
+
+The SMP production client and portable ZIP were rebuilt. All 24 available
+regression checks passed across the final runs; `frame_attach` required a run
+outside the sandbox after Windows denied fixture pipe access. The SMP checks
+cover exact block classification, completed-scan gating, filters, negative chunk
+coordinates, session/world isolation, discovery bounds, highest-count retention,
+profile compatibility and per-type rendering. Native UI checks cover the actual
+storage-type caption clicks, colour picker, settings controls and persistence.
+Six SMP captures under `.impeccable/review/smp/` use the real ImGui/D3D11 WARP
+renderer with synthetic fixtures. They do not establish live Minecraft scanning,
+appearance or attach behavior; no live Minecraft check was performed for SMP.
 
 The `mcov` and `mcov_injector` builds, native/UI checks and portable share ZIP
 passed after the redesign. Offscreen D3D11 WARP checks exercise real UI input,
