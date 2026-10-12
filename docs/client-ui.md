@@ -219,7 +219,8 @@ benannte Profil vor dem Anwenden scheitern. Entdeckungen bleiben auf die Session
 beschränkt; **Save waypoint** speichert den Ort dauerhaft im bestehenden Store.
 Details und Grenzen stehen in [SMP-Funktionen](smp-features.md).
 
-Für SMP bestanden alle 24 verfügbaren Regressionsprüfungen über die abschließenden
+Für die ursprüngliche Erweiterung mit Storage ESP, Stash Finder und Spawner ESP
+bestanden alle 24 verfügbaren Regressionsprüfungen über die abschließenden
 Läufe; der isolierte `frame_attach`-Fixture-Test erforderte nach einem Windows-
 Pipe-Zugriffsfehler einen Lauf außerhalb der Sandbox. Die nativen UI-Prüfungen
 decken auch echte Klicks auf Typbezeichnungen und das Öffnen des Farbwählers ab.

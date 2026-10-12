@@ -169,7 +169,8 @@ Die fünf endgültigen synthetischen Vorschauen liegen unter
 `.impeccable/review/base-esp/` mit dem Suffix `-final.png`.
 Live-Minecraft-Verhalten wurde für Base ESP nicht geprüft.
 
-Alle **24** verfügbaren Regressionsprüfungen bestanden über die abschließenden
+Für die ursprüngliche Erweiterung mit Storage ESP, Stash Finder und Spawner ESP
+bestanden alle **24** verfügbaren Regressionsprüfungen über die abschließenden
 Läufe. Der isolierte `frame_attach`-Test bestand nach einem Windows-Pipe-
 Zugriffsfehler außerhalb der Sandbox mit seinem eigenen Fixture-JVM.
 `smp_features` prüft Klassifikation, beendete Scans, Filter, negative Chunks,
