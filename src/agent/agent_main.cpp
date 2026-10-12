@@ -38,6 +38,7 @@
 #include "combat_live.hpp"
 #include "item_assist_live.hpp"
 #include "depth_capture.hpp"
+#include "base_texture_capture.hpp"
 
 using namespace mcov;
 
@@ -54,6 +55,8 @@ std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
 mcov::agent::DepthCapture g_depthCapture;
 void JNICALL OnDepthReady(JNIEnv* env,jclass,jobject renderer,jlong epoch) { g_depthCapture.Capture(env,renderer,static_cast<std::uint64_t>(epoch)); }
+mcov::agent::BaseTextureCapture g_baseTextures;
+void JNICALL OnTexturedBase(JNIEnv* env,jclass,jobject renderer,jlong) { g_baseTextures.Capture(env,renderer); }
 mcov::agent::MinecraftCombat g_combat;
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
 jboolean JNICALL OnMacroUse(JNIEnv* env,jclass,jobject client);
@@ -1421,6 +1424,7 @@ void SamplerThread() {
         // Keep liveness separate while loading, paused or awaiting the camera.
         const auto loopNow = ::GetTickCount64();
         g_depthCapture.RefreshRequest(env);
+        g_baseTextures.RefreshRequest(env);
         if (loopNow >= nextHeartbeatTick) {
             if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
             nextHeartbeatTick = loopNow + 100;
@@ -1464,6 +1468,9 @@ void SamplerThread() {
                 if(g_depthCapture.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnDepthReady)))
                     MCOV_LOG_INFO("OpenGL world-depth capture armed: %s",bindings.set->id);
                 else MCOV_LOG_INFO("world-depth capture not available for this renderer/profile");
+                if(g_baseTextures.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnTexturedBase)))
+                    MCOV_LOG_INFO("textured Base ESP bridge active: %s",bindings.set->id);
+                else MCOV_LOG_INFO("textured Base ESP unavailable for this renderer/profile");
                 if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
                     MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
                 else MCOV_LOG_WARN("inventory client-tick bridge unavailable");
@@ -1610,6 +1617,7 @@ void SamplerThread() {
             }
 
             if (auto* block = g_channel.block()) PublishSnapshot(block, snapshot);
+            g_baseTextures.Observe(snapshot);
         }
 
         env->DeleteLocalRef(client);
@@ -1622,6 +1630,7 @@ void SamplerThread() {
     SetStatus(AgentStatus::Detaching);
     if(scanWorld) env->DeleteWeakGlobalRef(scanWorld);
     g_depthCapture.Close(env);
+    g_baseTextures.Close(env);
     g_combat.Close(env);
     g_inventory.Close(env);
     g_frameSync.Close(env);

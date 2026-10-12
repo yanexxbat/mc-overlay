@@ -29,6 +29,7 @@ void Config::Clamp() {
     spawner.radius=std::clamp(spawner.radius,4,48); spawner.interval=std::clamp(spawner.interval,200,3000);
     spawner.maxDraw=Finite(spawner.maxDraw,8,128,64); spawner.glow=Finite(spawner.glow,0,2,.75f); ClampColour(spawner.colour);
     base.maxDraw=Finite(base.maxDraw,8,512,192); base.padding=Finite(base.padding,0,16,4);
+    base.textureOpacity=Finite(base.textureOpacity,0,1,1);
     base.fillOpacity=Finite(base.fillOpacity,0,.5f,.12f); base.lineWidth=Finite(base.lineWidth,.5f,4,1.8f); ClampColour(base.colour);
 }
 void StashFinder::Reset() {
@@ -123,7 +124,7 @@ void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p
         ScreenRect rect; if(!p.Bounds(bounds,rect)) continue;
         std::array<WorldPoint,8> corners{};
         for(int i=0;i<8;++i) corners[i]={i&1?bounds.max.x:bounds.min.x,i&2?bounds.max.y:bounds.min.y,i&4?bounds.max.z:bounds.min.z};
-        if(c.fillOpacity>0) {
+        if(!c.textured&&c.fillOpacity>0) {
             ImVec4 tint=c.colour; tint.w*=c.fillOpacity;
             const bool facing[]={s.camX<=bounds.min.x,s.camX>=bounds.max.x,s.camY<=bounds.min.y,s.camY>=bounds.max.y,
                 s.camZ<=bounds.min.z,s.camZ>=bounds.max.z};
@@ -133,7 +134,7 @@ void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p
                 soft::WorldQuad(draw,p,{corners[face[0]],corners[face[1]],corners[face[2]],corners[face[3]]},texture,tint,tint,white,white);
             }
         }
-        for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) {
+        if(!c.textured) for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) {
             ScreenPoint a,b;
             if(p.Segment(corners[i],corners[i|bit],a,b)) draw.AddLine({a.x,a.y},{b.x,b.y},ink,c.lineWidth);
         }
@@ -144,5 +145,27 @@ void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p
         savedTags->resize(draw.VtxBuffer.Size,0.f);
         std::fill(savedTags->begin()+firstVertex,savedTags->end(),0.f);
     }
+}
+base::Request BuildBaseRequest(const WorldSnapshot& s,const BaseSettings& c,std::span<const Stash> finds,bool fresh,std::uint64_t now) {
+    base::Request r; r.sentAtMs=now; r.opacity=c.textureOpacity;
+    if(!c.enabled||!c.textured||!fresh||!s.dimension[0]||c.textureOpacity<=0) return r;
+    std::snprintf(r.dimension,sizeof(r.dimension),"%s",s.dimension); std::snprintf(r.server,sizeof(r.server),"%s",s.serverAddress);
+    std::vector<const Stash*> nearest;
+    for(const auto& f:finds) { const double d=Distance(f.centre,s); if(std::isfinite(d)&&d<=c.maxDraw) nearest.push_back(&f); }
+    std::stable_sort(nearest.begin(),nearest.end(),[&](auto a,auto b){return Distance(a->centre,s)<Distance(b->centre,s);});
+    nearest.resize(std::min(nearest.size(),std::size_t(base::kMaxRegions)));
+    // Stable geometry order prevents camera movement from restarting extraction.
+    std::sort(nearest.begin(),nearest.end(),[](auto a,auto b){return a->chunkX==b->chunkX?a->chunkZ<b->chunkZ:a->chunkX<b->chunkX;});
+    const double p=std::clamp(double(c.padding),0.,16.);
+    for(auto f:nearest) {
+        auto& b=r.regions[r.count++]; const auto& a=f->bounds;
+        b={std::floor(a.min.x-p),std::max(-4096.,std::floor(a.min.y-p)),std::floor(a.min.z-p),
+           std::ceil(a.max.x+p),std::min(4096.,std::ceil(a.max.y+p)),std::ceil(a.max.z+p)};
+    }
+    r.enabled=r.count>0;
+    std::uint64_t hash=14695981039346656037ULL;
+    auto feed=[&](const void* data,std::size_t size){auto* bytes=static_cast<const unsigned char*>(data); for(std::size_t i=0;i<size;++i) { hash^=bytes[i]; hash*=1099511628211ULL; }};
+    feed(r.dimension,sizeof(r.dimension)); feed(r.server,sizeof(r.server)); feed(&r.count,sizeof(r.count));
+    feed(r.regions.data(),r.count*sizeof(base::Region)); r.revision=hash?hash:1; return r;
 }
 } // namespace mcov::smp

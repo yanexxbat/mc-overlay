@@ -1,6 +1,7 @@
 #pragma once
 #include "esp_geometry.hpp"
 #include "soft_glow.hpp"
+#include "../common/base_render_state.hpp"
 #include <algorithm>
 #include <array>
 #include <span>
@@ -38,7 +39,8 @@ struct SpawnerSettings {
     ImVec4 colour{.4f,1,.65f,.95f};
 };
 struct BaseSettings {
-    bool enabled=false,labels=true,tracers=false;
+    bool enabled=false,labels=true,tracers=false,textured=true;
+    float textureOpacity=1;
     float maxDraw=192,padding=4,fillOpacity=.12f,lineWidth=1.8f;
     ImVec4 colour{.35f,.85f,1,.95f};
 };
@@ -82,4 +84,6 @@ void DrawStashes(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProj
                  const StashSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
 void DrawBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                const BaseSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
+base::Request BuildBaseRequest(const WorldSnapshot& snapshot,const BaseSettings& settings,
+                              std::span<const Stash> finds,bool fresh,std::uint64_t now);
 } // namespace mcov::smp

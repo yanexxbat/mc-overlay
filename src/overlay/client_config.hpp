@@ -103,10 +103,16 @@ inline void Base(Archive& a,smp::BaseSettings& c) {
     a.Value("smp.base.enabled",c.enabled); a.Value("smp.base.labels",c.labels); a.Value("smp.base.tracers",c.tracers);
     a.Value("smp.base.distance",c.maxDraw,8,512); a.Value("smp.base.padding",c.padding,0,16);
     a.Value("smp.base.fill",c.fillOpacity,0,.5); a.Value("smp.base.lineWidth",c.lineWidth,.5,4); a.Color("smp.base.colour",c.colour);
+    a.Value("smp.base.textured",c.textured); a.Value("smp.base.textureOpacity",c.textureOpacity,0,1);
+}
+inline void AddBaseTextureDefaults(std::map<std::string,std::string>& values) {
+    if(!values.contains("smp.base.textured")&&!values.contains("smp.base.textureOpacity")) {
+        values.emplace("smp.base.textured","1"); values.emplace("smp.base.textureOpacity","1");
+    }
 }
 inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
     const bool present=std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.base.");});
-    if(present) return;
+    if(present) { AddBaseTextureDefaults(values); return; }
     smp::BaseSettings defaults; std::ostringstream out; Archive archive(out); Base(archive,defaults);
     std::istringstream in(out.str()); std::string line;
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
@@ -305,6 +311,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         AddBaseDefaults(values);
         values.emplace(baseBind+"key","0"); values.emplace(baseBind+"modifiers","0"); values.emplace(baseBind+"mode","0");
     }
+    AddBaseTextureDefaults(values);
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

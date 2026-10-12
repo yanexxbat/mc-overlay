@@ -283,6 +283,7 @@ private:
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
     smp::Config smpConfig_{};
+    base::Report baseReport_{};
     smp::StashFinder stashFinder_{};
     items::MacroConfig crystalMacro_{},anchorMacro_{};
     items::Report itemReport_{};

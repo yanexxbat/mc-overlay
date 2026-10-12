@@ -1094,6 +1094,10 @@ void Overlay::PushScanRequest() {
     block->scanMask.store(mask, std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
+    const auto baseNow=GetTickCount64();
+    const bool baseFresh=haveSnapshot_&&stashFinder_.Matches(lastSnapshot_)&&snapshotReceivedAt_&&baseNow-snapshotReceivedAt_<1500;
+    block->baseRequest.Publish(smp::BuildBaseRequest(lastSnapshot_,smpConfig_.base,stashFinder_.Finds(),baseFresh,baseNow));
+    block->baseReport.Read(baseReport_);
 
     // Auto totem lives in the same push. Both are re-asserted EVERY frame, not
     // just when a control changes: the agent zeroes the shared block when it
