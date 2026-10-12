@@ -248,13 +248,7 @@ struct BlockKindCache {
             else if (key) {
                 const std::string text = jvm::JStringToUtf8(env, key);
                 env->DeleteLocalRef(key);
-                for (std::uint8_t i = 0; i < kBlockKindCount; ++i) {
-                    if(i==kBlockRotatedDeepslate && text!="block.minecraft.deepslate") continue;
-                    if (text.find(BlockKindKey(i)) != std::string::npos) {
-                        kind = static_cast<std::int8_t>(i);
-                        break;
-                    }
-                }
+                kind=ClassifyBlock(text);
             }
         }
         entries.push_back({env->NewGlobalRef(block), kind});
@@ -1158,6 +1152,8 @@ struct BlockScanner {
     int           nextCell = 0;
     std::uint32_t mask    = 0;
     bool          running = false;
+    bool          successful = false;
+    std::uint64_t id = 0;
 
     std::vector<BlockSnapshot> accum;
     BlockScanner() { accum.reserve(kMaxBlocks); }
@@ -1170,6 +1166,8 @@ struct BlockScanner {
         baseZ   = static_cast<int>(std::floor(snap.posZ));
         nextDy  = 0; nextCell=0;
         running = true;
+        successful = true;
+        ++id;
         accum.clear();
     }
 
@@ -1177,19 +1175,20 @@ struct BlockScanner {
     bool Step(JNIEnv* env, const Bindings& b, jobject client, BlockKindCache& cache, int sliceBudget) {
         if (!running) return true;
         if (!b.mGetBlockState || !b.mGetBlock || !b.mMutableSet || !b.mMutableCtor) {
+            successful = false;
             running = false;
             return true;
         }
 
         jvm::LocalFrame frame(env, 16);
-        if(!frame.ok()) { running=false; return true; }
+        if(!frame.ok()) { running=false; successful=false; return true; }
 
         jobject level = env->GetObjectField(client, b.fLevel);
-        if (!level) { running = false; return true; }
+        if (!level) { running = false; successful=false; return true; }
 
         jobject cursor = env->NewObject(b.clsPosMut, b.mMutableCtor);
-        if (env->ExceptionCheck()) { env->ExceptionClear(); running = false; return true; }
-        if (!cursor) { running = false; return true; }
+        if (env->ExceptionCheck()) { env->ExceptionClear(); running = false; successful=false; return true; }
+        if (!cursor) { running = false; successful=false; return true; }
 
         const int span = 2 * radius + 1;
 
@@ -1204,11 +1203,11 @@ struct BlockScanner {
                     if((cell&31)==0&&std::chrono::steady_clock::now()>=deadline) { --nextCell; break; }
                     if(y < -64 || y >= 320) continue;
                     auto moved=env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
-                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); successful=false; continue; }
                     if(moved) env->DeleteLocalRef(moved);
 
                     jobject state = env->CallObjectMethod(level, b.mGetBlockState, cursor);
-                    if (env->ExceptionCheck()) { env->ExceptionClear(); continue; }
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); successful=false; continue; }
                     if (!state) continue;
 
                     // isAir() is skipped deliberately: it is a third JNI call on
@@ -1217,7 +1216,7 @@ struct BlockScanner {
                     // one pointer comparison, so going straight to getBlock is
                     // a third fewer calls across solid terrain.
                     jobject block = env->CallObjectMethod(state, b.mGetBlock);
-                    if (env->ExceptionCheck()) { env->ExceptionClear(); env->DeleteLocalRef(state); continue; }
+                    if (env->ExceptionCheck()) { env->ExceptionClear(); successful=false; env->DeleteLocalRef(state); continue; }
                     if (!block) { env->DeleteLocalRef(state); continue; }
                     const std::int8_t kind=cache.Lookup(env,b,block);
                     env->DeleteLocalRef(block);
@@ -1583,6 +1582,12 @@ void SamplerThread() {
                     block->scanProgress.store(state==ScanState::Ready?100u:state==ScanState::Scanning?
                         static_cast<unsigned>(100ull*scanner.nextCell/(span*span*span)):0u,std::memory_order_release);
                     snapshot.blockCount=lastBlocks;
+                    snapshot.blockScanId=scanner.id;
+                    snapshot.blockScanMask=mask;
+                    snapshot.blockScanX=scanner.baseX; snapshot.blockScanY=scanner.baseY; snapshot.blockScanZ=scanner.baseZ;
+                    snapshot.blockScanRadius=radius;
+                    snapshot.blockScanComplete=state==ScanState::Ready&&scanner.successful;
+                    snapshot.blockScanTruncated=lastBlocks>=kMaxBlocks;
                     if(lastBlocks) std::memcpy(snapshot.blocks,cachedBlocks,sizeof(BlockSnapshot)*lastBlocks);
                 }
 
