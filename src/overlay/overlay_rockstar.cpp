@@ -60,7 +60,7 @@ void Overlay::Panic() {
     for(int i=3;i<keys::kCount;++i) if(!keys::System(static_cast<keys::Action>(i))) SetModuleEnabled(static_cast<keys::Action>(i),false);
     visuals_.boxEsp=visuals_.skeleton=visuals_.tracers=visuals_.nameTags=visuals_.healthBars=visuals_.distanceText=visuals_.targetInfo=false;
     auraConfig_.enabled=targetCubeConfig_.enabled=localHatConfig_.enabled=false;
-    hud_.visible=false; rockstarPack_.ResetWorld(); worldVisuals_.Reset(); panicActive_=true;
+    hud_.visible=false; rockstarPack_.ResetWorld(); worldVisuals_.Reset(); stashFinder_.Reset(); panicActive_=true;
     preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+300; PushScanRequest(); PushCombatRequest();
 }
 void Overlay::UpdateRockstar() {
@@ -78,9 +78,16 @@ void Overlay::UpdateRockstar() {
     if(panicActive_) for(int i=3;i<keys::kCount;++i) if(ModuleEnabled(static_cast<keys::Action>(i))) { panicActive_=false; break; }
     if(panicActive_&&(visuals_.healthBars||visuals_.distanceText||visuals_.tracers||visuals_.targetInfo)) panicActive_=false;
     rockstarPack_.Input(keyInput_,IsForegroundWindowOwnedBy(target_.pid)&&!menuVisible_&&!hudEditing_&&captureAction_<0,now);
-    if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); return; }
+    if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); stashFinder_.Reset(); return; }
     // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
     const auto& s=lastSnapshot_;
+    const int newStashes=stashFinder_.Update(s,smpConfig_.stash);
+    if(newStashes&&smpConfig_.stash.notifications) {
+        char text[112]; const auto* latest=stashFinder_.Latest();
+        if(newStashes==1) std::snprintf(text,sizeof(text),"Stash found: %d containers at %.0f %.0f %.0f",latest->count,latest->centre.x,latest->centre.y,latest->centre.z);
+        else std::snprintf(text,sizeof(text),"Stash Finder: %d new stashes. Open the fund list for coordinates.",newStashes);
+        rockstarPack_.Notify(text,now);
+    }
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:s.hasTarget?s.targetEntityId:0;
     const auto oldDeath=std::find_if(rockstarPack_.Markers().begin(),rockstarPack_.Markers().end(),[](const auto& m){return m.used&&m.death;});
@@ -94,6 +101,7 @@ void Overlay::UpdateRockstar() {
     if(rockstarPack_.TakeHitSound()) PlayModuleSound(true,true);
 }
 void Overlay::DrawRockstarSettings(Feature feature) {
+    if(feature==Feature::ChestEsp) { DrawSmpSettings(0); return; }
     auto& c=rockstarConfig_[feature]; const bool before=c.enabled; bool dirty=false;
     ImGui::PushID(rockstar::Index(feature)+22000);
     if(panel::BeginRows("rockstar_module")) {

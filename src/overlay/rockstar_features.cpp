@@ -230,13 +230,6 @@ void Pack::DrawWorld(ImDrawList& d,const WorldSnapshot& s,const CameraProjection
         const auto [a,b]=palette(beacon); soft::Ring(d,p,{block.x+.5,block.y+1.05,block.z+.5},beacon.size,reduced?0:now_*.08,a,b,textures,beacon.glow);
         WorldLine(d,p,{block.x+.5,block.y+1,block.z+.5},{block.x+.5,block.y+32,block.z+.5},b,2,beacon.glow,textures.glow);
     }
-    const auto& storage=config[Feature::ChestEsp];
-    if(storage.enabled) for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) if(block.kind==kBlockChest||block.kind>=kBlockShulker) {
-        if(Distance({block.x,block.y,block.z},{s.posX,s.posY,s.posZ})>storage.range) continue;
-        ScreenRect box; if(p.Bounds({{block.x,block.y,block.z},{block.x+1,block.y+1,block.z+1}},box)) {
-            const auto [a,b]=palette(storage); soft::Outline(d,{box.left,box.top},{box.right,box.bottom},6,1.5f,a,b,storage.glow,textures.glow);
-        }
-    }
 }
 void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjection& projection,const Config& c,ImVec2 size,ImVec4 a,ImVec4 b,double now,AuraBlend blend,soft::Textures textures) const {
     const auto& hurt=c[Feature::DamageInfo];

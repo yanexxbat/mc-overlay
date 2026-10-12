@@ -50,7 +50,7 @@ int StashFinder::Update(const WorldSnapshot& s,const StashSettings& c) {
         const int x=static_cast<int>(std::floor(double(block.x)/16)),z=static_cast<int>(std::floor(double(block.z)/16));
         auto it=std::find_if(chunks.begin(),chunks.begin()+chunkCount,[&](const Stash& f){return f.chunkX==x&&f.chunkZ==z;});
         if(it==chunks.begin()+chunkCount) {
-            it=&chunks[chunkCount++]; it->chunkX=x; it->chunkZ=z;
+            it=chunks.begin()+chunkCount++; it->chunkX=x; it->chunkZ=z;
             it->bounds={{block.x,block.y,block.z},{block.x+1.,block.y+1.,block.z+1.}};
         }
         ++it->count;
@@ -84,7 +84,7 @@ void DrawBlocks(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& 
         ImVec4 colour=storage?c.storage.Colour(block.kind):c.spawner.colour; if(storage) colour.w*=opacity;
         if(colour.w<=0) continue;
         const ImU32 ink=ImGui::ColorConvertFloat4ToU32(colour);
-        soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,ink,ink,storage?glow:c.spawner.glow,glowTexture);
+        soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,storage?glow:c.spawner.glow,glowTexture);
         if(storage?c.storage.tracers:c.spawner.tracers)
             draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
         if(storage?c.storage.labels:c.spawner.labels) {
