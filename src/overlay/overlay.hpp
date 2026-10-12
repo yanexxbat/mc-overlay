@@ -311,6 +311,7 @@ private:
 
     WorldSnapshot lastSnapshot_{};
     bool          haveSnapshot_ = false;
+    std::uint64_t snapshotReceivedAt_{};
 
     AgentHeartbeat heartbeatClock_{};
     int           reconnectCountdown_ = 0;

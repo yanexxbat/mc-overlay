@@ -372,7 +372,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             }
         }
     }
-    c.base.enabled=true; scene->camX=18; scene->camY=76; scene->camZ=-20; scene->yawDeg=36; scene->pitchDeg=24;
+    c.base.enabled=true; c.base.textured=false; scene->camX=18; scene->camY=76; scene->camZ=-20; scene->yawDeg=36; scene->pitchDeg=24;
     scene->nearPlane=.05f; scene->farPlane=1024;
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();

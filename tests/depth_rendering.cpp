@@ -43,7 +43,7 @@ int main() {
         snapshot->camX=snapshot->camY=snapshot->camZ=0; snapshot->fovDeg=70; snapshot->nearPlane=.05f; snapshot->farPlane=1000;
         const CameraProjection baseProjection(*snapshot,320,180);
         smp::Stash base; base.count=8; base.centre={0,-5,11}; base.bounds={{-1,-6,10},{1,-4,12}};
-        smp::BaseSettings baseSettings; baseSettings.enabled=true; baseSettings.labels=false; baseSettings.padding=0;
+        smp::BaseSettings baseSettings; baseSettings.enabled=true; baseSettings.textured=false; baseSettings.labels=false; baseSettings.padding=0;
         baseSettings.fillOpacity=.4f; baseSettings.colour={0,1,1,1};
         for(bool missing:{false,true}) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame(); auto* draw=ImGui::GetBackgroundDrawList();

@@ -455,6 +455,7 @@ bool Overlay::RunFrame() {
         const SharedBlock* block = channel_.block();
         WorldSnapshot      fresh{};
         if (TryReadSnapshot(block, fresh)) {
+            if(!haveSnapshot_||fresh.frameIndex!=lastSnapshot_.frameIndex) snapshotReceivedAt_=GetTickCount64();
             lastSnapshot_ = fresh;
             haveSnapshot_ = true;
         }
@@ -1095,7 +1096,7 @@ void Overlay::PushScanRequest() {
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
     const auto baseNow=GetTickCount64();
-    const bool baseFresh=haveSnapshot_&&stashFinder_.Matches(lastSnapshot_)&&snapshotReceivedAt_&&baseNow-snapshotReceivedAt_<1500;
+    const bool baseFresh=haveSnapshot_&&!panicActive_&&stashFinder_.Matches(lastSnapshot_)&&snapshotReceivedAt_&&baseNow>=snapshotReceivedAt_&&baseNow-snapshotReceivedAt_<1500;
     block->baseRequest.Publish(smp::BuildBaseRequest(lastSnapshot_,smpConfig_.base,stashFinder_.Finds(),baseFresh,baseNow));
     block->baseReport.Read(baseReport_);
 

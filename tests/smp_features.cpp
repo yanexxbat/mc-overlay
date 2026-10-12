@@ -106,7 +106,7 @@ void Rendering() {
     smp::StashFinder finder; Require(finder.Update(s,c.stash)==1,"Render fixture stash not detected");
     const int stashes=draw.VtxBuffer.Size; smp::DrawStashes(draw,s,projection,c.stash,finder.Finds(),{1280,720});
     Require(draw.VtxBuffer.Size>stashes,"Stash markers generated no geometry");
-    c.base.enabled=true; c.base.padding=0; c.base.labels=false; c.base.colour={0,1,1,1};
+    c.base.enabled=true; c.base.textured=false; c.base.padding=0; c.base.labels=false; c.base.colour={0,1,1,1};
     ImGui::GetIO().Fonts->SetTexID(ImTextureID(123));
     const int bases=draw.VtxBuffer.Size; std::vector<float> tags(bases,.25f);
     { depth::Scope scope(tags); smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720});
