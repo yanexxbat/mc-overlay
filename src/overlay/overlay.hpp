@@ -40,6 +40,7 @@
 #include "keybinds.hpp"
 #include "hud_layout.hpp"
 #include "world_visuals.hpp"
+#include "smp_features.hpp"
 #include <filesystem>
 #include <vector>
 
@@ -192,6 +193,8 @@ private:
     void  DrawChunkFinderSettings();
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
+    void DrawSmpSettings(int section);
+    void DrawScanStatus();
     void DrawRockstarSettings(rockstar::Feature feature);
     void DrawMiscTab();
     void UpdateRockstar();
@@ -279,6 +282,8 @@ private:
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
+    smp::Config smpConfig_{};
+    smp::StashFinder stashFinder_{};
     items::MacroConfig crystalMacro_{},anchorMacro_{};
     items::Report itemReport_{};
 
