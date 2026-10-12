@@ -82,7 +82,11 @@ void Rendering() {
     smp::DrawBlocks(draw,s,projection,c,false,32,1,0,{1280,720}); Require(draw.VtxBuffer.Size==before,"Disabled block modules drew geometry");
     smp::DrawBlocks(draw,s,projection,c,true,32,1,0,{1280,720});
     bool red=false,green=false;
-    for(const auto& v:draw.VtxBuffer) { red|=v.col==IM_COL32(255,0,0,255); green|=v.col==IM_COL32(0,255,0,255); }
+    for(const auto& v:draw.VtxBuffer) {
+        const auto rgb=v.col&~IM_COL32_A_MASK;
+        red|=rgb==(IM_COL32(255,0,0,255)&~IM_COL32_A_MASK)&&(v.col&IM_COL32_A_MASK);
+        green|=rgb==(IM_COL32(0,255,0,255)&~IM_COL32_A_MASK)&&(v.col&IM_COL32_A_MASK);
+    }
     Require(red&&green,"Storage renderer ignored per-type colours");
     const int count=draw.VtxBuffer.Size; c.spawner.enabled=true; c.spawner.tracers=true;
     smp::DrawBlocks(draw,s,projection,c,false,32,1,0,{1280,720}); Require(draw.VtxBuffer.Size>count,"Spawner ESP generated no geometry");
