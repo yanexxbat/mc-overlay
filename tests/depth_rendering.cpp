@@ -1,5 +1,6 @@
 // GPU-Pruefung mit echtem ImGui/D3D11, ohne Minecraft oder JVM-Attach.
 #include "overlay/depth_renderer.hpp"
+#include "overlay/smp_features.hpp"
 #include "common/depth_snapshots.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
@@ -39,6 +40,11 @@ int main() {
         ComPtr<ID3D11RenderTargetView> view; Hr(device->CreateRenderTargetView(target.Get(),nullptr,&view));
         desc.Usage=D3D11_USAGE_STAGING; desc.BindFlags=0; desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         ComPtr<ID3D11Texture2D> staging; Hr(device->CreateTexture2D(&desc,nullptr,&staging));
+        snapshot->camX=snapshot->camY=snapshot->camZ=0; snapshot->fovDeg=70;
+        const CameraProjection baseProjection(*snapshot,320,180);
+        smp::Stash base; base.count=8; base.centre={0,-5,11}; base.bounds={{-1,-6,10},{1,-4,12}};
+        smp::BaseSettings baseSettings; baseSettings.enabled=true; baseSettings.labels=false; baseSettings.padding=0;
+        baseSettings.fillOpacity=.4f; baseSettings.colour={0,1,1,1};
         for(bool missing:{false,true}) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame(); auto* draw=ImGui::GetBackgroundDrawList();
             renderer.Begin(*draw);
@@ -50,6 +56,7 @@ int main() {
                 int first=draw->VtxBuffer.Size; draw->AddRectFilled({20,20},{300,70},IM_COL32(0,255,0,255)); depth::Tag(*draw,first,7);
                 first=draw->VtxBuffer.Size; draw->AddRectFilled({20,90},{300,130},IM_COL32(255,0,0,255)); depth::Tag(*draw,first,2);
                 draw->AddRectFilled({20,145},{80,165},IM_COL32(0,0,255,255)); // Bildschirm/HUD bleibt ungeclippt.
+                smp::DrawBases(*draw,*snapshot,baseProjection,baseSettings,{&base,1},{320,180});
             }
             ImGui::GetForegroundDrawList()->AddRectFilled({240,145},{300,165},IM_COL32(255,255,255,255));
             ImGui::Render(); auto* data=ImGui::GetDrawData();
@@ -71,6 +78,7 @@ int main() {
             Require(missing?channel(250,40,1)==0:channel(250,40,1)>200,"visible portion incorrectly clipped / missing depth failed open");
             Require(missing?channel(40,110,0)==0:channel(40,110,0)>200,"front effect was incorrectly hidden");
             Require(channel(40,155,2)>200&&channel(270,155,0)>200,"depth shader leaked into HUD or foreground state");
+            Require(channel(160,152,1)>80&&channel(160,152,2)>80,"Base ESP fill was hidden behind the occluder or missing depth");
             context->Unmap(staging.Get(),0);
         }
         renderer.Shutdown(); ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext();

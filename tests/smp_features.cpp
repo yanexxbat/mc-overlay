@@ -57,23 +57,35 @@ void Profiles() {
     using namespace client_configs;
     Snapshot s; s.smp.storage.colours[0]={.1f,.2f,.3f,.4f}; s.smp.storage.mask=1u<<kBlockEnderChest;
     s.smp.stash.enabled=true; s.smp.stash.minContainers=16; s.smp.spawner.enabled=true;
+    s.smp.base.enabled=true; s.smp.base.padding=6; s.smp.base.colour={.3f,.4f,.5f,.6f};
+    s.binds[keys::Index(keys::Action::BaseEsp)]={0x42,0,keys::Mode::Toggle};
     s.binds[keys::Index(keys::Action::StashFinder)]={0x4A,keys::Ctrl,keys::Mode::Hold};
     std::string text; Require(Encode(s,text),"Could not encode SMP profile"); Snapshot result;
     Require(Decode(text,result)&&result.smp.storage.colours[0].w==.4f&&result.smp.storage.mask==(1u<<kBlockEnderChest)&&
         result.smp.stash.enabled&&result.smp.stash.minContainers==16&&result.smp.spawner.enabled&&
-        result.binds[keys::Index(keys::Action::StashFinder)].mode==keys::Mode::Hold,"SMP profile round-trip lost values");
+        result.binds[keys::Index(keys::Action::StashFinder)].mode==keys::Mode::Hold&&result.smp.base.enabled&&result.smp.base.padding==6&&
+        result.smp.base.colour.w==.6f&&result.binds[keys::Index(keys::Action::BaseEsp)].key==0x42,"SMP profile round-trip lost values");
     std::istringstream source(text); std::ostringstream legacy; std::string line;
     const auto stashBind="bind."+std::to_string(keys::Index(keys::Action::StashFinder))+".";
     const auto spawnBind="bind."+std::to_string(keys::Index(keys::Action::SpawnerEsp))+".";
-    while(std::getline(source,line)) if(!line.starts_with("smp.")&&!line.starts_with(stashBind)&&!line.starts_with(spawnBind)) legacy<<line<<'\n';
+    const auto baseBind="bind."+std::to_string(keys::Index(keys::Action::BaseEsp))+".";
+    while(std::getline(source,line)) if(!line.starts_with("smp.")&&!line.starts_with(stashBind)&&!line.starts_with(spawnBind)&&!line.starts_with(baseBind)) legacy<<line<<'\n';
     Require(Decode(legacy.str(),result)&&!result.smp.stash.enabled&&!result.smp.spawner.enabled&&
         result.smp.storage.mask==smp::kStorageMask&&!result.binds[keys::Index(keys::Action::StashFinder)].key,"Legacy profile did not get safe SMP defaults");
+    source.clear(); source.str(text); std::ostringstream beforeBase;
+    while(std::getline(source,line)) if(!line.starts_with("smp.base.")&&!line.starts_with(baseBind)) beforeBase<<line<<'\n';
+    Require(Decode(beforeBase.str(),result)&&!result.smp.base.enabled&&!result.binds[keys::Index(keys::Action::BaseEsp)].key&&
+        result.smp.storage.colours[0].w==.4f&&result.smp.stash.minContainers==16,"Pre-Base profile lost existing SMP values");
+    auto brokenBase=text; const auto baseField=brokenBase.find("smp.base.padding "); brokenBase.erase(baseField,brokenBase.find('\n',baseField)-baseField+1);
+    Require(!Decode(brokenBase,result),"Partial Base ESP profile was accepted");
     auto bad=text; const auto start=bad.find("smp.storage.colour.10.a "); bad.erase(start,bad.find('\n',start)-start+1);
     result.smp.stash.minContainers=71; Require(!Decode(bad,result)&&result.smp.stash.minContainers==71,"Damaged SMP profile partially applied");
     s.smp.stash.mask=1u<<kBlockDiamond; Require(!Encode(s,text),"Ore accepted in stash filter");
     smp::Config config; config.storage.colours[0].x=std::numeric_limits<float>::quiet_NaN(); config.stash.radius=1000;
     config.spawner.glow=std::numeric_limits<float>::infinity(); config.Clamp();
     Require(std::isfinite(config.storage.colours[0].x)&&config.stash.radius==48&&config.spawner.glow==.75f,"Invalid SMP settings survived clamping");
+    config.stash.enabled=false; config.base.enabled=true;
+    Require(config.Detection().enabled&&!config.stash.enabled,"Base ESP depends on enabled Stash Finder");
 }
 void Rendering() {
     auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
@@ -94,6 +106,21 @@ void Rendering() {
     smp::StashFinder finder; Require(finder.Update(s,c.stash)==1,"Render fixture stash not detected");
     const int stashes=draw.VtxBuffer.Size; smp::DrawStashes(draw,s,projection,c.stash,finder.Finds(),{1280,720});
     Require(draw.VtxBuffer.Size>stashes,"Stash markers generated no geometry");
+    c.base.enabled=true; c.base.padding=0; c.base.labels=false; c.base.colour={0,1,1,1};
+    io_unused:
+    ImGui::GetIO().Fonts->SetTexID(ImTextureID(123));
+    const int bases=draw.VtxBuffer.Size; std::vector<float> tags(bases,.25f);
+    { depth::Scope scope(tags); smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720});
+      Require(depth::tags==&tags,"Base rendering did not restore the depth scope"); }
+    Require(draw.VtxBuffer.Size>bases,"Base ESP generated no 3D geometry");
+    bool filled=false;
+    for(int i=bases;i<draw.VtxBuffer.Size;++i) {
+        Require(tags[i]==0,"Base ESP became occluded by world depth");
+        const auto& v=draw.VtxBuffer[i]; filled|=(v.col&IM_COL32_A_MASK)>0&&(v.col&IM_COL32_A_MASK)<(IM_COL32(0,0,0,255)&IM_COL32_A_MASK);
+    }
+    Require(filled&&tags[0]==.25f,"Base fill missing or previous effects' depth tags changed");
+    const int end=draw.VtxBuffer.Size; c.base.enabled=false;
+    smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720}); Require(draw.VtxBuffer.Size==end,"Disabled Base ESP drew geometry");
     for(const auto& v:draw.VtxBuffer) Require(std::isfinite(v.pos.x)&&std::isfinite(v.pos.y),"SMP renderer emitted an invalid vertex");
 }
 }
