@@ -28,6 +28,7 @@ C = {
     'CameraState':'net/minecraft/client/renderer/state/CameraRenderState', 'Model':'net/minecraft/client/model/Model',
     'Part':'net/minecraft/client/model/geom/ModelPart', 'Overlay':'net/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay',
     'Fluid':'net/minecraft/world/level/material/FluidState', 'Shape':'net/minecraft/world/level/block/RenderShape',
+    'Target':'com/mojang/blaze3d/pipeline/RenderTarget',
 }
 def t(name): return type_descriptor(C.get(name, name.replace('/', '.')))
 def d(args, result): return '('+''.join(map(t,args))+')'+t(result)
@@ -39,6 +40,9 @@ f('level','Client','level','Level')
 m('blocks','Client','getBlockRenderer',[],'Dispatcher')
 m('textures','Client','getTextureManager',[],'TextureManager')
 m('entities','Client','getBlockEntityRenderDispatcher',[],'EntityDispatcher')
+m('target','Client','getMainRenderTarget',[],'Target')
+m('targetColour','Target','getColorTexture',[],'GpuTexture')
+f('targetWidth','Target','width','int'); f('targetHeight','Target','height','int')
 m('delta','Client','getDeltaTracker',[],'Delta')
 m('partial','Delta','getGameTimeDeltaPartialTick',['boolean'],'float')
 m('camera','Renderer','getMainCamera',[],'Camera')

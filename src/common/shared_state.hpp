@@ -7,6 +7,7 @@
 #pragma once
 #include "combat_bridge_state.hpp"
 #include "item_assist.hpp"
+#include "base_render_state.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -17,7 +18,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 21;
+inline constexpr std::uint32_t kSharedVersion = 22;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -371,6 +372,8 @@ struct SharedBlock {
     SharedMailbox<CombatReport> combatReport;   // Client-Tick -> Overlay, eigener Writer.
     SharedMailbox<items::Request> itemRequest;
     SharedMailbox<items::Report> itemReport;
+    SharedMailbox<base::Request> baseRequest;
+    SharedMailbox<base::Report> baseReport;
     WorldSnapshot snapshot;
 };
 
