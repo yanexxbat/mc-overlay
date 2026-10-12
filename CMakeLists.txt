@@ -310,9 +310,9 @@ if(Java_JAVAC_EXECUTABLE)
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
             --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
             -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
-        COMMAND ${Java_JAR_EXECUTABLE} --create --file ${MCOV_TOOLS_DIR}/frame-signal.jar
+        COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-signal.jar
             -C ${MCOV_SIGNAL_CLASSES} .
-        COMMAND ${Java_JAR_EXECUTABLE} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
+        COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
             --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
         DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
             tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java

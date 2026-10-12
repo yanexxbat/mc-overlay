@@ -23,8 +23,8 @@ std::array<float,16> Matrix(const BaseMesh& mesh,const BaseCamera& c) {
     const double x=mesh.x-c.x,y=mesh.y-c.y,z=mesh.z-c.z;
     const double view[16]={-cy,-sy*sp,sy*cp,0, 0,cp,sp,0, -sy,cy*sp,-cy*cp,0,
         -cy*x-sy*z,-sy*sp*x+cp*y+cy*sp*z,sy*cp*x+sp*y-cy*cp*z,1};
-    const double t=1/std::tan(c.fov*rad*.5),near=.05,far=4096;
-    const double projection[16]={t*c.height/c.width,0,0,0, 0,t,0,0, 0,0,-(far+near)/(far-near),-1, 0,0,-2*far*near/(far-near),0};
+    const double t=1/std::tan(c.fov*rad*.5),nearPlane=.05,farPlane=4096;
+    const double projection[16]={t*c.height/c.width,0,0,0, 0,t,0,0, 0,0,-(farPlane+nearPlane)/(farPlane-nearPlane),-1, 0,0,-2*farPlane*nearPlane/(farPlane-nearPlane),0};
     std::array<float,16> result{};
     for(int col=0;col<4;++col) for(int row=0;row<4;++row) for(int k=0;k<4;++k)
         result[col*4+row]+=float(projection[k*4+row]*view[col*4+k]);
@@ -51,21 +51,21 @@ struct BaseTextureGl::Api {
     void(APIENTRY *bindSampler)(GLuint,GLuint){}; void(APIENTRY *samplerParam)(GLuint,GLenum,GLint){};
     void(APIENTRY *blendSeparate)(GLenum,GLenum,GLenum,GLenum){}; void(APIENTRY *blendEquation)(GLenum,GLenum){};
     bool LoadAll() {
-#define GL_LOAD(member,name) if(!Load(member,name)) return false;
-        GL_LOAD(genFbo,"glGenFramebuffers") GL_LOAD(deleteFbo,"glDeleteFramebuffers") GL_LOAD(bindFbo,"glBindFramebuffer")
-        GL_LOAD(attach,"glFramebufferTexture2D") GL_LOAD(check,"glCheckFramebufferStatus")
-        GL_LOAD(genBuffer,"glGenBuffers") GL_LOAD(deleteBuffer,"glDeleteBuffers") GL_LOAD(bindBuffer,"glBindBuffer") GL_LOAD(bufferData,"glBufferData")
-        GL_LOAD(genVao,"glGenVertexArrays") GL_LOAD(deleteVao,"glDeleteVertexArrays") GL_LOAD(bindVao,"glBindVertexArray")
-        GL_LOAD(attribute,"glVertexAttribPointer") GL_LOAD(enableAttribute,"glEnableVertexAttribArray")
-        GL_LOAD(createShader,"glCreateShader") GL_LOAD(shaderSource,"glShaderSource") GL_LOAD(compileShader,"glCompileShader")
-        GL_LOAD(shaderStatus,"glGetShaderiv") GL_LOAD(deleteShader,"glDeleteShader") GL_LOAD(createProgram,"glCreateProgram")
-        GL_LOAD(attachShader,"glAttachShader") GL_LOAD(bindAttribute,"glBindAttribLocation") GL_LOAD(linkProgram,"glLinkProgram")
-        GL_LOAD(programStatus,"glGetProgramiv") GL_LOAD(deleteProgram,"glDeleteProgram") GL_LOAD(useProgram,"glUseProgram")
-        GL_LOAD(uniformLocation,"glGetUniformLocation") GL_LOAD(uniformInt,"glUniform1i") GL_LOAD(uniformFloat,"glUniform1f") GL_LOAD(uniformMatrix,"glUniformMatrix4fv")
-        GL_LOAD(activeTexture,"glActiveTexture") GL_LOAD(genSampler,"glGenSamplers") GL_LOAD(deleteSampler,"glDeleteSamplers")
-        GL_LOAD(bindSampler,"glBindSampler") GL_LOAD(samplerParam,"glSamplerParameteri")
-        GL_LOAD(blendSeparate,"glBlendFuncSeparate") GL_LOAD(blendEquation,"glBlendEquationSeparate")
-#undef GL_LOAD
+#define MCOV_BASE_GL_LOAD(member,name) if(!Load(member,name)) return false;
+        MCOV_BASE_GL_LOAD(genFbo,"glGenFramebuffers") MCOV_BASE_GL_LOAD(deleteFbo,"glDeleteFramebuffers") MCOV_BASE_GL_LOAD(bindFbo,"glBindFramebuffer")
+        MCOV_BASE_GL_LOAD(attach,"glFramebufferTexture2D") MCOV_BASE_GL_LOAD(check,"glCheckFramebufferStatus")
+        MCOV_BASE_GL_LOAD(genBuffer,"glGenBuffers") MCOV_BASE_GL_LOAD(deleteBuffer,"glDeleteBuffers") MCOV_BASE_GL_LOAD(bindBuffer,"glBindBuffer") MCOV_BASE_GL_LOAD(bufferData,"glBufferData")
+        MCOV_BASE_GL_LOAD(genVao,"glGenVertexArrays") MCOV_BASE_GL_LOAD(deleteVao,"glDeleteVertexArrays") MCOV_BASE_GL_LOAD(bindVao,"glBindVertexArray")
+        MCOV_BASE_GL_LOAD(attribute,"glVertexAttribPointer") MCOV_BASE_GL_LOAD(enableAttribute,"glEnableVertexAttribArray")
+        MCOV_BASE_GL_LOAD(createShader,"glCreateShader") MCOV_BASE_GL_LOAD(shaderSource,"glShaderSource") MCOV_BASE_GL_LOAD(compileShader,"glCompileShader")
+        MCOV_BASE_GL_LOAD(shaderStatus,"glGetShaderiv") MCOV_BASE_GL_LOAD(deleteShader,"glDeleteShader") MCOV_BASE_GL_LOAD(createProgram,"glCreateProgram")
+        MCOV_BASE_GL_LOAD(attachShader,"glAttachShader") MCOV_BASE_GL_LOAD(bindAttribute,"glBindAttribLocation") MCOV_BASE_GL_LOAD(linkProgram,"glLinkProgram")
+        MCOV_BASE_GL_LOAD(programStatus,"glGetProgramiv") MCOV_BASE_GL_LOAD(deleteProgram,"glDeleteProgram") MCOV_BASE_GL_LOAD(useProgram,"glUseProgram")
+        MCOV_BASE_GL_LOAD(uniformLocation,"glGetUniformLocation") MCOV_BASE_GL_LOAD(uniformInt,"glUniform1i") MCOV_BASE_GL_LOAD(uniformFloat,"glUniform1f") MCOV_BASE_GL_LOAD(uniformMatrix,"glUniformMatrix4fv")
+        MCOV_BASE_GL_LOAD(activeTexture,"glActiveTexture") MCOV_BASE_GL_LOAD(genSampler,"glGenSamplers") MCOV_BASE_GL_LOAD(deleteSampler,"glDeleteSamplers")
+        MCOV_BASE_GL_LOAD(bindSampler,"glBindSampler") MCOV_BASE_GL_LOAD(samplerParam,"glSamplerParameteri")
+        MCOV_BASE_GL_LOAD(blendSeparate,"glBlendFuncSeparate") MCOV_BASE_GL_LOAD(blendEquation,"glBlendEquationSeparate")
+#undef MCOV_BASE_GL_LOAD
         return true;
     }
     struct State {
