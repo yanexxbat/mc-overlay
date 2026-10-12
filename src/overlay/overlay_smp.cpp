@@ -68,7 +68,7 @@ void Overlay::DrawSmpSettings(int section) {
         panel::Section("Count these containers"); dirty|=Types(c.mask);
         if(!c.mask) ImGui::TextWrapped("Select container types to start finding stashes.");
         ImGui::TextWrapped("Finds chunks with enough selected container blocks. A double chest counts as two. Ender chests are excluded by default. Counts cover the scanned part of a chunk and do not reveal inventory contents.");
-        if(c.notifications&&(!hud_.visible||!hud_.extras[int(HudModule::Notifications)-int(HudModule::Radar)]||!rockstarConfig_.Enabled(rockstar::Feature::Notifications)))
+        if(c.notifications&&(!hud_.visible||!HudEnabled(int(HudModule::Notifications))))
             ImGui::TextWrapped("Enable HUD > Notifications to see stash messages.");
         panel::Section("Discoveries this session");
         const auto finds=stashFinder_.Finds();

@@ -85,7 +85,7 @@ void Overlay::UpdateRockstar() {
     if(newStashes&&smpConfig_.stash.notifications) {
         char text[112]; const auto* latest=stashFinder_.Latest();
         if(newStashes==1) std::snprintf(text,sizeof(text),"Stash found: %d containers at %.0f %.0f %.0f",latest->count,latest->centre.x,latest->centre.y,latest->centre.z);
-        else std::snprintf(text,sizeof(text),"Stash Finder: %d new stashes. Open the fund list for coordinates.",newStashes);
+        else std::snprintf(text,sizeof(text),"Stash Finder: %d new stashes. Open the discovery list for coordinates.",newStashes);
         rockstarPack_.Notify(text,now);
     }
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&

@@ -171,6 +171,8 @@ add_executable(mcov_overlay
     src/overlay/overlay_world_visuals.cpp
     src/overlay/overlay_rockstar.cpp
     src/overlay/overlay_utilities.cpp
+    src/overlay/overlay_smp.cpp
+    src/overlay/smp_features.cpp
     src/overlay/esp_renderer.cpp
     src/overlay/visual_draw.cpp
     src/overlay/item_icon_atlas_dx11.cpp
@@ -408,6 +410,10 @@ if(MCOV_BUILD_UI_CHECKS)
     target_include_directories(mcov_world_visuals_check PRIVATE src)
     target_link_libraries(mcov_world_visuals_check PRIVATE mcov_settings imgui)
     add_test(NAME world_visuals COMMAND mcov_world_visuals_check)
+    add_executable(mcov_smp_check tests/smp_features.cpp src/overlay/smp_features.cpp)
+    target_include_directories(mcov_smp_check PRIVATE src)
+    target_link_libraries(mcov_smp_check PRIVATE mcov_settings imgui)
+    add_test(NAME smp_features COMMAND mcov_smp_check)
     add_executable(mcov_rockstar_check tests/rockstar_features.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
     target_include_directories(mcov_rockstar_check PRIVATE src)
     target_link_libraries(mcov_rockstar_check PRIVATE mcov_settings imgui)
@@ -424,6 +430,8 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/overlay_world_visuals.cpp
         src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
     src/overlay/overlay_utilities.cpp
+        src/overlay/overlay_smp.cpp
+        src/overlay/smp_features.cpp
         src/overlay/combat_menu.cpp
         src/overlay/item_icon_atlas_dx11.cpp
         src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp src/overlay/depth_renderer.cpp

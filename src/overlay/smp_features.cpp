@@ -24,7 +24,7 @@ void Config::Clamp() {
     storage.mask&=kStorageMask;
     for(auto& c:storage.colours) ClampColour(c);
     stash.radius=std::clamp(stash.radius,4,48); stash.interval=std::clamp(stash.interval,200,3000);
-    stash.minContainers=std::clamp(stash.minContainers,2,1024); stash.maxDraw=Finite(stash.maxDraw,8,512,128);
+    stash.minContainers=std::clamp(stash.minContainers,2,128); stash.maxDraw=Finite(stash.maxDraw,8,512,128);
     stash.mask&=kStorageMask; ClampColour(stash.colour);
     spawner.radius=std::clamp(spawner.radius,4,48); spawner.interval=std::clamp(spawner.interval,200,3000);
     spawner.maxDraw=Finite(spawner.maxDraw,8,128,64); spawner.glow=Finite(spawner.glow,0,2,.75f); ClampColour(spawner.colour);

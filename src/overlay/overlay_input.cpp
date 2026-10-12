@@ -1,5 +1,6 @@
 #include "overlay.hpp"
 #include "visual_preferences.hpp"
+#include "client_config.hpp"
 #include "../common/flat_style.hpp"
 #include <windows.h>
 #include <fstream>
@@ -205,6 +206,7 @@ void Overlay::SavePreferences() {
       out<<"mcov-client 1\n"<<std::setprecision(9);
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
       visual_preferences::Write(out,visuals_);
+      client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
       for(int i=0;i<2;++i) {
           auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
@@ -231,11 +233,15 @@ void Overlay::SavePreferences() {
 void Overlay::LoadPreferences() {
     std::ifstream in(preferencesPath_); if(!in) return;
     std::string header; std::getline(in,header); if(header!="mcov-client 1") { preferenceStatus_="Unsupported preferences format; defaults loaded."; return; }
-    std::string line; for(int lines=0;lines<128&&std::getline(in,line);++lines) {
+    std::map<std::string,std::string> smpValues; bool smpUnique=true;
+    std::string line; for(int lines=0;lines<512&&std::getline(in,line);++lines) {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
                 (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
+        } else if(tag.starts_with("smp.")) {
+            const auto split=line.find(' ');
+            if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
         } else if(tag=="macro") {
             int i; items::MacroConfig c;
             if(row>>i>>c.restoreSlot>>c.intervalMs>>c.confirmationMs>>c.separateDelays>>c.requireTotem>>c.strictConfirmation>>c.chargeWithOffhandFuel
@@ -269,6 +275,11 @@ void Overlay::LoadPreferences() {
             bindings_[i]={};
     if(!bindings_[0].key||!bindings_[1].key||keys::Conflict(bindings_,0)||keys::Conflict(bindings_,1)) bindings_=keys::Defaults();
     preferencesDirty_=false;
+    if(!smpValues.empty()) {
+        smp::Config candidate; client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
+        if(smpUnique&&archive.valid&&smpValues.empty()) smpConfig_=candidate;
+        else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";
+    }
     rockstarConfig_.Clamp();
 }
 } // namespace mcov

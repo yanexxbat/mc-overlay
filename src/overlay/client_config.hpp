@@ -22,6 +22,7 @@ struct Snapshot {
     LocalHatConfig hat{};
     BlockEspSettings blocks{};
     ChunkFinderSettings chunks{};
+    smp::Config smp{};
     items::MacroConfig crystal{},anchor{};
     HudSettings hud{};
     keys::Bindings binds=keys::Defaults();
@@ -98,6 +99,22 @@ inline void Hat(Archive& a,const std::string& name,FriendHatConfig& c) {
     a.Value(name+".radius",c.radiusScale,.5,2); a.Value(name+".height",c.heightScale,.2,1);
     a.Value(name+".gap",c.headGap,0,.2);
 }
+inline void Smp(Archive& a,smp::Config& s) {
+    a.Value("smp.storage.mask",s.storage.mask,0,smp::kStorageMask);
+    a.Value("smp.storage.labels",s.storage.labels); a.Value("smp.storage.tracers",s.storage.tracers);
+    for(std::size_t i=0;i<smp::kStorageKinds.size();++i)
+        a.Color("smp.storage.colour."+std::to_string(smp::kStorageKinds[i]),s.storage.colours[i]);
+    auto& stash=s.stash;
+    a.Value("smp.stash.enabled",stash.enabled); a.Value("smp.stash.labels",stash.labels); a.Value("smp.stash.tracers",stash.tracers);
+    a.Value("smp.stash.notifications",stash.notifications); a.Value("smp.stash.radius",stash.radius,4,48);
+    a.Value("smp.stash.interval",stash.interval,200,3000); a.Value("smp.stash.minimum",stash.minContainers,2,128);
+    a.Value("smp.stash.distance",stash.maxDraw,8,512); a.Value("smp.stash.mask",stash.mask,0,smp::kStorageMask); a.Color("smp.stash.colour",stash.colour);
+    auto& spawn=s.spawner;
+    a.Value("smp.spawner.enabled",spawn.enabled); a.Value("smp.spawner.labels",spawn.labels); a.Value("smp.spawner.tracers",spawn.tracers);
+    a.Value("smp.spawner.radius",spawn.radius,4,48); a.Value("smp.spawner.interval",spawn.interval,200,3000);
+    a.Value("smp.spawner.distance",spawn.maxDraw,8,128); a.Value("smp.spawner.glow",spawn.glow,0,2); a.Color("smp.spawner.colour",spawn.colour);
+    if((s.storage.mask&~smp::kStorageMask)||(stash.mask&~smp::kStorageMask)) a.valid=false;
+}
 inline void Visit(Archive& a,Snapshot& s) {
     // Stable field names keep profiles readable and independent of struct layout.
 #define FIELD(object,field,...) a.Field(#object "." #field,s.object.field,std::tuple{__VA_ARGS__})
@@ -169,6 +186,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
     FIELD(chunks,enabled); FIELD(chunks,blocks); FIELD(chunks,labels); FIELD(chunks,radius,4,48);
     FIELD(chunks,interval,200,3000); FIELD(chunks,minHints,1,32); FIELD(chunks,maxDraw,8,128); COLOR(chunks,color);
+    Smp(a,s.smp);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
 #define MACRO(field,...) a.Field(n+#field,macro->field,std::tuple{__VA_ARGS__})
@@ -250,6 +268,20 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
             if(split==std::string::npos) continue;
             const auto key=line.substr(0,split);
             if(key.starts_with("combat.spin.")||key.starts_with(spinBind)) values.emplace(key,line.substr(split+1));
+        }
+    }
+    const auto stashBind="bind."+std::to_string(keys::Index(keys::Action::StashFinder))+".";
+    const auto spawnerBind="bind."+std::to_string(keys::Index(keys::Action::SpawnerEsp))+".";
+    const bool hasSmp=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("smp.")||entry.first.starts_with(stashBind)||entry.first.starts_with(spawnerBind);
+    });
+    if(!hasSmp) {
+        std::string defaults; if(!Encode(Snapshot{},defaults)) return false;
+        std::istringstream defaultsIn(defaults);
+        while(std::getline(defaultsIn,line)) {
+            const auto split=line.find(' '); if(split==std::string::npos) continue;
+            const auto key=line.substr(0,split);
+            if(key.starts_with("smp.")||key.starts_with(stashBind)||key.starts_with(spawnerBind)) values.emplace(key,line.substr(split+1));
         }
     }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
