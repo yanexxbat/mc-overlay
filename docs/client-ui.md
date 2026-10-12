@@ -28,7 +28,7 @@ gilt auch bei geöffnetem Menü.
 ## Kategorien, Module und Einstellungen
 
 Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
-Raster mit einer bis drei Spalten. Alle 80 Bereiche bleiben erreichbar.
+Raster mit einer bis drei Spalten. Alle 81 Bereiche bleiben erreichbar.
 Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
 Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
@@ -59,7 +59,7 @@ Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
   und Offscreen arrows. Gemeinsame Entity-Farben
   und Sichtbarkeitsfilter liegen unter Entity filters.
 - **Blocks:** Block ESP (Scan-Einstellungen), Block types, Tracers, Chunkfinder,
-  Storage ESP, Beacon radius, Chunk borders, Stash Finder und Spawner ESP.
+  Storage ESP, Beacon radius, Chunk borders, Stash Finder, Spawner ESP und Base ESP.
 - **HUD:** Editor und ein Widget pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
 - **Stats:** Local player, Client, Entities.
@@ -74,6 +74,11 @@ ermöglicht das Kopieren oder Speichern einer Entdeckung als Wegpunkt.
 **Spawner ESP** hat eigene Farbe, Labels und Tracer. Die Einstellungen liegen
 weiterhin unter **Blocks** und öffnen sich per Rechtsklick im unabhängigen Fenster.
 Bedienung, Scan-Grenzen und Zählregeln: [SMP-Funktionen](smp-features.md).
+
+**Base ESP** zeigt erkannte Containeransammlungen als transparente 3D-Fläche
+mit Rahmen durch Wände. Das Modul arbeitet auch ohne eingeschalteten Stash
+Finder; Radius, Filter und Mindestanzahl werden gemeinsam verwendet. Farbe,
+Flächentransparenz, Rahmenbreite und zusätzlicher Rand sind direkt einstellbar.
 
 ## Configs
 

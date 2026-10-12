@@ -7,6 +7,7 @@ Dear ImGui and Direct3D 11.
 
 - Compact translucent menu and launcher, with a matching HUD.
 - Entity and block visuals, target effects, particles and waypoints.
+- Base ESP with translucent 3D areas and frames visible through walls.
 - Storage ESP with individual block colours, Stash Finder and Spawner ESP.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
@@ -43,7 +44,9 @@ when replacing an already loaded agent. The SMP update uses IPC v21; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
-or **Spawner ESP** to configure them. Scans use loaded client blocks within a
+or **Spawner ESP** to configure them. **Base ESP** highlights detected container
+clusters as translucent 3D areas through walls and also works with Stash Finder off.
+Scans use loaded client blocks within a
 4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
 stash counting, saved waypoints and scan limits.
 

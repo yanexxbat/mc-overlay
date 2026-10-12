@@ -23,7 +23,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 80 real sections remain reachable. Left-click or Space operates the real
+  All 81 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -58,6 +58,10 @@ camera/entity projection stability.
   Stash Finder records container clusters by chunk; Spawner ESP has its own
   colour, labels and tracers. Right-click opens the same independent settings
   window. These controls preserve the incumbent compact visual system.
+- Base ESP independently enables the shared container-cluster detector and
+  draws translucent 3D areas with frames through walls. Its appearance and
+  unbound module key persist; scan radius, minimum and filters are shared with
+  Stash Finder. The area estimates storage extent plus an adjustable margin.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.

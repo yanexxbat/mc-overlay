@@ -1,6 +1,6 @@
-# SMP: Storage ESP, Stash Finder und Spawner ESP
+# SMP: Storage ESP, Stash Finder, Spawner ESP und Base ESP
 
-Die drei Module stehen unter **Blocks** im bestehenden kompakten Client-Menü.
+Die vier Module stehen unter **Blocks** im bestehenden kompakten Client-Menü.
 **Linksklick** oder **Leertaste** schaltet ein Modul um. **Rechtsklick**,
 **Menü-Taste** oder **Shift+F10** öffnet seine Einstellungen im unabhängigen
 Fenster. In kleinen Viewports scrollt dieses Fenster bis zu allen Controls und
@@ -91,6 +91,27 @@ markiert gescannte Mob-Spawner-Blöcke mit eigener RGBA-Farbe, **Labels**,
 Scan-Radius ist anfangs 24 Blöcke, Scan-Intervall 1000 ms und Draw distance 64 m.
 Radius erlaubt 4–48 Blöcke, Intervall 200–3000 ms, Draw distance 8–128 m und
 Glow 0–2. Mobtyp und Aktivierungszustand des Spawners werden nicht erfasst.
+
+## Base ESP
+
+**Blocks → Base ESP** einschalten; Rechtsklick öffnet die Einstellungen.
+Erkannte Containeransammlungen erscheinen als farbige, transparente 3D-Flächen
+mit Rahmen durch Wände und andere Blöcke. Die globale Wandverdeckung anderer
+Welteffekte beeinflusst Base ESP nicht.
+
+Base ESP funktioniert auch bei ausgeschaltetem Stash Finder. Beide verwenden
+denselben Scan-Radius, dieselben Container-Filter und dieselbe Mindestanzahl
+pro Chunk (standardmäßig acht). Die Darstellung umfasst beobachtete Lagerblöcke
+plus **Expand detected area**, standardmäßig vier zusätzliche Blöcke auf allen
+Seiten. Dieser Bereich schätzt einen Base-Standort; er rekonstruiert keine
+Gebäudegeometrie. Es gelten dieselben Grenzen für geladene Blöcke und Fundlisten.
+
+**Base colour**, **Fill opacity** und **Frame width** ändern Farbe, Transparenz
+und Rahmen. Labels und Tracer sind optional. Standardmäßig beträgt die
+Anzeigeentfernung 192 m und die Flächentransparenz 0,12. Die Anzeigeentfernung
+erweitert den Scan-Radius nicht. Aussehen und Modul-Bind werden in automatischen
+Einstellungen und benannten Configs gespeichert. Bestehende vollständige Configs
+ohne Base ESP erhalten dessen ausgeschaltete Defaults und einen ungebundenen Key.
 
 ## Scan-Status und Grenzen
 
