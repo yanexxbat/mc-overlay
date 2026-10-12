@@ -337,6 +337,23 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(int i=0;i<12;++i) { auto& b=scene->blocks[scene->blockCount++]; b.x=float(i%4); b.y=64; b.z=float(i/4); b.kind=mcov::kBlockChest; }
     scene->blockScanY=64; Require(mcov::OverlayUiCheck::Stashes(overlay).Update(*scene,c.stash)==1,"SMP UI discovery fixture failed");
     scene->fovDeg=70; scene->health=scene->maxHealth=20; mcov::OverlayUiCheck::Snapshot(overlay,*scene);
+    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,9);
+    auto storageFrame=[&] { Draw(overlay,Page::Blocks,0,{1280,800}); };
+    auto* storageContent=Child("/content_"); ImGui::SetScrollY(storageContent,storageContent->ScrollMax.y); storageFrame(); storageFrame();
+    auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(storageContent->GetID("storage_colours"));
+    Require(table!=nullptr,"Storage colour table missing");
+    const float height=mcov::style::MenuFont()->FontSize+6;
+    const ImVec2 caption{table->Columns[0].WorkMinX+20,table->OuterRect.Min.y+table->RowCellPaddingY+height*.5f};
+    auto clickStorage=[&](ImVec2 point) {
+        auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); storageFrame();
+        io.AddMouseButtonEvent(0,true); storageFrame(); io.AddMouseButtonEvent(0,false); storageFrame(); storageFrame();
+    };
+    clickStorage(caption); Require(!(c.storage.mask&(1u<<mcov::kBlockChest)),"Storage caption did not toggle its filter");
+    clickStorage(caption); Require(c.storage.mask&(1u<<mcov::kBlockChest),"Storage caption could not re-enable its filter");
+    const ImVec2 swatch{table->Columns[1].WorkMinX+height+ImGui::GetStyle().ItemSpacing.x+height*.5f,caption.y};
+    clickStorage(swatch); Require(ImGui::GetCurrentContext()->OpenPopupStack.Size>0,"Per-type storage colour picker did not open");
+    ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape,true); storageFrame(); ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape,false); storageFrame();
+    ImGui::GetIO().AddMousePosEvent(-100,-100); storageFrame();
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
         for(int index:{4,7,8}) {

@@ -13,7 +13,10 @@ bool Types(std::uint32_t& mask,std::array<ImVec4,smp::kStorageKinds.size()>* col
             const auto kind=smp::kStorageKinds[i]; const auto bit=1u<<kind;
             bool selected=(mask&bit)!=0; ImGui::PushID(kind);
             if(colours) {
-                ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted(BlockKindLabel(kind));
+                ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
+                if(ImGui::Selectable(BlockKindLabel(kind),false,ImGuiSelectableFlags_None,{0,ImGui::GetFrameHeight()})) {
+                    selected=!selected; mask=selected?mask|bit:mask&~bit; dirty=true;
+                }
                 ImGui::TableSetColumnIndex(1);
                 if(ImGui::Checkbox("##visible",&selected)) { mask=selected?mask|bit:mask&~bit; dirty=true; }
                 ImGui::SameLine(); dirty|=ImGui::ColorEdit4("##colour",&(*colours)[i].x,ImGuiColorEditFlags_NoInputs|ImGuiColorEditFlags_AlphaPreview);
