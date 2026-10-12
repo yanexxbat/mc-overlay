@@ -221,6 +221,8 @@ decken auch echte Klicks auf Typbezeichnungen und das Öffnen des Farbwählers a
 Die sechs Vorschauen unter `.impeccable/review/smp/` zeigen synthetische Fixtures
 mit dem echten ImGui/D3D11-WARP-Renderer. Die portable EXE und ZIP wurden neu
 gebaut. Live-Minecraft-Scans, Optik und Attach wurden für SMP nicht geprüft.
+Die unabhängige Abschlussprüfung öffnete alle sechs nach dem Typbezeichnungs-
+Fix erneut erzeugten Bilder und bestätigte **ship**, ohne sichtbare Regression.
 
 Geprüft: echte Rechtsklicks für alle 77 Abschnitte, reale Toggle-Stores,
 Leertaste und Shift+F10, unabhängiges Ziehen/Schließen beider Fenster,

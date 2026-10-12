@@ -61,7 +61,7 @@ The renderer reads the shared POD snapshot and never calls JNI.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **18**; restart Minecraft and use the newly built
+Shared-memory version is now **21**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
 Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
@@ -184,7 +184,7 @@ These are synthetic call-site tests, not a live Minecraft renderer test.
 See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
 the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v20 and a full Minecraft restart after upgrading. Spinbot shares the
+require IPC v21 and a full Minecraft restart after upgrading. Spinbot shares the
 existing silent camera hooks. Its movement correction uses audited Entity,
 LivingEntity, Player and LocalPlayer physics scopes; only getters inside those
 scopes use camera yaw/pitch. Model/network getters outside keep the spin angles.
@@ -193,6 +193,31 @@ travel pitch, nested/exception cleanup, foreign entities and pause/priority gate
 Dynamic attach also retransforms already loaded movement methods. Spinbot stays
 disabled if camera or movement hooks are unavailable. These fixtures do not
 replace movement testing in a running Minecraft client.
+
+## SMP block scanning
+
+Storage ESP, Stash Finder and Spawner ESP use the existing runtime profiles and
+the worker's block-state sampling. IPC v21 adds distinct storage types and
+coherent completed-scan metadata; restart already running Minecraft before
+reattaching with the updated portable client or matching development binaries.
+The overlay, injector and loaded agent must use the same shared-memory version.
+
+The scanner reads loaded client-world blocks in a 4–48 block-radius cube and
+currently visits Y = −64 through 319. Results are limited to 1024 matching blocks
+across active block modules; truncated scans report lower-bound counts. Stash
+Finder evaluates successful completed scans, records at most 128 session/world-
+scoped discoveries and retains the highest observed count per chunk. It does
+not read inventory contents. Spawner mob type and activation state are not sampled.
+See [SMP features](smp-features.md) for controls, counting and persistence.
+
+All 24 available regression checks passed across the final SMP runs. The
+`frame_attach` check passed outside the sandbox after Windows denied access to
+its disposable fixture JVM's pipe. SMP classification/state/profile/rendering,
+native settings interaction and portable-payload checks passed. The six native
+D3D11 WARP settings captures under `.impeccable/review/smp/` use synthetic data;
+the independent finish review checked all six final captures and returned
+**ship** after the caption-toggle fix. The production EXE and ZIP were rebuilt.
+**No live Minecraft scanning, appearance or attach test was performed for SMP.**
 
 ## Reproduce the checks
 

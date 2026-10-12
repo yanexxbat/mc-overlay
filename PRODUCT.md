@@ -127,6 +127,8 @@ storage-type caption clicks, colour picker, settings controls and persistence.
 Six SMP captures under `.impeccable/review/smp/` use the real ImGui/D3D11 WARP
 renderer with synthetic fixtures. They do not establish live Minecraft scanning,
 appearance or attach behavior; no live Minecraft check was performed for SMP.
+The independent finish review opened all six regenerated captures and returned
+**ship** after the storage-type caption-toggle fix, with no visible regression.
 
 The `mcov` and `mcov_injector` builds, native/UI checks and portable share ZIP
 passed after the redesign. Offscreen D3D11 WARP checks exercise real UI input,
