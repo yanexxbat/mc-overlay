@@ -278,6 +278,7 @@ void Overlay::LoadPreferences() {
     if(!bindings_[0].key||!bindings_[1].key||keys::Conflict(bindings_,0)||keys::Conflict(bindings_,1)) bindings_=keys::Defaults();
     preferencesDirty_=false;
     if(!smpValues.empty()) {
+        client_configs::AddBaseDefaults(smpValues);
         smp::Config candidate; client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
         if(smpUnique&&archive.valid&&smpValues.empty()) smpConfig_=candidate;
         else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";

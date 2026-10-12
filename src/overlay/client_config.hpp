@@ -99,6 +99,18 @@ inline void Hat(Archive& a,const std::string& name,FriendHatConfig& c) {
     a.Value(name+".radius",c.radiusScale,.5,2); a.Value(name+".height",c.heightScale,.2,1);
     a.Value(name+".gap",c.headGap,0,.2);
 }
+inline void Base(Archive& a,smp::BaseSettings& c) {
+    a.Value("smp.base.enabled",c.enabled); a.Value("smp.base.labels",c.labels); a.Value("smp.base.tracers",c.tracers);
+    a.Value("smp.base.distance",c.maxDraw,8,512); a.Value("smp.base.padding",c.padding,0,16);
+    a.Value("smp.base.fill",c.fillOpacity,0,.5); a.Value("smp.base.lineWidth",c.lineWidth,.5,4); a.Color("smp.base.colour",c.colour);
+}
+inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
+    const bool present=std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.base.");});
+    if(present) return;
+    smp::BaseSettings defaults; std::ostringstream out; Archive archive(out); Base(archive,defaults);
+    std::istringstream in(out.str()); std::string line;
+    while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
+}
 inline void Smp(Archive& a,smp::Config& s) {
     a.Value("smp.storage.mask",s.storage.mask,0,smp::kStorageMask);
     a.Value("smp.storage.labels",s.storage.labels); a.Value("smp.storage.tracers",s.storage.tracers);
@@ -113,6 +125,7 @@ inline void Smp(Archive& a,smp::Config& s) {
     a.Value("smp.spawner.enabled",spawn.enabled); a.Value("smp.spawner.labels",spawn.labels); a.Value("smp.spawner.tracers",spawn.tracers);
     a.Value("smp.spawner.radius",spawn.radius,4,48); a.Value("smp.spawner.interval",spawn.interval,200,3000);
     a.Value("smp.spawner.distance",spawn.maxDraw,8,128); a.Value("smp.spawner.glow",spawn.glow,0,2); a.Color("smp.spawner.colour",spawn.colour);
+    Base(a,s.base);
     if((s.storage.mask&~smp::kStorageMask)||(stash.mask&~smp::kStorageMask)) a.valid=false;
 }
 inline void Visit(Archive& a,Snapshot& s) {
@@ -272,8 +285,9 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
     }
     const auto stashBind="bind."+std::to_string(keys::Index(keys::Action::StashFinder))+".";
     const auto spawnerBind="bind."+std::to_string(keys::Index(keys::Action::SpawnerEsp))+".";
+    const auto baseBind="bind."+std::to_string(keys::Index(keys::Action::BaseEsp))+".";
     const bool hasSmp=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
-        return entry.first.starts_with("smp.")||entry.first.starts_with(stashBind)||entry.first.starts_with(spawnerBind);
+        return entry.first.starts_with("smp.")||entry.first.starts_with(stashBind)||entry.first.starts_with(spawnerBind)||entry.first.starts_with(baseBind);
     });
     if(!hasSmp) {
         std::string defaults; if(!Encode(Snapshot{},defaults)) return false;
@@ -281,8 +295,15 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         while(std::getline(defaultsIn,line)) {
             const auto split=line.find(' '); if(split==std::string::npos) continue;
             const auto key=line.substr(0,split);
-            if(key.starts_with("smp.")||key.starts_with(stashBind)||key.starts_with(spawnerBind)) values.emplace(key,line.substr(split+1));
+            if(key.starts_with("smp.")||key.starts_with(stashBind)||key.starts_with(spawnerBind)||key.starts_with(baseBind)) values.emplace(key,line.substr(split+1));
         }
+    }
+    const bool hasBase=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("smp.base.")||entry.first.starts_with(baseBind);
+    });
+    if(!hasBase) {
+        AddBaseDefaults(values);
+        values.emplace(baseBind+"key","0"); values.emplace(baseBind+"modifiers","0"); values.emplace(baseBind+"mode","0");
     }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);

@@ -102,7 +102,7 @@ void Overlay::DrawSmpSettings(int section) {
         }
         if(stashFinder_.Full()) ImGui::TextWrapped("Discovery limit reached. Copy coordinates and clear the list to record more.");
         ImGui::TextWrapped("Discoveries stay while you travel. They retain the highest observed count and may be outdated. Changing server, dimension, filters or minimum clears the list. Save a waypoint to keep a location after restart.");
-    } else {
+    } else if(section==2) {
         auto& c=smpConfig_.spawner;
         if(panel::BeginRows("spawner_settings")) {
             dirty|=panel::CheckRow("Enable Spawner ESP",&c.enabled); DrawBind(keys::Action::SpawnerEsp,true);
@@ -114,6 +114,25 @@ void Overlay::DrawSmpSettings(int section) {
             ImGui::EndTable();
         }
         ImGui::TextWrapped("Highlights scanned mob spawner blocks. The mob type and activation state are not sampled.");
+    } else {
+        auto& c=smpConfig_.base; auto& detection=smpConfig_.stash;
+        if(panel::BeginRows("base_settings")) {
+            dirty|=panel::CheckRow("Enable Base ESP",&c.enabled); DrawBind(keys::Action::BaseEsp,true);
+            dirty|=panel::SliderIntRow("Scan radius",&detection.radius,4,48,"%d blocks");
+            dirty|=panel::SliderIntRow("Minimum containers / chunk",&detection.minContainers,2,128,"%d");
+            dirty|=panel::SliderRow("Draw distance",&c.maxDraw,8,512,"%.0f m");
+            dirty|=panel::SliderRow("Expand detected area",&c.padding,0,16,"%.1f blocks");
+            dirty|=panel::SliderRow("Fill opacity",&c.fillOpacity,0,.5f,"%.2f");
+            dirty|=panel::SliderRow("Frame width",&c.lineWidth,.5f,4,"%.1f px");
+            dirty|=panel::ColorRow("Base colour",&c.colour.x);
+            dirty|=panel::CheckRow("Labels",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
+            panel::ValueRow("Visibility","Through walls");
+            ImGui::EndTable();
+        }
+        ImGui::TextWrapped("A transparent 3D area and frame mark detected container clusters through walls. Base ESP works on its own. Radius, minimum and container filters are shared with Stash Finder.");
+        ImGui::TextDisabled("Detected areas: %zu",stashFinder_.Finds().size());
+        if(!detection.mask) ImGui::TextWrapped("Choose container types under Stash Finder to detect bases.");
+        ImGui::TextWrapped("The area follows observed storage blocks plus your chosen margin. It estimates a base location; building outlines are not sampled. Only loaded blocks within the scan radius are available.");
     }
     DrawScanStatus();
     if(dirty) { smpConfig_.Clamp(); rockstarConfig_.Clamp(); panicActive_=false; preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; PushScanRequest(); }
