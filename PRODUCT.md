@@ -121,6 +121,13 @@ Snapshot HUDs use the shared rounded ImGui fill and font; their editor applies
 
 ## Verification limits
 
+Base ESP's five relevant checks passed: SMP state/profile/rendering, native
+controls, D3D11 WARP depth rendering, keybind controls and portable packaging.
+The GPU test confirms the filled base remains visible behind occluders and
+without depth data while other world effects preserve their occlusion policy.
+Base settings and synthetic world captures are retained under
+`.impeccable/review/base-esp/`. No live Minecraft check was performed for Base ESP.
+
 The SMP production client and portable ZIP were rebuilt. All 24 available
 regression checks passed across the final runs; `frame_attach` required a run
 outside the sandbox after Windows denied fixture pipe access. The SMP checks

@@ -158,6 +158,17 @@ Umzug `client-settings.ini` und den `configs`-Ordner mitnehmen.
 
 ## Prüfbelege
 
+Für Base ESP bestanden die fünf passenden Prüfungen `smp_features`,
+`depth_rendering`, `control_panel`, `client_controls` und `portable_client`.
+Der echte D3D11-WARP-Pixeltest bestätigt, dass die gefüllte 3D-Fläche trotz
+vorgelagerter Tiefenwerte und fehlender Tiefendaten sichtbar bleibt; die
+Wandverdeckung anderer Effekte bleibt aktiv. Profilprüfungen decken Base-Farben,
+Einstellungen und die Migration älterer SMP-Profile ab. Die UI-Prüfung deckt
+Modulaktivierung, Speicherung und den festen Kopfbereich im kleinen Fenster ab.
+Die fünf endgültigen synthetischen Vorschauen liegen unter
+`.impeccable/review/base-esp/` mit dem Suffix `-final.png`.
+Live-Minecraft-Verhalten wurde für Base ESP nicht geprüft.
+
 Alle **24** verfügbaren Regressionsprüfungen bestanden über die abschließenden
 Läufe. Der isolierte `frame_attach`-Test bestand nach einem Windows-Pipe-
 Zugriffsfehler außerhalb der Sandbox mit seinem eigenen Fixture-JVM.
