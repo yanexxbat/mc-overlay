@@ -37,10 +37,17 @@ struct SpawnerSettings {
     float maxDraw=64,glow=.75f;
     ImVec4 colour{.4f,1,.65f,.95f};
 };
+struct BaseSettings {
+    bool enabled=false,labels=true,tracers=false;
+    float maxDraw=192,padding=4,fillOpacity=.12f,lineWidth=1.8f;
+    ImVec4 colour{.35f,.85f,1,.95f};
+};
 struct Config {
     StorageSettings storage{};
     StashSettings stash{};
     SpawnerSettings spawner{};
+    BaseSettings base{};
+    StashSettings Detection() const { auto c=stash; c.enabled=stash.enabled||base.enabled; return c; }
     void Clamp();
 };
 struct Stash {
@@ -73,4 +80,6 @@ void DrawBlocks(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProje
                 ImVec2 viewport,ImTextureID glowTexture=0);
 void DrawStashes(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                  const StashSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
+void DrawBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
+               const BaseSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
 } // namespace mcov::smp

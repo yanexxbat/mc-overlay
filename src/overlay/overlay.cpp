@@ -670,7 +670,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
-    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !auraConfig_.enabled &&
+    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !extraEffects && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
@@ -708,6 +708,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storage.enabled,storage.range,storage.opacity,storage.glow,
         {width,height},auraBlend_.GlowTexture());
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
+    if(stashFinder_.Matches(snapshot)) smp::DrawBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.base,stashFinder_.Finds(),{width,height});
     if (!entitiesEnabled) return;
 
     auto visualConfig=visuals_; visualConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);
@@ -1081,7 +1082,7 @@ void Overlay::PushScanRequest() {
     if (!block) return;
 
     const bool storage=rockstarConfig_.Enabled(rockstar::Feature::ChestEsp),beacon=rockstarConfig_.Enabled(rockstar::Feature::BeaconRadius);
-    const auto& stash=smpConfig_.stash; const auto& spawner=smpConfig_.spawner;
+    const auto stash=smpConfig_.Detection(); const auto& spawner=smpConfig_.spawner;
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
         (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u)|(storage?smpConfig_.storage.mask:0)|(beacon?1u<<kBlockBeacon:0)|
         (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0);
@@ -1610,7 +1611,7 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     if(blocksSection_==4||blocksSection_>=7) { DrawSmpSettings(blocksSection_==4?0:blocksSection_-6); return; }

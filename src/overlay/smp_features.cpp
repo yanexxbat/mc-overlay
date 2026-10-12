@@ -28,6 +28,8 @@ void Config::Clamp() {
     stash.mask&=kStorageMask; ClampColour(stash.colour);
     spawner.radius=std::clamp(spawner.radius,4,48); spawner.interval=std::clamp(spawner.interval,200,3000);
     spawner.maxDraw=Finite(spawner.maxDraw,8,128,64); spawner.glow=Finite(spawner.glow,0,2,.75f); ClampColour(spawner.colour);
+    base.maxDraw=Finite(base.maxDraw,8,512,192); base.padding=Finite(base.padding,0,16,4);
+    base.fillOpacity=Finite(base.fillOpacity,0,.5f,.12f); base.lineWidth=Finite(base.lineWidth,.5f,4,1.8f); ClampColour(base.colour);
 }
 void StashFinder::Reset() {
     count_=0; scan_=0; mask_=0; minimum_=0; dimension_={}; server_={};
@@ -101,6 +103,46 @@ void DrawStashes(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection&
         draw.AddRect({rect.left,rect.top},{rect.right,rect.bottom},ink,4,0,2);
         if(c.tracers) draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
         if(c.labels) { char text[112]; std::snprintf(text,sizeof(text),"Stash | %d containers | %.0f m",f.count,distance); Label(draw,rect,text,ink,viewport); }
+    }
+}
+void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const BaseSettings& c,std::span<const Stash> finds,ImVec2 viewport) {
+    if(!c.enabled||c.colour.w<=0) return;
+    // Base ESP deliberately bypasses world-depth tagging, including the filled
+    // WorldQuad path. Other world effects keep their normal occlusion policy.
+    auto* savedTags=depth::tags;
+    struct Restore { std::vector<float>* previous; ~Restore() { depth::tags=previous; } } restore{savedTags};
+    depth::tags=nullptr;
+    const int firstVertex=draw.VtxBuffer.Size;
+    const ImU32 ink=ImGui::ColorConvertFloat4ToU32(c.colour);
+    constexpr int faces[][4]={{0,2,6,4},{1,5,7,3},{0,4,5,1},{2,3,7,6},{0,1,3,2},{4,6,7,5}};
+    for(const auto& f:finds) {
+        const double distance=Distance(f.centre,s); if(!std::isfinite(distance)||distance>c.maxDraw) continue;
+        const double margin=std::clamp(double(c.padding),0.,16.);
+        const WorldBounds bounds{{f.bounds.min.x-margin,f.bounds.min.y-margin,f.bounds.min.z-margin},
+            {f.bounds.max.x+margin,f.bounds.max.y+margin,f.bounds.max.z+margin}};
+        ScreenRect rect; if(!p.Bounds(bounds,rect)) continue;
+        std::array<WorldPoint,8> corners{};
+        for(int i=0;i<8;++i) corners[i]={i&1?bounds.max.x:bounds.min.x,i&2?bounds.max.y:bounds.min.y,i&4?bounds.max.z:bounds.min.z};
+        if(c.fillOpacity>0) {
+            ImVec4 tint=c.colour; tint.w*=c.fillOpacity;
+            const bool facing[]={s.camX<=bounds.min.x,s.camX>=bounds.max.x,s.camY<=bounds.min.y,s.camY>=bounds.max.y,
+                s.camZ<=bounds.min.z,s.camZ>=bounds.max.z};
+            const auto texture=ImGui::GetIO().Fonts->TexID; const auto white=ImGui::GetIO().Fonts->TexUvWhitePixel;
+            for(int i=0;i<6;++i) if(facing[i]) {
+                const auto& face=faces[i];
+                soft::WorldQuad(draw,p,{corners[face[0]],corners[face[1]],corners[face[2]],corners[face[3]]},texture,tint,tint,white,white);
+            }
+        }
+        for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) {
+            ScreenPoint a,b;
+            if(p.Segment(corners[i],corners[i|bit],a,b)) draw.AddLine({a.x,a.y},{b.x,b.y},ink,c.lineWidth);
+        }
+        if(c.tracers) draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
+        if(c.labels) { char text[112]; std::snprintf(text,sizeof(text),"Base | %d containers | %.0f m",f.count,distance); Label(draw,rect,text,ink,viewport); }
+    }
+    if(savedTags) {
+        savedTags->resize(draw.VtxBuffer.Size,0.f);
+        std::fill(savedTags->begin()+firstVertex,savedTags->end(),0.f);
     }
 }
 } // namespace mcov::smp

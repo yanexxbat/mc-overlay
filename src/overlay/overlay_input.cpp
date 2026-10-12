@@ -53,6 +53,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::ChunkFinder:return chunkFinder_.enabled;
         case keys::Action::StashFinder:return smpConfig_.stash.enabled;
         case keys::Action::SpawnerEsp:return smpConfig_.spawner.enabled;
+        case keys::Action::BaseEsp:return smpConfig_.base.enabled;
         default:return false;
     }
 }
@@ -88,6 +89,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::ChunkFinder:chunkFinder_.enabled=value;break;
         case keys::Action::StashFinder:smpConfig_.stash.enabled=value;preferencesDirty_=true;break;
         case keys::Action::SpawnerEsp:smpConfig_.spawner.enabled=value;preferencesDirty_=true;break;
+        case keys::Action::BaseEsp:smpConfig_.base.enabled=value;preferencesDirty_=true;break;
         default:break;
     }
 }

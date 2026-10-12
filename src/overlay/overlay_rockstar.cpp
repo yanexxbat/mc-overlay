@@ -81,8 +81,8 @@ void Overlay::UpdateRockstar() {
     if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); stashFinder_.Reset(); return; }
     // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
     const auto& s=lastSnapshot_;
-    const int newStashes=stashFinder_.Update(s,smpConfig_.stash);
-    if(newStashes&&smpConfig_.stash.notifications) {
+    const int newStashes=stashFinder_.Update(s,smpConfig_.Detection());
+    if(newStashes&&smpConfig_.stash.enabled&&smpConfig_.stash.notifications) {
         char text[112]; const auto* latest=stashFinder_.Latest();
         if(newStashes==1) std::snprintf(text,sizeof(text),"Stash found: %d containers at %.0f %.0f %.0f",latest->count,latest->centre.x,latest->centre.y,latest->centre.z);
         else std::snprintf(text,sizeof(text),"Stash Finder: %d new stashes. Open the discovery list for coordinates.",newStashes);
