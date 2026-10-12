@@ -12,11 +12,12 @@
 #include <cstdint>
 #include <cstring>
 #include <type_traits>
+#include <string_view>
 
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 20;
+inline constexpr std::uint32_t kSharedVersion = 21;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -43,8 +44,17 @@ enum BlockKind : std::uint8_t {
     kBlockBarrel,
     kBlockHopper,
     kBlockFurnace,
+    kBlockEnderChest,
+    kBlockTrappedChest,
+    kBlockDispenser,
+    kBlockDropper,
+    kBlockBlastFurnace,
+    kBlockSmoker,
+    kBlockCrafter,
+    kBlockBrewingStand,
     kBlockKindCount,
 };
+static_assert(kBlockKindCount < 32);
 
 inline const char* BlockKindKey(std::uint8_t kind) {
     switch (kind) {
@@ -66,6 +76,14 @@ inline const char* BlockKindKey(std::uint8_t kind) {
         case kBlockBarrel:        return "barrel";
         case kBlockHopper:        return "hopper";
         case kBlockFurnace:       return "furnace";
+        case kBlockEnderChest:    return "ender_chest";
+        case kBlockTrappedChest:  return "trapped_chest";
+        case kBlockDispenser:     return "dispenser";
+        case kBlockDropper:       return "dropper";
+        case kBlockBlastFurnace:  return "blast_furnace";
+        case kBlockSmoker:        return "smoker";
+        case kBlockCrafter:       return "crafter";
+        case kBlockBrewingStand:  return "brewing_stand";
         default:                  return "";
     }
 }
@@ -90,8 +108,32 @@ inline const char* BlockKindLabel(std::uint8_t kind) {
         case kBlockBarrel:        return "Barrels";
         case kBlockHopper:        return "Hoppers";
         case kBlockFurnace:       return "Furnaces";
+        case kBlockEnderChest:    return "Ender chests";
+        case kBlockTrappedChest:  return "Trapped chests";
+        case kBlockDispenser:     return "Dispensers";
+        case kBlockDropper:       return "Droppers";
+        case kBlockBlastFurnace:  return "Blast furnaces";
+        case kBlockSmoker:        return "Smokers";
+        case kBlockCrafter:       return "Crafters";
+        case kBlockBrewingStand:  return "Brewing stands";
         default:                  return "?";
     }
+}
+// Specific container names must not collapse into chest/furnace. Keep the
+// existing ore matching (including deepslate variants) and coloured shulkers.
+inline std::int8_t ClassifyBlock(std::string_view key) {
+    constexpr std::string_view prefix="block.minecraft.";
+    if(!key.starts_with(prefix)) return -1;
+    const auto name=key.substr(prefix.size());
+    for(std::uint8_t kind=0;kind<kBlockKindCount;++kind) {
+        const std::string_view match=BlockKindKey(kind);
+        if(kind<kBlockChest) {
+            if(name==match||name==std::string_view("deepslate_")+match) return static_cast<std::int8_t>(kind);
+        } else if(kind==kBlockShulker) {
+            if(name==match||name.ends_with("_shulker_box")) return static_cast<std::int8_t>(kind);
+        } else if(name==match) return static_cast<std::int8_t>(kind);
+    }
+    return -1;
 }
 inline constexpr std::uint32_t kMaxEffects  = 16;
 inline constexpr std::uint32_t kNameLen     = 40;
@@ -284,6 +326,14 @@ struct WorldSnapshot {
 
     std::uint32_t  entityCount;
     std::uint32_t  blockCount;
+    // Coherent scan metadata travels with the blocks, not separate atomics.
+    // A finder evaluates each finished sweep once, never a partial result.
+    std::uint64_t blockScanId;
+    std::uint32_t blockScanMask;
+    std::int32_t blockScanX,blockScanY,blockScanZ;
+    std::uint32_t blockScanRadius;
+    std::uint8_t blockScanComplete,blockScanTruncated;
+    std::uint8_t _padScan[2];
     EntitySnapshot entities[kMaxEntities];
     BlockSnapshot  blocks[kMaxBlocks];
 };
