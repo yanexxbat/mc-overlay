@@ -364,7 +364,12 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             SaveFrame(device,context,output/(name+suffix));
             Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
             if(index==9&&size.x<500) {
-                ImGui::SetScrollY(content,0); frame(); frame(); SaveFrame(device,context,output/"base-esp-settings-small-top.png");
+                ImGui::SetScrollY(content,0); frame(); frame();
+                auto* pane=ImGui::FindWindowByName("mcov module settings");
+                std::cerr<<"Base small layout: parentY="<<pane->Pos.y<<" parentScroll="<<pane->Scroll.y<<" childY="<<content->Pos.y
+                    <<" childScroll="<<content->Scroll.y<<" childClip="<<content->InnerClipRect.Min.y<<'\n';
+                Require(content->Pos.y>=pane->Pos.y+42,"Base content overlaps its fixed header");
+                SaveFrame(device,context,output/"base-esp-settings-small-top.png");
             }
         }
     }
