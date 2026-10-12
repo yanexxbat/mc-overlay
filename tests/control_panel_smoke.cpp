@@ -337,7 +337,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(int i=0;i<12;++i) { auto& b=scene->blocks[scene->blockCount++]; b.x=float(i%4); b.y=64; b.z=float(i/4); b.kind=mcov::kBlockChest; }
     scene->blockScanY=64; Require(mcov::OverlayUiCheck::Stashes(overlay).Update(*scene,c.stash)==1,"SMP UI discovery fixture failed");
     scene->fovDeg=70; scene->health=scene->maxHealth=20; mcov::OverlayUiCheck::Snapshot(overlay,*scene);
-    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,9);
+    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,10);
     auto storageFrame=[&] { Draw(overlay,Page::Blocks,0,{1280,800}); };
     auto* storageContent=Child("/content_"); ImGui::SetScrollY(storageContent,storageContent->ScrollMax.y); storageFrame(); storageFrame();
     auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(storageContent->GetID("storage_colours"));
@@ -356,23 +356,39 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     ImGui::GetIO().AddMousePosEvent(-100,-100); storageFrame();
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
-        for(int index:{4,7,8}) {
-            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,9,size);
+        for(int index:{4,7,8,9}) {
+            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,10,size);
             auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
             auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
-            const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":"smp-spawner-";
+            const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":"base-esp-settings-";
             SaveFrame(device,context,output/(name+suffix));
             Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
+            if(index==9&&size.x<500) {
+                ImGui::SetScrollY(content,0); frame(); frame(); SaveFrame(device,context,output/"base-esp-settings-small-top.png");
+            }
         }
+    }
+    c.base.enabled=true; scene->camX=18; scene->camY=76; scene->camZ=-20; scene->yawDeg=36; scene->pitchDeg=24;
+    scene->nearPlane=.05f; scene->farPlane=1024;
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},size,IM_COL32(24,26,30,255));
+        draw->AddRectFilled({size.x*.2f,size.y*.25f},{size.x*.8f,size.y*.82f},IM_COL32(68,61,54,255));
+        draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: Base ESP over an opaque wall");
+        const mcov::CameraProjection projection(*scene,size.x,size.y);
+        mcov::smp::DrawBases(*draw,*scene,projection,c.base,mcov::OverlayUiCheck::Stashes(overlay).Finds(),size);
+        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"base-esp-world-desktop.png":"base-esp-world-small.png"));
     }
     // Saved preferences use the same typed SMP schema as named profiles.
     c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
+    c.base.padding=7; c.base.fillOpacity=.21f; c.base.colour={.6f,.5f,.4f,.3f};
     mcov::OverlayUiCheck::PrefPath(overlay,output/"smp-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
-    Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers,
+    Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
+        c.base.enabled&&c.base.padding==7&&c.base.fillOpacity==.21f&&c.base.colour.w==.3f,
         "Automatic preferences lost SMP colours/filters/settings");
-    for(const auto action:{mcov::keys::Action::StashFinder,mcov::keys::Action::SpawnerEsp}) mcov::OverlayUiCheck::SetModule(overlay,action,true);
+    for(const auto action:{mcov::keys::Action::StashFinder,mcov::keys::Action::SpawnerEsp,mcov::keys::Action::BaseEsp}) mcov::OverlayUiCheck::SetModule(overlay,action,true);
     mcov::OverlayUiCheck::Panic(overlay);
-    Require(!c.stash.enabled&&!c.spawner.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty(),"Panic left an SMP module or stash marker active");
+    Require(!c.stash.enabled&&!c.spawner.enabled&&!c.base.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty(),"Panic left an SMP module or stash marker active");
 }
 void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto& io=ImGui::GetIO();
@@ -1104,7 +1120,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,26,9,20,3,5,8};
+        constexpr int sectionCounts[]={9,26,10,20,3,5,8};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1375,7 +1391,7 @@ int main(int argc,char** argv) {
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,9,size); mcov::OverlayUiCheck::Center(overlay);
+            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
@@ -1421,7 +1437,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 80 module widgets, SMP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 81 module widgets, SMP/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
