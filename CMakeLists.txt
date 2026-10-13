@@ -477,7 +477,7 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
     add_test(NAME namespace_inheritance COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/namespace_inheritance.py")
-    add_executable(mcov_agent_package_match_check tests/agent_package_match.cpp src/injector/portable_package.cpp src/overlay/process.cpp src/common/log.cpp)
+    add_executable(mcov_agent_package_match_check tests/agent_package_match.cpp src/injector/portable_package.cpp src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_agent_package_match_check PRIVATE src)
     target_link_libraries(mcov_agent_package_match_check PRIVATE mcov_settings bcrypt user32)
     add_test(NAME agent_package_match COMMAND mcov_agent_package_match_check "${CMAKE_BINARY_DIR}/agent-package-match")

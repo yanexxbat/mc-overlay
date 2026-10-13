@@ -278,12 +278,11 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                 }
                 if(a.start&&!state.view.busy&&state.view.selected>=0&&state.view.selected<int(state.processes.size())) {
                     const auto target=state.processes[state.view.selected];
-                    if(ClientRunning(target.pid)) SetForegroundWindow(static_cast<HWND>(target.window));
-                    else {
-                        state.view.busy=true; state.view.error=state.view.needsJdk=false; state.stop=std::stop_source{};
-                        const auto token=state.stop.get_token();
-                        state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token); });
-                    }
+                    // Reconnection goes through the same package verification
+                    // even while the old overlay window is still running.
+                    state.view.busy=true; state.view.error=state.view.needsJdk=false; state.stop=std::stop_source{};
+                    const auto token=state.stop.get_token();
+                    state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token); });
                 }
             });
         } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.
