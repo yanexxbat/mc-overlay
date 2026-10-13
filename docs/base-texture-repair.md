@@ -29,3 +29,23 @@ the old launcher is closed.
 Minecraft had exited before an attempted live consumer repair; no class was
 redefined. Successful texture appearance in Minecraft has not yet been verified.
 The development-only hotfix/probe tools are not bundled in the client.
+
+## Reconnection follow-up
+
+The next live log showed the repaired launcher selecting cache `33ee65a277e9299f9d01`
+while reusing the agent already loaded from `f5f56baf201064da30bc`. The old DLL and
+frame-signal JAR differ from the repaired package by SHA-256. Thus that session
+still executed the previous consumer and its exception handler.
+
+The launcher now checks all three loaded runtime files before either reconnect
+shortcut: the native agent, frame-signal helper and frame synchronization agent.
+An already running overlay also enters this verification. A mismatch uses the
+existing restart diagnostic instead of launching new UI over obsolete code.
+
+`agent_package_match` verifies identical payloads in different cache directories,
+same-sized differences beyond a read-buffer boundary, each helper separately,
+and missing packages. It passed along with `base_texture_models`,
+`base_texture_gl`, `depth_hook` and the rebuilt portable package check. The normal
+`build/client/mcov.exe` and `build/mcov-client.zip` were rebuilt successfully.
+This confirms version rejection and packaging; successful in-game texture
+appearance remains unverified until Minecraft starts with the repaired runtime.

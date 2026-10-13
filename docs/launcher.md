@@ -49,6 +49,10 @@ Closing the launcher leaves the overlay and Minecraft running. Closing during
 connection cancels the launcher's attach helper; it never terminates Minecraft.
 An agent already loaded into the JVM stays loaded until Minecraft exits.
 An incompatible/stale agent requires restarting Minecraft before retrying.
+Reconnection compares the loaded agent DLL and both frame/helper JARs with the
+selected client package. A healthy heartbeat and matching IPC version alone do
+not establish that the loaded code is current. The check also runs when an old
+overlay is already open; different code requires a full Minecraft restart.
 The default **END** binding quits the overlay, **INSERT** opens its menu and
 **F6** opens the HUD editor. Bindings remain configurable.
 
