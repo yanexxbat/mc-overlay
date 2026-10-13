@@ -463,6 +463,11 @@ if(MCOV_BUILD_UI_CHECKS)
     target_link_libraries(mcov_depth_gl_check PRIVATE mcov_settings opengl32 user32 gdi32)
     add_test(NAME depth_capture_gl COMMAND mcov_depth_gl_check)
     set_tests_properties(depth_capture_gl PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
+    add_executable(mcov_base_gl_check tests/base_texture_gl.cpp src/agent/base_texture_gl.cpp src/common/log.cpp)
+    target_include_directories(mcov_base_gl_check PRIVATE src)
+    target_link_libraries(mcov_base_gl_check PRIVATE mcov_settings opengl32 user32 gdi32)
+    add_test(NAME base_texture_gl COMMAND mcov_base_gl_check)
+    set_tests_properties(base_texture_gl PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
     set_tests_properties(aura_rendering PROPERTIES TIMEOUT 30)
 endif()
 
@@ -472,6 +477,19 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
     add_test(NAME namespace_inheritance COMMAND ${Python3_EXECUTABLE}
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/namespace_inheritance.py")
+    set(MCOV_BASE_TEST_DIR ${CMAKE_BINARY_DIR}/base-texture-test)
+    add_custom_command(OUTPUT ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_BASE_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_BASE_TEST_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/BaseTextureCheck.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
+        DEPENDS tests/BaseTextureCheck.java tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java VERBATIM)
+    add_custom_target(mcov_base_texture_check ALL DEPENDS ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class)
+    add_test(NAME base_texture_models COMMAND ${Java_JAVA_EXECUTABLE} -cp ${MCOV_BASE_TEST_DIR} mcov.BaseTextureCheck)
+    add_executable(mcov_base_texture_probe tools/diagnostics/base_texture_probe.cpp src/common/ipc.cpp src/common/log.cpp)
+    target_include_directories(mcov_base_texture_probe PRIVATE src)
+    target_link_libraries(mcov_base_texture_probe PRIVATE mcov_settings)
     add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/compatibility/make_fixtures.py"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/agent/generated_profiles.hpp" "${CMAKE_BINARY_DIR}/compat-fixtures"
@@ -481,7 +499,7 @@ if(MCOV_BUILD_COMPAT_CHECKS)
             tools/compatibility/geometry_schema.py
         VERBATIM)
     add_custom_target(mcov_compat_fixtures DEPENDS "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp")
-    add_executable(mcov_compat_check tests/runtime_profiles.cpp src/agent/jvm_interface.cpp
+    add_executable(mcov_compat_check tests/runtime_profiles.cpp src/agent/jvm_interface.cpp src/agent/base_texture_gl.cpp
         src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_compat_check PRIVATE src ${JNI_INCLUDE_DIRS})
     target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32 opengl32)
@@ -516,6 +534,7 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     add_test(NAME frame_attach COMMAND ${Java_JAVA_EXECUTABLE} -Djdk.attach.allowAttachSelf=true
         -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
         mcov.sync.FrameSyncAttachCheck "${CMAKE_BINARY_DIR}/compat-fixtures" "${MCOV_TOOLS_DIR}/frame-sync-agent.jar")
+    set_tests_properties(frame_attach PROPERTIES TIMEOUT 30)
     add_test(NAME depth_hook COMMAND ${Java_JAVA_EXECUTABLE}
         --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
         "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"

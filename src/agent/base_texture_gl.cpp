@@ -155,6 +155,9 @@ bool BaseTextureGl::Draw(const BaseMesh& mesh,const BaseCamera& camera,float opa
     gl_->bindVao(vao_); gl_->bindBuffer(ArrayBuffer,vbo_);
     if(uploaded_!=mesh.serial) {
         std::vector<float> data; std::vector<Batch> batches;
+        std::size_t capacity=0; for(const auto& group:mesh.groups) capacity+=group.vertices.size();
+        if(capacity>std::size_t(base::kMaxVertices)*Stride) return false;
+        data.reserve(capacity);
         for(const auto& group:mesh.groups) {
             if(group.vertices.size()%(Stride*3)||data.size()+group.vertices.size()>std::size_t(base::kMaxVertices)*Stride||!glIsTexture(group.texture)) return false;
             if(!std::all_of(group.vertices.begin(),group.vertices.end(),[](float v){return std::isfinite(v);})) return false;
@@ -162,7 +165,8 @@ bool BaseTextureGl::Draw(const BaseMesh& mesh,const BaseCamera& camera,float opa
             std::vector<std::size_t> triangles(group.vertices.size()/(Stride*3)); std::iota(triangles.begin(),triangles.end(),0);
             auto distance=[&](std::size_t t) { double x=0,y=0,z=0; for(int i=0;i<3;++i) { const float* v=group.vertices.data()+(t*3+i)*Stride; x+=v[0]; y+=v[1]; z+=v[2]; }
                 x=x/3+mesh.x-camera.x; y=y/3+mesh.y-camera.y; z=z/3+mesh.z-camera.z; return x*x+y*y+z*z; };
-            std::stable_sort(triangles.begin(),triangles.end(),[&](auto a,auto b){return distance(a)>distance(b);});
+            std::vector<double> distances(triangles.size()); for(auto triangle:triangles) distances[triangle]=distance(triangle);
+            std::stable_sort(triangles.begin(),triangles.end(),[&](auto a,auto b){return distances[a]>distances[b];});
             batches.push_back({group.texture,GLint(data.size()/Stride),GLsizei(group.vertices.size()/Stride)});
             for(auto triangle:triangles) data.insert(data.end(),group.vertices.begin()+triangle*Stride*3,group.vertices.begin()+(triangle+1)*Stride*3);
         }

@@ -7,7 +7,7 @@ Dear ImGui and Direct3D 11.
 
 - Compact translucent menu and launcher, with a matching HUD.
 - Entity and block visuals, target effects, particles and waypoints.
-- Base ESP with translucent 3D areas and frames visible through walls.
+- Base ESP with Minecraft models and textures visible through walls (1.21.11).
 - Storage ESP with individual block colours, Stash Finder and Spawner ESP.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
@@ -40,12 +40,16 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The SMP update uses IPC v21; restart an
+when replacing an already loaded agent. The Base texture update uses IPC v22; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
-or **Spawner ESP** to configure them. **Base ESP** highlights detected container
-clusters as translucent 3D areas through walls and also works with Stash Finder off.
+or **Spawner ESP** to configure them. **Base ESP → Display → Minecraft textures**
+renders loaded blocks around detected container clusters through walls. It also
+works with Stash Finder off. Minecraft textures are the default display at full
+opacity on 1.21.11. Texture opacity and area expansion are adjustable; detection
+uses container bounds plus padding and does not trace a whole building.
+The optional **Area marker** mode keeps the coloured frame and fill.
 Scans use loaded client blocks within a
 4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
 stash counting, saved waypoints and scan limits.

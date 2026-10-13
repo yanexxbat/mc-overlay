@@ -25,10 +25,28 @@ class BaseTextureCapture {
     }
     bool Exception(JNIEnv* env) {
         if(!env->ExceptionCheck()) return false;
-        env->ExceptionClear(); failed_=true; MCOV_LOG_WARN("textured Base ESP: game model bridge raised an exception"); return true;
+        jobject error=env->ExceptionOccurred(); env->ExceptionClear(); failed_=true;
+        MCOV_LOG_WARN("textured Base ESP: game model bridge raised an exception");
+        // Preserve the underlying game exception instead of losing the cause
+        // behind reflection's InvocationTargetException.
+        auto type=env->FindClass("java/lang/Throwable");
+        auto describe=type?env->GetMethodID(type,"toString","()Ljava/lang/String;"):nullptr;
+        auto cause=type?env->GetMethodID(type,"getCause","()Ljava/lang/Throwable;"):nullptr;
+        for(int depth=0;error&&describe&&cause&&!env->ExceptionCheck()&&depth<6;++depth) {
+            auto message=static_cast<jstring>(env->CallObjectMethod(error,describe));
+            if(env->ExceptionCheck()) break;
+            if(message) {
+                const char* text=env->GetStringUTFChars(message,nullptr);
+                if(text) { MCOV_LOG_WARN("  cause: %.1500s",text); env->ReleaseStringUTFChars(message,text); }
+                env->DeleteLocalRef(message);
+            }
+            auto next=env->CallObjectMethod(error,cause); env->DeleteLocalRef(error); error=next;
+        }
+        if(error) env->DeleteLocalRef(error); if(type) env->DeleteLocalRef(type);
+        if(env->ExceptionCheck()) env->ExceptionClear(); return true;
     }
     void Reset(JNIEnv* env) {
-        mesh_={}; gl_.Clear();
+        mesh_={}; gl_.Release();
         if(bridge_&&clear_) env->CallStaticVoidMethod(bridge_,clear_);
         if(env->ExceptionCheck()) env->ExceptionClear();
     }
@@ -82,7 +100,9 @@ public:
         }
         if(failed_) { Report(base::Status::Failed,request); return; }
         jvm::LocalFrame frame(env,32);
-        auto bounds=env->NewDoubleArray(request.count*6); double values[base::kMaxRegions*6]{};
+        auto bounds=env->NewDoubleArray(request.count*6);
+        if(Exception(env)||!bounds) { Report(base::Status::Failed,request); return; }
+        double values[base::kMaxRegions*6]{};
         for(unsigned i=0;i<request.count;++i) { const auto& r=request.regions[i]; const double v[6]={r.minX,r.minY,r.minZ,r.maxX,r.maxY,r.maxZ}; std::memcpy(values+i*6,v,sizeof(v)); }
         env->SetDoubleArrayRegion(bounds,0,request.count*6,values);
         auto object=env->CallStaticObjectMethod(bridge_,step_,renderer,jlong(request.revision),bounds);
@@ -121,7 +141,10 @@ public:
             if(Exception(env)||!coords||env->GetArrayLength(coords)!=11) { report.status=base::Status::Failed; failed_=true; }
             else {
                 env->GetDoubleArrayRegion(coords,0,11,camera);
-                if(!gl_.Draw(mesh_,{camera[0],camera[1],camera[2],camera[3],camera[4],camera[5],GLuint(camera[6]),GLuint(camera[7]),int(camera[8]),int(camera[9])},request.opacity)) {
+                const bool valid=std::all_of(camera,camera+11,[](double v){return std::isfinite(v);})&&
+                    camera[6]>0&&camera[6]<=2147483647.&&camera[7]>0&&camera[7]<=2147483647.&&
+                    camera[8]>0&&camera[8]<=8192&&camera[9]>0&&camera[9]<=8192;
+                if(!valid||!gl_.Draw(mesh_,{camera[0],camera[1],camera[2],camera[3],camera[4],camera[5],GLuint(camera[6]),GLuint(camera[7]),int(camera[8]),int(camera[9])},request.opacity)) {
                     report.status=base::Status::Failed; failed_=true; MCOV_LOG_WARN("textured Base ESP: OpenGL pass unavailable");
                 }
             }

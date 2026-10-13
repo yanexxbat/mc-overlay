@@ -29,6 +29,7 @@ C = {
     'Part':'net/minecraft/client/model/geom/ModelPart', 'Overlay':'net/minecraft/client/renderer/feature/ModelFeatureRenderer$CrumblingOverlay',
     'Fluid':'net/minecraft/world/level/material/FluidState', 'Shape':'net/minecraft/world/level/block/RenderShape',
     'Target':'com/mojang/blaze3d/pipeline/RenderTarget',
+    'RenderType':'net/minecraft/client/renderer/rendertype/RenderType',
 }
 def t(name): return type_descriptor(C.get(name, name.replace('/', '.')))
 def d(args, result): return '('+''.join(map(t,args))+')'+t(result)
@@ -85,6 +86,7 @@ m('translate','Pose','translate',['double','double','double'],'void')
 m('posePush','Pose','pushPose',[],'void'); m('posePop','Pose','popPose',[],'void')
 m('vertex','Consumer','addVertex',['float','float','float'],'Consumer')
 m('colour','Consumer','setColor',['int','int','int','int'],'Consumer')
+m('colourPacked','Consumer','setColor',['int'],'Consumer')
 m('uv','Consumer','setUv',['float','float'],'Consumer')
 m('overlay','Consumer','setUv1',['int','int'],'Consumer')
 m('uvLight','Consumer','setUv2',['int','int'],'Consumer')
@@ -94,12 +96,19 @@ m('entityRenderer','EntityDispatcher','getRenderer',['Entity'],'EntityRenderer')
 m('newEntityState','EntityRenderer','createRenderState',[],'EntityState')
 m('extractEntity','EntityRenderer','extractRenderState',['Entity','EntityState','float','Vec','Overlay'],'void')
 m('submitEntity','EntityRenderer','submit',['EntityState','Pose','Collector','CameraState'],'void')
+m('submitModel','Ordered','submitModel',['Model','java.lang.Object','Pose','RenderType','int','int','int','Sprite','int','Overlay'],'void')
+m('submitPart','Ordered','submitModelPart',['Part','Pose','RenderType','int','int','Sprite','boolean','boolean','int','Overlay','int'],'void')
+m('order','Collector','order',['int'],'Ordered')
 m('modelAnim','Model','setupAnim',['java.lang.Object'],'void')
 m('modelDraw','Model','renderToBuffer',['Pose','Consumer','int','int','int'],'void')
 m('partDraw','Part','render',['Pose','Consumer','int','int','int'],'void')
 
 def generate(cache, target):
     jar=NamedJar(cache,'1.21.11')
+    abstract={(member['name'],member['descriptor']) for _,member in jar.members(C['Consumer'],'methods') if member['flags']&0x400}
+    supplied={(name,descriptor) for _,owner,name,descriptor,kind,_ in S if owner==C['Consumer'] and kind=='methods'}
+    missing=abstract-supplied
+    if missing: raise ValueError(f'Unhandled abstract vertex operations: {sorted(missing)}')
     resolved=[]
     for symbol,owner,name,desc,kind,static in S:
         matches=[(declaring,member) for declaring,member in jar.members(owner,kind) if member['name']==name and member['descriptor']==desc]
@@ -129,6 +138,6 @@ def generate(cache, target):
         text+=f'    private static final String[][] P{i}={{\n'
         text+=''.join('        {'+','.join(map(quote,row))+'},\n' for row in rows)+'    };\n'
     text+='    static String[][] get(String profile) {\n        if(profile.equals("mojmap-1.21.11")) return P0;\n        if(profile.equals("vanilla-1.21.11")) return P1;\n        if(profile.equals("intermediary-1.21.11")) return P2;\n        return null;\n    }\n}\n'
-    target.write_text(text,encoding='utf-8')
+    target.write_text(text,encoding='utf-8',newline='\n')
     print(f'Audited {len(C)} classes / {len(S)} members for three 1.21.11 namespaces')
 if __name__=='__main__': generate(Path(sys.argv[1]),Path(sys.argv[2]))

@@ -78,6 +78,11 @@ void Profiles() {
         result.smp.storage.colours[0].w==.4f&&result.smp.stash.minContainers==16,"Pre-Base profile lost existing SMP values");
     auto brokenBase=text; const auto baseField=brokenBase.find("smp.base.padding "); brokenBase.erase(baseField,brokenBase.find('\n',baseField)-baseField+1);
     Require(!Decode(brokenBase,result),"Partial Base ESP profile was accepted");
+    std::istringstream oldTextureInput(text); std::ostringstream oldTextures;
+    while(std::getline(oldTextureInput,line)) if(!line.starts_with("smp.base.textured ")&&!line.starts_with("smp.base.textureOpacity ")) oldTextures<<line<<'\n';
+    Require(Decode(oldTextures.str(),result)&&result.smp.base.textured&&result.smp.base.textureOpacity==1,"Old profiles did not migrate to game textures");
+    auto partialTextures=text; const auto textureField=partialTextures.find("smp.base.textured "); partialTextures.erase(textureField,partialTextures.find('\n',textureField)-textureField+1);
+    Require(!Decode(partialTextures,result),"Partially damaged texture settings were silently repaired");
     auto bad=text; const auto start=bad.find("smp.storage.colour.10.a "); bad.erase(start,bad.find('\n',start)-start+1);
     result.smp.stash.minContainers=71; Require(!Decode(bad,result)&&result.smp.stash.minContainers==71,"Damaged SMP profile partially applied");
     s.smp.stash.mask=1u<<kBlockDiamond; Require(!Encode(s,text),"Ore accepted in stash filter");
@@ -118,6 +123,14 @@ void Rendering() {
         const auto& v=draw.VtxBuffer[i]; filled|=(v.col&IM_COL32_A_MASK)>0&&(v.col&IM_COL32_A_MASK)<(IM_COL32(0,0,0,255)&IM_COL32_A_MASK);
     }
     Require(filled&&tags[0]==.25f,"Base fill missing or previous effects' depth tags changed");
+    c.base.textured=true;
+    const int textures=draw.VtxBuffer.Size; smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720});
+    Require(draw.VtxBuffer.Size==textures,"Texture mode still drew a coloured area");
+    auto request=smp::BuildBaseRequest(s,c.base,finder.Finds(),true,1000);
+    Require(request.enabled&&request.count==1&&request.opacity==1&&request.sentAtMs==1000,"Texture request omitted a detected base");
+    c.base.textureOpacity=.5f;
+    Require(smp::BuildBaseRequest(s,c.base,finder.Finds(),true,1100).revision==request.revision,"Opacity change unnecessarily rebuilt geometry");
+    Require(!smp::BuildBaseRequest(s,c.base,finder.Finds(),false,1100).enabled,"Stale snapshot kept game rendering active");
     const int end=draw.VtxBuffer.Size; c.base.enabled=false;
     smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720}); Require(draw.VtxBuffer.Size==end,"Disabled Base ESP drew geometry");
     for(const auto& v:draw.VtxBuffer) Require(std::isfinite(v.pos.x)&&std::isfinite(v.pos.y),"SMP renderer emitted an invalid vertex");

@@ -74,6 +74,10 @@ struct OverlayUiCheck {
     }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
     static smp::Config& Smp(Overlay& o) { return o.smpConfig_; }
+    static void BaseStatus(Overlay& o,base::Status status) {
+        o.baseReport_={}; o.baseReport_.sampledAtMs=GetTickCount64(); o.baseReport_.status=status;
+        o.baseReport_.scanned=1200; o.baseReport_.blocks=64;
+    }
     static smp::StashFinder& Stashes(Overlay& o) { return o.stashFinder_; }
     static items::MacroConfig& Crystal(Overlay& o) { return o.crystalMacro_; }
     static items::MacroConfig& Anchor(Overlay& o) { return o.anchorMacro_; }
@@ -372,7 +376,17 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             }
         }
     }
-    c.base.enabled=true; c.base.textured=false; scene->camX=18; scene->camY=76; scene->camZ=-20; scene->yawDeg=36; scene->pitchDeg=24;
+    c.base.enabled=true;
+    mcov::CopyField(scene->gameVersion,"1.21.11"); mcov::OverlayUiCheck::Snapshot(overlay,*scene);
+    for(auto state:{mcov::base::Status::Building,mcov::base::Status::Failed}) {
+        mcov::OverlayUiCheck::BaseStatus(overlay,state);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,10,{480,360});
+        auto frame=[&]{ Draw(overlay,Page::Blocks,0,{480,360}); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+        SaveFrame(device,context,output/(state==mcov::base::Status::Building?"base-textures-loading-small.png":"base-textures-error-small.png"));
+        Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Texture status footer could not be reached");
+    }
+    c.base.textured=false; scene->camX=18; scene->camY=76; scene->camZ=-20; scene->yawDeg=36; scene->pitchDeg=24;
     scene->nearPlane=.05f; scene->farPlane=1024;
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();

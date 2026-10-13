@@ -8,6 +8,7 @@ public final class DepthHookCheck implements Opcodes {
     public static int clears;
     public static void cleared(double value) {
         if(FrameSignal.depthEnabled) throw new AssertionError("Depth callback ran after clear");
+        if(FrameSignal.texturedBaseEnabled) throw new AssertionError("Textured base callback ran after clear");
         if(value!=1.0) throw new AssertionError("Operand stack was changed");
         ++clears;
     }
@@ -54,6 +55,7 @@ public final class DepthHookCheck implements Opcodes {
             Class<?> renderer=loader.put(names[0],game.toByteArray());
             // Ohne registrierte native Methode deaktiviert depthReady die Bruecke.
             FrameSignal.depthEnabled=true;
+            FrameSignal.texturedBaseEnabled=true;
             renderer.getMethod(names[2],deltaType).invoke(renderer.getConstructor().newInstance(),deltaType.getConstructor().newInstance());
             if(FrameSignal.depthEnabled) throw new AssertionError("Depth hook missing: "+names[0]);
             System.out.println("PASS depth-before-clear "+names[0]);

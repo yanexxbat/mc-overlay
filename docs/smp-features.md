@@ -7,7 +7,7 @@ Fenster. In kleinen Viewports scrollt dieses Fenster bis zu allen Controls und
 Aktionen; **X** führt zurück zum Raster. **Strg-Klick** auf einen Slider erlaubt
 die direkte Zahleneingabe. [Menü und Keybinds](client-ui.md).
 
-Die Erweiterung verwendet **IPC v21**. Bereits laufendes Minecraft vollständig
+Die Erweiterung verwendet **IPC v22**. Bereits laufendes Minecraft vollständig
 neu starten, bevor der aktualisierte Client erneut angehängt wird. Ein schon
 geladener Agent behält sonst das alte gemeinsame Datenlayout.
 
@@ -95,23 +95,48 @@ Glow 0–2. Mobtyp und Aktivierungszustand des Spawners werden nicht erfasst.
 ## Base ESP
 
 **Blocks → Base ESP** einschalten; Rechtsklick öffnet die Einstellungen.
-Erkannte Containeransammlungen erscheinen als farbige, transparente 3D-Flächen
-mit Rahmen durch Wände und andere Blöcke. Die globale Wandverdeckung anderer
-Welteffekte beeinflusst Base ESP nicht.
+**Display → Minecraft textures** ist der Standard für Minecraft **1.21.11**
+(Mojmap, Vanilla und Fabric Intermediary). Geladene Blöcke im erkannten Bereich
+werden mit den echten Blockmodellen, Textur-Atlanten, Farbtönungen und der Lightmap
+des laufenden Spiels durch verdeckende Weltblöcke gezeichnet. Die Base-Blöcke
+verdecken sich untereinander weiterhin. **Texture opacity** stellt die
+Transparenz ein; standardmäßig sind die Texturen vollständig sichtbar.
 
 Base ESP funktioniert auch bei ausgeschaltetem Stash Finder. Beide verwenden
 denselben Scan-Radius, dieselben Container-Filter und dieselbe Mindestanzahl
 pro Chunk (standardmäßig acht). Die Darstellung umfasst beobachtete Lagerblöcke
 plus **Expand detected area**, standardmäßig vier zusätzliche Blöcke auf allen
-Seiten. Dieser Bereich schätzt einen Base-Standort; er rekonstruiert keine
-Gebäudegeometrie. Es gelten dieselben Grenzen für geladene Blöcke und Fundlisten.
+Seiten. Die Erkennung folgt Lagerblöcken und ihrem zusätzlichen Rand; sie bestimmt
+nicht automatisch die Außengrenzen eines ganzen Gebäudes. Innerhalb dieses
+Bereichs verwendet der Texturmodus die tatsächliche geladene Blockgeometrie.
 
-**Base colour**, **Fill opacity** und **Frame width** ändern Farbe, Transparenz
-und Rahmen. Labels und Tracer sind optional. Standardmäßig beträgt die
-Anzeigeentfernung 192 m und die Flächentransparenz 0,12. Die Anzeigeentfernung
+**Display → Area marker** bietet weiterhin die farbige Fläche mit Rahmen,
+**Base colour**, **Fill opacity** und **Frame width**. Der Modus ist auch auf
+anderen unterstützten Minecraft-Versionen verfügbar. Labels und Tracer sind
+optional. Standardmäßig beträgt die Anzeigeentfernung 192 m. Die Anzeigeentfernung
 erweitert den Scan-Radius nicht. Aussehen und Modul-Bind werden in automatischen
 Einstellungen und benannten Configs gespeichert. Bestehende vollständige Configs
 ohne Base ESP erhalten dessen ausgeschaltete Defaults und einen ungebundenen Key.
+Vollständige ältere Base-Configs erhalten den neuen Texturmodus mit Deckkraft 1;
+teilweise beschädigte neue Texturfelder werden bei benannten Configs abgelehnt.
+
+Der Texturmodus bearbeitet höchstens acht nahe Bereiche, 16.384 Zellen und
+786.432 Dreiecksvertices pro Aufbau. Die Erfassung läuft in Abschnitten mit
+einem Zielbudget von 2 ms auf Minecrafts Render-Thread; mindestens eine Zelle
+wird pro Abschnitt geprüft. Ein einzelner aufwendiger Block kann dieses Budget
+überschreiten. Nach einem fertigen Aufbau wird etwa jede Sekunde neu erfasst.
+Animierte Atlas-Texturen bleiben live. Überlappende Bereiche
+werden ohne doppelte Blockgeometrie erfasst. Die Anfrage läuft nach 750 ms ohne
+Overlay-Erneuerung ab und ist an Server und Dimension gebunden.
+
+Normale Blockmodelle, Flüssigkeiten und spritebasierte Block-Entity-Modelle
+(etwa Kisten und Shulker) werden über die Spielrenderer erfasst. Spezielle
+Zusatzdarstellungen wie Text, Portale und manche Mod-Renderer werden übersprungen
+und im Status gemeldet. Der Status zeigt außerdem Aufbau, leere Bereiche,
+Grenzen oder Fehler. Bei einem Fehler Base ESP aus- und wieder einschalten,
+um erneut aufzubauen, oder **Area marker** wählen. Auf anderen Versionen und
+bei fehlendem Texturrenderer zeigt das Menü die passende Version-/Neustart-
+Empfehlung; **Area marker** bleibt die alternative Darstellung.
 
 ## Scan-Status und Grenzen
 
@@ -119,7 +144,9 @@ Scans laufen im Agent-Worker und lesen ausschließlich Blockdaten, die der Clien
 in seiner Welt bereitstellt. Die Scanform ist ein Würfel mit dem gewählten Radius
 um die Spielerposition beim Scanbeginn. Der aktuelle Scanner berücksichtigt
 Y-Koordinaten von −64 bis 319. Er deckt keine ungeladenen Chunks auf und liest
-keine Container-Inhalte. Rendering verarbeitet nur die veröffentlichten Snapshots.
+keine Container-Inhalte. Die externe Scan-Darstellung verarbeitet nur die
+veröffentlichten Snapshots; der Texturmodus hat den oben beschriebenen eigenen
+Callback im Spielrenderer.
 
 Aktive Blockmodule teilen einen Scanner: ihre Typfilter werden zusammengefasst,
 der größte Radius und das kürzeste Intervall werden angefordert. Die einzelnen
@@ -158,16 +185,49 @@ Umzug `client-settings.ini` und den `configs`-Ordner mitnehmen.
 
 ## Prüfbelege
 
-Für Base ESP bestanden die fünf passenden Prüfungen `smp_features`,
-`depth_rendering`, `control_panel`, `client_controls` und `portable_client`.
-Der echte D3D11-WARP-Pixeltest bestätigt, dass die gefüllte 3D-Fläche trotz
-vorgelagerter Tiefenwerte und fehlender Tiefendaten sichtbar bleibt; die
-Wandverdeckung anderer Effekte bleibt aktiv. Profilprüfungen decken Base-Farben,
-Einstellungen und die Migration älterer SMP-Profile ab. Die UI-Prüfung deckt
-Modulaktivierung, Speicherung und den festen Kopfbereich im kleinen Fenster ab.
-Die fünf endgültigen synthetischen Vorschauen liegen unter
-`.impeccable/review/base-esp/` mit dem Suffix `-final.png`.
-Live-Minecraft-Verhalten wurde für Base ESP nicht geprüft.
+Für die aktuelle Base-Texturerweiterung bestanden alle **26** verfügbaren
+Regressionsprüfungen über die abschließenden Läufe: 25 in der Sandbox und
+`frame_attach` separat außerhalb nach einem Windows-Pipe-Zugriffsfehler seines
+isolierten Fixture-JVMs. Nach der letzten Ressourcenfreigabe-Änderung bestanden
+`base_texture_gl`, `base_texture_models`, `smp_features` und `portable_client`
+erneut; `depth_hook` bestand im vorangehenden gezielten Lauf. Die Produktions-
+EXE und Share-ZIP wurden neu gebaut.
+
+`base_texture_gl` verwendet echtes WGL/OpenGL und prüft Pixel sowie erhaltenen
+Grafikzustand: Atlas-UVs, Kameraprojektion, Verdeckung zwischen Base-Blöcken,
+Durch-Wand-Compositing, unveränderte Pixel außerhalb der Base, live aktualisierte
+Atlas-Texturen, Deckkraft 0,5, das Mischen transparenter Texel und erneute
+Renderer-Initialisierung nach Ressourcenfreigabe. Ausschalten gibt die GL-
+Ressourcen frei, sodass Aus-/Einschalten auch einen fehlgeschlagenen Renderer
+neu erstellen kann.
+`base_texture_models` prüft Java-Proxy-Defaults, Modell-/Sprite-Pfade und
+Quad-Erfassung mit UVs, Tint und Lichtwerten. `depth_hook` deckt beide
+Render-Callbacks ab; `smp_features` prüft Texturmodus, Profilmigration,
+Anfrage-Lease und Welttrennung. Die 38 Klassen und 73 Member des 1.21.11-
+Texturbridges wurden gegen zwischengespeicherte offizielle Klassen für Mojmap,
+Vanilla und Fabric Intermediary geprüft.
+
+Die fünf endgültigen Settings-Belege verwenden native ImGui/D3D11-WARP-
+Fixtures mit synthetischen Daten:
+
+| Zustand | Beleg |
+|---|---|
+| Desktop, 1280 × 800 | [Base-Einstellungen](../.impeccable/review/base-textures/base-esp-settings-desktop-verified.png) |
+| Kleines Fenster oben, 480 × 360 | [Textur-Controls](../.impeccable/review/base-textures/base-esp-settings-small-top-verified.png) |
+| Kleines Fenster gescrollt, 480 × 360 | [Erkennung und Grenzen](../.impeccable/review/base-textures/base-esp-settings-small-verified.png) |
+| Aufbau, 480 × 360 | [Ladestatus](../.impeccable/review/base-textures/base-textures-loading-small-verified.png) |
+| Fehler, 480 × 360 | [Fehler und Wiederherstellung](../.impeccable/review/base-textures/base-textures-error-small-verified.png) |
+
+Die unabhängige Abschlussprüfung bestätigte **ship für den UI-Umfang**.
+Es gibt keine Live-Minecraft-Aufnahme oder Prüfung des Texturmodus im laufenden
+Spiel. Shader- und Mod-Grafik-Kompatibilität bleibt ungeprüft.
+
+Die früheren fünf Base-Prüfungen `smp_features`, `depth_rendering`,
+`control_panel`, `client_controls` und `portable_client` sowie die fünf
+`-final.png`-Bilder unter `.impeccable/review/base-esp/` betreffen die farbige
+Fläche und den Rahmen des **Area marker**. Der damalige D3D11-WARP-Pixeltest
+bestätigt diese Fläche hinter Tiefenwerten und ohne Tiefendaten; er prüft keine
+Minecraft-Modelle oder Texturen. Diese historischen Belege bleiben erhalten.
 
 Für die ursprüngliche Erweiterung mit Storage ESP, Stash Finder und Spawner ESP
 bestanden alle **24** verfügbaren Regressionsprüfungen über die abschließenden

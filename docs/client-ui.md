@@ -75,10 +75,20 @@ ermöglicht das Kopieren oder Speichern einer Entdeckung als Wegpunkt.
 weiterhin unter **Blocks** und öffnen sich per Rechtsklick im unabhängigen Fenster.
 Bedienung, Scan-Grenzen und Zählregeln: [SMP-Funktionen](smp-features.md).
 
-**Base ESP** zeigt erkannte Containeransammlungen als transparente 3D-Fläche
-mit Rahmen durch Wände. Das Modul arbeitet auch ohne eingeschalteten Stash
-Finder; Radius, Filter und Mindestanzahl werden gemeinsam verwendet. Farbe,
-Flächentransparenz, Rahmenbreite und zusätzlicher Rand sind direkt einstellbar.
+**Base ESP → Display → Minecraft textures** zeichnet in 1.21.11 die echten
+geladenen Blockmodelle rund um erkannte Containeransammlungen durch Wände.
+Dieser Modus ist der Standard, mit **Texture opacity** anfangs 1. Der zusätzliche
+Rand ist einstellbar; die Erkennung bestimmt Container-Ausdehnung plus Rand,
+keine vollständigen Gebäudegrenzen. **Label colour** färbt die optionalen Labels
+und Tracer, während die Blocktexturen aus dem laufenden Spiel kommen.
+**Area marker** bietet
+weiterhin die farbige 3D-Fläche mit Rahmen. Das Modul arbeitet auch ohne
+eingeschalteten Stash Finder; Radius, Filter und Mindestanzahl werden gemeinsam
+verwendet. Der Status zeigt laufenden Aufbau, leere Bereiche, Bereichsgrenzen,
+übersprungene Spezialeffekte und Fehler. Zum erneuten Aufbau nach einem Fehler
+Base ESP aus- und wieder einschalten. Auf anderen Versionen oder bei fehlendem
+Texturrenderer **Area marker** wählen; die Meldung erklärt gegebenenfalls den
+nötigen Minecraft-Neustart.
 
 ## Configs
 
@@ -207,10 +217,12 @@ und Logs bleiben unter `%LOCALAPPDATA%\mcov`.
 `hud_layout.hpp` kapselt Platzierung und Grenzen. `overlay_input.cpp` bindet echte
 Stores und Dateispeicherung an; `overlay_hud.cpp` zeichnet nur Snapshot-Daten.
 Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
-bleiben außerhalb des Render-Threads. [Neue Funktionen und Bedienung](rockstar-features.md).
+dieser Scanner bleiben außerhalb des Render-Threads.
+[Neue Funktionen und Bedienung](rockstar-features.md).
 
-Die aktuelle SMP-Erweiterung verwendet IPC v21 für zusätzliche Blocktypen und
-zusammenhängende Metadaten abgeschlossener Scans. Bereits laufendes Minecraft
+Die aktuelle Base-Texturerweiterung verwendet IPC v22, einschließlich der
+gemeinsamen Blocktypen, Scan-Metadaten und Texturanfragen/-meldungen.
+Bereits laufendes Minecraft
 vor erneutem Attach mit dem aktualisierten Client und Agent vollständig neu starten.
 Alle SMP-Einstellungen und Binds speichern automatisch und in benannten Configs.
 Vollständige ältere Configs ohne SMP-Block erhalten Defaults und ungebundene neue
@@ -218,6 +230,22 @@ Aktionen; teilweise vorhandene oder ungültige SMP-Daten lassen das gesamte
 benannte Profil vor dem Anwenden scheitern. Entdeckungen bleiben auf die Session
 beschränkt; **Save waypoint** speichert den Ort dauerhaft im bestehenden Store.
 Details und Grenzen stehen in [SMP-Funktionen](smp-features.md).
+
+Für die aktuelle Base-Texturerweiterung bestanden alle 26 verfügbaren
+Regressionsprüfungen über die abschließenden Läufe; `frame_attach` bestand nach
+einem Windows-Pipe-Zugriffsfehler separat außerhalb der Sandbox. Die letzte
+gezielte Prüfung bestand nach der Ressourcenfreigabe-Änderung für
+`base_texture_gl`, `base_texture_models`, `smp_features` und `portable_client`;
+`depth_hook` bestand im vorangehenden gezielten Lauf. Der echte WGL/OpenGL-
+Pixeltest prüft auch Deckkraft 0,5, transparente Texel und Renderer-
+Initialisierung nach Ressourcenfreigabe. Die fünf
+`-verified.png`-Bilder unter `.impeccable/review/base-textures/` zeigen die
+Desktop-Einstellungen, kleine obere/gescrollte Einstellungen und Lade-/Fehler-
+zustände mit synthetischen ImGui/D3D11-WARP-Fixtures. Die unabhängige
+Abschlussprüfung bestätigte **ship für den UI-Umfang**. Die EXE und ZIP sind neu
+gebaut; Live-Minecraft-Texturen, Optik, Attach sowie Shader-/Mod-Grafik-
+Kompatibilität wurden hier nicht geprüft. Die früheren Base-Bilder unter
+`.impeccable/review/base-esp/` belegen den farbigen **Area marker**.
 
 Für die ursprüngliche Erweiterung mit Storage ESP, Stash Finder und Spawner ESP
 bestanden alle 24 verfügbaren Regressionsprüfungen über die abschließenden

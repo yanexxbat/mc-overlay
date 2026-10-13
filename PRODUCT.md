@@ -8,8 +8,9 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v21. The game's OpenGL renderer and the overlay's D3D11 renderer are
-separate. UI rendering introduces no render-thread JNI calls.
+through IPC v22. The game's OpenGL renderer and the overlay's D3D11 renderer are
+separate. UI rendering stays outside the JVM; textured Base ESP uses a dedicated
+JNI callback on the game's render thread.
 
 ## User and purpose
 
@@ -38,7 +39,8 @@ camera/entity projection stability.
   quiet headings and semantic green/amber/red feedback preserve readability.
   The F6 editor retains movable/scalable elements, visibility, reset and persistence.
 - Keep the simplified Kill Aura workflow and independent mouse-controlled camera.
-- Renderers consume snapshots; UI/HUD changes add no render-thread JNI.
+- External UI/HUD renderers consume snapshots; their presentation adds no
+  render-thread JNI. Base texture extraction has its own game-render callback.
 - Keep one canonical `build` directory and existing version/Forge compatibility.
 - Ship one portable `mcov.exe` containing the client payload. The optional
   `START.txt` guide is the only other file in the share ZIP.
@@ -58,10 +60,13 @@ camera/entity projection stability.
   Stash Finder records container clusters by chunk; Spawner ESP has its own
   colour, labels and tracers. Right-click opens the same independent settings
   window. These controls preserve the incumbent compact visual system.
-- Base ESP independently enables the shared container-cluster detector and
-  draws translucent 3D areas with frames through walls. Its appearance and
-  unbound module key persist; scan radius, minimum and filters are shared with
-  Stash Finder. The area estimates storage extent plus an adjustable margin.
+- Base ESP independently enables the shared container-cluster detector. Its
+  default 1.21.11 display uses actual game block models, atlas textures and
+  lightmap through walls, with independent depth for the base itself. The
+  optional Area marker keeps the coloured fill/frame on other supported profiles.
+  Texture opacity, appearance and the unbound module key persist. Scan radius,
+  minimum and filters are shared with Stash Finder. Detection estimates storage
+  extent plus an adjustable margin; it does not trace entire building bounds.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.
@@ -94,7 +99,7 @@ shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
 It keeps at most 128 discoveries and the highest observed count for each chunk.
 Truncated scans report lower-bound counts. The scan does not reveal inventory
 contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
-IPC v21 changes the shared layout: restart already running Minecraft before
+IPC v22 changes the shared layout: restart already running Minecraft before
 reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the
@@ -121,12 +126,29 @@ Snapshot HUDs use the shared rounded ImGui fill and font; their editor applies
 
 ## Verification limits
 
-Base ESP's five relevant checks passed: SMP state/profile/rendering, native
-controls, D3D11 WARP depth rendering, keybind controls and portable packaging.
-The GPU test confirms the filled base remains visible behind occluders and
-without depth data while other world effects preserve their occlusion policy.
-Base settings and synthetic world captures are retained under
-`.impeccable/review/base-esp/`. No live Minecraft check was performed for Base ESP.
+For the Base texture update, all 26 available regression checks passed across
+the final runs. The sandbox run passed 25; `frame_attach` passed separately
+outside the sandbox after a Windows fixture-pipe access failure. After the final
+resource-release changes, `base_texture_gl`, `base_texture_models`,
+`smp_features` and `portable_client` passed again; `depth_hook` passed in the
+preceding focused run. The real WGL/OpenGL pixel test
+covers live atlas sampling, UVs, camera projection, independent base depth,
+compositing, restored graphics state, opacity 0.5, translucent texel blending
+and renderer reinitialization after resource release.
+Java fixtures cover quad/tint/light capture, sprite/model paths and proxy defaults;
+state/profile checks cover mode migration and leased, world-scoped requests.
+The 1.21.11 texture bridge's 38 classes and 73 members were audited against
+cached official classes for Mojmap, vanilla and Fabric intermediary.
+
+Native UI checks cover the existing Base settings and texture loading/error
+states. The five final `-verified.png` captures under
+`.impeccable/review/base-textures/` use synthetic ImGui/D3D11 WARP fixtures at
+1280 × 800 and 480 × 360. The independent finish review returned **ship for the
+UI scope**. The EXE and ZIP were rebuilt. Earlier coloured-marker checks and
+captures under `.impeccable/review/base-esp/` remain historical Area marker
+evidence, not texture-rendering evidence. No live Minecraft texture, appearance
+or attach check was performed; shader and mod graphics compatibility remains
+unverified.
 
 For the original Storage ESP, Stash Finder and Spawner ESP extension, the
 production client and portable ZIP were rebuilt. All 24 available

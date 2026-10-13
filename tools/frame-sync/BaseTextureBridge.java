@@ -20,6 +20,8 @@ public final class BaseTextureBridge {
     private static double originX,originY,originZ;
     private static boolean limited;
     private static Mesh completed;
+    private static final Set<Cell> visited=new HashSet<>();
+    private record Cell(int x,int y,int z) {}
     public static final class Mesh {
         public int[] textures;
         public float[][] vertices;
@@ -34,7 +36,7 @@ public final class BaseTextureBridge {
     }
     public static void clear() {
         level=manager=pose=random=cameraState=null; builder=null; completed=null;
-        requested=Long.MIN_VALUE; bounds=null; nextRefresh=0;
+        requested=Long.MIN_VALUE; bounds=null; nextRefresh=0; visited.clear();
     }
     public static double[] camera(Object renderer) throws ReflectiveOperationException {
         Object client=symbols.call("instance",null),cam=symbols.call("camera",renderer);
@@ -59,13 +61,13 @@ public final class BaseTextureBridge {
         if(level!=currentLevel) { clear(); level=currentLevel; levelReady=now+150_000_000L; }
         if(now<levelReady) return null;
         Object dispatcher=symbols.call("blocks",client);
-        int atlas=texture(textures,symbols.get("blocksAtlas",null));
+        int atlas=texture(symbols,textures,symbols.get("blocksAtlas",null));
         boolean changed=requested!=revision||bounds==null||!Arrays.equals(bounds,requestedBounds)||manager!=textures||atlasId!=atlas;
         if(changed||builder==null&&now>=nextRefresh) {
             if(changed) completed=null;
             requested=revision; bounds=requestedBounds.clone(); manager=textures; atlasId=atlas;
             originX=Math.floor(bounds[0]); originY=Math.floor(bounds[1]); originZ=Math.floor(bounds[2]);
-            builder=new Builder(symbols,manager); region=0; scanned=blocks=skipped=0; limited=false;
+            builder=new Builder(symbols,manager); visited.clear(); region=0; scanned=blocks=skipped=0; limited=false;
             pose=symbols.type("Pose").getConstructor().newInstance(); random=symbols.call("random",null,0L);
             cameraState=symbols.type("CameraState").getConstructor().newInstance(); modelShape=symbols.get("modelShape",null);
             startRegion();
@@ -79,8 +81,9 @@ public final class BaseTextureBridge {
             symbols.set("cameraStateOrientation",cameraState,symbols.call("cameraRotation",cam)); symbols.set("cameraStateReady",cameraState,true);
             Object pos=symbols.type("MutablePos").getConstructor().newInstance();
             while(region<bounds.length/6&&scanned<MAX_BLOCKS&&!builder.full()) {
-                if(slice++>=32&&System.nanoTime()>=deadline) break;
+                if(slice++>=1&&System.nanoTime()>=deadline) break;
                 int bx=x,by=y,bz=z; advance(); ++scanned;
+                if(!visited.add(new Cell(bx,by,bz))) continue;
                 symbols.call("posSet",pos,bx,by,bz);
                 if(!(Boolean)symbols.call("loaded",level,pos)) continue;
                 Object state=symbols.call("state",level,pos);
@@ -133,9 +136,9 @@ public final class BaseTextureBridge {
             }
         }
     }
-    private static int texture(Object manager,Object id) throws ReflectiveOperationException {
-        Object atlas=symbols.call("getTexture",manager,id);
-        return ((Number)symbols.call("glId",symbols.call("gpuTexture",atlas))).intValue();
+    private static int texture(Symbols s,Object manager,Object id) throws ReflectiveOperationException {
+        Object atlas=s.call("getTexture",manager,id);
+        return ((Number)s.call("glId",s.call("gpuTexture",atlas))).intValue();
     }
     static final class Symbols {
         final Map<String,Class<?>> classes=new HashMap<>();
@@ -197,6 +200,14 @@ public final class BaseTextureBridge {
                 vertex[1]=((Number)args[1]).floatValue()+(float)dy; vertex[2]=((Number)args[2]).floatValue()+(float)dz;
                 vertex[5]=vertex[6]=vertex[7]=vertex[8]=1; vertex[9]=vertex[10]=.96875f; pending=true;
             } else if(method.equals(s.methods.get("colour"))) { for(int i=0;i<4;++i) vertex[5+i]=((Number)args[i]).intValue()/255.f;
+            } else if(method.equals(s.methods.get("colourPacked"))||
+                method.getReturnType()==s.type("Consumer")&&method.getParameterCount()==1&&method.getParameterTypes()[0]==int.class) {
+                // The audited API's sole abstract (int)->Consumer operation is
+                // packed ARGB. The signature also works for already configured
+                // builders when this body is repaired in a running JVM.
+                int argb=((Number)args[0]).intValue();
+                vertex[5]=(argb>>>16&255)/255.f; vertex[6]=(argb>>>8&255)/255.f;
+                vertex[7]=(argb&255)/255.f; vertex[8]=(argb>>>24)/255.f;
             } else if(method.equals(s.methods.get("uv"))) { vertex[3]=((Number)args[0]).floatValue(); vertex[4]=((Number)args[1]).floatValue();
             } else if(method.equals(s.methods.get("uvLight"))) { vertex[9]=(((Number)args[0]).intValue()+8)/256.f; vertex[10]=(((Number)args[1]).intValue()+8)/256.f;
             } else if(method.equals(s.methods.get("normal"))) { for(int i=0;i<3;++i) vertex[11+i]=((Number)args[i]).floatValue();
@@ -213,10 +224,10 @@ public final class BaseTextureBridge {
                 int spriteAt=model?7:5;
                 Object sprite=a[spriteAt];
                 if(sprite==null) { ++BaseTextureBridge.skipped; return null; }
-                select(texture(textureManager,s.call("spriteAtlas",sprite)),0,0,0);
+                select(texture(s,textureManager,s.call("spriteAtlas",sprite)),0,0,0);
                 Object wrapped=s.call("wrap",sprite,consumer);
                 if(model) { s.call("modelAnim",a[0],a[1]); s.call("modelDraw",a[0],a[2],wrapped,a[4],a[5],a[6]); }
-                else s.call("partDraw",a[0],a[1],wrapped,a[3],a[4],-1);
+                else s.call("partDraw",a[0],a[1],wrapped,a[3],a[4],a.length>8?a[8]:-1);
                 finish(); return null;
             }
             ++BaseTextureBridge.skipped; return null;

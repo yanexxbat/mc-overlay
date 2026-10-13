@@ -50,8 +50,10 @@ the namespace mappings. In Fabric 1.21.11, `Camera.position()` inherits
 `method_71156` from the tracked-waypoint camera interface; its raw name `b` is
 not the runtime name. The same resolution handles inherited entity/bounds and
 inventory methods instead of silently retaining their obfuscated names.
-Version detection, binding and sampling run only in the native daemon worker.
-The renderer reads the shared POD snapshot and never calls JNI.
+Core camera/entity version detection, binding and sampling run in the native
+daemon worker. The external D3D11 renderer reads the shared POD snapshot and
+never calls JNI. Base texture extraction has a separate game-render callback,
+described below.
 
 - 1.20.1 / 1.21.1: renderer `getFov(Camera,float,boolean)` returns **double**.
 - 1.21.11: renderer FOV returns **float**; camera accessors are `position`, `yRot`, `xRot`.
@@ -61,7 +63,7 @@ The renderer reads the shared POD snapshot and never calls JNI.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **21**; restart Minecraft and use the newly built
+Shared-memory version is now **22**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
 Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
@@ -99,15 +101,16 @@ View bob uses the sampled camera entity's walk distance and bob amplitude. The
 overlay applies the game's translation and Z/X rotations before camera rotation.
 Modern profiles read `ClientAvatarState`; older profiles read Entity/Player fields.
 Damage camera shake, camera roll and custom projection effects are not reconstructed.
-Visual sampling uses JNI in the sampler; the renderer only consumes POD snapshots.
+Camera/entity visual sampling uses JNI in the sampler; the external renderer
+only consumes POD snapshots.
 The combat adapter has a separate, instrumented client-tick callback.
 
 ## Frame synchronization
 
 The attach helper installs the Java frame agent before the native DLL. It adds
 pure Java volatile epoch writes at `Minecraft.runTick(boolean)` entry and at
-camera update entry/return. Game-data reads and JNI calls remain in the daemon
-sampler. The transformer uses the target JDK's bundled ASM, the audited version
+camera update entry/return. Camera/entity reads and their JNI calls remain in
+the daemon sampler. The transformer uses the target JDK's bundled ASM, the audited version
 signatures and an additional accessor/position-field signature to guard against
 reused obfuscated class names. The optional camera getter is not required for
 frame marking. Forge game modules receive access to the bootstrap
@@ -183,8 +186,8 @@ private `alignWithEntity`, and filters mouse deltas at `Entity.turn`.
 These are synthetic call-site tests, not a live Minecraft renderer test.
 See [silent camera](silent-camera.md). JNI for combat runs on the client tick;
 camera/ESP sampling stays in
-the daemon worker and the renderer consumes IPC only. The helper and agent now
-require IPC v21 and a full Minecraft restart after upgrading. Spinbot shares the
+the daemon worker and the external renderer consumes IPC only. The helper and agent now
+require IPC v22 and a full Minecraft restart after upgrading. Spinbot shares the
 existing silent camera hooks. Its movement correction uses audited Entity,
 LivingEntity, Player and LocalPlayer physics scopes; only getters inside those
 scopes use camera yaw/pitch. Model/network getters outside keep the spin angles.
@@ -197,7 +200,7 @@ replace movement testing in a running Minecraft client.
 ## SMP block scanning
 
 Storage ESP, Stash Finder and Spawner ESP use the existing runtime profiles and
-the worker's block-state sampling. IPC v21 adds distinct storage types and
+the worker's block-state sampling. IPC v22 adds distinct storage types and
 coherent completed-scan metadata; restart already running Minecraft before
 reattaching with the updated portable client or matching development binaries.
 The overlay, injector and loaded agent must use the same shared-memory version.
@@ -218,6 +221,56 @@ D3D11 WARP settings captures under `.impeccable/review/smp/` use synthetic data;
 the independent finish review checked all six final captures and returned
 **ship** after the caption-toggle fix. The production EXE and ZIP were rebuilt.
 **No live Minecraft scanning, appearance or attach test was performed for SMP.**
+
+## Base texture rendering (1.21.11)
+
+**Base ESP → Minecraft textures** is the default display, with texture opacity
+1. It supports Mojmap, vanilla obfuscated and Fabric intermediary **1.21.11**.
+The texture bridge's 38 classes and 73 mapped members were audited against
+cached official 1.21.11 classes. Other supported versions retain the optional
+**Area marker** display; the settings report an unsupported texture version or
+missing renderer rather than substituting fabricated textures.
+
+The existing detector still estimates storage-cluster bounds plus padding;
+it does not trace an entire building. A dedicated JNI callback on the game's
+render thread invokes the live game's block, liquid and sprite-based block-
+entity renderers. Its Java reflection bridge captures quads, tint, light values
+and atlas UVs. Native OpenGL draws the result with independent base depth,
+then composites it into the main colour target while preserving graphics state.
+The current game atlas and lightmap are sampled live. External UI/HUD rendering
+stays outside the JVM.
+
+Extraction targets 2 ms per slice and checks at least one cell; a single
+expensive block can exceed that budget. Each rebuild is bounded to eight nearby
+regions, 16,384 checked cells and 786,432 vertices. Overlapping areas are
+deduplicated. Completed geometry is rebuilt after about one second. Requests
+expire after 750 ms without renewal and are scoped to server and dimension.
+Special text, portal and custom-renderer submissions are skipped and reported.
+The menu reports loading, empty results, limits and failures, with toggle-to-retry
+and Area marker recovery. **IPC v22 requires a full Minecraft restart after
+upgrading** because an already loaded DLL retains the old layout.
+
+All 26 available CTest checks passed across the final runs: 25 in the sandbox,
+then `frame_attach` separately outside it after Windows fixture-pipe access
+failed. After the final resource-release changes, `base_texture_gl`,
+`base_texture_models`, `smp_features` and `portable_client` passed again;
+`depth_hook` passed in the preceding focused run. The real WGL/OpenGL pixel/state
+check covers atlas UVs, camera projection,
+base self-occlusion, through-world compositing, live atlas updates, restored
+state, opacity 0.5, translucent texel blending and renderer reinitialization
+after resource release. Disabling Base ESP releases GL resources so off/on
+can recreate a failed renderer. Java model fixtures cover
+proxy defaults, quad UV/tint/light capture and sprite/model paths; the other
+checks cover both render callbacks, mode/profile migration, leased world-scoped
+requests and the embedded portable bundle.
+
+The final five `-verified.png` settings captures under
+`.impeccable/review/base-textures/` are native ImGui/D3D11 WARP synthetic fixtures
+at 1280 × 800 and 480 × 360. The independent finish review returned **ship for
+the UI scope**. Earlier `.impeccable/review/base-esp/` evidence covers the
+coloured Area marker only. The EXE and ZIP were rebuilt. **No live Minecraft
+texture, appearance or attach test was performed; shader and mod graphics
+compatibility remains unverified.**
 
 ## Reproduce the checks
 
