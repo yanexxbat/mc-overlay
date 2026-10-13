@@ -42,6 +42,16 @@ std::string FileHash(const std::filesystem::path& path) {
     return file.eof()?sha.Finish():std::string{};
 }
 }
+bool MatchingAgentRuntime(const std::filesystem::path& expected,const std::filesystem::path& loadedAgent) {
+    if(loadedAgent.empty()) return false;
+    const auto loaded=loadedAgent.parent_path();
+    for(const auto* name:{L"mcov_agent.dll",L"tools/frame-signal.jar",L"tools/frame-sync-agent.jar"}) {
+        const auto current=FileHash(expected/name);
+        const auto previous=FileHash(std::wcscmp(name,L"mcov_agent.dll")==0?loadedAgent:loaded/name);
+        if(current.empty()||previous.empty()||current!=previous) return false;
+    }
+    return true;
+}
 std::filesystem::path PreparePackage(const std::filesystem::path& storage) {
 #ifdef MCOV_BUNDLED
     const auto directory=storage/L"runtime"/kPackageId;

@@ -101,9 +101,19 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
         phase=Phase::Runtime; Cancel(stop);
         TargetProcess target; std::string detail;
         if(!FindMinecraftProcess(target,&detail,pid)) { result.detail=detail; throw std::runtime_error("Diese Minecraft-Instanz ist nicht mehr verfuegbar. Liste aktualisieren und erneut waehlen."); }
-        if(ClientRunning(pid)) { result.success=true; result.status="Der Client laeuft bereits. Zu Minecraft wechseln und das Menue oeffnen."; return result; }
         const auto loaded=AgentPath(pid);
         result.agentLog=(loaded.empty()?runtime:loaded.parent_path())/L"mcov_agent.log";
+        // Check before the already-running shortcut: even a healthy IPC v22
+        // agent may still contain the previous Java mesh consumer.
+        if(!loaded.empty()&&!launcher::MatchingAgentRuntime(runtime,loaded)) {
+            result.detail="Die geladene mcov-Version passt nicht zu diesem Client.\n";
+            MCOV_LOG_WARN("loaded agent/runtime differs: loaded=%s expected=%s",Utf8(loaded.wstring()).c_str(),Utf8(runtime.wstring()).c_str());
+            throw std::runtime_error("Ein alter oder gestoppter Agent ist geladen. Minecraft vollstaendig beenden und erneut starten.");
+        }
+        if(ClientRunning(pid)) {
+            if(loaded.empty()) throw std::runtime_error("Die laufende Minecraft-Verbindung kann nicht geprueft werden. Minecraft vollstaendig beenden und erneut starten.");
+            result.success=true; result.status="Der Client laeuft bereits. Zu Minecraft wechseln und das Menue oeffnen."; return result;
+        }
         if(!loaded.empty()) {
             if(!LiveAgent(pid,stop,2200,true)) throw std::runtime_error("Ein alter oder gestoppter Agent ist geladen. Minecraft vollstaendig beenden und erneut starten.");
             result.detail="Vorhandene Minecraft-Verbindung wiederverwendet.\n";
