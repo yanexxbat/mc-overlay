@@ -7,6 +7,7 @@
 #include <vector>
 #include <stdexcept>
 #include <span>
+#include <cwchar>
 #ifdef MCOV_BUNDLED
 #include "portable_manifest.hpp"
 #endif
