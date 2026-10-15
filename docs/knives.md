@@ -10,12 +10,12 @@ classes. Other versions keep the original item and show an unavailable message.
 Choose the model, size (0.5â€“2x), animation speed (0.5â€“2x), deploy animation and
 blade trails. Models use cached solid geometry with 64-section bevelled blades,
 rounded grips, machined pockets, screw heads, a smooth finger ring and raised
-Katana wraps. Solid models contain 10,256–18,512 vertices. The blade material follows wooden/stone/iron/golden/diamond/netherite
+Katana wraps. Solid models contain 10,256-18,512 vertices. The blade material follows wooden/stone/iron/golden/diamond/netherite
 or copper swords. This changes local appearance only, with no inventory, attack
 range, damage or server changes. Other players see the original sword.
 
-**Glow** defaults on. Adjust its RGB colour, strength (0–3x) and width
-(0.25–3x). A soft Gaussian falloff follows both cutting edges and the moving
+**Glow** defaults on. Adjust its RGB colour, strength (0-3x) and width
+(0.25-3x). A soft Gaussian falloff follows both cutting edges and the moving
 blade trails; rounded ends and shared curve joins avoid squared tips and gaps.
 The effect uses additive POSITION_COLOR geometry in the main hand output, with
 culling and depth writes disabled. This is local luminous geometry, not a

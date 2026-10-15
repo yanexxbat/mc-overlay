@@ -37,7 +37,7 @@ void Overlay::DrawKnifeSettings() {
         ImGui::EndDisabled();
         ImGui::EndTable();
     }
-    ImGui::TextWrapped("Glow adds a soft luminous edge to the blade and its trails. It does not light the surrounding world.");
+    ImGui::TextWrapped("Adds a soft luminous edge to the blade and its trails.");
     panel::Section("How to use");
     ImGui::TextWrapped("Hold a sword in your main hand. Its first-person appearance changes to the selected knife; its material follows the sword. Other players still see your normal sword.");
     ImGui::TextWrapped("Assign an Inspect key that Minecraft does not use, such as R. Tap to inspect once, or hold to repeat. Attacking, using an item or changing slots cancels the inspect. The module key only toggles CS Knife.");

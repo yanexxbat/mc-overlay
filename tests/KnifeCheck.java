@@ -49,7 +49,7 @@ public final class KnifeCheck {
         public Setup output(String s) { output=s;return this; }
         public Setup build() { return this; }
         public static Object create(String name,Setup setup) {
-            check(name.equals("mcov_knife_glow")&&!setup.pipeline.cull&&!setup.pipeline.depth&&"additive".equals(setup.pipeline.blend)&&"main".equals(setup.output),"Glow pipeline has incorrect blend/depth/output");return setup;
+            check(name.equals("mcov_knife_glow")&&!setup.pipeline.cull&&!setup.pipeline.depth&&"additive".equals(setup.pipeline.blend)&&"main".equals(setup.output)&&"position_colour".equals(setup.pipeline.format)&&"quads".equals(setup.pipeline.mode),"Glow pipeline has incorrect blend/depth/output");return setup;
         }
     }
     public static final class Collector implements Consumer {
@@ -119,6 +119,9 @@ public final class KnifeCheck {
         KnifeBridge.record(1_000_000_000L,new float[]{0,0,0},new float[]{0,1,0});
         KnifeBridge.record(1_010_000_000L,new float[]{.1f,0,0},new float[]{.1f,1,0});
         check(KnifeBridge.trail(1_010_000_000L,.14f,0xff00ffff).vertices()>0,"Moving blade generated no trail");
+        int faint=Arrays.stream(KnifeBridge.trail(1_010_000_000L,.14f,0xff00ffff,.25f).colours()).map(c->c>>>24).max().orElse(0);
+        int bright=Arrays.stream(KnifeBridge.trail(1_010_000_000L,.14f,0xff00ffff,2).colours()).map(c->c>>>24).max().orElse(0);
+        check(bright>faint,"Glow strength did not control the trail core");
         check(KnifeBridge.trail(2_000_000_000L,.14f,0xff00ffff).vertices()==0,"Expired blade trail persisted");
         KnifeBridge.update(true,0,1,1,.14f,false,true,false,5,0,true,1.2f,1,0x69ddd5);
         check(!render(p,Context.RIGHT,collector),"Expired request continued replacing the sword");

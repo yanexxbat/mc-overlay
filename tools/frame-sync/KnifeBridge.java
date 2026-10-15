@@ -88,7 +88,7 @@ public final class KnifeBridge {
             if(c.trails&&(motion!=0||attack>.01f)&&!busy) record(now,base,tip);
             else streaks.clear();
             boolean glowing=c.glow&&c.strength>0;
-            KnifeGeometry.Mesh trail=trail(now,c.lifetime,glowing?(0xff000000|c.colour):KnifeGeometry.metal(name));
+            KnifeGeometry.Mesh trail=trail(now,c.lifetime,glowing?(0xff000000|c.colour):KnifeGeometry.metal(name),glowing?c.strength:1);
             Object ordered=a.s.call("order",collector,0);
             // Submission may defer until the end of the hand pass. Capture only
             // immutable per-frame geometry, never the next frame's mutable state.
@@ -131,14 +131,15 @@ public final class KnifeBridge {
         }
         streaks.addLast(new Streak(now,base,tip)); while(streaks.size()>48) streaks.removeFirst();
     }
-    static KnifeGeometry.Mesh trail(long now,float lifetime,int colour) {
+    static KnifeGeometry.Mesh trail(long now,float lifetime,int colour) { return trail(now,lifetime,colour,1); }
+    static KnifeGeometry.Mesh trail(long now,float lifetime,int colour,float strength) {
         long duration=(long)(lifetime*1e9);
         while(!streaks.isEmpty()&&now-streaks.peekFirst().time>duration) streaks.removeFirst();
         KnifeGeometry.Builder b=new KnifeGeometry.Builder(); Streak previous=null;
         for(Streak next:streaks) {
             if(previous!=null) {
                 float alpha=Math.max(0,1-(now-previous.time)/(float)duration);
-                int ink=colour&0xffffff|(Math.round(alpha*105)<<24);
+                int ink=colour&0xffffff|(Math.min(255,Math.round(alpha*105*strength))<<24);
                 b.quad(previous.base,previous.tip,next.tip,next.base,ink);
                 b.quad(next.base,next.tip,previous.tip,previous.base,ink);
             }
