@@ -177,6 +177,7 @@ add_executable(mcov_overlay
     src/overlay/overlay_rockstar.cpp
     src/overlay/overlay_utilities.cpp
     src/overlay/overlay_smp.cpp
+    src/overlay/overlay_knives.cpp
     src/overlay/smp_features.cpp
     src/overlay/esp_renderer.cpp
     src/overlay/visual_draw.cpp
@@ -452,6 +453,7 @@ if(MCOV_BUILD_UI_CHECKS)
         src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
     src/overlay/overlay_utilities.cpp
         src/overlay/overlay_smp.cpp
+        src/overlay/overlay_knives.cpp
         src/overlay/smp_features.cpp
         src/overlay/combat_menu.cpp
         src/overlay/item_icon_atlas_dx11.cpp

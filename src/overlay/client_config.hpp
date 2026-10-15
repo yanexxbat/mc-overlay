@@ -23,6 +23,7 @@ struct Snapshot {
     BlockEspSettings blocks{};
     ChunkFinderSettings chunks{};
     smp::Config smp{};
+    knife::Config knife{};
     items::MacroConfig crystal{},anchor{};
     HudSettings hud{};
     keys::Bindings binds=keys::Defaults();
@@ -129,6 +130,11 @@ inline void Chunks(Archive& a,ChunkFinderSettings& c) {
     a.Value("chunks.radius",c.radius,4,48); a.Value("chunks.interval",c.interval,200,3000);
     a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,128); a.Color("chunks.color",c.color);
 }
+inline void Knife(Archive& a,knife::Config& c) {
+    a.Value("knife.enabled",c.enabled); a.Value("knife.skin",c.skin,0,2);
+    a.Value("knife.speed",c.speed,.5,2); a.Value("knife.size",c.size,.5,2);
+    a.Value("knife.trails",c.trails); a.Value("knife.deploy",c.deploy); a.Value("knife.duration",c.trailSeconds,.05,.35);
+}
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
         values.emplace("chunks.chunks","1"); values.emplace("chunks.deepslate","1");
@@ -231,6 +237,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
     Chunks(a,s.chunks);
     Smp(a,s.smp);
+    Knife(a,s.knife);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
 #define MACRO(field,...) a.Field(n+#field,macro->field,std::tuple{__VA_ARGS__})
@@ -354,6 +361,17 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace(freecamBind+"key","0"); values.emplace(freecamBind+"modifiers","0"); values.emplace(freecamBind+"mode","0");
     }
     AddChunkHighlightDefaults(values);
+    const auto knifeBind="bind."+std::to_string(keys::Index(keys::Action::CsKnife))+".";
+    const auto inspectBind="bind."+std::to_string(keys::Index(keys::Action::KnifeInspect))+".";
+    const bool hasKnife=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("knife.")||entry.first.starts_with(knifeBind)||entry.first.starts_with(inspectBind);
+    });
+    if(!hasKnife) {
+        knife::Config c; std::ostringstream defaults; Archive a(defaults); Knife(a,c);
+        std::istringstream input(defaults.str());
+        while(std::getline(input,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
+        for(const auto& bind:{knifeBind,inspectBind}) { values.emplace(bind+"key","0"); values.emplace(bind+"modifiers","0"); values.emplace(bind+"mode","0"); }
+    }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;
