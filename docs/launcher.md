@@ -55,8 +55,10 @@ the KeyAuth dashboard until replaced or expired.
 
 Validation uses isolated signed fixtures for altered/missing signatures, wrong
 owner/code, expiry, malformed data, rejection, cancellation, parameter encoding
-and the inherited pipe. The configured app's live initialization succeeded;
-successful real-license login and live Minecraft use have not been tested.
+and the inherited pipe. The configured app's live initialization succeeded.
+A separate live check confirmed that a merely initialized session without a
+license login is rejected. Successful real-license login and live Minecraft
+use have not been tested.
 
 ## Data and lifetime
 
