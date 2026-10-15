@@ -64,6 +64,11 @@ def geometry_schema(version):
     else:
         add('partialTick', camera, 'getPartialTickTime', '()F', 'methods')
     add('cameraEntity', camera, 'entity', 'L' + entity + ';')
+    add('freecamPosition', camera, 'setPosition', '(DDD)V', 'methods')
+    add('freecamRotation', camera, 'setRotation', '(FF)V', 'methods')
+    add('freecamDetached', camera, 'detached', 'Z')
+    add('freecamAttack', client, 'startAttack', '()Z', 'methods')
+    add('freecamContinueAttack', client, 'continueAttack', '(Z)V', 'methods')
     add('runFrame', client, 'runTick', '(Z)V', 'methods')
     add('clientTick', client, 'tick', '()V', 'methods')
     add('clientPaused', client, 'isPaused', '()Z', 'methods')

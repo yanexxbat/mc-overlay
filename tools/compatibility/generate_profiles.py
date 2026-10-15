@@ -305,7 +305,7 @@ def generate(cache):
     (cache / 'profiles.json').write_text(json.dumps(profiles, indent=2) + '\n', encoding='utf-8')
     java = ['// Generated from the same audited profiles as generated_profiles.hpp.',
             'package mcov.sync;', 'final class FrameProfiles {',
-            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc, String tick, String tickDesc, String entity, String uuid, String uuidDesc, String turn, String turnDesc, String viewYaw, String viewPitch, String use, String useDesc, String living, String player, String localPlayer, String yaw, String pitch, String move, String moveDesc, String travel, String travelDesc, String jump, String playerTravel, String playerJump, String localStep, String health, String cooldown) {}',
+            '    record Profile(String id, String client, String frame, String frameDesc, String camera, String update, String updateDesc, String instance, String instanceDesc, String position, String positionDesc, String positionField, String positionFieldDesc, String tick, String tickDesc, String entity, String uuid, String uuidDesc, String turn, String turnDesc, String viewYaw, String viewPitch, String use, String useDesc, String living, String player, String localPlayer, String yaw, String pitch, String move, String moveDesc, String travel, String travelDesc, String jump, String playerTravel, String playerJump, String localStep, String health, String cooldown, String setPosition, String setRotation, String detached, String attack, String continueAttack) {}',
             '    static final Profile[] PROFILES = {']
     for p in profiles:
         frame, update = p['geometry']['members']['runFrame'], p['geometry']['members']['updateCamera']
@@ -318,7 +318,8 @@ def generate(cache):
                   *p['geometry']['members']['movementRelative'], *p['geometry']['members']['movementTravel'],
                   p['geometry']['members']['movementJump'][0], p['geometry']['members']['movementPlayerTravel'][0],
                   p['geometry']['members'].get('movementPlayerJump',[''])[0], p['geometry']['members']['movementLocalStep'][0],
-                  p['members']['methodGetHealth'][0], p['geometry']['members']['attackCooldown'][0]]
+                  p['members']['methodGetHealth'][0], p['geometry']['members']['attackCooldown'][0],
+                  *[p['geometry']['members'][key][0] for key in ('freecamPosition','freecamRotation','freecamDetached','freecamAttack','freecamContinueAttack')]]
         java.append('        new Profile(' + ', '.join(quote(v) for v in values) + '),')
     java.extend(['    };', '    static boolean isTarget(String owner) {',
         '        for (Profile p : PROFILES) if (p.client().equals(owner) || p.camera().equals(owner) || p.entity().equals(owner) || p.living().equals(owner) || p.player().equals(owner) || p.localPlayer().equals(owner)) return true;',
@@ -340,6 +341,8 @@ def generate(cache):
         '            if (p.client().equals(owner) && p.tick().equals(name) && p.tickDesc().equals(descriptor)) return 3;',
         '            if (p.entity().equals(owner) && p.turn().equals(name) && p.turnDesc().equals(descriptor)) return 4;',
         '            if (p.client().equals(owner) && p.use().equals(name) && p.useDesc().equals(descriptor)) return 5;',
+        '            if (p.client().equals(owner) && p.attack().equals(name) && descriptor.equals("()Z")) return 6;',
+        '            if (p.client().equals(owner) && p.continueAttack().equals(name) && descriptor.equals("(Z)V")) return 7;',
         '        }', '        return 0;', '    }',
         '    static int cameraAxis(String camera, String entity, String method, String descriptor) {',
         '        if (!descriptor.equals("(F)F")) return 0;',
