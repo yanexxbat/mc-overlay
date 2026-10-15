@@ -100,6 +100,10 @@ struct OverlayUiCheck {
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
     static freecam::Config& Freecam(Overlay& o) { return o.combat_.freecam; }
+    static knife::Config& Knife(Overlay& o) { return o.knifeConfig_; }
+    static knife::Request KnifeRequest(const Overlay& o) { return o.BuildKnifeRequest(GetTickCount64()); }
+    static void KnifeStatus(Overlay& o,knife::Status status) { o.knifeReport_={GetTickCount64(),status}; }
+    static void FocusInput(Overlay& o,const keys::Input& input,bool focused) { o.ProcessKeyInput(input,focused); }
     static void FreecamStatus(Overlay& o,freecam::Status status) { o.combatReport_.freecamStatus=status; o.combatReport_.sampledAtMs=GetTickCount64(); }
     static void ConfigName(Overlay& o,const char* name) { std::snprintf(o.configName_,sizeof(o.configName_),"%s",name); }
     static bool SaveConfig(Overlay& o,const std::string& name,bool overwrite=false) { return o.SaveConfig(name,overwrite); }
@@ -1184,6 +1188,38 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
         Require(item.path().filename().string().find(".tmp-")==std::string::npos,"Successful/failed writes left temporary config files");
     Check::PrefPath(overlay,{});
 }
+void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using Check=mcov::OverlayUiCheck;
+    auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
+    auto& c=Check::Knife(o); c={true,true,true,2,1.5f,1.25f,.21f};
+    Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::KnifeInspect)]={0x52,0,mcov::keys::Mode::Toggle};
+    Check::KnifeStatus(o,mcov::knife::Status::Ready);
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        Check::Center(o); OpenModuleSettings(o,Page::Visuals,"visual_sections",26,27,size);
+        auto frame=[&]{ Draw(o,Page::Visuals,0,size); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+        Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("knife_controls"))!=nullptr,"CS Knife controls are missing");
+        SaveFrame(device,context,output/(size.x>500?"knife-settings-desktop.png":"knife-settings-small.png"));
+        ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"knife-status-desktop.png":"knife-status-small.png"));
+        auto* pane=ImGui::FindWindowByName("mcov module settings");
+        Require(pane->Scroll.y==0&&content->InnerClipRect.Min.y>=pane->Pos.y+42&&content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,
+            "Knife controls/status overlap the header or are unreachable");
+    }
+    Check::KnifeStatus(o,mcov::knife::Status::Failed); Draw(o,Page::Visuals,0,{480,360});
+    SaveFrame(device,context,output/"knife-error-small.png");
+    mcov::keys::Input input{}; Check::Input(o,input);
+    auto before=Check::KnifeRequest(o); input[0x52]=true; Check::Input(o,input);
+    auto pressed=Check::KnifeRequest(o);
+    Require(pressed.config.enabled&&pressed.inspectHeld&&pressed.inspectSerial==before.inspectSerial+1,"Inspect key did not reach the hand renderer request");
+    Check::Input(o,input); Require(Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Held Inspect generated duplicate press events");
+    Check::FocusInput(o,input,false); Require(!Check::KnifeRequest(o).inspectHeld,"Focus loss left Inspect held");
+    input={}; Check::Input(o,input); input[0x52]=true; Check::Input(o,input,true);
+    Require(!Check::KnifeRequest(o).inspectHeld&&Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Overlay menu activated Inspect");
+    Check::PrefPath(o,output/"knife-preferences.ini"); Check::Save(o); c={}; Check::Load(o);
+    Require(c.enabled&&c.skin==2&&c.speed==1.5f&&c.size==1.25f&&c.trailSeconds==.21f,"Knife preferences lost settings");
+    Check::Panic(o); Require(!c.enabled&&!Check::KnifeRequest(o).config.enabled,"Panic left knife replacement active");
+}
 void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     using Check=mcov::OverlayUiCheck;
     auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
@@ -1250,6 +1286,7 @@ int main(int argc,char** argv) {
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
         SmpUiChecks(device.Get(),context.Get(),output);
+        KnifeUiChecks(device.Get(),context.Get(),output);
         FreecamUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
