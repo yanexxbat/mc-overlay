@@ -206,7 +206,26 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
         args = re.findall(r'\[*(?:L[^;]+;|[BCDFIJSZ])', desc[1:desc.index(')')])
         locals_count = (0 if static else 1) + sum(2 if arg in ('D', 'J') else 1 for arg in args)
         nested = u2(0)
-        if special and special[0] == 'camera_branch':
+        exception_table = u2(0)
+        if special and special[0] == 'camera_guarded':
+            # A live local must survive every injected branch inside a try block.
+            # Real Camera.setup methods (and camera mods) keep such locals in handlers.
+            marker_slot=locals_count
+            code=b'\xbb'+u2(cp.cls('java/lang/Object'))+b'\x59\xb7'+u2(cp.ref(10,'java/lang/Object','<init>','()V'))+b'\x3a'+bytes([marker_slot])
+            start=len(code)
+            code+=b'\x19'+bytes([marker_slot])+b'\xb6'+u2(cp.ref(10,'java/lang/Object','hashCode','()I'))+b'\x57\xb1'
+            handler=len(code)
+            code+=b'\x3a'+bytes([marker_slot+1])+b'\x19'+bytes([marker_slot])+b'\xb6'+u2(cp.ref(10,'java/lang/Object','hashCode','()I'))+b'\x57\xb1'
+            def verification_type(t):
+                if t in ('Z','B','C','S','I'): return b'\x01'
+                if t in ('F','D','J'): return {'F':b'\x02','D':b'\x03','J':b'\x04'}[t]
+                return b'\x07'+u2(cp.cls(t[1:-1] if t.startswith('L') else t))
+            frame_locals=b'\x07'+u2(cp.cls(name))+b''.join(verification_type(t) for t in args)+b'\x07'+u2(cp.cls('java/lang/Object'))
+            stack_map=u2(1)+b'\xff'+u2(handler)+u2(len(args)+2)+frame_locals+u2(1)+b'\x07'+u2(cp.cls('java/lang/Throwable'))
+            nested=u2(1)+u2(cp.utf('StackMapTable'))+u4(len(stack_map))+stack_map
+            exception_table=u2(1)+u2(start)+u2(handler)+u2(handler)+u2(0)
+            locals_count+=2
+        elif special and special[0] == 'camera_branch':
             stack_map = u2(1) + b'\x05'  # same_frame at the null branch's offset 5
             nested = u2(1) + u2(cp.utf('StackMapTable')) + u4(len(stack_map)) + stack_map
         elif special and special[0] in ('world_states','optional_field'):
@@ -214,7 +233,7 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             stack_type='java/util/Map' if special[0]=='world_states' else special[3][1:-1]
             stack_map=u2(1)+bytes([64+offset])+b'\x07'+u2(cp.cls(stack_type))
             nested=u2(1)+u2(cp.utf('StackMapTable'))+u4(len(stack_map))+stack_map
-        attr = u2(12) + u2(locals_count) + u4(len(code)) + code + u2(0) + nested
+        attr = u2(12) + u2(locals_count) + u4(len(code)) + code + exception_table + nested
         compiled_methods.append(u2(9 if static else 1) + u2(cp.utf(method)) + u2(cp.utf(desc)) + u2(1) +
                                 u2(code_name) + u4(len(attr)) + attr)
     return (b'\xca\xfe\xba\xbe' + u2(0) + u2(61) + u2(len(cp.entries) + 1) + b''.join(cp.entries) +
@@ -322,6 +341,7 @@ def generate(profiles_path, output):
             cls(geometry['owners'][key])['specials'][tuple(member)] = ('camera_branch' if key == 'updateCamera' else 'nop',)
         if profile['version']=='26.2':
             cls(core['camera'])['specials'][tuple(geometry['members']['updateCamera'])]=('freecam_update',geometry['members']['freecamSetup'][0])
+        cls(core['camera'])['specials'][tuple(geometry['members']['freecamSetup'])]=('camera_guarded',)
         if 'getDelta' in geometry['members']:
             member = geometry['members']['getDelta']
             cls(core['client'])['specials'][tuple(member)] = ('new', geometry['classes']['deltaClass'])
