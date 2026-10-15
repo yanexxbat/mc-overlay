@@ -60,10 +60,11 @@ void Overlay::Panic() {
     for(int i=3;i<keys::kCount;++i) if(!keys::System(static_cast<keys::Action>(i))) SetModuleEnabled(static_cast<keys::Action>(i),false);
     visuals_.boxEsp=visuals_.skeleton=visuals_.tracers=visuals_.nameTags=visuals_.healthBars=visuals_.distanceText=visuals_.targetInfo=false;
     auraConfig_.enabled=targetCubeConfig_.enabled=localHatConfig_.enabled=false;
-    hud_.visible=false; rockstarPack_.ResetWorld(); worldVisuals_.Reset(); stashFinder_.Reset(); baseFinder_.Reset(); panicActive_=true;
+    hud_.visible=false; rockstarPack_.ResetWorld(); worldVisuals_.Reset(); stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset(); panicActive_=true;
     preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+300; PushScanRequest(); PushCombatRequest();
 }
 void Overlay::UpdateRockstar() {
+    if(!rockstarConfig_.Enabled(rockstar::Feature::ChestEsp)) storagePulse_.Reset();
     UpdateAntiVanish();
     const double now=double(GetTickCount64())/1000;
     for(int i=3;i<keys::kCount;++i) {
@@ -79,7 +80,7 @@ void Overlay::UpdateRockstar() {
     if(panicActive_) for(int i=3;i<keys::kCount;++i) if(ModuleEnabled(static_cast<keys::Action>(i))) { panicActive_=false; break; }
     if(panicActive_&&(visuals_.healthBars||visuals_.distanceText||visuals_.tracers||visuals_.targetInfo)) panicActive_=false;
     rockstarPack_.Input(keyInput_,IsForegroundWindowOwnedBy(target_.pid)&&!menuVisible_&&!hudEditing_&&captureAction_<0,now);
-    if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); stashFinder_.Reset(); baseFinder_.Reset(); return; }
+    if(!haveSnapshot_||!agentConnected_||!heartbeatClock_.Alive(GetTickCount64())) { rockstarPack_.ResetWorld(); stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset(); return; }
     // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
     const auto& s=lastSnapshot_;
     const int newStashes=stashFinder_.Update(s,smpConfig_.Detection());

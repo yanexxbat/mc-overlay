@@ -56,12 +56,14 @@ void Detection() {
 void Profiles() {
     using namespace client_configs;
     Snapshot s; s.smp.storage.colours[0]={.1f,.2f,.3f,.4f}; s.smp.storage.mask=1u<<kBlockEnderChest;
+    s.smp.storage.interval=2400; s.smp.storage.pulseDuration=4200; s.smp.storage.pulse=false;
     s.smp.stash.enabled=true; s.smp.stash.minContainers=16; s.smp.spawner.enabled=true;
     s.smp.base.enabled=true; s.smp.base.padding=6; s.smp.base.colour={.3f,.4f,.5f,.6f};
     s.binds[keys::Index(keys::Action::BaseEsp)]={0x42,0,keys::Mode::Toggle};
     s.binds[keys::Index(keys::Action::StashFinder)]={0x4A,keys::Ctrl,keys::Mode::Hold};
     std::string text; Require(Encode(s,text),"Could not encode SMP profile"); Snapshot result;
     Require(Decode(text,result)&&result.smp.storage.colours[0].w==.4f&&result.smp.storage.mask==(1u<<kBlockEnderChest)&&
+        result.smp.storage.interval==2400&&result.smp.storage.pulseDuration==4200&&!result.smp.storage.pulse&&
         result.smp.stash.enabled&&result.smp.stash.minContainers==16&&result.smp.spawner.enabled&&
         result.binds[keys::Index(keys::Action::StashFinder)].mode==keys::Mode::Hold&&result.smp.base.enabled&&result.smp.base.padding==6&&
         result.smp.base.colour.w==.6f&&result.binds[keys::Index(keys::Action::BaseEsp)].key==0x42,"SMP profile round-trip lost values");
@@ -76,6 +78,14 @@ void Profiles() {
     while(std::getline(source,line)) if(!line.starts_with("smp.base.")&&!line.starts_with(baseBind)) beforeBase<<line<<'\n';
     Require(Decode(beforeBase.str(),result)&&!result.smp.base.enabled&&!result.binds[keys::Index(keys::Action::BaseEsp)].key&&
         result.smp.storage.colours[0].w==.4f&&result.smp.stash.minContainers==16,"Pre-Base profile lost existing SMP values");
+    source.clear(); source.str(text); std::ostringstream beforePulse;
+    while(std::getline(source,line)) if(!line.starts_with("smp.storage.interval ")&&!line.starts_with("smp.storage.pulse ")&&
+        !line.starts_with("smp.storage.pulseDuration ")) beforePulse<<line<<'\n';
+    Require(Decode(beforePulse.str(),result)&&result.smp.storage.interval==1000&&result.smp.storage.pulse&&
+        result.smp.storage.pulseDuration==1500&&result.smp.storage.colours[0].w==.4f,"Legacy storage timing migration lost settings");
+    auto brokenPulse=text; const auto pulseField=brokenPulse.find("smp.storage.pulseDuration ");
+    brokenPulse.erase(pulseField,brokenPulse.find('\n',pulseField)-pulseField+1);
+    Require(!Decode(brokenPulse,result),"Partially damaged storage timing was accepted");
     auto brokenBase=text; const auto baseField=brokenBase.find("smp.base.padding "); brokenBase.erase(baseField,brokenBase.find('\n',baseField)-baseField+1);
     Require(!Decode(brokenBase,result),"Partial Base ESP profile was accepted");
     std::istringstream oldTextureInput(text); std::ostringstream oldTextures;
@@ -91,6 +101,63 @@ void Profiles() {
     Require(std::isfinite(config.storage.colours[0].x)&&config.stash.radius==48&&config.spawner.glow==.75f,"Invalid SMP settings survived clamping");
     config.stash.enabled=false; config.base.enabled=true;
     Require(config.Detection().enabled&&!config.stash.enabled,"Base ESP depends on enabled Stash Finder");
+}
+void StableStorage() {
+    BlockScanResults results; auto s=Scene(); Add(s,0,0,6); Add(s,1,0,6);
+    results.Begin(); results.Merge({s.blocks,s.blockCount},true);
+    results.Begin(); results.Merge({},false);
+    Require(results.Results().size()==2,"Beginning an empty rescan hid known containers");
+    auto next=Scene(); Add(next,0,0,6,kBlockBarrel); Add(next,2,0,6);
+    results.Merge({next.blocks,1},false);
+    Require(results.Results().size()==2&&results.Results()[0].kind==kBlockBarrel,"Incremental scan duplicated or failed to update a position");
+    results.Merge({next.blocks,next.blockCount},false);
+    Require(results.Results().size()==3,"Incremental scan hid old matches or delayed a new one");
+    results.Merge({next.blocks,next.blockCount},true);
+    Require(results.Results().size()==2&&results.Results()[1].x==2,"Successful sweep retained a removed container");
+    results.Begin(); results.Merge({},false);
+    Require(results.Results().size()==2,"Unfinished/failed empty sweep removed known matches");
+    results.Merge({},true); Require(results.Results().empty(),"Successful empty scan retained containers");
+    s=Scene(); for(unsigned i=0;i<kMaxBlocks;++i) Add(s,float(i+10),0,6);
+    results.Begin(); results.Merge({s.blocks,s.blockCount},true);
+    next=Scene(); Add(next,-10,0,6); results.Begin(); results.Merge({next.blocks,next.blockCount},false);
+    Require(results.Results().size()==kMaxBlocks,"Retained and partial results exceeded the pool");
+    results.Merge({next.blocks,next.blockCount},true);
+    Require(results.Results().size()==1&&results.Results()[0].x==-10,"Full retained pool blocked completed replacement");
+    results.Reset(); Require(results.Results().empty(),"World/filter reset kept stale block results");
+}
+void StorageAnimation() {
+    auto s=Scene(); Add(s,0,0,6); Add(s,1,0,6); Add(s,2,0,6);
+    smp::StorageSettings c; smp::StoragePulse pulse;
+    pulse.Update(s,c,true,32,0); pulse.Update(s,c,true,32,.03);
+    Require(pulse.Markers().size()==3&&pulse.Markers()[0].alpha>0&&pulse.Markers()[1].alpha==0,
+        "New containers did not appear progressively");
+    for(int i=1;i<=60;++i) pulse.Update(s,c,true,32,.03+i/60.);
+    Require(pulse.Markers()[0].alpha>.99f&&pulse.Markers()[2].alpha>.99f,"Storage fade never settled");
+    const auto first=pulse.Highlight(0,c,.2125),second=pulse.Highlight(1,c,.7125);
+    Require(first.strength>.99f&&pulse.Highlight(1,c,.2125).strength==0&&second.strength>.99f,
+        "Storage pulse did not move from one container to the next");
+    c.pulseDuration=3000;
+    Require(pulse.Highlight(1,c,1.425).strength>.99f,"Pulse cycle ignored configured speed");
+    c.pulse=false; Require(pulse.Highlight(0,c,1.425).strength==0,"Disabled pulse still animated"); c.pulse=true;
+    ++s.blockScanId; s.blockScanComplete=0; pulse.Update(s,c,true,32,1.1);
+    Require(pulse.Markers()[0].alpha>.99f,"An ordinary rescan restarted storage fades");
+    s.blockCount=2; s.blockScanComplete=1; pulse.Update(s,c,true,32,1.12);
+    Require(pulse.Markers().size()==3&&pulse.Markers()[2].alpha>0&&pulse.Markers()[2].alpha<1,
+        "Removed container popped out instead of fading");
+    for(int i=1;i<=60;++i) pulse.Update(s,c,true,32,1.12+i/60.);
+    Require(pulse.Markers().size()==2,"Removed container remained after fade");
+    CopyField(s.dimension,"nether"); pulse.Update(s,c,true,32,2.2,true);
+    Require(pulse.Markers().size()==2&&pulse.Markers()[0].alpha==1&&pulse.Highlight(0,c,2.3,true).strength==0,
+        "Reduced motion did not produce immediate steady frames");
+    CopyField(s.serverAddress,"other.example"); s.blockCount=0; pulse.Update(s,c,true,32,2.3);
+    Require(pulse.Markers().empty(),"Storage markers crossed servers");
+    s=Scene(); for(unsigned i=0;i<kMaxBlocks;++i) Add(s,float(i%32),float(i/32),6);
+    pulse.Update(s,c,true,128,2.4,true); Require(pulse.Markers().size()==kMaxBlocks,"Storage marker capacity was not usable");
+    ++s.blockScanId; for(unsigned i=0;i<kMaxBlocks;++i) s.blocks[i].z=8;
+    pulse.Update(s,c,true,128,2.5); Require(pulse.Markers().size()<=kMaxBlocks,"Storage history exceeded the bounded pool");
+    pulse.Update(s,c,false,128,2.6); Require(pulse.Markers().empty(),"Disabled storage retained animation state");
+    pulse.Update(s,c,true,128,2.7,true); s.blockScanId=1; s.blockCount=0;
+    pulse.Update(s,c,true,128,2.8); Require(pulse.Markers().empty(),"Agent restart retained old storage markers");
 }
 void GrowthDetection() {
     smp::BaseFinderSettings c; c.enabled=true; smp::BaseFinder finder; auto s=Scene(); s.blockScanMask=c.Mask();
@@ -170,6 +237,33 @@ void UnifiedChunks() {
     const auto nether=smp::PossibleChunkBounds(finder.Finds()[0],s);
     Require(nether.min.y==0&&nether.max.y==256,"Nether chunk column used Overworld height");
 }
+void StorageGeometry() {
+    auto s=Scene(); Add(s,2,0,6); smp::Config c; c.storage.mask=1u<<kBlockChest;
+    auto& draw=*ImGui::GetBackgroundDrawList(); const auto flags=draw.Flags;
+    draw.Flags&=~(ImDrawListFlags_AntiAliasedLines|ImDrawListFlags_AntiAliasedLinesUseTex);
+    CameraProjection p(s,1280,720); const int first=draw.VtxBuffer.Size;
+    std::vector<float> tags(first,.35f);
+    { depth::Scope scope(tags); smp::DrawBlocks(draw,s,p,c,true,32,1,0,{1280,720});
+      Require(depth::tags==&tags,"Storage renderer did not restore depth tagging"); }
+    Require(draw.VtxBuffer.Size-first==12*4,"Storage did not draw the twelve edges of a 3D cube");
+    const auto corner=[](int i)->WorldPoint { return {i&1?3.:2.,i&2?1.:0.,i&4?7.:6.}; };
+    int vertex=first;
+    for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) {
+        ScreenPoint a,b; Require(p.Segment(corner(i),corner(i|bit),a,b),"Storage geometry fixture was offscreen");
+        const auto& v=draw.VtxBuffer;
+        // AddLine aligns its endpoints to pixel centres (+0.5 px).
+        Require(std::hypot((v[vertex].pos.x+v[vertex+3].pos.x)*.5f-a.x-.5f,(v[vertex].pos.y+v[vertex+3].pos.y)*.5f-a.y-.5f)<.01f&&
+            std::hypot((v[vertex+1].pos.x+v[vertex+2].pos.x)*.5f-b.x-.5f,(v[vertex+1].pos.y+v[vertex+2].pos.y)*.5f-b.y-.5f)<.01f,
+            "Storage edge did not follow its projected world corners");
+        vertex+=4;
+    }
+    for(int i=first;i<draw.VtxBuffer.Size;++i) Require(tags[i]==0,"Storage frame became occluded by world depth");
+    s.camZ=6.5; s.camX=2.5; s.camY=.5; s.yawDeg=25;
+    smp::DrawBlocks(draw,s,CameraProjection(s,1280,720),c,true,32,1,1,{1280,720});
+    for(int i=first;i<draw.VtxBuffer.Size;++i) Require(std::isfinite(draw.VtxBuffer[i].pos.x)&&
+        std::isfinite(draw.VtxBuffer[i].pos.y),"Near-plane storage clipping emitted invalid geometry");
+    draw.Flags=flags;
+}
 void Rendering() {
     auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
     c.storage.mask=(1u<<kBlockChest)|(1u<<kBlockEnderChest); Add(s,-2,0,6); Add(s,2,0,6,kBlockEnderChest); Add(s,0,0,8,kBlockSpawner);
@@ -236,9 +330,9 @@ void Rendering() {
 }
 int main() {
     try {
-        Detection(); Profiles(); GrowthDetection(); GrowthProfiles(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+        Detection(); Profiles(); StableStorage(); StorageAnimation(); GrowthDetection(); GrowthProfiles(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.DisplaySize={1280,720}; io.DeltaTime=1.f/60; io.Fonts->AddFontDefault(); io.Fonts->Build();
-        ImGui::NewFrame(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
+        ImGui::NewFrame(); StorageGeometry(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
         std::cout<<"PASS SMP: block classification, completed scans, filters, world isolation, limits, profiles and per-type rendering\n"; return 0;
     } catch(const std::exception& error) { std::cerr<<"FAIL SMP: "<<error.what()<<'\n'; return 1; }
 }

@@ -374,6 +374,10 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":index==9?"base-esp-settings-":"chunkfinder-empty-";
             SaveFrame(device,context,output/(name+suffix));
             Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
+            if(index==4) {
+                ImGui::SetScrollY(content,0); frame(); frame();
+                SaveFrame(device,context,output/(std::string("storage-3d-settings-")+suffix));
+            }
             if(index==9&&size.x<500) {
                 ImGui::SetScrollY(content,0); frame(); frame();
                 auto* pane=ImGui::FindWindowByName("mcov module settings");
@@ -424,16 +428,46 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
         mcov::smp::DrawBases(*draw,*scene,projection,c.base,mcov::OverlayUiCheck::Stashes(overlay).Finds(),size);
         ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"base-esp-world-desktop.png":"base-esp-world-small.png"));
     }
+    auto storageScene=std::make_unique<mcov::WorldSnapshot>(); *storageScene=*scene; storageScene->blockCount=0;
+    storageScene->camX=5; storageScene->camY=68; storageScene->camZ=-6; storageScene->yawDeg=25; storageScene->pitchDeg=12;
+    storageScene->posX=5; storageScene->posY=64; storageScene->posZ=-6;
+    for(int i=0;i<6;++i) {
+        auto& b=storageScene->blocks[storageScene->blockCount++]; b={};
+        b.x=float(i%3*2-2); b.y=64; b.z=float(i/3*3+4);
+        b.kind=i==1?mcov::kBlockEnderChest:i==4?mcov::kBlockShulker:mcov::kBlockChest;
+    }
+    mcov::smp::Config storageConfig; mcov::smp::StoragePulse storagePulse;
+    storagePulse.Update(*storageScene,storageConfig.storage,true,48,0);
+    for(int i=1;i<=45;++i) storagePulse.Update(*storageScene,storageConfig.storage,true,48,i/60.);
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},size,IM_COL32(24,26,30,255));
+        draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: 3D Storage ESP with scan pulse");
+        const mcov::CameraProjection projection(*storageScene,size.x,size.y);
+        const int vertices=draw->VtxBuffer.Size;
+        mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,1,size,0,&storagePulse,.75);
+        Require(draw->VtxBuffer.Size>vertices,"Storage world fixture drew no 3D frames");
+        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"storage-3d-world-desktop.png":"storage-3d-world-small.png"));
+    }
     // Saved preferences use the same typed SMP schema as named profiles.
     c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
+    c.storage.interval=2600; c.storage.pulseDuration=4800; c.storage.pulse=false;
     c.base.padding=7; c.base.fillOpacity=.21f; c.base.colour={.6f,.5f,.4f,.3f};
     c.finder.minKelpHeight=24;
     mcov::OverlayUiCheck::PrefPath(overlay,output/"smp-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
     Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
+        c.storage.interval==2600&&c.storage.pulseDuration==4800&&!c.storage.pulse&&
         c.base.enabled&&c.base.padding==7&&c.base.fillOpacity==.21f&&c.base.colour.w==.3f&&c.finder.enabled&&c.finder.minKelpHeight==24,
         "Automatic preferences lost SMP colours/filters/settings");
     Require(!mcov::OverlayUiCheck::Chunk(overlay).chunks&&!mcov::OverlayUiCheck::Chunk(overlay).deepslate,
         "Automatic preferences lost Chunkfinder highlight/filter choices");
+    std::ifstream storagePrefs(output/"smp-preferences.ini"); std::ostringstream beforeStoragePulse; std::string storageLine;
+    while(std::getline(storagePrefs,storageLine)) if(!storageLine.starts_with("smp.storage.interval ")&&
+        !storageLine.starts_with("smp.storage.pulse ")&&!storageLine.starts_with("smp.storage.pulseDuration ")) beforeStoragePulse<<storageLine<<'\n';
+    storagePrefs.close(); { std::ofstream legacy(output/"smp-preferences.ini"); legacy<<beforeStoragePulse.str(); }
+    c={}; mcov::OverlayUiCheck::Load(overlay);
+    Require(c.storage.interval==1000&&c.storage.pulse&&c.storage.pulseDuration==1500&&c.storage.colours[2].w==.54f&&
+        c.stash.minContainers==21,"Legacy automatic preferences lost storage settings during timing migration");
     for(const auto action:{mcov::keys::Action::StashFinder,mcov::keys::Action::SpawnerEsp,mcov::keys::Action::BaseEsp}) mcov::OverlayUiCheck::SetModule(overlay,action,true);
     mcov::OverlayUiCheck::Panic(overlay);
     Require(!c.stash.enabled&&!c.spawner.enabled&&!c.base.enabled&&!c.finder.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty()&&

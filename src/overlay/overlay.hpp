@@ -294,6 +294,7 @@ private:
     base::Report baseReport_{};
     smp::StashFinder stashFinder_{};
     smp::BaseFinder baseFinder_{};
+    smp::StoragePulse storagePulse_{};
     items::MacroConfig crystalMacro_{},anchorMacro_{};
     items::Report itemReport_{};
 

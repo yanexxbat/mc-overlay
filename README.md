@@ -8,7 +8,7 @@ Dear ImGui and Direct3D 11.
 - Compact translucent menu and launcher, with a matching HUD.
 - Entity and block visuals, target effects, particles and waypoints.
 - Base ESP with Minecraft models and textures visible through walls (1.21.11).
-- Storage ESP with individual block colours, Stash Finder and Spawner ESP.
+- 3D Storage ESP with individual block colours, adjustable scan timing and sequential pulses, plus Stash Finder and Spawner ESP.
 - Chunkfinder marks possible bases from horizontal deepslate, tall kelp and large amethyst buds/clusters, with whole-chunk frames and individual block boxes.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
@@ -51,7 +51,10 @@ when replacing an already loaded agent. The current client uses IPC v28; restart
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
-or **Chunkfinder** to configure them. **Chunkfinder** combines deepslate and growth
+or **Chunkfinder** to configure them. Storage ESP uses world-aligned 3D frames;
+known containers stay visible throughout rescans. **Scan interval** sets the pause
+between sweeps (200–3000 ms); **Pulse cycle** sets the visual cycle (500–6000 ms).
+**Chunkfinder** combines deepslate and growth
 clues as **Possible Base**, with separate per-chunk minimums. Whole-chunk frames
 and individual block boxes are both enabled by default and independently adjustable.
 These clues can also occur naturally. **Base ESP → Display → Minecraft textures**
@@ -63,6 +66,15 @@ The optional **Area marker** mode keeps the coloured frame and fill.
 Scans use loaded client blocks within a
 4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
 stash counting, saved waypoints and scan limits.
+
+## Anti Vanish
+
+Open **Misc > Anti Vanish** for passive TAB-list and optional invisible-player
+hints on **1.21.11**. Uses a bounded sampler twice per second, with a confirmation
+delay, a result list and optional Notifications HUD alerts. Hints are not proof
+of vanished staff; fully hidden server data cannot be detected. Knife cosmetics
+have been removed. Restart Minecraft and mcov after updating.
+See [Anti Vanish](docs/anti-vanish.md).
 
 ## Freecam
 

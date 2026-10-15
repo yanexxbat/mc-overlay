@@ -146,9 +146,18 @@ inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
     std::istringstream in(out.str()); std::string line;
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
+inline void AddStorageTimingDefaults(std::map<std::string,std::string>& values) {
+    // Missing the complete group denotes a legacy file; partial damage fails.
+    if(!values.contains("smp.storage.interval")&&!values.contains("smp.storage.pulse")&&!values.contains("smp.storage.pulseDuration")) {
+        values.emplace("smp.storage.interval","1000"); values.emplace("smp.storage.pulse","1");
+        values.emplace("smp.storage.pulseDuration","1500");
+    }
+}
 inline void Smp(Archive& a,smp::Config& s) {
     a.Value("smp.storage.mask",s.storage.mask,0,smp::kStorageMask);
     a.Value("smp.storage.labels",s.storage.labels); a.Value("smp.storage.tracers",s.storage.tracers);
+    a.Value("smp.storage.interval",s.storage.interval,200,3000);
+    a.Value("smp.storage.pulse",s.storage.pulse); a.Value("smp.storage.pulseDuration",s.storage.pulseDuration,500,6000);
     for(std::size_t i=0;i<smp::kStorageKinds.size();++i)
         a.Color("smp.storage.colour."+std::to_string(smp::kStorageKinds[i]),s.storage.colours[i]);
     auto& stash=s.stash;
@@ -344,6 +353,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace(baseBind+"key","0"); values.emplace(baseBind+"modifiers","0"); values.emplace(baseBind+"mode","0");
     }
     AddBaseTextureDefaults(values);
+    AddStorageTimingDefaults(values);
     const auto finderBind="bind."+std::to_string(keys::Index(keys::Action::BaseFinder))+".";
     const bool hasFinder=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
         return entry.first.starts_with("smp.finder.")||entry.first.starts_with(finderBind);

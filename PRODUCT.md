@@ -24,7 +24,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 82 real sections remain reachable. Left-click or Space operates the real
+  All 83 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -67,7 +67,12 @@ camera/entity projection stability.
 - Preserve the clean rounded entity ESP, configurable Target Aura and Target
   Marker, soft particles/trails and the glowing friend/self hats.
 - SMP controls extend the existing **Blocks** category: Storage ESP selects
-  13 storage block types with independent RGBA colours, labels and tracers;
+  13 storage block types with independent RGBA colours, labels and tracers.
+  Clipped world-space cube edges replace flat Storage ESP rectangles. Known
+  matches persist during rescans; discoveries and removals fade progressively.
+  Scan pause (200–3000 ms) and sequential pulse cycle (500–6000 ms) persist;
+  Reduced motion shows steady frames. Both scan and presentation are bounded
+  to 1024 matches and preserve the scanner's 2 ms step budget.
   Stash Finder records container clusters by chunk; Spawner ESP has its own
   colour, labels and tracers. Right-click opens the same independent settings
   window. These controls preserve the incumbent compact visual system.
@@ -87,6 +92,11 @@ camera/entity projection stability.
   Session results retain reasons, coordinates, copy and waypoint actions.
   Legacy growth profiles and bindings remain compatible. Natural clues can
   produce markers, so detections are never confirmation.
+- Misc > Anti Vanish adapts the Anubis TAB/invisible-player hints on 1.21.11.
+  The client-tick sampler runs at 2 Hz with bounded identities/results, a trust
+  window and confirmation grace. It reports possible evidence, not confirmed
+  staff. Alerts reuse Notifications HUD and Name protect. No render geometry or
+  outgoing probes are added. Preferences/profiles retain choices and binding.
 - First-person knife cosmetics, inspect animations, blade trails and knife glow
   have been removed. No item-render hook or knife geometry ships. Old cosmetic
   profile fields are ignored without changing surviving bindings.

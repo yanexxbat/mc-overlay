@@ -23,6 +23,8 @@ void Label(ImDrawList& draw,ScreenRect rect,const char* text,ImU32 colour,ImVec2
 }
 void Config::Clamp() {
     storage.mask&=kStorageMask;
+    storage.interval=std::clamp(storage.interval,200,3000);
+    storage.pulseDuration=std::clamp(storage.pulseDuration,500,6000);
     for(auto& c:storage.colours) ClampColour(c);
     stash.radius=std::clamp(stash.radius,4,48); stash.interval=std::clamp(stash.interval,200,3000);
     stash.minContainers=std::clamp(stash.minContainers,2,128); stash.maxDraw=Finite(stash.maxDraw,8,512,128);
@@ -35,6 +37,54 @@ void Config::Clamp() {
     finder.radius=std::clamp(finder.radius,4,48); finder.interval=std::clamp(finder.interval,200,3000);
     finder.minKelpHeight=std::clamp(finder.minKelpHeight,6,64); finder.minKelpColumns=std::clamp(finder.minKelpColumns,1,64);
     finder.minAmethyst=std::clamp(finder.minAmethyst,1,64); finder.maxDraw=Finite(finder.maxDraw,8,512,192); ClampColour(finder.colour);
+}
+void StoragePulse::Reset() {
+    markers_.clear(); positions_.clear(); dimension_={}; server_={}; scan_=mask_=0;
+    previous_=epoch_=nextReveal_=0;
+}
+void StoragePulse::Update(const WorldSnapshot& s,const StorageSettings& c,bool enabled,float range,double now,bool reducedMotion) {
+    if(!enabled||!s.dimension[0]||!c.mask||!std::isfinite(now)||!std::isfinite(range)) { Reset(); return; }
+    if(std::strncmp(dimension_.data(),s.dimension,kNameLen)||std::strncmp(server_.data(),s.serverAddress,kAddrLen)||
+       mask_!=c.mask||(s.blockScanId&&s.blockScanId<scan_)||now<previous_) {
+        Reset(); std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
+        mask_=c.mask; epoch_=previous_=nextReveal_=now;
+    }
+    scan_=s.blockScanId;
+    const float dt=float(std::clamp(now-previous_,0.,.1)); previous_=now;
+    for(auto& marker:markers_) marker.present=false;
+    const auto count=std::min(s.blockCount,kMaxBlocks);
+    const double duration=std::clamp(c.pulseDuration,500,6000)/1000.;
+    const double spacing=std::min(.06,duration/std::max(1u,count));
+    nextReveal_=std::clamp(nextReveal_,now,now+duration);
+    for(const auto& b:std::span(s.blocks,count)) {
+        if(!StorageKind(b.kind)||!(c.mask&(1u<<b.kind))||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
+           std::abs(b.x)>3e7||std::abs(b.z)>3e7||std::abs(b.y)>4096||Distance({b.x+.5,b.y+.5,b.z+.5},s)>range) continue;
+        const auto key=BlockPosition::Of(b); auto it=positions_.find(key);
+        if(it==positions_.end()) {
+            if(markers_.size()>=kMaxBlocks) continue;
+            const auto index=markers_.size();
+            markers_.push_back({b,reducedMotion?1.f:0.f,nextReveal_,true});
+            positions_.emplace(key,index); nextReveal_=std::min(now+duration,nextReveal_+spacing);
+        } else { auto& marker=markers_[it->second]; marker.block=b; marker.present=true; }
+    }
+    for(auto& marker:markers_) {
+        const float target=marker.present&&(reducedMotion||now>=marker.revealAt)?1.f:0.f;
+        marker.alpha=reducedMotion?target:std::lerp(marker.alpha,target,1-std::exp(-dt/.09f));
+    }
+    const auto removed=std::erase_if(markers_,[](const StorageMarker& marker){return !marker.present&&marker.alpha<.005f;});
+    if(removed) {
+        positions_.clear();
+        for(std::size_t i=0;i<markers_.size();++i) positions_.emplace(BlockPosition::Of(markers_[i].block),i);
+    }
+}
+StorageHighlight StoragePulse::Highlight(std::size_t index,const StorageSettings& c,double now,bool reducedMotion) const {
+    if(!c.pulse||reducedMotion||index>=markers_.size()||!std::isfinite(now)) return {};
+    const double period=std::clamp(c.pulseDuration,500,6000)/1000.;
+    const double slot=period/markers_.size(),window=std::min(period,std::max(.3,slot*.85));
+    const double age=std::fmod(std::max(0.,now-epoch_)+period-index*slot,period);
+    if(age>=window) return {};
+    const float height=float(age/window),wave=std::sin(height*std::numbers::pi_v<float>);
+    return {wave*wave,height};
 }
 void BaseFinder::Update(const WorldSnapshot& s,const BaseFinderSettings& c) {
     if(!Matches(s)||mask_!=c.Mask()||height_!=c.minKelpHeight||columns_!=c.minKelpColumns||amethyst_!=c.minAmethyst||radius_!=c.radius||deepslate_!=c.minDeepslate) {
@@ -190,25 +240,60 @@ int StashFinder::Update(const WorldSnapshot& s,const StashSettings& c) {
     return added;
 }
 void DrawBlocks(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const Config& c,
-                bool storageEnabled,float range,float opacity,float glow,ImVec2 viewport,ImTextureID glowTexture) {
+                bool storageEnabled,float range,float opacity,float glow,ImVec2 viewport,ImTextureID glowTexture,
+                const StoragePulse* pulse,double now,bool reducedMotion) {
     if(!storageEnabled&&!c.spawner.enabled) return;
-    for(const auto& block:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) {
+    auto* savedTags=depth::tags;
+    struct Restore { std::vector<float>* previous; ~Restore() { depth::tags=previous; } } restore{savedTags};
+    depth::tags=nullptr; const int first=draw.VtxBuffer.Size;
+    const auto origin=ImGui::GetMainViewport()->Pos;
+    const auto render=[&](const BlockSnapshot& block,float alpha,StorageHighlight highlight) {
         const bool storage=storageEnabled&&StorageKind(block.kind)&&(c.storage.mask&(1u<<block.kind));
         const bool spawner=c.spawner.enabled&&block.kind==kBlockSpawner;
-        if(!storage&&!spawner) continue;
+        if(!storage&&!spawner) return;
         const WorldPoint centre{block.x+.5,block.y+.5,block.z+.5}; const double distance=Distance(centre,s);
-        if(!std::isfinite(distance)||distance>(storage?range:c.spawner.maxDraw)) continue;
-        ScreenRect rect; if(!p.Bounds({{block.x,block.y,block.z},{block.x+1.,block.y+1.,block.z+1.}},rect)) continue;
-        ImVec4 colour=storage?c.storage.Colour(block.kind):c.spawner.colour; if(storage) colour.w*=opacity;
-        if(colour.w<=0) continue;
+        if(!std::isfinite(distance)||distance>(storage?range:c.spawner.maxDraw)) return;
+        const WorldBounds bounds{{block.x,block.y,block.z},{block.x+1.,block.y+1.,block.z+1.}};
+        ImVec4 colour=storage?c.storage.Colour(block.kind):c.spawner.colour;
+        if(storage) colour.w*=opacity*alpha*(.72f+.28f*highlight.strength);
+        if(colour.w<=.001f) return;
         const ImU32 ink=ImGui::ColorConvertFloat4ToU32(colour);
-        soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,storage?glow:c.spawner.glow,glowTexture);
+        ScreenRect rect; const bool haveRect=p.Bounds(bounds,rect);
+        if(storage) {
+            const auto segment=[&](WorldPoint a,WorldPoint b,ImVec4 tint,float width) {
+                ScreenPoint from,to; if(!p.Segment(a,b,from,to)) return;
+                const ImVec2 start{from.x+origin.x,from.y+origin.y},end{to.x+origin.x,to.y+origin.y};
+                if(glow>0) {
+                    if(glowTexture) soft::Stroke(draw,start,end,width,tint,glow,glowTexture);
+                    else { auto halo=tint; halo.w*=.12f*glow; draw.AddLine(start,end,ImGui::ColorConvertFloat4ToU32(halo),width+4); }
+                }
+                draw.AddLine(start,end,ImGui::ColorConvertFloat4ToU32(tint),width);
+            };
+            const auto corner=[&](int i)->WorldPoint { return {i&1?bounds.max.x:bounds.min.x,
+                i&2?bounds.max.y:bounds.min.y,i&4?bounds.max.z:bounds.min.z}; };
+            for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit))
+                segment(corner(i),corner(i|bit),colour,1.2f+.5f*highlight.strength);
+            if(highlight.strength>.005f) {
+                auto band=soft::Mix(colour,{1,1,1,colour.w},.45f); band.w*=highlight.strength;
+                const double y=block.y+highlight.height;
+                const WorldPoint a{block.x,y,block.z},b{block.x+1.,y,block.z},d{block.x,y,block.z+1.},e{block.x+1.,y,block.z+1.};
+                segment(a,b,band,1.5f); segment(b,e,band,1.5f); segment(e,d,band,1.5f); segment(d,a,band,1.5f);
+            }
+        } else if(haveRect) soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,c.spawner.glow,glowTexture);
+        if(!haveRect) return;
         if(storage?c.storage.tracers:c.spawner.tracers)
             draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
         if(storage?c.storage.labels:c.spawner.labels) {
             char text[80]; std::snprintf(text,sizeof(text),"%s | %.0f m",BlockKindLabel(block.kind),distance); Label(draw,rect,text,ink,viewport);
         }
+    };
+    if(storageEnabled&&pulse) {
+        const auto markers=pulse->Markers();
+        for(std::size_t i=0;i<markers.size();++i) render(markers[i].block,markers[i].alpha,pulse->Highlight(i,c.storage,now,reducedMotion));
     }
+    for(const auto& b:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks)))
+        if(!pulse||!StorageKind(b.kind)) render(b,1,{});
+    if(savedTags) { savedTags->resize(draw.VtxBuffer.Size,0.f); std::fill(savedTags->begin()+first,savedTags->end(),0.f); }
 }
 void DrawStashes(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const StashSettings& c,std::span<const Stash> finds,ImVec2 viewport) {
     if(!c.enabled||c.colour.w<=0) return;

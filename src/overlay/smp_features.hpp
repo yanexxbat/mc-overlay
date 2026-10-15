@@ -2,6 +2,7 @@
 #include "esp_geometry.hpp"
 #include "soft_glow.hpp"
 #include "../common/base_render_state.hpp"
+#include "../common/block_scan_results.hpp"
 #include <algorithm>
 #include <array>
 #include <span>
@@ -16,6 +17,8 @@ inline bool StorageKind(std::uint8_t kind) { return kind<kBlockKindCount&&(kStor
 struct StorageSettings {
     std::uint32_t mask=kStorageMask;
     bool labels=false,tracers=false;
+    int interval=1000,pulseDuration=1500;
+    bool pulse=true;
     std::array<ImVec4,kStorageKinds.size()> colours={ImVec4{.92f,.68f,.28f,1},ImVec4{1,.35f,.25f,1},ImVec4{.25f,.9f,.75f,1},
         ImVec4{.78f,.5f,1,1},ImVec4{.76f,.55f,.3f,1},ImVec4{.65f,.7f,.8f,1},ImVec4{1,.58f,.3f,1},
         ImVec4{.8f,.8f,.85f,1},ImVec4{.8f,.55f,.4f,1},ImVec4{.55f,.7f,1,1},ImVec4{.45f,.85f,1,1},
@@ -66,6 +69,30 @@ struct Config {
     StashSettings Detection() const { auto c=stash; c.enabled=stash.enabled||base.enabled; return c; }
     void Clamp();
 };
+struct StorageMarker {
+    BlockSnapshot block{};
+    float alpha=0;
+    double revealAt=0;
+    bool present=false;
+};
+struct StorageHighlight { float strength=0,height=0; };
+// Bounded presentation history: progressive discovery, steady known boxes and
+// a short fade when a completed sweep no longer contains a container.
+class StoragePulse {
+    std::vector<StorageMarker> markers_;
+    std::unordered_map<BlockPosition,std::size_t,BlockPositionHash> positions_;
+    std::array<char,kNameLen> dimension_{};
+    std::array<char,kAddrLen> server_{};
+    std::uint64_t scan_=0;
+    std::uint32_t mask_=0;
+    double previous_=0,epoch_=0,nextReveal_=0;
+public:
+    StoragePulse() { markers_.reserve(kMaxBlocks); positions_.reserve(kMaxBlocks); }
+    void Reset();
+    void Update(const WorldSnapshot& snapshot,const StorageSettings& settings,bool enabled,float range,double now,bool reducedMotion=false);
+    std::span<const StorageMarker> Markers() const { return markers_; }
+    StorageHighlight Highlight(std::size_t index,const StorageSettings& settings,double now,bool reducedMotion=false) const;
+};
 struct PossibleBase {
     int chunkX=0,chunkZ=0,kelpColumns=0,tallestKelp=0,amethyst=0,deepslate=0;
     WorldPoint centre{};
@@ -114,7 +141,7 @@ private:
 };
 void DrawBlocks(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                 const Config& config,bool storageEnabled,float storageRange,float opacity,float glow,
-                ImVec2 viewport,ImTextureID glowTexture=0);
+                ImVec2 viewport,ImTextureID glowTexture=0,const StoragePulse* pulse=nullptr,double now=0,bool reducedMotion=false);
 void DrawStashes(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                  const StashSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
 void DrawBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,

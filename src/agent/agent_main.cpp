@@ -36,6 +36,7 @@
 #include "entity_identity_cache.hpp"
 #include "../common/equipment_icons.hpp"
 #include "../common/chunk_hints.hpp"
+#include "../common/block_scan_results.hpp"
 #include "combat_live.hpp"
 #include "item_assist_live.hpp"
 #include "depth_capture.hpp"
@@ -1417,8 +1418,7 @@ void SamplerThread() {
 
     // Block results persist between scans so the ESP does not blink at the
     // game frame cadence while the scanner runs at ~1 Hz.
-    static BlockSnapshot cachedBlocks[kMaxBlocks];
-    std::uint32_t        lastBlocks    = 0;
+    BlockScanResults blockResults;
     std::uint64_t        nextScanTick  = 0;
     jweak scanWorld=nullptr;
     bool                 syncAttempted = false;
@@ -1580,7 +1580,8 @@ void SamplerThread() {
                 SampleEntityDetails(env,bindings,client,player,snapshot,entityDetails,detailsEnabled);
 
                 // Resumierbarer Scan mit höchstens 2 ms Budget pro Sampler-Durchlauf.
-                // Welt-/Filterwechsel löschen alte Treffer; neue Treffer erscheinen sofort.
+                // Keep known matches throughout a sweep; only a successful
+                // completion removes old matches. World/filter changes reset it.
                 if(auto* block=g_channel.block()) {
                     const auto mask=block->scanMask.load(std::memory_order_acquire);
                     const int radius=static_cast<int>(std::clamp(block->scanRadius.load(std::memory_order_acquire),4u,48u));
@@ -1593,7 +1594,7 @@ void SamplerThread() {
                         scanWorld=env->NewWeakGlobalRef(level);
                     }
                     if(newWorld||mask!=scanner.mask||radius!=scanner.radius||!mask) {
-                        lastBlocks=0; scanner.running=false; scanner.accum.clear(); nextScanTick=0;
+                        blockResults.Reset(); scanner.running=false; scanner.accum.clear(); nextScanTick=0;
                         scanner.mask=mask; scanner.radius=radius;
                     }
                     ScanState state=ScanState::Idle;
@@ -1602,11 +1603,12 @@ void SamplerThread() {
                             (!(mask&(1u<<kBlockRotatedDeepslate))||EnsureChunkBindings(env,bindings));
                         if(!bindingsReady) state=ScanState::MissingBindings;
                         else {
-                            if(!scanner.running&&now>=nextScanTick) scanner.Begin(radius,mask,snapshot);
+                            if(!scanner.running&&now>=nextScanTick) {
+                                scanner.Begin(radius,mask,snapshot); blockResults.Begin();
+                            }
                             if(scanner.running) {
                                 const bool complete=scanner.Step(env,bindings,client,blockCache,2);
-                                lastBlocks=static_cast<std::uint32_t>(scanner.accum.size());
-                                if(lastBlocks) std::memcpy(cachedBlocks,scanner.accum.data(),sizeof(BlockSnapshot)*lastBlocks);
+                                blockResults.Merge(scanner.accum,complete&&scanner.successful);
                                 if(complete) nextScanTick=now+interval;
                             }
                             state=scanner.running?ScanState::Scanning:ScanState::Ready;
@@ -1616,20 +1618,21 @@ void SamplerThread() {
                     const int span=radius*2+1;
                     block->scanProgress.store(state==ScanState::Ready?100u:state==ScanState::Scanning?
                         static_cast<unsigned>(100ull*scanner.nextCell/(span*span*span)):0u,std::memory_order_release);
-                    snapshot.blockCount=lastBlocks;
+                    const auto results=blockResults.Results();
+                    snapshot.blockCount=static_cast<std::uint32_t>(results.size());
                     snapshot.blockScanId=scanner.id;
                     snapshot.blockScanMask=mask;
                     snapshot.blockScanX=scanner.baseX; snapshot.blockScanY=scanner.baseY; snapshot.blockScanZ=scanner.baseZ;
                     snapshot.blockScanRadius=radius;
                     snapshot.blockScanComplete=state==ScanState::Ready&&scanner.successful;
-                    snapshot.blockScanTruncated=lastBlocks>=kMaxBlocks;
-                    if(lastBlocks) std::memcpy(snapshot.blocks,cachedBlocks,sizeof(BlockSnapshot)*lastBlocks);
+                    snapshot.blockScanTruncated=scanner.accum.size()>=kMaxBlocks;
+                    std::copy(results.begin(),results.end(),snapshot.blocks);
                 }
 
                 SetStatus(AgentStatus::Running);
             } else {
                 // In a menu / not in a world yet.
-                scanner.running=false; scanner.accum.clear(); lastBlocks=0; nextScanTick=0;
+                scanner.running=false; scanner.accum.clear(); blockResults.Reset(); nextScanTick=0;
                 if(scanWorld) { env->DeleteWeakGlobalRef(scanWorld); scanWorld=nullptr; }
                 if(auto* block=g_channel.block()) { block->scanState.store(0); block->scanProgress.store(0); }
                 lastCaptureTick = 0;

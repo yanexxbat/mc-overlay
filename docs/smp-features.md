@@ -7,7 +7,7 @@ Fenster. In kleinen Viewports scrollt dieses Fenster bis zu allen Controls und
 Aktionen; **X** führt zurück zum Raster. **Strg-Klick** auf einen Slider erlaubt
 die direkte Zahleneingabe. [Menü und Keybinds](client-ui.md).
 
-Die Erweiterung verwendet **IPC v24**. Bereits laufendes Minecraft vollständig
+Der aktuelle Client verwendet **IPC v28**. Bereits laufendes Minecraft vollständig
 neu starten, bevor der aktualisierte Client erneut angehängt wird. Ein schon
 geladener Agent behält sonst das alte gemeinsame Datenlayout.
 
@@ -76,6 +76,35 @@ Linie vom unteren Bildschirmrand zum Block. **Scan radius** reicht von 4 bis
 48 Blöcken; **Opacity** multipliziert die Alpha-Komponente der jeweiligen Farbe,
 **Glow** verändert den Effekt. Ein Alpha-Wert von null macht diesen Typ unsichtbar.
 Ohne ausgewählten Typ erscheint ein Hinweis, einen Typ zu wählen.
+
+Storage ESP zeichnet räumliche Würfelrahmen mit zwölf projizierten Weltkanten.
+Auch an der Kamera werden Kanten an der Near Plane und am Bildschirmrand
+abgeschnitten. Die Rahmen bleiben durch Wände sichtbar. Wenn zugleich das
+allgemeine Block ESP läuft, überlässt es ausgewählte Storage-Typen diesem
+3D-Renderer, damit keine zusätzliche flache Box darüberliegt.
+
+| Einstellung | Standard | Bereich |
+|---|---:|---:|
+| Scan interval | 1000 ms | 200–3000 ms |
+| Scan pulse | an | an / aus |
+| Pulse cycle | 1500 ms | 500–6000 ms |
+
+**Scan interval** ist die Pause nach einem Scan, nicht dessen garantierte
+Gesamtdauer. Andere aktive Blockmodule können kürzere Pausen anfordern.
+Der Agent behält bekannte Treffer während des nächsten Scans und ergänzt neue
+Fundstellen schrittweise. Erst ein erfolgreich abgeschlossener Scan ersetzt
+die alte Liste; verschwundene Container blenden im Overlay weich aus.
+Ein fehlgeschlagener Teilscan löscht die bekannte Liste nicht.
+
+Neue Container blenden versetzt ein. **Scan pulse** lässt einen helleren Streifen
+nacheinander über ihre 3D-Rahmen wandern, während alle bekannten Rahmen sichtbar
+bleiben. **Pulse cycle** steuert diesen visuellen Umlauf unabhängig von der
+eigentlichen Blocksuche. Bei vielen Containern überlappen benachbarte Pulse.
+**Settings → Overlay → Reduced motion** zeigt sofort ruhige Rahmen ohne Puls
+oder Ein-/Ausblendung. Farben, Deckkraft, Glow, Labels und Tracer gelten weiter.
+Beide Zeitwerte und der Puls-Schalter speichern automatisch und in benannten
+Configs. Ältere vollständige Dateien erhalten die genannten Defaults, ohne
+ihre Farben und Filter zu verlieren.
 
 ## Stash Finder
 
@@ -312,3 +341,21 @@ Die sechs nativen synthetischen Screenshots und die unabhängige UI-Prüfung
 mit Ergebnis **ship** liegen unter `.impeccable/review/base-finder/`.
 Sie zeigen Einstellungen, leere Liste und Entdeckungen bei 1280 × 800 und
 480 × 360. Ein Live-Minecraft-Test wurde nicht durchgeführt.
+
+## Storage ESP 3D: Prüfung
+
+Für die 3D-/Puls-Erweiterung bestanden alle **30** aktuellen Prüfungen: 29 in
+der Sandbox (93,40 s), der isolierte `frame_attach` separat außerhalb (0,45 s).
+`smp_features` prüft die exakten zwölf projizierten Würfelkanten einschließlich
+Near-Plane-Fällen, stabile Treffer während Teilscans, erfolgreiche leere Scans,
+Positionswechsel, Kapazitätsgrenzen, versetztes Einblenden, Puls-Geschwindigkeit,
+weiches Entfernen, reduzierte Bewegung und Session-Trennung. Benannte Configs
+und automatische Preferences prüfen neue Werte und die Migration alter Dateien.
+Der gemeinsame Scanner und die Cluster-Detektoren behalten ihre bisherigen
+Grenzen und die Auswertung ausschließlich abgeschlossener erfolgreicher Scans.
+
+Die vier nativen Settings-/Weltbelege mit synthetischen Snapshots liegen unter
+[Storage-3D-Prüfung](../.impeccable/review/storage-3d/review.md). Sie zeigen den
+tatsächlichen Renderer bei 1280 × 800 und 480 × 360. Client-EXE und Share-ZIP
+wurden neu gebaut und mit `portable_client` geprüft. Es gab keinen Test im
+laufenden Minecraft und keine Messung von FPS oder RAM-Verbrauch.

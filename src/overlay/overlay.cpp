@@ -706,8 +706,11 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     DrawBlockEsp(snapshot, projection, width, height);
     DrawChunkFinder(snapshot,projection);
     const auto& storage=rockstarConfig_[rockstar::Feature::ChestEsp];
-    smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storage.enabled,storage.range,storage.opacity,storage.glow,
-        {width,height},auraBlend_.GlowTexture());
+    const double storageNow=double(GetTickCount64())/1000.;
+    const bool storageActive=storage.enabled&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64());
+    storagePulse_.Update(snapshot,smpConfig_.storage,storageActive,storage.range,storageNow,menu_.reduceMotion);
+    smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storageActive,storage.range,storage.opacity,storage.glow,
+        {width,height},auraBlend_.GlowTexture(),&storagePulse_,storageNow,menu_.reduceMotion);
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
     if(stashFinder_.Matches(snapshot)) smp::DrawBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.base,stashFinder_.Finds(),{width,height});
     if (!entitiesEnabled) return;
@@ -1091,7 +1094,8 @@ void Overlay::PushScanRequest() {
     const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
         storage?int(rockstarConfig_[rockstar::Feature::ChestEsp].range):4,beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
         stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4,finder.enabled?finder.radius:4});
-    const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,storage||beacon?1000:3000,
+    const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,
+        storage?smpConfig_.storage.interval:3000,beacon?1000:3000,
         stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000,finder.enabled?finder.interval:3000});
     block->scanMask.store(mask, std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
@@ -1178,6 +1182,10 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
     for (std::uint32_t i = 0; i < snapshot.blockCount && i < kMaxBlocks; ++i) {
         const BlockSnapshot& b = snapshot.blocks[i];
         if(b.kind>=kBlockKindCount||!(blocks_.mask&(1u<<b.kind))) continue;
+        // Storage ESP owns its selected container geometry when both modules
+        // are on, avoiding a second, flat rectangle over the same 3D frame.
+        if(rockstarConfig_.Enabled(rockstar::Feature::ChestEsp)&&smp::StorageKind(b.kind)&&
+           (smpConfig_.storage.mask&(1u<<b.kind))) continue;
 
         const double dx = (b.x + 0.5) - snapshot.camX;
         const double dy = (b.y + 0.5) - snapshot.camY;
@@ -1314,7 +1322,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset();
             for(int i=0;i<=rockstar::Index(rockstar::Feature::Arrows);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
-        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset(); baseFinder_.Reset();
+        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset();
             for(int i=rockstar::Index(rockstar::Feature::ChestEsp);i<=rockstar::Index(rockstar::Feature::ChunkBorders);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
         case panel::Page::Hud: hud_=HudSettings{};
             rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;

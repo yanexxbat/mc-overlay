@@ -48,6 +48,9 @@ void Overlay::DrawSmpSettings(int section) {
         if(panel::BeginRows("storage_settings")) {
             dirty|=panel::CheckRow("Enable Storage ESP",&appearance.enabled); DrawBind(keys::Action::ChestEsp,true);
             dirty|=panel::SliderRow("Scan radius",&appearance.range,4,48,"%.0f blocks");
+            dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
+            dirty|=panel::CheckRow("Scan pulse",&c.pulse);
+            if(c.pulse) dirty|=panel::SliderIntRow("Pulse cycle",&c.pulseDuration,500,6000,"%d ms");
             dirty|=panel::CheckRow("Block names and distance",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
             dirty|=panel::SliderRow("Opacity",&appearance.opacity,0,1,"%.2f"); dirty|=panel::SliderRow("Glow",&appearance.glow,0,2,"%.2f");
             ImGui::EndTable();
@@ -55,6 +58,8 @@ void Overlay::DrawSmpSettings(int section) {
         panel::Section("Block types and colours"); dirty|=Types(c.mask,&c.colours);
         if(ImGui::Button("Reset storage colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
         if(!c.mask) ImGui::TextWrapped("Select at least one block type to show Storage ESP.");
+        ImGui::TextWrapped("3D frames stay visible during each scan. New containers appear in sequence; the pulse passes from one container to the next.");
+        ImGui::TextWrapped("Scan interval sets the pause after a sweep. Other active block scanners can request faster sweeps. Pulse cycle controls the visual speed; Reduce motion shows steady frames.");
         ImGui::TextWrapped("Each type uses its own colour. Only blocks available in the client world can be found.");
     } else if(section==1) {
         auto& c=smpConfig_.stash;

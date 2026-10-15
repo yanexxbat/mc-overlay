@@ -57,7 +57,7 @@ void Overlay::ApplyConfig(const client_configs::Snapshot& c) {
     keyEngine_={}; captureAction_=-1; captureArmed_=false; captureModifier_=0;
     nextClickTick_=0; panicActive_=false; moduleObservationReady_=false;
     worldVisuals_.Reset(); auraRenderer_.Reset(); targetCube_.Reset();
-    rockstarPack_.ResetWorld(); stashFinder_.Reset(); baseFinder_.Reset();
+    rockstarPack_.ResetWorld(); stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset();
     if(hwnd_) { ApplyCaptureAffinity(); ApplyExtendedStyles(!menuVisible_&&!hudEditing_&&settings_.clickThroughWhenIdle); }
     PushScanRequest(); PushCombatRequest();
 }

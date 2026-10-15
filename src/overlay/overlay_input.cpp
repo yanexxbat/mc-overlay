@@ -302,6 +302,7 @@ void Overlay::LoadPreferences() {
     if(!smpValues.empty()) {
         client_configs::AddBaseDefaults(smpValues);
         client_configs::AddFinderDefaults(smpValues);
+        client_configs::AddStorageTimingDefaults(smpValues);
         const bool hasChunks=std::any_of(smpValues.begin(),smpValues.end(),[](const auto& entry){return entry.first.starts_with("chunks.");});
         if(hasChunks) client_configs::AddChunkHighlightDefaults(smpValues);
         smp::Config candidate; ChunkFinderSettings chunks;
