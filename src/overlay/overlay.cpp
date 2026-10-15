@@ -1123,11 +1123,14 @@ void Overlay::PushCombatRequest() {
     request.sentAtMs=::GetTickCount64(); request.revision=version.revision;
     request.config=version.values; request.relations=combatMenu_.Relations().Read();
     request.spin=combat_.spin;
+    request.freecam=combat_.freecam;
+    const auto held=[](int key) { return (GetAsyncKeyState(key)&0x8000)!=0; };
+    request.freecamInput={float(held('W')-held('S')),float(held('D')-held('A')),float(held(VK_SPACE)-held(VK_SHIFT)),held(VK_CONTROL)};
     request.verticalFov=haveSnapshot_ && lastSnapshot_.fovDeg>1 ? lastSnapshot_.fovDeg : 70;
     request.viewportHeight=std::max(1.f,ImGui::GetIO().DisplaySize.y);
     request.inputAllowed=!menuVisible_&&!hudEditing_ && IsForegroundWindowOwnedBy(target_.pid);
     block->combatRequest.Publish(request);
-    block->itemRequest.Publish(BuildItemRequest(request.sentAtMs,request.inputAllowed,request.config.enabled));
+    block->itemRequest.Publish(BuildItemRequest(request.sentAtMs,request.inputAllowed&&!request.freecam.enabled,request.config.enabled||request.freecam.enabled));
     items::Report items;
     if(block->itemReport.Read(items)) itemReport_=items;
     if(!itemReport_.sampledAtMs||request.sentAtMs<itemReport_.sampledAtMs||request.sentAtMs-itemReport_.sampledAtMs>1000)
@@ -1315,6 +1318,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;
         case panel::Page::Stats: break;
         case panel::Page::Misc:
+            combat_.freecam={};
             for(const auto f:{rockstar::Feature::MiddleFriend,rockstar::Feature::DeathCoordinates,rockstar::Feature::DetectPlayer,rockstar::Feature::Waypoints,rockstar::Feature::NameProtect,rockstar::Feature::ModuleSounds,rockstar::Feature::Notifications}) rockstarConfig_[f]=defaults[f];
             break;
         case panel::Page::Settings:

@@ -1,6 +1,7 @@
 #pragma once
 #include "../combat/target_selector.hpp"
 #include "../combat/spinbot.hpp"
+#include "freecam.hpp"
 #include <atomic>
 #include <cstring>
 #include <type_traits>
@@ -51,6 +52,8 @@ struct CombatRequest {
     std::uint64_t sentAtMs{}, revision{};
     combat::Config config{};
     combat::SpinConfig spin{};
+    freecam::Config freecam{};
+    freecam::Input freecamInput{};
     combat::Relations relations{};
     double verticalFov{70}, viewportHeight{1080};
     bool inputAllowed{};
@@ -60,6 +63,7 @@ struct CombatReport {
     CombatBridgeStatus status{};
     combat::DebugSnapshot debug{};
     combat::SpinStatus spinStatus{};
+    freecam::Status freecamStatus{};
 };
 inline bool CombatLeaseValid(const CombatRequest& r,std::uint64_t now) {
     return r.sentAtMs && r.sentAtMs<=now && now-r.sentAtMs<=kCombatLeaseMs && r.inputAllowed;

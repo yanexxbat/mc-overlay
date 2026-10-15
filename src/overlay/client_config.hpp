@@ -174,6 +174,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     COLOR(visuals,tracerColor); COLOR(visuals,tracerEndColor); COLOR(visuals,targetColor);
     FIELD(combat,triggerbot); FIELD(combat,aimLock); FIELD(combat,aimKey,1,254);
     FIELD(combat,spin.enabled); FIELD(combat,spin.speed,30,1800); FIELD(combat,spin.direction,0,2);
+    FIELD(combat,freecam.enabled); FIELD(combat,freecam.speed,1,40); FIELD(combat,freecam.boost,1,10);
     FIELD(combat,spin.reverseSeconds,.5,10); FIELD(combat,spin.pitchMode,0,3);
     FIELD(combat,spin.pitchAmplitude,0,80); FIELD(combat,spin.pitchFrequency,.1,3);
     FIELD(combat,aimFov,2,90); FIELD(combat,aimRange,1,8); FIELD(combat,aimGain,.02,1);
@@ -333,6 +334,14 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
     if(!hasFinder) {
         AddFinderDefaults(values);
         values.emplace(finderBind+"key","0"); values.emplace(finderBind+"modifiers","0"); values.emplace(finderBind+"mode","0");
+    }
+    const auto freecamBind="bind."+std::to_string(keys::Index(keys::Action::Freecam))+".";
+    const bool hasFreecam=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("combat.freecam.")||entry.first.starts_with(freecamBind);
+    });
+    if(!hasFreecam) {
+        values.emplace("combat.freecam.enabled","0"); values.emplace("combat.freecam.speed","8"); values.emplace("combat.freecam.boost","3");
+        values.emplace(freecamBind+"key","0"); values.emplace(freecamBind+"modifiers","0"); values.emplace(freecamBind+"mode","0");
     }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);

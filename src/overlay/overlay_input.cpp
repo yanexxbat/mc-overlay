@@ -37,6 +37,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::KillAura:return combatMenu_.Store().Read().values.enabled;
         case keys::Action::AimAssist:return combat_.aimLock;
         case keys::Action::Spinbot:return combat_.spin.enabled;
+        case keys::Action::Freecam:return combat_.freecam.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
@@ -74,6 +75,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::KillAura: { auto c=combatMenu_.Store().Read().values; c.enabled=value; combatMenu_.Store().Publish(c); break; }
         case keys::Action::AimAssist:combat_.aimLock=value;break;
         case keys::Action::Spinbot:combat_.spin.enabled=value;break;
+        case keys::Action::Freecam:combat_.freecam.enabled=value;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
@@ -214,6 +216,7 @@ void Overlay::SavePreferences() {
       if(!out) { preferenceStatus_="Could not save client-settings.ini."; preferencesDirty_=false; return; }
       out<<"mcov-client 1\n"<<std::setprecision(9);
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
+      out<<"freecam "<<combat_.freecam.speed<<' '<<combat_.freecam.boost<<'\n';
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
@@ -251,6 +254,9 @@ void Overlay::LoadPreferences() {
         } else if(tag.starts_with("smp.")) {
             const auto split=line.find(' ');
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
+        } else if(tag=="freecam") {
+            freecam::Config c;
+            if(row>>c.speed>>c.boost&&freecam::Valid(c)) { combat_.freecam.speed=c.speed; combat_.freecam.boost=c.boost; }
         } else if(tag=="macro") {
             int i; items::MacroConfig c;
             if(row>>i>>c.restoreSlot>>c.intervalMs>>c.confirmationMs>>c.separateDelays>>c.requireTotem>>c.strictConfirmation>>c.chargeWithOffhandFuel

@@ -169,11 +169,26 @@ void Overlay::DrawRockstarSettings(Feature feature) {
     ImGui::PopID();
 }
 void Overlay::DrawMiscTab() {
-    constexpr const char* labels[]={"Middle click friend","Death coordinates","Detect players","Waypoints","Name protect","Module sounds","Notifications","Panic"};
+    constexpr const char* labels[]={"Middle click friend","Death coordinates","Detect players","Waypoints","Name protect","Module sounds","Notifications","Panic","Freecam"};
     constexpr Feature modules[]={Feature::MiddleFriend,Feature::DeathCoordinates,Feature::DetectPlayer,Feature::Waypoints,Feature::NameProtect,Feature::ModuleSounds,Feature::Notifications};
     miscSection_=panel::SubTabs("misc_sections",labels,IM_ARRAYSIZE(labels),miscSection_);
     if(miscSection_<7) DrawRockstarSettings(modules[miscSection_]);
-    else {
+    else if(miscSection_==8) {
+        auto& c=combat_.freecam;
+        bool changed=false;
+        if(panel::BeginRows("freecam_controls")) {
+            changed|=panel::CheckRow("Enable Freecam",&c.enabled); DrawBind(keys::Action::Freecam,true);
+            changed|=panel::SliderRow("Flight speed",&c.speed,1,40,"%.1f m/s");
+            changed|=panel::SliderRow("Boost multiplier",&c.boost,1,10,"%.1fx");
+            const auto now=GetTickCount64();
+            const bool fresh=agentConnected_&&combatReport_.sampledAtMs&&now>=combatReport_.sampledAtMs&&now-combatReport_.sampledAtMs<1000;
+            panel::ValueRow("Status",fresh?freecam::Text(combatReport_.freecamStatus):"Connect with the injector");
+            ImGui::EndTable();
+        }
+        if(changed) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
+        ImGui::TextWrapped("Close the menu to fly. WASD moves the camera, mouse looks around, Space rises, Shift descends and Ctrl boosts. Your player stays in place; attacks, item use and combat assists pause.");
+        ImGui::TextWrapped("Disable Freecam to return to your player. Menus, focus loss and world changes release the camera. Only loaded chunks are visible. Set Toggle or Hold under Settings / Keybinds.");
+    } else {
         panel::Section("Disable all modules"); ImGui::TextUnformatted("Panic key"); ImGui::SameLine(); DrawBind(keys::Action::Panic);
         if(ImGui::Button("Disable all modules now")) Panic();
         ImGui::TextWrapped("Stops combat and macros, clears transient effects and hides ESP/HUD. Friends and saved waypoints are retained. Enable a module to resume.");
