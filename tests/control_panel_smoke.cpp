@@ -99,6 +99,8 @@ struct OverlayUiCheck {
     static void PrefPath(Overlay& o,const std::filesystem::path& path) { o.preferencesPath_=path; }
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
+    static antivanish::Config& AntiVanish(Overlay& o){return o.antiVanishConfig_;}
+    static antivanish::Report& AntiVanishReport(Overlay& o){return o.antiVanishReport_;}
     static freecam::Config& Freecam(Overlay& o) { return o.combat_.freecam; }
     static void FocusInput(Overlay& o,const keys::Input& input,bool focused) { o.ProcessKeyInput(input,focused); }
     static void FreecamStatus(Overlay& o,freecam::Status status) { o.combatReport_.freecamStatus=status; o.combatReport_.sampledAtMs=GetTickCount64(); }
@@ -1108,6 +1110,8 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     expected.hud.layout[4]={{.7f,.8f},1.4f,true}; expected.hud.extras[2]=true;
     expected.overlay.fovTrim=9; expected.overlay.vsync=false; expected.overlay.focusMode=mcov::FocusMode::UnlockForeground;
     expected.reducedMotion=true;
+    expected.antiVanish={true,false,true,96};
+    expected.binds[mcov::keys::Index(mcov::keys::Action::AntiVanish)]={0x56,mcov::keys::Alt,mcov::keys::Mode::Toggle};
     expected.binds[mcov::keys::Index(mcov::keys::Action::BoxEsp)]={0x42,mcov::keys::Ctrl,mcov::keys::Mode::Hold};
     expected.extra[mcov::rockstar::Feature::Wings].enabled=true; expected.extra[mcov::rockstar::Feature::Wings].size=1.8f;
     expected.relations[0]={{0xf123456789abcdef,0xedcba98765432101},mcov::combat::Relation::Friend,true};
@@ -1127,6 +1131,11 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     const int retired=mcov::keys::Index(mcov::keys::Action::Freecam)+1;
     auto legacy=saved+"knife.enabled 1\nknife.glow 1\n";
     for(int id:{retired,retired+1}) legacy+="bind."+std::to_string(id)+".key 82\nbind."+std::to_string(id)+".modifiers 0\nbind."+std::to_string(id)+".mode 0\n";
+    std::istringstream olderIn(saved);std::ostringstream older;std::string olderLine;
+    const auto avBind="bind."+std::to_string(mcov::keys::Index(mcov::keys::Action::AntiVanish))+".";
+    while(std::getline(olderIn,olderLine))if(!olderLine.starts_with("antivanish.")&&!olderLine.starts_with(avBind))older<<olderLine<<'\n';
+    Snapshot preAnti;Require(Decode(older.str(),preAnti)&&!preAnti.antiVanish.enabled&&!preAnti.binds[mcov::keys::Index(mcov::keys::Action::AntiVanish)].key,"Old profiles did not receive safe Anti Vanish defaults");
+    Require(!Decode(older.str()+"antivanish.enabled 1\n",preAnti),"Partial Anti Vanish settings accepted");
     Snapshot migratedCosmetics;std::string cleaned;
     Require(Decode(legacy,migratedCosmetics)&&Encode(migratedCosmetics,cleaned)&&cleaned==saved,"Removed cosmetics damaged surviving profile settings/bindings");
     std::string reencoded; Require(Encode(decoded,reencoded)&&reencoded==saved,"Config schema did not round-trip every field");
@@ -1190,6 +1199,18 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
         Require(item.path().filename().string().find(".tmp-")==std::string::npos,"Successful/failed writes left temporary config files");
     Check::PrefPath(overlay,{});
 }
+void AntiVanishUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using Check=mcov::OverlayUiCheck;auto storage=std::make_unique<mcov::Overlay>();auto& o=*storage;Check::Seed(o);
+    auto& c=Check::AntiVanish(o);c={true,true,false,64};auto& report=Check::AntiVanishReport(o);report.sampledAtMs=GetTickCount64();report.status=mcov::antivanish::Status::Active;report.count=1;report.rows[0].id={1,2};std::snprintf(report.rows[0].name,32,"ExamplePlayer");report.rows[0].evidence=3;
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}){
+        Check::Center(o);OpenModuleSettings(o,Page::Misc,"misc_sections",9,10,size);
+        auto frame=[&]{report.sampledAtMs=GetTickCount64();Draw(o,Page::Misc,0,size);};auto* content=Child("/content_");ImGui::SetScrollY(content,0);frame();frame();
+        Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("antivanish_controls"))!=nullptr,"Anti Vanish controls missing");
+        SaveFrame(device,context,output/(size.x>500?"antivanish-desktop.png":"antivanish-small.png"));
+        ImGui::SetScrollY(content,content->ScrollMax.y);frame();frame();SaveFrame(device,context,output/(size.x>500?"antivanish-results-desktop.png":"antivanish-results-small.png"));
+    }
+    Check::PrefPath(o,output/"antivanish-preferences.ini");Check::Save(o);c={};Check::Load(o);Require(c.enabled&&c.notifications&&!c.invisible&&c.range==64,"Anti Vanish preferences lost settings");Check::Panic(o);Require(!c.enabled,"Panic left Anti Vanish enabled");
+}
 void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     using Check=mcov::OverlayUiCheck;
     auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
@@ -1198,7 +1219,7 @@ void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     Check::PrefPath(o,output/"freecam-preferences.ini"); Check::Save(o); camera={};
     Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::Freecam)]={}; Check::Load(o);
     Require(camera.speed==17&&camera.boost==4&&!camera.enabled&&Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::Freecam)].mode==mcov::keys::Mode::Hold,"Freecam preferences did not retain speed/binding with safe startup");
-    OpenModuleSettings(o,Page::Misc,"",8,9);
+    OpenModuleSettings(o,Page::Misc,"",8,10);
     auto* pane=Child("/content_");
     auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(pane->GetID("freecam_controls"));
     Require(table!=nullptr,"Freecam settings did not render real controls");
@@ -1248,7 +1269,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,26,10,20,3,5,9};
+        constexpr int sectionCounts[]={9,26,10,20,3,5,10};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1256,6 +1277,7 @@ int main(int argc,char** argv) {
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
         SmpUiChecks(device.Get(),context.Get(),output);
+        AntiVanishUiChecks(device.Get(),context.Get(),output);
         FreecamUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
@@ -1593,7 +1615,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 82 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 83 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

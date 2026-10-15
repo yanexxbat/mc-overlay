@@ -507,12 +507,17 @@ if(MCOV_BUILD_COMPAT_CHECKS)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/BaseTextureCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishProfiles.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishTracker.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishBridge.java
         DEPENDS tests/BaseTextureCheck.java tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java VERBATIM)
     add_custom_target(mcov_base_texture_check ALL DEPENDS ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class)
     add_test(NAME base_texture_models COMMAND ${Java_JAVA_EXECUTABLE} -cp ${MCOV_BASE_TEST_DIR} mcov.BaseTextureCheck)
+    set(MCOV_AV_TEST_DIR ${CMAKE_BINARY_DIR}/antivanish-test)
+    add_custom_command(OUTPUT ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_AV_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -cp ${MCOV_SIGNAL_CLASSES}
+            -d ${MCOV_AV_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishCheck.java
+        DEPENDS mcov_frame_agent tests/AntiVanishCheck.java tools/frame-sync/AntiVanishTracker.java VERBATIM)
+    add_custom_target(mcov_antivanish_check ALL DEPENDS ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class)
+    add_test(NAME anti_vanish COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_AV_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.AntiVanishCheck)
     add_executable(mcov_base_texture_probe tools/diagnostics/base_texture_probe.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_base_texture_probe PRIVATE src)
     target_link_libraries(mcov_base_texture_probe PRIVATE mcov_settings)
