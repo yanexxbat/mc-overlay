@@ -22,7 +22,7 @@ constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleto
     Module("Kill effect",Action::KillEffect),Module("BreadCrumbs",Action::BreadCrumbs),Module("China hat",Action::ChinaHat),{"Entity filters"},
     Module("Jump circles",Action::JumpCircles),Module("Wings",Action::Wings),Module("Halo / Nimb",Action::Halo),Module("Glow ESP",Action::GlowEsp),
     Module("Damage markers",Action::DamageMarkers),Module("Damage vignette",Action::DamageInfo),Module("Target circle",Action::TargetCircle),
-    Module("Crosshair",Action::Crosshair),Module("Offscreen arrows",Action::Arrows)};
+    Module("Crosshair",Action::Crosshair),Module("Offscreen arrows",Action::Arrows),Module("CS Knife",Action::CsKnife)};
 constexpr Definition blocks[]={Module("Block ESP",Action::BlockEsp),{"Block types"},Option("Tracers",Flag::BlockTracers),
     Module("Chunkfinder",Action::ChunkFinder),Module("Storage ESP",Action::ChestEsp),Module("Beacon radius",Action::BeaconRadius),Module("Chunk borders",Action::ChunkBorders),
     Module("Stash Finder",Action::StashFinder),Module("Spawner ESP",Action::SpawnerEsp),Module("Base ESP",Action::BaseEsp)};

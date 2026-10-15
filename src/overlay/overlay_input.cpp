@@ -38,6 +38,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::AimAssist:return combat_.aimLock;
         case keys::Action::Spinbot:return combat_.spin.enabled;
         case keys::Action::Freecam:return combat_.freecam.enabled;
+        case keys::Action::CsKnife:return knifeConfig_.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
@@ -76,6 +77,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::AimAssist:combat_.aimLock=value;break;
         case keys::Action::Spinbot:combat_.spin.enabled=value;break;
         case keys::Action::Freecam:combat_.freecam.enabled=value;break;
+        case keys::Action::CsKnife:knifeConfig_.enabled=value;preferencesDirty_=true;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
@@ -104,6 +106,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
 }
 void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
     const bool middlePressed=input[VK_MBUTTON]&&!keyInput_[VK_MBUTTON];
+    knifeInputAllowed_=focused&&!menuVisible_&&!hudEditing_&&captureAction_<0;
     keyInput_=input; const bool capturing=captureAction_>=0;
     if(capturing) {
         if(!focused||!menuVisible_) captureAction_=-1;
@@ -140,6 +143,7 @@ void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
             else if(a==keys::Action::Quit) running_=false;
             else if(a==keys::Action::HudEditor) SetHudEditing(!hudEditing_);
             else if(a==keys::Action::Panic) Panic();
+            else if(a==keys::Action::KnifeInspect&&knifeInputAllowed_&&knifeConfig_.enabled) ++knifeInspectSerial_;
         });
     if(middlePressed&&focused&&!capturing&&!menuVisible_&&!hudEditing_&&rockstarConfig_.Enabled(rockstar::Feature::MiddleFriend)&&haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64())) {
         for(const auto& entity:std::span(lastSnapshot_.entities,std::min(lastSnapshot_.entityCount,kMaxEntities))) {

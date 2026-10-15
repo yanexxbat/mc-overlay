@@ -305,7 +305,8 @@ if(Java_JAVAC_EXECUTABLE)
     set(MCOV_FRAME_CLASSES ${CMAKE_BINARY_DIR}/frame-sync-classes)
     set(MCOV_SIGNAL_CLASSES ${CMAKE_BINARY_DIR}/frame-signal-classes)
     set(MCOV_FRAME_SOURCES
-        tools/frame-sync/FrameSynchronizer.java tools/frame-sync/FrameTransformer.java tools/frame-sync/FrameProfiles.java tools/frame-sync/DepthProfiles.java)
+        tools/frame-sync/FrameSynchronizer.java tools/frame-sync/FrameTransformer.java tools/frame-sync/FrameProfiles.java tools/frame-sync/DepthProfiles.java
+        tools/frame-sync/KnifeTransformer.java)
     list(TRANSFORM MCOV_FRAME_SOURCES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
     add_custom_command(
         OUTPUT ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar
@@ -314,16 +315,20 @@ if(Java_JAVAC_EXECUTABLE)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/KnifeProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/KnifeGeometry.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/KnifeBridge.java
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
             --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
             --add-exports java.base/jdk.internal.org.objectweb.asm.commons=ALL-UNNAMED
-            -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
+            -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
         COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-signal.jar
             -C ${MCOV_SIGNAL_CLASSES} .
         COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
             --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
         DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
             tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java
+            tools/frame-sync/KnifeProfiles.java tools/frame-sync/KnifeGeometry.java tools/frame-sync/KnifeBridge.java
         COMMENT "Compiling Java frame synchronization helpers (Java 17 bytecode)"
         VERBATIM)
     add_custom_target(mcov_frame_agent ALL DEPENDS ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar)

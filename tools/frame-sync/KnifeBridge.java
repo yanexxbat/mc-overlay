@@ -22,18 +22,25 @@ public final class KnifeBridge {
     public static synchronized boolean configure(Class<?> client,String profile) {
         String[][] table=KnifeProfiles.get(profile); if(table==null) return false;
         int index=profile.startsWith("mojmap")?0:profile.startsWith("vanilla")?1:2;
-        if((FrameSignal.knifeProfiles&(1L<<index))==0) return false;
-        try { api=new Api(client.getClassLoader(),table); status=1; return true; }
+        try {
+            Class.forName(KnifeProfiles.row(table,"class.Hand")[1].replace('/','.'),false,client.getClassLoader());
+            if((FrameSignal.knifeProfiles&(1L<<index))==0) return false;
+            api=new Api(client.getClassLoader(),table); status=1; return true;
+        }
         catch(ReflectiveOperationException|LinkageError error) { api=null; status=0; return false; }
     }
-    public static void update(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,boolean held,long serial) {
+    public static void update(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,boolean held,long serial,long remainingMs) {
         boolean valid=skin>=0&&skin<=2&&Float.isFinite(speed)&&speed>=.5f&&speed<=2&&Float.isFinite(size)&&size>=.5f&&size<=2&&
             Float.isFinite(lifetime)&&lifetime>=.05f&&lifetime<=.35f;
-        settings=new Settings(enabled&&valid,skin,speed,size,lifetime,deploy,trails,held,serial,System.nanoTime()+LEASE);
-        if(api!=null) status=enabled&&valid?2:1;
+        settings=new Settings(enabled&&valid&&remainingMs>0,skin,speed,size,lifetime,deploy,trails,held,serial,
+            System.nanoTime()+Math.max(0,Math.min(500,remainingMs))*1_000_000L);
+        if(api!=null) {
+            if(!enabled||!valid||remainingMs<=0) status=1;
+            else if(status!=3&&status!=4) status=2;
+        }
     }
     public static int status() { return status; }
-    public static void disable() { update(false,0,1,1,.14f,false,false,false,0); }
+    public static void disable() { update(false,0,1,1,.14f,false,false,false,0,0); }
     private static void reset(long serial) {
         started=lastFrame=0; consumed=serial; motion=0; slot=model=-1; item=""; world=null; streaks.clear();
     }
@@ -130,7 +137,7 @@ public final class KnifeBridge {
         final Method matrixGet;
         final Object quads,identity;
         Api(ClassLoader loader,String[][] table) throws ReflectiveOperationException {
-            s=new BaseTextureBridge.Symbols(loader,table);
+            s=new BaseTextureBridge.Symbols(loader,Arrays.stream(table).filter(row->!row[0].equals("mainItem")).toArray(String[][]::new));
             matrixGet=Class.forName("org.joml.Matrix4f",false,loader).getMethod("get",float[].class);
             quads=s.call("quads",null); identity=s.type("Pose").getConstructor().newInstance();
         }
@@ -139,6 +146,7 @@ public final class KnifeBridge {
                 if(method.getDeclaringClass()==Object.class) return switch(method.getName()) {
                     case "hashCode"->System.identityHashCode(proxy); case "equals"->proxy==args[0]; default->"mcov knife geometry";
                 };
+                try {
                 if(args==null||args.length!=2) throw new IllegalStateException("Unexpected custom geometry callback");
                 float[] raw=new float[16]; matrixGet.invoke(s.call("matrix",args[0]),(Object)raw);
                 KnifeGeometry.Matrix transform=new KnifeGeometry.Matrix(raw);
@@ -146,6 +154,7 @@ public final class KnifeBridge {
                     float[] xyz=transform.point(mesh.xyz()[i*3],mesh.xyz()[i*3+1],mesh.xyz()[i*3+2]);
                     s.call("vertex",args[1],xyz[0],xyz[1],xyz[2]); s.call("colour",args[1],mesh.colours()[i]);
                 }
+                } catch(Throwable error) { status=4; }
                 return null;
             });
         }
