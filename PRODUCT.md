@@ -24,7 +24,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 83 real sections remain reachable. Left-click or Space operates the real
+  All 82 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -78,11 +78,15 @@ camera/entity projection stability.
   Texture opacity, appearance and the unbound module key persist. Scan radius,
   minimum and filters are shared with Stash Finder. Detection estimates storage
   extent plus an adjustable margin; it does not trace entire building bounds.
-- Base Finder independently searches loaded blocks for tall kelp and large
-  amethyst buds/clusters. Adjustable per-chunk thresholds mark Possible Base
-  clues in amber through walls. Session results expose reasons, coordinates,
-  copy and waypoint actions; settings and an initially unbound key persist.
-  Natural clues can produce markers, so detections are never confirmation.
+- Chunkfinder contains the former Base Finder: raw horizontal deepslate, tall
+  kelp and large amethyst buds/clusters have independent per-chunk thresholds.
+  One master toggle and scan/appearance controls serve all three clue types.
+  Both full 16x16 chunk-column frames and individual evidence-block boxes are
+  on by default and independently configurable. Markers remain visible through
+  walls. Vanilla column height is used; custom dimension height is not sampled.
+  Session results retain reasons, coordinates, copy and waypoint actions.
+  Legacy growth profiles and bindings remain compatible. Natural clues can
+  produce markers, so detections are never confirmation.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.

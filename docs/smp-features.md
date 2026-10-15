@@ -1,4 +1,4 @@
-# SMP: Storage ESP, Stash Finder, Spawner ESP, Base ESP und Base Finder
+# SMP: Storage ESP, Stash Finder, Spawner ESP, Base ESP und Chunkfinder
 
 Die fünf Module stehen unter **Blocks** im bestehenden kompakten Client-Menü.
 **Linksklick** oder **Leertaste** schaltet ein Modul um. **Rechtsklick**,
@@ -7,39 +7,51 @@ Fenster. In kleinen Viewports scrollt dieses Fenster bis zu allen Controls und
 Aktionen; **X** führt zurück zum Raster. **Strg-Klick** auf einen Slider erlaubt
 die direkte Zahleneingabe. [Menü und Keybinds](client-ui.md).
 
-Die Erweiterung verwendet **IPC v23**. Bereits laufendes Minecraft vollständig
+Die Erweiterung verwendet **IPC v24**. Bereits laufendes Minecraft vollständig
 neu starten, bevor der aktualisierte Client erneut angehängt wird. Ein schon
 geladener Agent behält sonst das alte gemeinsame Datenlayout.
 
-## Base Finder
+## Chunkfinder: Deepslate, Kelp und Amethyst
 
-**Blocks → Base Finder** einschalten; Rechtsklick öffnet die Einstellungen.
-Das Modul markiert einen Chunk als **Possible Base**, sobald mindestens eine
-der beiden unabhängig einstellbaren Bedingungen erfüllt ist:
+**Blocks → Chunkfinder** einschalten; Rechtsklick öffnet alle Einstellungen.
+Der frühere Base Finder ist jetzt Teil des Chunkfinders. Ein Chunk wird als
+**Possible Base** markiert, sobald mindestens einer der getrennten Grenzwerte
+für ausgewählte Hinweise erreicht ist:
 
+- **Horizontal deepslate**: standardmäßig mindestens ein roher Deepslate-Block
+  mit horizontaler X/Z-Achse. Erze, polierter und befallener Deepslate zählen nicht.
 - **Tall kelp**: standardmäßig mindestens drei Pflanzen mit jeweils mindestens
-  18 Blöcken Höhe. Jede Kelp-Spitze zählt einmal; der Scanner misst ihren
-  zusammenhängenden Stängel abwärts bis maximal 64 Blöcke, auch unterhalb des
-  Scanwürfels. Die Spitze muss innerhalb des Scanradius liegen.
-- **Large amethyst / clusters**: standardmäßig mindestens sechs große
-  Amethystknospen oder vollständig gewachsene Cluster im gescannten Chunk.
-  Kleine und mittlere Knospen sowie normale Amethystblöcke zählen nicht.
+  18 Blöcken Höhe. Jede Spitze zählt einmal; die zusammenhängende Säule wird
+  abwärts bis maximal 64 Blöcke gemessen, auch unterhalb des Scanwürfels.
+- **Large amethyst / clusters**: standardmäßig mindestens sechs große Knospen
+  oder vollständig gewachsene Cluster. Kleine/mittlere Knospen und normale
+  Amethystblöcke zählen nicht.
 
-Scanradius (Standard 32, Bereich 4–48), Intervall, Mindestwerte, Markerentfernung,
-Farbe, Labels und Tracer sind einstellbar. Die Markierung erscheint durch Wände
-und nennt die beobachteten Kelp- und Amethystzahlen. Wachstumshinweise können
-auch natürlich vorkommen und bestätigen keine Base. Der Client scannt nur die
-verfügbaren Blöcke um den Spieler, keine entfernten oder ungeladenen Chunks.
+**Highlight whole chunks** und **Highlight individual blocks** sind standardmäßig
+beide an und unabhängig einstellbar. Der Chunk erhält einen 3D-Rahmen um seinen
+exakten 16 × 16-Block-Fußabdruck mit Linien alle 16 Höhenblöcke. Die Höhe reicht
+in der Overworld von −64 bis 320, in Nether/End von 0 bis 256. Beobachtete Hinweise
+außerhalb erweitern den Rahmen; eigene Dimensionshöhen werden nicht ausgelesen.
+Jeder verdächtige Block im erkannten Chunk erhält zusätzlich Würfelkanten, bei
+Kelp auch jeder aus der gemessenen Höhe rekonstruierte Stängelblock. Rahmen,
+Blöcke und Labels sind durch Wände sichtbar. Die Markierung beweist keine Base.
 
-Die Session-Liste enthält bis zu 128 mögliche Bases mit Koordinaten und Gründen.
-**Copy coordinates** kopiert eine Position; **Save waypoint** speichert sie über
-Neustarts hinweg. Die Liste behält die Beobachtung mit der höchsten Summe aus
-qualifizierten Kelp-Pflanzen und Amethyst und kann veraltet sein. **Clear possible
-bases** leert sie bis zum nächsten neuen Scan. Server-/Dimensionswechsel,
-Verbindungsabbruch, Panic sowie Änderungen an Filtern, Radius oder Mindestwerten
-setzen sie zurück. Einstellungen und der anfangs unbelegte Keybind werden in
-automatischen Preferences und benannten Configs gespeichert. Ältere vollständige
-Configs erhalten deaktivierte Base-Finder-Standardwerte.
+Scanradius (Standard 20, Bereich 4–48), Intervall (900 ms), Entfernung (64 m,
+8–128 m), Farbe, Labels und Tracer gelten gemeinsam für alle drei Hinweise.
+Nur erfolgreich abgeschlossene Scans und lokal geladene Blöcke werden ausgewertet.
+Es werden keine entfernten oder ungeladenen Chunks gefunden.
+
+Die Session-Liste enthält bis zu 128 mögliche Bases mit Chunk-Koordinaten,
+Hinweiszahlen und Position. **Copy coordinates** kopiert die Position;
+**Save waypoint** erhält sie über Neustarts. Die stärkste Beobachtung pro Chunk
+bleibt erhalten und kann veraltet sein. **Clear possible bases** leert die Liste
+bis zum nächsten Scan. Server-/Dimensionswechsel, Verbindungsabbruch, Panic und
+Änderungen an Filtern, Radius oder Mindestwerten setzen sie zurück.
+
+Alle Optionen speichern automatisch und in benannten Configs. Ältere Base-Finder-
+Einstellungen werden beim Laden in den gemeinsamen Chunkfinder übernommen.
+Ein vorhandener zweiter Keybind bleibt als **Chunkfinder (alternate)** nutzbar;
+beide Bindings steuern denselben Schalter. Base ESP bleibt eigenständig.
 
 ## Storage ESP
 

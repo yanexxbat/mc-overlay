@@ -140,8 +140,8 @@ void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProje
         ScreenRect rect; if(!p.Bounds(f.bounds,rect)) continue;
         if(c.tracers) draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
         if(c.labels) {
-            char text[192]; std::snprintf(text,sizeof(text),"Possible Base | Chunk %d, %d | %d kelp / %d amethyst / %d deepslate | %.0f m",
-                f.chunkX,f.chunkZ,f.kelpColumns,f.amethyst,f.deepslate,distance);
+            char text[192]; std::snprintf(text,sizeof(text),"Possible Base | Chunk %d, %d | %.0f m\n%d kelp | %d amethyst | %d deepslate",
+                f.chunkX,f.chunkZ,distance,f.kelpColumns,f.amethyst,f.deepslate);
             Label(draw,rect,text,ink,viewport);
         }
     }

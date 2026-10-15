@@ -1,37 +1,25 @@
-# Base Finder
+# Chunkfinder / growth clues
 
-Mode: Operate. Local extension of the existing native Blocks module grid and
-independent settings window. Authority: PRODUCT.md, DESIGN.md and
-surfaces/module-widgets.md. Preserve the anthracite/coral theme and controls.
+Mode: Operate. Extend the incumbent native Blocks grid and independent settings
+window. PRODUCT.md and DESIGN.md remain authoritative; preserve anthracite/coral,
+embedded Inter, compact rows, native controls, fixed header and scrolling body.
 
-## Direction contract
+The former Base Finder now lives under Blocks > Chunkfinder. One master toggle,
+scan radius/interval, distance and appearance serve deepslate, kelp and amethyst.
+Each clue has its own per-chunk minimum. The separate Base Finder widget is gone;
+Base ESP remains a separate module. Existing binding indices stay stable and a
+saved old growth binding remains an alternate for the same Chunkfinder toggle.
 
-THESIS: Make growth clues inspectable as possible bases, with adjustable
-thresholds and explicit reasons. Follow existing module behavior.
+First viewport: master/binding, scan controls and separate whole-chunk/block
+highlight toggles (both default on), labels, tracers and colour. Suspicious block
+filters and thresholds follow. Explanatory copy and session discoveries with
+copy/waypoint actions remain reachable below, including at 480x360.
 
-OWN-WORLD: Reuse embedded Inter, compact rows, rounded anthracite settings,
-coral switches and sliders. Amber world markers distinguish possible bases.
+World markers use clipped 3D segments through walls. Chunk outlines span the full
+16x16 footprint and vanilla build height with quiet section rings. Each evidence
+block, including reconstructed kelp stems, has its own cube. The two-line label
+names Possible Base, chunk coordinates, distance and clue counts. Custom dimension
+height is not sampled. Labels remain clues, never confirmed bases.
 
-STORY: Enable the module, adjust kelp/amethyst thresholds, inspect the reason
-and coordinates, then copy a location or save a waypoint. Explain natural clues.
-
-FIRST VIEWPORT: A Base Finder widget follows Base ESP. Right-click opens the
-existing 480px settings pane: enable/binding, scan controls, independent clue
-filters and thresholds, then appearance. Results and actions scroll below.
-The header remains fixed at desktop and 480x360 sizes.
-
-FORM: Assigned local extension; no concept seed applies. Preserve global tokens.
-
-FINISH: Finish review and documentation are recorded in
-`review/base-finder/review.md` and `review/base-finder/documentation.md`.
-The verdict is ship for the bounded native UI scope. Inherited `DESIGN.md` and
-the design sidecar remain authoritative and unchanged; no new shipping raster
-assets are introduced. Runtime and packaging verification remain separately
-bounded by their actual checks.
-
-## Verification boundary
-
-Native D3D11 offscreen captures use synthetic fixtures at 1280x800 and 480x360.
-They verify menu composition, not live Minecraft appearance. JNI fixtures verify
-kelp-height extraction and amethyst classification across mapped profiles.
-No new shipping raster assets or visual system changes.
+Verification uses actual native ImGui/D3D11 WARP captures with synthetic snapshots,
+not live Minecraft. Current captures and review: review/chunkfinder/.

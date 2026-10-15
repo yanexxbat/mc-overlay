@@ -9,7 +9,7 @@ Dear ImGui and Direct3D 11.
 - Entity and block visuals, target effects, particles and waypoints.
 - Base ESP with Minecraft models and textures visible through walls (1.21.11).
 - Storage ESP with individual block colours, Stash Finder and Spawner ESP.
-- Base Finder marks possible bases from tall kelp and large amethyst buds/clusters.
+- Chunkfinder marks possible bases from horizontal deepslate, tall kelp and large amethyst buds/clusters, with whole-chunk frames and individual block boxes.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
 - Freecam with independent flight, adjustable speed/boost and Toggle/Hold binding.
@@ -51,8 +51,9 @@ when replacing an already loaded agent. The Freecam update uses IPC v24; restart
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
-or **Base Finder** to configure them. **Base Finder** marks growth clues as
-**Possible Base**, with adjustable kelp height, plant count and amethyst count.
+or **Chunkfinder** to configure them. **Chunkfinder** combines deepslate and growth
+clues as **Possible Base**, with separate per-chunk minimums. Whole-chunk frames
+and individual block boxes are both enabled by default and independently adjustable.
 These clues can also occur naturally. **Base ESP → Display → Minecraft textures**
 renders loaded blocks around detected container clusters through walls. It also
 works with Stash Finder off. Minecraft textures are the default display at full

@@ -392,6 +392,8 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-settings-desktop.png":"chunkfinder-settings-small.png"));
+        ImGui::SetScrollY(content,300); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"chunkfinder-filters-desktop.png":"chunkfinder-filters-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-discoveries-desktop.png":"chunkfinder-discoveries-small.png"));
         auto* pane=ImGui::FindWindowByName("mcov module settings");
@@ -433,6 +435,20 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::OverlayUiCheck::Panic(overlay);
     Require(!c.stash.enabled&&!c.spawner.enabled&&!c.base.enabled&&!c.finder.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty()&&
         mcov::OverlayUiCheck::Growth(overlay).Finds().empty(),"Panic left an SMP module or marker active");
+    mcov::client_configs::Snapshot oldGrowth;
+    oldGrowth.smp.finder.enabled=true; oldGrowth.smp.finder.radius=44; oldGrowth.smp.finder.interval=1200;
+    oldGrowth.smp.finder.minKelpHeight=25;
+    oldGrowth.binds[mcov::keys::Index(mcov::keys::Action::BaseFinder)]={0x47,mcov::keys::Ctrl,mcov::keys::Mode::Toggle};
+    mcov::OverlayUiCheck::ConfigSnapshot(overlay,oldGrowth);
+    Require(mcov::OverlayUiCheck::Chunk(overlay).enabled&&mcov::OverlayUiCheck::ChunkSettings(overlay).radius==44&&
+        mcov::OverlayUiCheck::ChunkSettings(overlay).interval==1200&&c.finder.minKelpHeight==25,
+        "Legacy Base Finder profile did not migrate to the shared Chunkfinder");
+    mcov::keys::Input oldKey{}; mcov::OverlayUiCheck::Input(overlay,oldKey);
+    oldKey[VK_CONTROL]=oldKey[0x47]=true; mcov::OverlayUiCheck::Input(overlay,oldKey);
+    Require(!mcov::OverlayUiCheck::Module(overlay,mcov::keys::Action::ChunkFinder),"Old growth binding could not disable the unified finder");
+    oldKey={}; mcov::OverlayUiCheck::Input(overlay,oldKey);
+    oldKey[VK_CONTROL]=oldKey[0x47]=true; mcov::OverlayUiCheck::Input(overlay,oldKey);
+    Require(mcov::OverlayUiCheck::Chunk(overlay).enabled&&c.finder.enabled,"Old growth binding could not re-enable the unified finder");
 }
 void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto& io=ImGui::GetIO();
@@ -1531,9 +1547,11 @@ int main(int argc,char** argv) {
         ++chunkScene.blockScanId; chunkScene.camX=22; chunkScene.camY=20; chunkScene.camZ=-20; chunkScene.yawDeg=30; chunkScene.pitchDeg=15;
         finder.chunks=finder.blocks=true; const int both=chunkFrame();
         Require(both>0&&mcov::OverlayUiCheck::Growth(overlay).Finds().size()==2,"Growth clues did not join Chunkfinder across chunk boundaries");
+        finder.labels=true; chunkFrame();
         SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-desktop.png");
         chunkViewport={480,360}; Require(chunkFrame()>0,"Small viewport lost whole chunk rendering");
         SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-small.png"); chunkViewport={1280,800};
+        finder.labels=false;
         finder.chunks=false; const int onlyBlocks=chunkFrame(); Require(onlyBlocks>0&&onlyBlocks<both,"Whole-chunk toggle also removed individual blocks");
         finder.chunks=true; finder.blocks=false; Require(chunkFrame()>0,"Individual-block toggle removed whole chunk outlines");
         finder.chunks=false; Require(chunkFrame()==0,"Turning both highlight options off left geometry");
@@ -1569,7 +1587,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 83 module widgets, SMP/Base Finder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 82 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

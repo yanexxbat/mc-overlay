@@ -88,18 +88,13 @@ Vanilla-Vorhersage. Sie sind keine separate Bestätigung des Servers. Das
 konservative Profil ist kein getesteter Anti-Cheat-Bypass und verspricht
 keine serverübergreifende Akzeptanz.
 
-**Blocks → Chunkfinder:** aktivieren, Radius und Mindestzahl der Hinweise pro Chunk
-wählen. Gesucht wird ausschließlich roher Deepslate mit horizontaler X/Z-Achse.
-Vertikaler, polierter und befallener Deepslate sowie Deepslate-Erze zählen nicht.
-Würfelkanten markieren die Blöcke; Labels zeigen Chunk-Koordinaten und Trefferzahl.
-Negative Koordinaten verwenden Floor-Division. Die Hinweise sind kein Nachweis
-einer Basis und können auch durch Weltgenerierung und andere Bauten entstehen.
-
-Der Scan sieht nur lokal geladene Blöcke in einem Würfel um den Spieler. Es gibt
-keine Erkennung entfernter/unbekannter Chunks. Radius 4–48, Standard 20; maximal
-1.024 Treffer gemeinsam mit Block ESP. Größere Radien brauchen länger. Eine
-Fortschrittsanzeige und frühe Treffer sind bereits während eines Durchlaufs
-sichtbar. Welt- und Filterwechsel verwerfen alte Resultate.
+**Blocks → Chunkfinder:** sucht nach horizontalem rohem Deepslate, hohem Kelp
+und großen Amethystknospen/Clustern. Die Filter haben getrennte Mindestwerte pro
+Chunk. Der frühere Base Finder steckt im selben Modul. Standardmäßig markieren
+3D-Rahmen den vollständigen Chunk und Würfelkanten jeden verdächtigen Block.
+Beide Markierungen sind unabhängig einstellbar. Nur abgeschlossene Scans lokal
+geladener Blöcke werden gewertet. Details zu Grenzwerten, gespeicherten Funden,
+Dimensionshöhen und Scanlimits: [Chunkfinder](smp-features.md#chunkfinder-deepslate-kelp-und-amethyst).
 
 ## Architektur und Prüfung
 
