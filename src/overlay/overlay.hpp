@@ -72,7 +72,7 @@ struct BlockEspSettings {
 };
 
 struct ChunkFinderSettings {
-    bool enabled=false,blocks=true,labels=true;
+    bool enabled=false,blocks=true,labels=true,chunks=true,deepslate=true;
     int radius=20,interval=900,minHints=1;
     float maxDraw=64;
     ImVec4 color{.48f,.85f,1.f,.95f};
@@ -192,6 +192,7 @@ private:
     items::Request BuildItemRequest(std::uint64_t now,bool inputAllowed,bool combatActive) const;
     void  DrawItemAssistSettings(int section);
     void  DrawChunkFinderSettings();
+    smp::BaseFinderSettings ChunkDetection() const;
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
     void DrawSmpSettings(int section);

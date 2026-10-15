@@ -22,7 +22,7 @@ inline constexpr std::array<const char*,kCount> kNames={"Menu","Quit overlay","H
     "Jump circles","Wings","Halo / Nimb","Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows",
     "Name protect","Hit sounds","Module sounds","Middle click friend","Death coordinates","Detect players","Notifications",
     "Storage ESP","Beacon radius","Chunk borders","Waypoints",
-    "Radar","Keystrokes","Speedometer","Session statistics","Armor strip","Combat indicators","Clock","Click rate","Panic","Spinbot","Stash Finder","Spawner ESP","Base ESP","Base Finder","Freecam"};
+    "Radar","Keystrokes","Speedometer","Session statistics","Armor strip","Combat indicators","Clock","Click rate","Panic","Spinbot","Stash Finder","Spawner ESP","Base ESP","Chunkfinder (alternate)","Freecam"};
 struct Bind { int key{}; unsigned modifiers{}; Mode mode=Mode::Toggle; };
 using Bindings=std::array<Bind,kCount>;
 using Input=std::array<bool,256>;

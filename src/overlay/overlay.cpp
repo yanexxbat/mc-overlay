@@ -710,7 +710,6 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
         {width,height},auraBlend_.GlowTexture());
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
     if(stashFinder_.Matches(snapshot)) smp::DrawBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.base,stashFinder_.Finds(),{width,height});
-    if(baseFinder_.Matches(snapshot)) smp::DrawPossibleBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.finder,baseFinder_.Finds(),{width,height});
     if (!entitiesEnabled) return;
 
     auto visualConfig=visuals_; visualConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);
@@ -1085,9 +1084,9 @@ void Overlay::PushScanRequest() {
 
     const bool storage=rockstarConfig_.Enabled(rockstar::Feature::ChestEsp),beacon=rockstarConfig_.Enabled(rockstar::Feature::BeaconRadius);
     const auto stash=smpConfig_.Detection(); const auto& spawner=smpConfig_.spawner;
-    const auto& finder=smpConfig_.finder;
+    const auto finder=ChunkDetection();
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
-        (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u)|(storage?smpConfig_.storage.mask:0)|(beacon?1u<<kBlockBeacon:0)|
+        (storage?smpConfig_.storage.mask:0)|(beacon?1u<<kBlockBeacon:0)|
         (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0)|(finder.enabled?finder.Mask():0);
     const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
         storage?int(rockstarConfig_[rockstar::Feature::ChestEsp].range):4,beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
@@ -1625,7 +1624,7 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP","Base Finder"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     if(blocksSection_==4||blocksSection_>=7) { DrawSmpSettings(blocksSection_==4?0:blocksSection_-6); return; }

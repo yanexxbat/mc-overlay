@@ -82,7 +82,7 @@ void Overlay::UpdateRockstar() {
     // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
     const auto& s=lastSnapshot_;
     const int newStashes=stashFinder_.Update(s,smpConfig_.Detection());
-    baseFinder_.Update(s,smpConfig_.finder);
+    baseFinder_.Update(s,ChunkDetection());
     if(newStashes&&smpConfig_.stash.enabled&&smpConfig_.stash.notifications) {
         char text[112]; const auto* latest=stashFinder_.Latest();
         if(newStashes==1) std::snprintf(text,sizeof(text),"Stash found: %d containers at %.0f %.0f %.0f",latest->count,latest->centre.x,latest->centre.y,latest->centre.z);

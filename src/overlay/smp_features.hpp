@@ -46,11 +46,15 @@ struct BaseSettings {
 };
 struct BaseFinderSettings {
     bool enabled=false,kelp=true,amethyst=true,labels=true,tracers=false;
+    // Deepslate is supplied by Chunkfinder; old standalone growth profiles keep their schema.
+    bool deepslate=false;
+    int minDeepslate=1;
     int radius=32,interval=1000,minKelpHeight=18,minKelpColumns=3,minAmethyst=6;
     float maxDraw=192;
     ImVec4 colour{1,.75f,.3f,.95f};
     std::uint32_t Mask() const {
-        return (kelp?1u<<kBlockKelp:0u)|(amethyst?(1u<<kBlockLargeAmethystBud)|(1u<<kBlockAmethystCluster):0u);
+        return (kelp?1u<<kBlockKelp:0u)|(amethyst?(1u<<kBlockLargeAmethystBud)|(1u<<kBlockAmethystCluster):0u)|
+            (deepslate?1u<<kBlockRotatedDeepslate:0u);
     }
 };
 struct Config {
@@ -63,7 +67,7 @@ struct Config {
     void Clamp();
 };
 struct PossibleBase {
-    int chunkX=0,chunkZ=0,kelpColumns=0,tallestKelp=0,amethyst=0;
+    int chunkX=0,chunkZ=0,kelpColumns=0,tallestKelp=0,amethyst=0,deepslate=0;
     WorldPoint centre{};
     WorldBounds bounds{};
 };
@@ -81,7 +85,7 @@ private:
     std::array<char,kAddrLen> server_{};
     std::uint64_t scan_=0;
     std::uint32_t mask_=0;
-    int count_=0,height_=0,columns_=0,amethyst_=0,radius_=0;
+    int count_=0,height_=0,columns_=0,amethyst_=0,radius_=0,deepslate_=0;
 };
 struct Stash {
     int chunkX=0,chunkZ=0,count=0;
@@ -116,7 +120,9 @@ void DrawStashes(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProj
 void DrawBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                const BaseSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
 void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
-                       const BaseFinderSettings& settings,std::span<const PossibleBase> finds,ImVec2 viewport);
+                       const BaseFinderSettings& settings,std::span<const PossibleBase> finds,ImVec2 viewport,
+                       bool chunks=true,bool blocks=true);
+WorldBounds PossibleChunkBounds(const PossibleBase& find,const WorldSnapshot& snapshot);
 base::Request BuildBaseRequest(const WorldSnapshot& snapshot,const BaseSettings& settings,
                               std::span<const Stash> finds,bool fresh,std::uint64_t now);
 } // namespace mcov::smp
