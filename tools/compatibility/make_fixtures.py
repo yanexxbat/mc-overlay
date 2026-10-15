@@ -120,6 +120,15 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             code = b'\x2a\xb4' + u2(cp.ref(9, name, special[1], special[2])) + {'D': b'\xaf', 'F': b'\xae', 'I': b'\xac', 'Z': b'\xac', 'J': b'\xad'}.get(result, b'\xb0')
         elif special and special[0] == 'set_float':
             code = b'\x2a\x23\xb5' + u2(cp.ref(9, name, special[1], 'F')) + b'\xb1'
+        elif special and special[0] == 'freecam_position':
+            vec,field,vector_desc=special[1:]
+            code=b'\x2a\xbb'+u2(cp.cls(vec))+b'\x59\x27\x29\x18\x05\xb7'+u2(cp.ref(10,vec,'<init>','(DDD)V'))+b'\xb5'+u2(cp.ref(9,name,field,vector_desc))+b'\xb1'
+        elif special and special[0] == 'freecam_rotation':
+            code=b'\x2a\x23\xb5'+u2(cp.ref(9,name,'testFreeYaw','F'))+b'\x2a\x24\xb5'+u2(cp.ref(9,name,'testFreePitch','F'))+b'\xb1'
+        elif special and special[0] == 'freecam_click':
+            code=b'\xb2'+u2(cp.ref(9,name,'testClicks','I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,'testClicks','I'))+b'\x04\xac'
+        elif special and special[0] == 'freecam_update':
+            code=b'\x2a\x0b\xb6'+u2(cp.ref(10,name,special[1],'(F)V'))+b'\xb1'
         elif special and special[0] == 'attack':
             player, cooldown = special[1:]
             code = b'\x2b\x0b\xb5' + u2(cp.ref(9, player, cooldown, 'F'))
@@ -277,6 +286,13 @@ def generate(profiles_path, output):
             kind, static = geometry['kinds'][key]
             add(geometry['owners'][key], kind, name, desc, static)
         core = profile['classes']
+        cls(core['camera'])['specials'][tuple(geometry['members']['freecamPosition'])]=('freecam_position',core['vec3'],*profile['members']['fieldCameraPosition'])
+        cls(core['camera'])['specials'][tuple(geometry['members']['freecamRotation'])]=('freecam_rotation',)
+        for field in ('testFreeYaw','testFreePitch'): add(core['camera'],'fields',field,'F')
+        add(core['client'],'fields','testClicks','I',True)
+        add(core['client'],'fields','testBreaks','I',True)
+        cls(core['client'])['specials'][tuple(geometry['members']['freecamAttack'])]=('freecam_click',)
+        cls(core['client'])['specials'][tuple(geometry['members']['freecamContinueAttack'])]=('increment','testBreaks')
         cls(core['blockPosMut'])['parent_name']=geometry['members']['blockHitPos'][1].split(')')[1][1:-1]
         cls(core['livingEntity'])['parent_name'] = core['entity']
         cls(core['player'])['parent_name'] = core['livingEntity']
@@ -302,6 +318,8 @@ def generate(profiles_path, output):
         for key in ('runFrame', 'updateCamera'):
             member = geometry['members'][key]
             cls(geometry['owners'][key])['specials'][tuple(member)] = ('camera_branch' if key == 'updateCamera' else 'nop',)
+        if profile['version']=='26.2':
+            cls(core['camera'])['specials'][tuple(geometry['members']['updateCamera'])]=('freecam_update',geometry['members']['freecamSetup'][0])
         if 'getDelta' in geometry['members']:
             member = geometry['members']['getDelta']
             cls(core['client'])['specials'][tuple(member)] = ('new', geometry['classes']['deltaClass'])
