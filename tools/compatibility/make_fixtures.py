@@ -212,19 +212,21 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             # Real Camera.setup methods (and camera mods) keep such locals in handlers.
             marker_slot=locals_count
             code=b'\xbb'+u2(cp.cls('java/lang/Object'))+b'\x59\xb7'+u2(cp.ref(10,'java/lang/Object','<init>','()V'))+b'\x3a'+bytes([marker_slot])
+            code+=b'\x09\x37'+bytes([marker_slot+1])+b'\x0e\x39'+bytes([marker_slot+3])
             start=len(code)
             code+=b'\x19'+bytes([marker_slot])+b'\xb6'+u2(cp.ref(10,'java/lang/Object','hashCode','()I'))+b'\x57\xb1'
             handler=len(code)
-            code+=b'\x3a'+bytes([marker_slot+1])+b'\x19'+bytes([marker_slot])+b'\xb6'+u2(cp.ref(10,'java/lang/Object','hashCode','()I'))+b'\x57\xb1'
+            code+=b'\x3a'+bytes([marker_slot+5])+b'\x19'+bytes([marker_slot])+b'\xb6'+u2(cp.ref(10,'java/lang/Object','hashCode','()I'))+b'\x57'
+            code+=b'\x16'+bytes([marker_slot+1])+b'\x58\x18'+bytes([marker_slot+3])+b'\x58\xb1'
             def verification_type(t):
                 if t in ('Z','B','C','S','I'): return b'\x01'
                 if t in ('F','D','J'): return {'F':b'\x02','D':b'\x03','J':b'\x04'}[t]
                 return b'\x07'+u2(cp.cls(t[1:-1] if t.startswith('L') else t))
-            frame_locals=b'\x07'+u2(cp.cls(name))+b''.join(verification_type(t) for t in args)+b'\x07'+u2(cp.cls('java/lang/Object'))
-            stack_map=u2(1)+b'\xff'+u2(handler)+u2(len(args)+2)+frame_locals+u2(1)+b'\x07'+u2(cp.cls('java/lang/Throwable'))
+            frame_locals=b'\x07'+u2(cp.cls(name))+b''.join(verification_type(t) for t in args)+b'\x07'+u2(cp.cls('java/lang/Object'))+b'\x04\x03'
+            stack_map=u2(1)+b'\xff'+u2(handler)+u2(len(args)+4)+frame_locals+u2(1)+b'\x07'+u2(cp.cls('java/lang/Throwable'))
             nested=u2(1)+u2(cp.utf('StackMapTable'))+u4(len(stack_map))+stack_map
             exception_table=u2(1)+u2(start)+u2(handler)+u2(handler)+u2(0)
-            locals_count+=2
+            locals_count+=6
         elif special and special[0] == 'camera_branch':
             stack_map = u2(1) + b'\x05'  # same_frame at the null branch's offset 5
             nested = u2(1) + u2(cp.utf('StackMapTable')) + u4(len(stack_map)) + stack_map
