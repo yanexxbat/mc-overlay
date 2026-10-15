@@ -30,7 +30,7 @@ constexpr Definition stats[]={{"Local player"},{"Client"},{"Entities"}};
 constexpr Definition settings[]={{"Overlay"},{"Focus"},{"Keybinds"},{"Agent"},{"Configs"}};
 constexpr Definition misc[]={Module("Middle click friend",Action::MiddleFriend),Module("Death coordinates",Action::DeathCoordinates),
     Module("Detect players",Action::DetectPlayer),Module("Waypoints",Action::Waypoints),Module("Name protect",Action::NameProtect),
-    Module("Module sounds",Action::ModuleSounds),Module("Notifications",Action::Notifications),{"Panic",Mode::Action,Action::Panic},Module("Freecam",Action::Freecam)};
+    Module("Module sounds",Action::ModuleSounds),Module("Notifications",Action::Notifications),{"Panic",Mode::Action,Action::Panic},Module("Freecam",Action::Freecam),Module("Anti Vanish",Action::AntiVanish)};
 std::span<const Definition> Definitions(Page page) {
     switch(page) {
         case Page::Combat:return combat; case Page::Visuals:return visuals; case Page::Blocks:return blocks;

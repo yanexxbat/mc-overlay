@@ -64,6 +64,7 @@ void Overlay::Panic() {
     preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+300; PushScanRequest(); PushCombatRequest();
 }
 void Overlay::UpdateRockstar() {
+    UpdateAntiVanish();
     const double now=double(GetTickCount64())/1000;
     for(int i=3;i<keys::kCount;++i) {
         const auto action=static_cast<keys::Action>(i); if(keys::System(action)||action==keys::Action::BaseFinder) continue;
@@ -169,9 +170,10 @@ void Overlay::DrawRockstarSettings(Feature feature) {
     ImGui::PopID();
 }
 void Overlay::DrawMiscTab() {
-    constexpr const char* labels[]={"Middle click friend","Death coordinates","Detect players","Waypoints","Name protect","Module sounds","Notifications","Panic","Freecam"};
+    constexpr const char* labels[]={"Middle click friend","Death coordinates","Detect players","Waypoints","Name protect","Module sounds","Notifications","Panic","Freecam","Anti Vanish"};
     constexpr Feature modules[]={Feature::MiddleFriend,Feature::DeathCoordinates,Feature::DetectPlayer,Feature::Waypoints,Feature::NameProtect,Feature::ModuleSounds,Feature::Notifications};
     miscSection_=panel::SubTabs("misc_sections",labels,IM_ARRAYSIZE(labels),miscSection_);
+    if(miscSection_==9) { DrawAntiVanishSettings();return; }
     if(miscSection_<7) DrawRockstarSettings(modules[miscSection_]);
     else if(miscSection_==8) {
         auto& c=combat_.freecam;

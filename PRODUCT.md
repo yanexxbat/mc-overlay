@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v27. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v28. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering stays outside the JVM; textured Base ESP uses a dedicated
 JNI callback on the game's render thread.
 
@@ -122,7 +122,7 @@ shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
 It keeps at most 128 discoveries and the highest observed count for each chunk.
 Truncated scans report lower-bound counts. The scan does not reveal inventory
 contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
-IPC v27 changes the shared layout: restart already running Minecraft before
+IPC v28 changes the shared layout: restart already running Minecraft before
 reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the

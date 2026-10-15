@@ -1099,6 +1099,9 @@ void Overlay::PushScanRequest() {
     const auto baseNow=GetTickCount64();
     const bool baseFresh=haveSnapshot_&&!panicActive_&&stashFinder_.Matches(lastSnapshot_)&&snapshotReceivedAt_&&baseNow>=snapshotReceivedAt_&&baseNow-snapshotReceivedAt_<1500;
     block->baseRequest.Publish(smp::BuildBaseRequest(lastSnapshot_,smpConfig_.base,stashFinder_.Finds(),baseFresh,baseNow));
+    antivanish::Request anti;anti.sentAtMs=GetTickCount64();anti.config=antiVanishConfig_;
+    anti.config.enabled=anti.config.enabled&&!panicActive_&&agentConnected_&&haveSnapshot_&&lastSnapshot_.dimension[0]&&heartbeatClock_.Alive(anti.sentAtMs);
+    block->antiVanishRequest.Publish(anti);block->antiVanishReport.Read(antiVanishReport_);
     block->baseReport.Read(baseReport_);
 
     // Auto totem lives in the same push. Both are re-asserted EVERY frame, not
@@ -1317,7 +1320,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;
         case panel::Page::Stats: break;
         case panel::Page::Misc:
-            combat_.freecam={};
+            combat_.freecam={};antiVanishConfig_={};antiVanishPrevious_={};
             for(const auto f:{rockstar::Feature::MiddleFriend,rockstar::Feature::DeathCoordinates,rockstar::Feature::DetectPlayer,rockstar::Feature::Waypoints,rockstar::Feature::NameProtect,rockstar::Feature::ModuleSounds,rockstar::Feature::Notifications}) rockstarConfig_[f]=defaults[f];
             break;
         case panel::Page::Settings:

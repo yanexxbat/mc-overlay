@@ -23,6 +23,7 @@ struct Snapshot {
     BlockEspSettings blocks{};
     ChunkFinderSettings chunks{};
     smp::Config smp{};
+    antivanish::Config antiVanish{};
     items::MacroConfig crystal{},anchor{};
     HudSettings hud{};
     keys::Bindings binds=keys::Defaults();
@@ -129,6 +130,10 @@ inline void Chunks(Archive& a,ChunkFinderSettings& c) {
     a.Value("chunks.radius",c.radius,4,48); a.Value("chunks.interval",c.interval,200,3000);
     a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,128); a.Color("chunks.color",c.color);
 }
+inline void AntiVanish(Archive& a,antivanish::Config& c) {
+    a.Value("antivanish.enabled",c.enabled);a.Value("antivanish.notifications",c.notifications);
+    a.Value("antivanish.invisible",c.invisible);a.Value("antivanish.range",c.range,8,128);
+}
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
         values.emplace("chunks.chunks","1"); values.emplace("chunks.deepslate","1");
@@ -230,6 +235,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKindCount)-1); FIELD(blocks,radius,4,48);
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
     Chunks(a,s.chunks);
+    AntiVanish(a,s.antiVanish);
     Smp(a,s.smp);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
@@ -249,6 +255,7 @@ inline void Visit(Archive& a,Snapshot& s) {
         a.Value(n+".scale",p.scale,.65,1.6); a.Value(n+".placed",p.placed);
     }
     for(int i=0;i<keys::kCount;++i) {
+        if(keys::Reserved(static_cast<keys::Action>(i)))continue;
         auto& b=s.binds[i]; const auto n="bind."+std::to_string(i);
         a.Value(n+".key",b.key,i<2?1:0,254); a.Value(n+".modifiers",b.modifiers,0,7); a.Value(n+".mode",b.mode,0,1);
         if(keys::System(static_cast<keys::Action>(i))&&b.mode!=keys::Mode::Toggle) a.valid=false;
@@ -362,6 +369,11 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
     for(auto it=values.begin();it!=values.end();) {
         if(it->first.starts_with("knife.")||it->first.starts_with(removedModule)||it->first.starts_with(removedInspect)) it=values.erase(it);
         else ++it;
+    }
+    if(!std::any_of(values.begin(),values.end(),[](const auto& e){return e.first.starts_with("antivanish.");})) {
+        values.emplace("antivanish.enabled","0");values.emplace("antivanish.notifications","1");values.emplace("antivanish.invisible","0");values.emplace("antivanish.range","64");
+        const auto bind="bind."+std::to_string(keys::Index(keys::Action::AntiVanish))+".";
+        values.emplace(bind+"key","0");values.emplace(bind+"modifiers","0");values.emplace(bind+"mode","0");
     }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);

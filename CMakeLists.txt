@@ -182,6 +182,7 @@ add_executable(mcov_overlay
     src/overlay/visual_draw.cpp
     src/overlay/item_icon_atlas_dx11.cpp
     src/overlay/control_panel.cpp
+    src/overlay/overlay_antivanish.cpp
     src/overlay/overlay_modules.cpp
     src/overlay/combat_menu.cpp
     src/overlay/aura_renderer.cpp
@@ -315,6 +316,9 @@ if(Java_JAVAC_EXECUTABLE)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishTracker.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishBridge.java
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
             --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
             --add-exports java.base/jdk.internal.org.objectweb.asm.commons=ALL-UNNAMED
@@ -325,6 +329,7 @@ if(Java_JAVAC_EXECUTABLE)
             --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
         DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
             tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java
+            tools/frame-sync/AntiVanishProfiles.java tools/frame-sync/AntiVanishTracker.java tools/frame-sync/AntiVanishBridge.java
         COMMENT "Compiling Java frame synchronization helpers (Java 17 bytecode)"
         VERBATIM)
     add_custom_target(mcov_frame_agent ALL DEPENDS ${MCOV_TOOLS_DIR}/frame-sync-agent.jar ${MCOV_TOOLS_DIR}/frame-signal.jar)
@@ -441,7 +446,8 @@ if(MCOV_BUILD_UI_CHECKS)
         src/injector/launcher_ui.cpp
         src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
         src/overlay/visual_draw.cpp
-        src/overlay/overlay_modules.cpp
+        src/overlay/overlay_antivanish.cpp
+    src/overlay/overlay_modules.cpp
         src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
         src/overlay/overlay_configs.cpp
         src/overlay/overlay_world_visuals.cpp
@@ -501,6 +507,9 @@ if(MCOV_BUILD_COMPAT_CHECKS)
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/BaseTextureCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishTracker.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishBridge.java
         DEPENDS tests/BaseTextureCheck.java tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java VERBATIM)
     add_custom_target(mcov_base_texture_check ALL DEPENDS ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class)
     add_test(NAME base_texture_models COMMAND ${Java_JAVA_EXECUTABLE} -cp ${MCOV_BASE_TEST_DIR} mcov.BaseTextureCheck)

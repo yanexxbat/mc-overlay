@@ -200,6 +200,8 @@ private:
     void DrawScanStatus();
     void DrawRockstarSettings(rockstar::Feature feature);
     void DrawMiscTab();
+    void DrawAntiVanishSettings();
+    void UpdateAntiVanish();
     void UpdateRockstar();
     void Panic();
     void PlayModuleSound(bool enabled,bool hit=false);
@@ -285,6 +287,8 @@ private:
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
+    antivanish::Config antiVanishConfig_{};
+    antivanish::Report antiVanishReport_{},antiVanishPrevious_{};
     smp::Config smpConfig_{};
     base::Report baseReport_{};
     smp::StashFinder stashFinder_{};
