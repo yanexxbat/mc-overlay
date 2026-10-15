@@ -59,3 +59,19 @@ All 29 regression checks passed across the final verification runs. The dynamic
 attach check passed separately outside the sandbox after Windows denied access
 to its disposable fixture pipe. The final focused run passed the Freecam core,
 all 22 JNI profiles, frame hooks, depth hook, native menu and portable package.
+
+### Attach correction
+
+The first Freecam build failed Java verification when a camera return was inside
+an exception scope with live local variables. Its injected branch described only
+the method parameters; an existing handler could still require the omitted
+locals. The transformer now tracks the actual local-variable state with the
+JDK's ASM `AnalyzerAdapter`, including two-slot long/double values, and preserves
+it in each inserted stack-map frame. Unreachable returns are left alone.
+
+The synthetic cameras now retain object, long and double locals in a surrounding
+handler. This reproduces the original `VerifyError` with the old transformer and
+passes with the correction, including attach to already loaded classes. The
+updated helper is embedded in the rebuilt portable client. Fully restart
+Minecraft before retrying, since a failed Java-agent initialization can leave
+the old helper classes loaded. Live Minecraft reconnection remains unverified.
