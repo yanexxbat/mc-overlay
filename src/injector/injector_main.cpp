@@ -148,7 +148,7 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
         if(!auth::LaunchOverlay(executable,runtime,std::move(command),license,process,launchError)) throw std::runtime_error(launchError);
         WinHandle thread(process.hThread); result.overlay=WinHandle(process.hProcess);
         HANDLE handles[]={ready.get(),result.overlay.get()};
-        const auto until=GetTickCount64()+10000;
+        const auto until=GetTickCount64()+30000;
         while(true) {
             // Einen schon gestarteten Client bei Abbruch offen lassen.
             Cancel(stop);

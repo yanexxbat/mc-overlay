@@ -140,7 +140,7 @@ HttpResponse Request(std::string_view form,std::stop_token stop) {
     constexpr auto networkError="Could not reach KeyAuth. Check your internet connection and try again.";
     Internet session(WinHttpOpen(L"mcov/1.0",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     Need(session.value!=nullptr,networkError);
-    WinHttpSetTimeouts(session.value,3000,3000,5000,5000);
+    Need(WinHttpSetTimeouts(session.value,3000,3000,5000,5000)!=FALSE,networkError);
     Internet connection(WinHttpConnect(session.value,L"keyauth.win",INTERNET_DEFAULT_HTTPS_PORT,0)); Need(connection.value!=nullptr,networkError);
     Internet request(WinHttpOpenRequest(connection.value,L"POST",L"/api/1.3/",nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,WINHTTP_FLAG_SECURE)); Need(request.value!=nullptr,networkError);
     DWORD redirects=WINHTTP_OPTION_REDIRECT_POLICY_NEVER;
