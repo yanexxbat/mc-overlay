@@ -75,3 +75,20 @@ passes with the correction, including attach to already loaded classes. The
 updated helper is embedded in the rebuilt portable client. Fully restart
 Minecraft before retrying, since a failed Java-agent initialization can leave
 the old helper classes loaded. Live Minecraft reconnection remains unverified.
+
+The installed Fabric 1.21.11 classes exposed a second case: the original camera
+stack maps discard all locals, including the receiver, immediately before the
+terminal return. A return hook cannot load slot 0 from that frame. The first
+transformer pass now proves that the camera method never overwrites receiver
+slot 0; its original frames then retain the receiver type. Methods that reuse
+that slot remain ineligible for Freecam. Both handler locals and terminal
+receiver chopping are covered by the synthetic cameras.
+
+`tools/diagnostics/RealFrameVerify.java` additionally verifies the installed game
+classes without initializing Minecraft. With a file containing local dependency
+JAR paths (one per line), it can either verify transformed definitions or attach
+the helper to a separate JVM containing already verified game classes. The
+installed intermediary 1.21.11 client, Camera, Entity, LivingEntity, Player,
+LocalPlayer and GameRenderer passed both verification and dynamic attach after
+the receiver correction. These checks do not launch Minecraft, apply the
+profile's mixins or establish live-game rendering behavior.
