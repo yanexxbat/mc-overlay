@@ -622,8 +622,8 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
             target = &selected;
         }
     }
-    // Der eigene Aura-Schalter steuert die Umlaufbahn. Die Einstellungen für
-    // reduzierte Menü-/Windows-Animationen dürfen diesen Spieleffekt nicht stoppen.
+    // Der eigene Aura-Schalter steuert die Umlaufbahn. Die Einstellungen fÃ¼r
+    // reduzierte MenÃ¼-/Windows-Animationen dÃ¼rfen diesen Spieleffekt nicht stoppen.
     const auto& config = auraConfig_;
     auraRenderer_.UpdateTarget(target, ImGui::GetIO().DeltaTime, config);
     auto& draw = *ImGui::GetBackgroundDrawList();
@@ -652,8 +652,8 @@ void Overlay::DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjectio
             selected=&e; break;
         }
     }
-    // Windows-Menüanimationen steuern diesen Spieleffekt nicht. Der explizite
-    // Reduced-Motion-Schalter lässt den Marker sichtbar und friert seine Drehung ein.
+    // Windows-MenÃ¼animationen steuern diesen Spieleffekt nicht. Der explizite
+    // Reduced-Motion-Schalter lÃ¤sst den Marker sichtbar und friert seine Drehung ein.
     targetCube_.Update(selected,ImGui::GetIO().DeltaTime,!menu_.reduceMotion,targetCubeConfig_);
     if(!selected) return;
     TargetCubeWorld world; TargetCubeScreen screen;
@@ -692,7 +692,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
         auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
 
-    // Die Aura liegt unter ESP und HUD. Sie teilt deren kohärenten Snapshot.
+    // Die Aura liegt unter ESP und HUD. Sie teilt deren kohÃ¤renten Snapshot.
     DrawAura(snapshot, projection, width, height);
     DrawTargetCube(snapshot,projection,{width,height});
     if(haveFriends && agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
@@ -1039,7 +1039,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
 // Triggerbot
 // ---------------------------------------------------------------------------
 void Overlay::UpdateTriggerbot(const WorldSnapshot& snapshot) {
-    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled) return;
+    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled||combat_.freecam.enabled) return;
     if (!combat_.triggerbot) return;
 
     // Never while our own menu is up - the injected click would land on the UI.
@@ -1202,7 +1202,7 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
 // Aim lock
 // ---------------------------------------------------------------------------
 void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
-    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled) return;
+    if(combatMenu_.Store().Read().values.enabled||combat_.spin.enabled||combat_.freecam.enabled) return;
     if (!combat_.aimLock || menuVisible_ || hudEditing_) return;
     if (!IsForegroundWindowOwnedBy(target_.pid)) return;
     if (!(::GetAsyncKeyState(combat_.aimKey) & 0x8000)) return;
@@ -1524,7 +1524,7 @@ void Overlay::DrawTargetMarkerSettings() {
         ImGui::EndDisabled();
         panel::ColorRow("Frame colour",&c.lime.x);
         panel::ColorRow("Highlight colour",&c.yellow.x);
-        // Die Details bleiben in derselben Tabelle, damit ihre Höhe auch unterhalb
+        // Die Details bleiben in derselben Tabelle, damit ihre HÃ¶he auch unterhalb
         // des sichtbaren Scrollbereichs erfasst wird und alle Regler erreichbar sind.
         ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
         ImGui::SetNextItemOpen(markerDetailsOpen_,ImGuiCond_Always);

@@ -97,6 +97,15 @@ public:
                 movementSupported_=(static_cast<std::uint64_t>(movements)&(std::uint64_t{1}<<i))!=0;
         }
         viewYaw_=jvm::TryField(env,signal_,"viewYaw","F",true); viewPitch_=jvm::TryField(env,signal_,"viewPitch","F",true);
+        freecamUpdate_=jvm::TryMethod(env,signal_,"updateFreecam","(DDD)V",true);
+        freecamStop_=jvm::TryMethod(env,signal_,"stopFreecam","()V",true);
+        const auto freecamBits=jvm::TryField(env,signal_,"freecamProfiles","J",true);
+        if(freecamUpdate_&&freecamStop_&&freecamBits) {
+            const auto bits=env->GetStaticLongField(signal_,freecamBits);
+            if(env->ExceptionCheck()) env->ExceptionClear();
+            else for(std::size_t i=0;i<std::size(mappings::kRuntimeProfiles);++i) if(std::strcmp(b.set->id,mappings::kRuntimeProfiles[i].set->id)==0)
+                freecamSupported_=(static_cast<std::uint64_t>(bits)&(std::uint64_t{1}<<i))!=0;
+        }
         const auto cameraBits=jvm::TryField(env,signal_,"cameraProfiles","J",true),turnBits=jvm::TryField(env,signal_,"turnProfiles","J",true);
         if(silentPlayer_ && viewYaw_ && viewPitch_ && yawOld_ && pitchOld_ && cameraBits && turnBits) {
             const auto cameras=env->GetStaticLongField(signal_,cameraBits);
@@ -125,6 +134,9 @@ public:
         if(env->ExceptionCheck()) env->ExceptionClear();
         if(signal_ && movementEnabled_) env->SetStaticBooleanField(signal_,movementEnabled_,JNI_FALSE);
         if(env->ExceptionCheck()) env->ExceptionClear();
+        if(signal_ && freecamStop_) env->CallStaticVoidMethod(signal_,freecamStop_);
+        if(env->ExceptionCheck()) env->ExceptionClear();
+        freecamActive_=false;
         // Close kann auf dem Sampler/VM-Shutdown laufen: hier keine Entity schreiben.
         if(signal_ && silentPlayer_) env->SetStaticObjectField(signal_,silentPlayer_,nullptr);
         if(env->ExceptionCheck()) env->ExceptionClear();
@@ -153,6 +165,10 @@ public:
             if(!combat::Valid(spin)) spin={};
             spinRequested_=spin.enabled;
             spinStatus_=spin.enabled?combat::SpinStatus::Paused:combat::SpinStatus::Disabled;
+            auto freecam=read?request.freecam:freecam::Config{};
+            if(!freecam::Valid(freecam)) freecam={};
+            freecamRequested_=freecam.enabled;
+            report_.freecamStatus=freecam.enabled?freecam::Status::Paused:freecam::Status::Disabled;
             if(read && request.sentAtMs && request.revision!=revision_) {
                 const auto next=combat::MakeKillAuraConfig(request.config);
                 if(!config_.Publish(next)) throw std::runtime_error("combat configuration");
@@ -168,7 +184,7 @@ public:
             const auto cfg=config_.Read().values;
             if(failed_) { EndSilent(); Report(CombatBridgeStatus::Error); return; }
             const auto flags=channel_->controlFlags.load(std::memory_order_acquire);
-            if(!read || (!cfg.enabled&&!spin.enabled) || !CombatLeaseValid(request,now) || (flags&(kCtrlRequestUnload|kCtrlPauseSampling))) {
+            if(!read || (!cfg.enabled&&!spin.enabled&&!freecam.enabled) || !CombatLeaseValid(request,now) || (flags&(kCtrlRequestUnload|kCtrlPauseSampling))) {
                 EndSilent();
                 report_.debug=assist_.Step(frame_);
                 Report(cfg.enabled ? CombatBridgeStatus::Paused : CombatBridgeStatus::Disabled); return;
@@ -193,6 +209,24 @@ public:
             if(silentSupported_) {
                 if(!cameraDetached_) BeginSilent(frame_.cameraRotation);
                 frame_.cameraRotation=ViewRotation();
+            }
+            // Freecam owns the detached view and pauses every combat action.
+            if(freecam.enabled) {
+                frame_.inputAllowed=false; report_.debug=assist_.Step(frame_); SetMovement(false); spinbot_.Reset();
+                if(!silentSupported_||!freecamSupported_) {
+                    EndSilent(); report_.freecamStatus=freecam::Status::Unsupported;
+                } else {
+                    if(!freecamActive_) { freecamPosition_=frame_.eye; freecamActive_=true; }
+                    freecamPosition_=freecam::Move(freecamPosition_,frame_.cameraRotation,freecam,request.freecamInput,frame_.dt);
+                    env_->CallStaticVoidMethod(signal_,freecamUpdate_,freecamPosition_.x,freecamPosition_.y,freecamPosition_.z); Check();
+                    report_.freecamStatus=freecam::Status::Active;
+                }
+                Report(CombatBridgeStatus::Paused); return;
+            }
+            if(freecamActive_) {
+                EndSilent();
+                frame_.cameraRotation=frame_.observedRotation=Rotation(player_);
+                if(silentSupported_) BeginSilent(frame_.cameraRotation);
             }
             frame_.verticalFovDeg=request.verticalFov; frame_.viewportHeight=request.viewportHeight;
             frame_.attackCooldown=Float(player_,cooldown_,0.0f);
@@ -334,6 +368,8 @@ private:
         return {yaw,pitch};
     }
     void EndSilent(bool restore=true) {
+        if(freecamStop_) { env_->CallStaticVoidMethod(signal_,freecamStop_); Check(); }
+        freecamActive_=false;
         spinbot_.Reset();
         SetMovement(false);
         if(!cameraDetached_) return;
@@ -402,6 +438,10 @@ private:
         frame_.inputAllowed=false; report_.debug=assist_.Step(frame_); Report(s);
     }
     void Report(CombatBridgeStatus status) {
+        if(freecamRequested_) {
+            if(status==CombatBridgeStatus::Error) report_.freecamStatus=freecam::Status::Error;
+            else if(status==CombatBridgeStatus::NoWorld) report_.freecamStatus=freecam::Status::NoWorld;
+        }
         if(spinRequested_) {
             if(status==CombatBridgeStatus::Error) spinStatus_=combat::SpinStatus::Error;
             else if(status==CombatBridgeStatus::NoWorld) spinStatus_=combat::SpinStatus::NoWorld;
@@ -417,6 +457,9 @@ private:
     combat::Spinbot spinbot_;
     combat::SpinStatus spinStatus_{};
     bool spinRequested_{};
+    bool freecamRequested_{},freecamSupported_{},freecamActive_{};
+    combat::Vec3 freecamPosition_{};
+    jmethodID freecamUpdate_{},freecamStop_{};
     SharedBlock* channel_{};
     CombatReport report_{};
     std::array<combat::Entity,kMaxEntities> entitiesData_{};
