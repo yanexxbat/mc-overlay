@@ -30,7 +30,7 @@ public final class KnifeHookCheck implements Opcodes {
             MethodVisitor tick=w.visitMethod(ACC_PUBLIC,marker[2],marker[3],null,null); tick.visitCode(); tick.visitInsn(RETURN); tick.visitMaxs(0,0); tick.visitEnd();
             MethodVisitor render=w.visitMethod(ACC_PUBLIC,hook[2],hook[3],null,null); render.visitCode();
             render.visitMethodInsn(INVOKESTATIC,"mcov/sync/KnifeHookCheck","original","()V",false); render.visitInsn(RETURN); render.visitMaxs(0,0); render.visitEnd(); w.visitEnd();
-            Class<?> hand=loader.put(owner,w.toByteArray()); var method=Arrays.stream(hand.getDeclaredMethods()).filter(m->m.getName().equals(hook[2])).findFirst().orElseThrow();
+            Class<?> hand=loader.put(owner,w.toByteArray()); var method=Arrays.stream(hand.getDeclaredMethods()).filter(m->m.getName().equals(hook[2])&&m.getParameterCount()==6).findFirst().orElseThrow();
             method.invoke(hand.getConstructor().newInstance(),null,null,null,null,null,0);
             if(vanilla!=index+1||(FrameSignal.knifeProfiles&(1L<<index))==0) throw new AssertionError("Knife hook verification/fallback failed "+index);
             ++index;

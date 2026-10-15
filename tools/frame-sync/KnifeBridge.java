@@ -105,7 +105,13 @@ public final class KnifeBridge {
     static KnifeGeometry.Mesh transform(KnifeGeometry.Mesh source,KnifeGeometry.Matrix matrix) {
         float[] result=new float[source.xyz().length];
         for(int i=0;i<source.vertices();++i) System.arraycopy(matrix.point(source.xyz()[i*3],source.xyz()[i*3+1],source.xyz()[i*3+2]),0,result,i*3,3);
-        return new KnifeGeometry.Mesh(result,source.colours());
+        // A reflection reverses winding. Preserve outward faces for culling.
+        int[] colours=source.colours().clone();
+        for(int first=0;first<source.vertices();first+=4) for(int i=0;i<2;++i) {
+            int a=first+i,b=first+3-i; int colour=colours[a]; colours[a]=colours[b]; colours[b]=colour;
+            for(int axis=0;axis<3;++axis) { float value=result[a*3+axis]; result[a*3+axis]=result[b*3+axis]; result[b*3+axis]=value; }
+        }
+        return new KnifeGeometry.Mesh(result,colours);
     }
     static void record(long now,float[] base,float[] tip) {
         Streak last=streaks.peekLast();
