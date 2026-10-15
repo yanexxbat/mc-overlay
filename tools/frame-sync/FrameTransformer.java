@@ -23,10 +23,6 @@ final class FrameTransformer implements ClassFileTransformer {
     FrameTransformer(Instrumentation inst, Class<?> signals) { this.inst = inst; this.signals=signals; this.signalModule = signals.getModule(); }
     @Override public byte[] transform(Module module, ClassLoader loader, String name, Class<?> previous,
                                       ProtectionDomain domain, byte[] original) {
-        if(mcov.KnifeProfiles.target(name)) {
-            try { byte[] knife=KnifeTransformer.rewrite(inst,module,signals,name,original); if(knife!=null) return knife; }
-            catch(Throwable error) { System.err.println("[mcov] optional knife hook unavailable: "+error); }
-        }
         if (!FrameProfiles.isTarget(name) && !DepthProfiles.isTarget(name)) return null;
         try {
             ClassReader reader = new ClassReader(original);

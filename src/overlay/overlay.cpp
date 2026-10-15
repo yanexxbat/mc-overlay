@@ -1081,8 +1081,6 @@ void Overlay::UpdateTriggerbot(const WorldSnapshot& snapshot) {
 void Overlay::PushScanRequest() {
     SharedBlock* block = channel_.block();
     if (!block) return;
-    block->knifeRequest.Publish(BuildKnifeRequest(GetTickCount64()));
-    block->knifeReport.Read(knifeReport_);
 
     const bool storage=rockstarConfig_.Enabled(rockstar::Feature::ChestEsp),beacon=rockstarConfig_.Enabled(rockstar::Feature::BeaconRadius);
     const auto stash=smpConfig_.Detection(); const auto& spawner=smpConfig_.spawner;
@@ -1310,7 +1308,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
             worldVisualsConfig_=WorldVisualsConfig{}; worldVisuals_.Reset();
-            localHatConfig_=LocalHatConfig{}; knifeConfig_={};
+            localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset();
             for(int i=0;i<=rockstar::Index(rockstar::Feature::Arrows);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
         case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset(); baseFinder_.Reset();
@@ -1338,9 +1336,8 @@ void Overlay::DrawVisualsTab() {
     constexpr const char* sections[]={"Box ESP","Skeleton","Name tags","Health bars","Distance labels",
         "Tracers","Target info","Target aura","Target marker","Trails","Hit particles","Ambient particles",
         "Hit bubbles","Kill effect","BreadCrumbs","China hat","Entity filters","Jump circles","Wings","Halo / Nimb",
-        "Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows","CS Knife"};
+        "Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows"};
     visualsSection_=panel::SubTabs("visual_sections",sections,IM_ARRAYSIZE(sections),visualsSection_);
-    if(visualsSection_==26) { DrawKnifeSettings(); return; }
     if(visualsSection_>=17) { DrawRockstarSettings(static_cast<rockstar::Feature>(visualsSection_-17)); return; }
     bool changed=false;
     const auto enumRow=[&]<class Enum,std::size_t N>(const char* label,Enum& value,const char* const (&items)[N]) {

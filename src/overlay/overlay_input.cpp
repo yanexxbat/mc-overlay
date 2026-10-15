@@ -38,7 +38,6 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::AimAssist:return combat_.aimLock;
         case keys::Action::Spinbot:return combat_.spin.enabled;
         case keys::Action::Freecam:return combat_.freecam.enabled;
-        case keys::Action::CsKnife:return knifeConfig_.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
@@ -77,7 +76,6 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::AimAssist:combat_.aimLock=value;break;
         case keys::Action::Spinbot:combat_.spin.enabled=value;break;
         case keys::Action::Freecam:combat_.freecam.enabled=value;break;
-        case keys::Action::CsKnife:knifeConfig_.enabled=value;preferencesDirty_=true;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
@@ -106,7 +104,6 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
 }
 void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
     const bool middlePressed=input[VK_MBUTTON]&&!keyInput_[VK_MBUTTON];
-    knifeInputAllowed_=focused&&!menuVisible_&&!hudEditing_&&captureAction_<0;
     keyInput_=input; const bool capturing=captureAction_>=0;
     if(capturing) {
         if(!focused||!menuVisible_) captureAction_=-1;
@@ -143,7 +140,6 @@ void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
             else if(a==keys::Action::Quit) running_=false;
             else if(a==keys::Action::HudEditor) SetHudEditing(!hudEditing_);
             else if(a==keys::Action::Panic) Panic();
-            else if(a==keys::Action::KnifeInspect&&knifeInputAllowed_&&!menuVisible_&&!hudEditing_&&knifeConfig_.enabled) ++knifeInspectSerial_;
         });
     if(middlePressed&&focused&&!capturing&&!menuVisible_&&!hudEditing_&&rockstarConfig_.Enabled(rockstar::Feature::MiddleFriend)&&haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64())) {
         for(const auto& entity:std::span(lastSnapshot_.entities,std::min(lastSnapshot_.entityCount,kMaxEntities))) {
@@ -224,7 +220,6 @@ void Overlay::SavePreferences() {
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
       client_configs::Chunks(smpArchive,chunkFinder_);
-      client_configs::Knife(smpArchive,knifeConfig_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
       for(int i=0;i<2;++i) {
           auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
@@ -252,15 +247,11 @@ void Overlay::LoadPreferences() {
     std::ifstream in(preferencesPath_); if(!in) return;
     std::string header; std::getline(in,header); if(header!="mcov-client 1") { preferenceStatus_="Unsupported preferences format; defaults loaded."; return; }
     std::map<std::string,std::string> smpValues; bool smpUnique=true;
-    std::map<std::string,std::string> knifeValues; bool knifeUnique=true;
     std::string line; for(int lines=0;lines<512&&std::getline(in,line);++lines) {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
                 (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
-        } else if(tag.starts_with("knife.")) {
-            const auto split=line.find(' ');
-            if(split==std::string::npos||!knifeValues.emplace(tag,line.substr(split+1)).second) knifeUnique=false;
         } else if(tag.starts_with("smp.")||tag.starts_with("chunks.")) {
             const auto split=line.find(' ');
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
@@ -312,11 +303,5 @@ void Overlay::LoadPreferences() {
         else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";
     }
     rockstarConfig_.Clamp();
-    if(!knifeValues.empty()) {
-        client_configs::AddKnifeGlowDefaults(knifeValues);
-        knife::Config candidate; client_configs::Archive archive(knifeValues); client_configs::Knife(archive,candidate);
-        if(knifeUnique&&archive.valid&&knifeValues.empty()) knifeConfig_=candidate;
-        else preferenceStatus_="Invalid knife preferences; CS Knife defaults retained.";
-    }
 }
 } // namespace mcov

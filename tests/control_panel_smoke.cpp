@@ -100,9 +100,6 @@ struct OverlayUiCheck {
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
     static freecam::Config& Freecam(Overlay& o) { return o.combat_.freecam; }
-    static knife::Config& Knife(Overlay& o) { return o.knifeConfig_; }
-    static knife::Request KnifeRequest(const Overlay& o) { return o.BuildKnifeRequest(GetTickCount64()); }
-    static void KnifeStatus(Overlay& o,knife::Status status) { o.knifeReport_={GetTickCount64(),status}; }
     static void FocusInput(Overlay& o,const keys::Input& input,bool focused) { o.ProcessKeyInput(input,focused); }
     static void FreecamStatus(Overlay& o,freecam::Status status) { o.combatReport_.freecamStatus=status; o.combatReport_.sampledAtMs=GetTickCount64(); }
     static void ConfigName(Overlay& o,const char* name) { std::snprintf(o.configName_,sizeof(o.configName_),"%s",name); }
@@ -325,7 +322,7 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
         }
     }
     // Native button focus supports Space, and Shift+F10 opens its settings.
-    ClickModule(overlay,Page::Visuals,0,27,0);
+    ClickModule(overlay,Page::Visuals,0,26,0);
     const bool box=mcov::OverlayUiCheck::Box(overlay);
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
     ImGui::GetCurrentContext()->NavCursorVisible=true;
@@ -463,7 +460,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     // Closing/reopening the same module retains its scroll; a new module resets it.
     OpenModuleSettings(overlay,Page::Settings,"",2,5);
     Require(content->Scroll.y>0,"Reopening the same module lost its scroll");
-    OpenModuleSettings(overlay,Page::Visuals,"",0,27);
+    OpenModuleSettings(overlay,Page::Visuals,"",0,26);
     Require(Child("/content_")->Scroll.y==0,"Changing module did not reset settings scroll");
     auto* root=ImGui::FindWindowByName("mcov control panel");
     auto* pane=ImGui::FindWindowByName("mcov module settings");
@@ -483,7 +480,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     io.AddMousePosEvent(grip.x,grip.y); frame(); io.AddMouseButtonEvent(0,true); frame();
     io.AddMousePosEvent(grip.x+35,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
     Require(root->Pos.x==original.x+35&&root->Pos.y==original.y+15,"Module grid drag lost its offset");
-    OpenModuleSettings(overlay,Page::Visuals,"",0,27);
+    OpenModuleSettings(overlay,Page::Visuals,"",0,26);
     const ImVec2 centerButton{root->Pos.x+root->Size.x-182,root->Pos.y+root->Size.y-23};
     io.AddMousePosEvent(centerButton.x,centerButton.y); frame(); io.AddMouseButtonEvent(0,true); frame();
     io.AddMouseButtonEvent(0,false); frame(); frame();
@@ -612,13 +609,13 @@ void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
         click({popup->DC.CursorStartPos.x+30,popup->DC.CursorStartPos.y+index*(height+ctx.Style.ItemSpacing.y)+height*.5f});
     };
     mcov::OverlayUiCheck::ResetVisuals(overlay);
-    OpenModuleSettings(overlay,Page::Visuals,"",0,27); choose("box_controls",2);
+    OpenModuleSettings(overlay,Page::Visuals,"",0,26); choose("box_controls",2);
     Require(c.boxStyle==mcov::EspBoxStyle::Wire3D,"Box mode did not update the real renderer settings");
-    c.tracers=true; OpenModuleSettings(overlay,Page::Visuals,"",5,27); choose("tracer_controls",3);
+    c.tracers=true; OpenModuleSettings(overlay,Page::Visuals,"",5,26); choose("tracer_controls",3);
     Require(c.tracerOrigin==mcov::EspTracerOrigin::Custom,"Tracer origin did not update the real renderer settings");
     click(controlPoint("tracer_controls",2,.92f));
     Require(c.customTracerOrigin.x>.8f&&c.customTracerOrigin.x<=1,"Custom origin slider was not wired to the renderer");
-    OpenModuleSettings(overlay,Page::Visuals,"",3,27); choose("health_controls",1);
+    OpenModuleSettings(overlay,Page::Visuals,"",3,26); choose("health_controls",1);
     Require(c.barPlacement==mcov::EspBarPlacement::Horizontal,"Bar placement was not wired to the renderer");
     const auto* t=table("health_controls");
     const auto armorPoint=controlPoint("health_controls",7);
@@ -627,7 +624,7 @@ void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     io.AddMousePosEvent(-100,-100);
     for(const auto size:{ImVec2{1280,800},ImVec2{480,360}}) {
         for(int section:{0,2,3,4,5}) {
-            OpenModuleSettings(overlay,Page::Visuals,"",section,27,size);
+            OpenModuleSettings(overlay,Page::Visuals,"",section,26,size);
             auto* content=Child("/content_");
             Draw(overlay,Page::Visuals,0,size); Draw(overlay,Page::Visuals,0,size);
             SaveFrame(device,context,output/(std::string("visual-controls-")+std::to_string(section)+
@@ -648,7 +645,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     auto& config=mcov::OverlayUiCheck::CubeSettings(overlay);
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
     mcov::OverlayUiCheck::Center(overlay); frame(); frame();
-    OpenModuleSettings(overlay,Page::Visuals,"visual_sections",8,27);
+    OpenModuleSettings(overlay,Page::Visuals,"visual_sections",8,26);
     auto* content=Child("/content_");
     auto click=[&](ImVec2 p) {
         io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
@@ -756,7 +753,7 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     bool* enabled[]={&config.trails.enabled,&config.hits.enabled,&config.ambient.enabled,&config.bubbles.enabled,
         &config.kills.enabled,&config.crumbs.enabled,&hat.enabled};
     for(int section=9;section<=15;++section) {
-        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",section,27);
+        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",section,26);
         const char* names[]={"trail_settings","hit_particle_settings","ambient_particle_settings","hit_bubble_settings",
             "kill_effect_settings","breadcrumb_settings","local_hat_settings"};
         auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID(names[section-9]));
@@ -850,7 +847,7 @@ void RockstarChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCont
     jumpPreview(.14,"jump-soft-enter.png"); jumpPreview(.45,"jump-soft-ring.png"); jumpPreview(.95,"jump-soft-fade.png");
     for(int i=0;i<=int(Feature::Arrows);++i) config.modules[i].enabled=true;
     for(int index:{18,20,21,24,25}) {
-        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",index,27);
+        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",index,26);
         SaveFrame(device,context,output/(std::string("rockstar-settings-")+std::to_string(index)+".png"));
     }
     config={}; pack.ResetWorld(); pack.ClearMarkers(); mcov::OverlayUiCheck::Seed(overlay);
@@ -1127,6 +1124,11 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     if(!std::filesystem::is_regular_file(folder/"configs"/"My setup.ini")) throw std::runtime_error("Config Save button: "+Check::ConfigStatus(overlay));
     std::string saved; Require(Encode(Check::ConfigSnapshot(overlay),saved),"Saved settings could not be serialized");
     Snapshot decoded; Require(Decode(saved,decoded),"Fresh profile did not pass its own parser");
+    const int retired=mcov::keys::Index(mcov::keys::Action::Freecam)+1;
+    auto legacy=saved+"knife.enabled 1\nknife.glow 1\n";
+    for(int id:{retired,retired+1}) legacy+="bind."+std::to_string(id)+".key 82\nbind."+std::to_string(id)+".modifiers 0\nbind."+std::to_string(id)+".mode 0\n";
+    Snapshot migratedCosmetics;std::string cleaned;
+    Require(Decode(legacy,migratedCosmetics)&&Encode(migratedCosmetics,cleaned)&&cleaned==saved,"Removed cosmetics damaged surviving profile settings/bindings");
     std::string reencoded; Require(Encode(decoded,reencoded)&&reencoded==saved,"Config schema did not round-trip every field");
     const auto spinBind="bind."+std::to_string(mcov::keys::Index(mcov::keys::Action::Spinbot))+".";
     std::istringstream oldIn(saved); std::ostringstream oldOut; std::string oldLine;
@@ -1188,43 +1190,6 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
         Require(item.path().filename().string().find(".tmp-")==std::string::npos,"Successful/failed writes left temporary config files");
     Check::PrefPath(overlay,{});
 }
-void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
-    using Check=mcov::OverlayUiCheck;
-    auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
-    auto& c=Check::Knife(o); c={true,true,true,2,1.5f,1.25f,.21f}; c.glow=true; c.glowStrength=1.6f; c.glowWidth=1.3f; c.glowColour=0x69ddd5;
-    Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::KnifeInspect)]={0x52,0,mcov::keys::Mode::Toggle};
-    Check::KnifeStatus(o,mcov::knife::Status::Ready);
-    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        Check::Center(o); OpenModuleSettings(o,Page::Visuals,"visual_sections",26,27,size);
-        auto frame=[&]{ Draw(o,Page::Visuals,0,size); };
-        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
-        Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("knife_controls"))!=nullptr,"CS Knife controls are missing");
-        SaveFrame(device,context,output/(size.x>500?"knife-settings-desktop.png":"knife-settings-small.png"));
-        ImGui::SetScrollY(content,6*(ImGui::GetFrameHeight()+ImGui::GetStyle().CellPadding.y*2)); frame();frame();
-        SaveFrame(device,context,output/(size.x>500?"knife-glow-desktop.png":"knife-glow-small.png"));
-        ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
-        SaveFrame(device,context,output/(size.x>500?"knife-status-desktop.png":"knife-status-small.png"));
-        auto* pane=ImGui::FindWindowByName("mcov module settings");
-        Require(pane->Scroll.y==0&&content->InnerClipRect.Min.y>=pane->Pos.y+42&&content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,
-            "Knife controls/status overlap the header or are unreachable");
-    }
-    Check::KnifeStatus(o,mcov::knife::Status::Failed); Draw(o,Page::Visuals,0,{480,360});
-    auto* errorContent=Child("/content_"); ImGui::SetScrollY(errorContent,errorContent->ScrollMax.y);
-    Draw(o,Page::Visuals,0,{480,360}); Draw(o,Page::Visuals,0,{480,360});
-    Require(errorContent->DC.CursorPosPrevLine.y<=errorContent->InnerRect.Max.y+2,"Knife error recovery text is unreachable");
-    SaveFrame(device,context,output/"knife-error-small.png");
-    mcov::keys::Input input{}; Check::Input(o,input);
-    auto before=Check::KnifeRequest(o); input[0x52]=true; Check::Input(o,input);
-    auto pressed=Check::KnifeRequest(o);
-    Require(pressed.config.enabled&&pressed.config.glow&&pressed.config.glowStrength==1.6f&&pressed.config.glowWidth==1.3f&&pressed.config.glowColour==0x69ddd5&&pressed.inspectHeld&&pressed.inspectSerial==before.inspectSerial+1,"Inspect key did not reach the hand renderer request");
-    Check::Input(o,input); Require(Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Held Inspect generated duplicate press events");
-    Check::FocusInput(o,input,false); Require(!Check::KnifeRequest(o).inspectHeld,"Focus loss left Inspect held");
-    input={}; Check::Input(o,input); input[0x52]=true; Check::Input(o,input,true);
-    Require(!Check::KnifeRequest(o).inspectHeld&&Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Overlay menu activated Inspect");
-    Check::PrefPath(o,output/"knife-preferences.ini"); Check::Save(o); c={}; Check::Load(o);
-    Require(c.enabled&&c.skin==2&&c.speed==1.5f&&c.size==1.25f&&c.trailSeconds==.21f&&c.glow&&c.glowStrength==1.6f&&c.glowWidth==1.3f&&c.glowColour==0x69ddd5,"Knife preferences lost settings");
-    Check::Panic(o); Require(!c.enabled&&!Check::KnifeRequest(o).config.enabled,"Panic left knife replacement active");
-}
 void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     using Check=mcov::OverlayUiCheck;
     auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
@@ -1283,7 +1248,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,27,10,20,3,5,9};
+        constexpr int sectionCounts[]={9,26,10,20,3,5,9};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1291,7 +1256,6 @@ int main(int argc,char** argv) {
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
         SmpUiChecks(device.Get(),context.Get(),output);
-        KnifeUiChecks(device.Get(),context.Get(),output);
         FreecamUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
@@ -1309,7 +1273,7 @@ int main(int argc,char** argv) {
             io.AddMousePosEvent(p.x,p.y); frame(page,true); io.AddMouseButtonEvent(0,true); frame(page,true);
             io.AddMouseButtonEvent(0,false); frame(page,true); frame(page,true);
         };
-        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",0,27);
+        OpenModuleSettings(overlay,Page::Visuals,"visual_sections",0,26);
         SaveFrame(device.Get(),context.Get(),output/"module-settings-box.png");
         frame(Page::Visuals); auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(Page::Visuals);
         auto* boxTable=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("box_controls"));
@@ -1629,7 +1593,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 83 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 82 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

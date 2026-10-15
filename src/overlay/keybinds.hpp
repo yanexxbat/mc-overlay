@@ -11,7 +11,7 @@ enum class Action { Menu, Quit, HudEditor, KillAura, AimAssist, Triggerbot, Auto
     JumpCircles, Wings, Halo, GlowEsp, DamageMarkers, DamageInfo, TargetCircle, Crosshair, Arrows,
     NameProtect, HitSounds, ModuleSounds, MiddleFriend, DeathCoordinates, DetectPlayer, Notifications,
     ChestEsp, BeaconRadius, ChunkBorders, Waypoints,
-    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Panic, Spinbot, StashFinder, SpawnerEsp, BaseEsp, BaseFinder, Freecam, CsKnife, KnifeInspect, Count };
+    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Panic, Spinbot, StashFinder, SpawnerEsp, BaseEsp, BaseFinder, Freecam, Count };
 enum class Mode { Toggle, Hold };
 enum Modifier : unsigned { Ctrl=1, Shift=2, Alt=4 };
 inline constexpr int kCount=static_cast<int>(Action::Count);
@@ -22,7 +22,7 @@ inline constexpr std::array<const char*,kCount> kNames={"Menu","Quit overlay","H
     "Jump circles","Wings","Halo / Nimb","Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows",
     "Name protect","Hit sounds","Module sounds","Middle click friend","Death coordinates","Detect players","Notifications",
     "Storage ESP","Beacon radius","Chunk borders","Waypoints",
-    "Radar","Keystrokes","Speedometer","Session statistics","Armor strip","Combat indicators","Clock","Click rate","Panic","Spinbot","Stash Finder","Spawner ESP","Base ESP","Chunkfinder (alternate)","Freecam","CS Knife","Knife inspect"};
+    "Radar","Keystrokes","Speedometer","Session statistics","Armor strip","Combat indicators","Clock","Click rate","Panic","Spinbot","Stash Finder","Spawner ESP","Base ESP","Chunkfinder (alternate)","Freecam"};
 struct Bind { int key{}; unsigned modifiers{}; Mode mode=Mode::Toggle; };
 using Bindings=std::array<Bind,kCount>;
 using Input=std::array<bool,256>;
@@ -57,7 +57,7 @@ inline std::string KeyName(int key) {
     }
 }
 inline constexpr int Index(Action a) { return static_cast<int>(a); }
-inline constexpr bool System(Action a) { return Index(a)<=Index(Action::HudEditor)||a==Action::Panic||a==Action::KnifeInspect; }
+inline constexpr bool System(Action a) { return Index(a)<=Index(Action::HudEditor)||a==Action::Panic; }
 inline Bindings Defaults() {
     Bindings b{}; b[Index(Action::Menu)].key=0x2D; b[Index(Action::Quit)].key=0x23;
     b[Index(Action::HudEditor)].key=0x75;

@@ -39,7 +39,6 @@
 #include "item_assist_live.hpp"
 #include "depth_capture.hpp"
 #include "base_texture_capture.hpp"
-#include "knife_bridge.hpp"
 
 using namespace mcov;
 
@@ -57,7 +56,6 @@ FrameSync        g_frameSync;
 mcov::agent::DepthCapture g_depthCapture;
 void JNICALL OnDepthReady(JNIEnv* env,jclass,jobject renderer,jlong epoch) { g_depthCapture.Capture(env,renderer,static_cast<std::uint64_t>(epoch)); }
 mcov::agent::BaseTextureCapture g_baseTextures;
-mcov::agent::KnifeBridge g_knives;
 void JNICALL OnTexturedBase(JNIEnv* env,jclass,jobject renderer,jlong) { g_baseTextures.Capture(env,renderer); }
 mcov::agent::MinecraftCombat g_combat;
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
@@ -1450,7 +1448,6 @@ void SamplerThread() {
         const auto loopNow = ::GetTickCount64();
         g_depthCapture.RefreshRequest(env);
         g_baseTextures.RefreshRequest(env);
-        g_knives.Refresh(env);
         if (loopNow >= nextHeartbeatTick) {
             if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
             nextHeartbeatTick = loopNow + 100;
@@ -1497,8 +1494,6 @@ void SamplerThread() {
                 if(g_baseTextures.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnTexturedBase)))
                     MCOV_LOG_INFO("textured Base ESP bridge active: %s",bindings.set->id);
                 else MCOV_LOG_INFO("textured Base ESP unavailable for this renderer/profile");
-                if(g_knives.Install(env,bindings,g_channel.block())) MCOV_LOG_INFO("first-person knife bridge active: %s",bindings.set->id);
-                else MCOV_LOG_INFO("first-person knives unavailable for this renderer/profile");
                 if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
                     MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
                 else MCOV_LOG_WARN("inventory client-tick bridge unavailable");
@@ -1659,7 +1654,6 @@ void SamplerThread() {
     if(scanWorld) env->DeleteWeakGlobalRef(scanWorld);
     g_depthCapture.Close(env);
     g_baseTextures.Close(env);
-    g_knives.Close(env);
     g_combat.Close(env);
     g_inventory.Close(env);
     g_frameSync.Close(env);

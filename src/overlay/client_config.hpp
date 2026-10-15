@@ -23,7 +23,6 @@ struct Snapshot {
     BlockEspSettings blocks{};
     ChunkFinderSettings chunks{};
     smp::Config smp{};
-    knife::Config knife{};
     items::MacroConfig crystal{},anchor{};
     HudSettings hud{};
     keys::Bindings binds=keys::Defaults();
@@ -130,18 +129,6 @@ inline void Chunks(Archive& a,ChunkFinderSettings& c) {
     a.Value("chunks.radius",c.radius,4,48); a.Value("chunks.interval",c.interval,200,3000);
     a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,128); a.Color("chunks.color",c.color);
 }
-inline void Knife(Archive& a,knife::Config& c) {
-    a.Value("knife.enabled",c.enabled); a.Value("knife.skin",c.skin,0,2);
-    a.Value("knife.speed",c.speed,.5,2); a.Value("knife.size",c.size,.5,2);
-    a.Value("knife.trails",c.trails); a.Value("knife.deploy",c.deploy); a.Value("knife.duration",c.trailSeconds,.05,.35);
-    a.Value("knife.glow",c.glow); a.Value("knife.glowStrength",c.glowStrength,0,3);
-    a.Value("knife.glowWidth",c.glowWidth,.25,3); a.Value("knife.glowColour",c.glowColour,0,0xffffff);
-}
-inline void AddKnifeGlowDefaults(std::map<std::string,std::string>& values) {
-    if(values.contains("knife.glow")||values.contains("knife.glowStrength")||values.contains("knife.glowWidth")||values.contains("knife.glowColour")) return;
-    values.emplace("knife.glow","1"); values.emplace("knife.glowStrength","1.2");
-    values.emplace("knife.glowWidth","1"); values.emplace("knife.glowColour","6938069");
-}
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
         values.emplace("chunks.chunks","1"); values.emplace("chunks.deepslate","1");
@@ -244,7 +231,6 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
     Chunks(a,s.chunks);
     Smp(a,s.smp);
-    Knife(a,s.knife);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
 #define MACRO(field,...) a.Field(n+#field,macro->field,std::tuple{__VA_ARGS__})
@@ -368,18 +354,15 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace(freecamBind+"key","0"); values.emplace(freecamBind+"modifiers","0"); values.emplace(freecamBind+"mode","0");
     }
     AddChunkHighlightDefaults(values);
-    const auto knifeBind="bind."+std::to_string(keys::Index(keys::Action::CsKnife))+".";
-    const auto inspectBind="bind."+std::to_string(keys::Index(keys::Action::KnifeInspect))+".";
-    const bool hasKnife=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
-        return entry.first.starts_with("knife.")||entry.first.starts_with(knifeBind)||entry.first.starts_with(inspectBind);
-    });
-    if(!hasKnife) {
-        knife::Config c; std::ostringstream defaults; Archive a(defaults); Knife(a,c);
-        std::istringstream input(defaults.str());
-        while(std::getline(input,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
-        for(const auto& bind:{knifeBind,inspectBind}) { values.emplace(bind+"key","0"); values.emplace(bind+"modifiers","0"); values.emplace(bind+"mode","0"); }
+    // Removed cosmetics occupied the two IDs immediately after Freecam.
+    // Drop their old data without shifting any surviving module bindings.
+    const int firstRemoved=keys::Index(keys::Action::Freecam)+1;
+    const auto removedModule="bind."+std::to_string(firstRemoved)+".";
+    const auto removedInspect="bind."+std::to_string(firstRemoved+1)+".";
+    for(auto it=values.begin();it!=values.end();) {
+        if(it->first.starts_with("knife.")||it->first.starts_with(removedModule)||it->first.starts_with(removedInspect)) it=values.erase(it);
+        else ++it;
     }
-    AddKnifeGlowDefaults(values);
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

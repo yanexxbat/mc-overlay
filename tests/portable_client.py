@@ -44,6 +44,10 @@ runtime = versions[0]
 hash_file = lambda p: hashlib.sha256(p.read_bytes()).digest()
 for name in payloads:
     assert hash_file(runtime / name) == hash_file(binaries / name), f'wrong bundled payload: {name}'
+for name in ['tools/frame-sync-agent.jar', 'tools/frame-signal.jar']:
+    with zipfile.ZipFile(runtime / name) as helper:
+        assert not any('knife' in entry.lower() for entry in helper.namelist()), 'removed knife renderer is still bundled'
+
 timestamps = [(runtime / name).stat().st_mtime_ns for name in payloads]
 prepare()
 assert timestamps == [(runtime / name).stat().st_mtime_ns for name in payloads], 'valid cache unnecessarily rewritten'

@@ -2,8 +2,6 @@ package mcov;
 
 /** Bootstrap-visible frame signals and the explicitly armed client-tick bridge. */
 public final class FrameSignal {
-    public static volatile long knifeProfiles;
-    public static synchronized void markKnife(long mask) { knifeProfiles|=mask; }
     public static volatile boolean texturedBaseEnabled;
     private static native void nativeTexturedBase(Object renderer,long epoch);
     public static volatile boolean depthEnabled;

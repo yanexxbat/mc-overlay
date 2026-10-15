@@ -197,8 +197,6 @@ private:
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
     void DrawSmpSettings(int section);
-    void DrawKnifeSettings();
-    knife::Request BuildKnifeRequest(std::uint64_t now) const;
     void DrawScanStatus();
     void DrawRockstarSettings(rockstar::Feature feature);
     void DrawMiscTab();
@@ -291,10 +289,6 @@ private:
     base::Report baseReport_{};
     smp::StashFinder stashFinder_{};
     smp::BaseFinder baseFinder_{};
-    knife::Config knifeConfig_{};
-    knife::Report knifeReport_{};
-    std::uint64_t knifeInspectSerial_{};
-    bool knifeInputAllowed_=false;
     items::MacroConfig crystalMacro_{},anchorMacro_{};
     items::Report itemReport_{};
 

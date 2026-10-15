@@ -36,7 +36,6 @@ client_configs::Snapshot Overlay::CaptureConfig() const {
     c.aura=auraConfig_; c.marker=targetCubeConfig_; c.world=worldVisualsConfig_;
     c.friendHat=friendHatConfig_; c.hat=localHatConfig_; c.blocks=blocks_; c.chunks=chunkFinder_;
     c.smp=smpConfig_; c.crystal=crystalMacro_; c.anchor=anchorMacro_; c.hud=hud_; c.binds=bindings_;
-    c.knife=knifeConfig_;
     c.extra=rockstarConfig_; c.waypoints=rockstarPack_.Markers(); c.reducedMotion=menu_.reduceMotion;
     return c;
 }
@@ -51,7 +50,6 @@ void Overlay::ApplyConfig(const client_configs::Snapshot& c) {
     friendHatConfig_=c.friendHat; localHatConfig_=c.hat; blocks_=c.blocks; chunkFinder_=c.chunks;
     smpConfig_=c.smp; crystalMacro_=c.crystal; anchorMacro_=c.anchor; hud_=c.hud; bindings_=c.binds;
     NormalizeChunkFinder();
-    knifeConfig_=c.knife; knifeInputAllowed_=false; ++knifeInspectSerial_;
     rockstarConfig_=c.extra; rockstarPack_.Markers()=c.waypoints; menu_.reduceMotion=c.reducedMotion;
     // Discard old Hold-key leases and visual history on explicit profile changes.
     keyEngine_={}; captureAction_=-1; captureArmed_=false; captureModifier_=0;
