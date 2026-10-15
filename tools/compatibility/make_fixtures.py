@@ -293,6 +293,8 @@ def generate(profiles_path, output):
         add(core['client'],'fields','testBreaks','I',True)
         cls(core['client'])['specials'][tuple(geometry['members']['freecamAttack'])]=('freecam_click',)
         cls(core['client'])['specials'][tuple(geometry['members']['freecamContinueAttack'])]=('increment','testBreaks')
+        add(core['gameRenderer'],'fields','testHands','I',True)
+        cls(core['gameRenderer'])['specials'][tuple(geometry['members']['freecamHand'])]=('increment','testHands')
         cls(core['blockPosMut'])['parent_name']=geometry['members']['blockHitPos'][1].split(')')[1][1:-1]
         cls(core['livingEntity'])['parent_name'] = core['entity']
         cls(core['player'])['parent_name'] = core['livingEntity']

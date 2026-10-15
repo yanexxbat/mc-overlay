@@ -23,8 +23,9 @@ The existing client-tick JNI bridge reads the leased request, advances flight
 using elapsed time and publishes coordinates to `FrameSignal`. Its existing
 mouse hook separates view angles from entity angles. Camera hooks apply a
 linearly interpolated position through Minecraft's own `setPosition`, update
-rotation through `setRotation`, and set detached mode for third-person model
-and hand rendering. Minecraft overwrites these normally on the next setup.
+rotation through `setRotation`, and set detached mode for the player model.
+The renderer's hand pass is separately skipped while Freecam is active.
+Minecraft overwrites the camera normally on the next setup.
 For 26.2 the hook runs at the end of `alignWithEntity`, before camera culling
 and cached matrices are prepared; earlier profiles use `Camera.setup`.
 No render-frame JNI callback is added.

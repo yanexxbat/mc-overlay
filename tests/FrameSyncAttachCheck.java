@@ -30,6 +30,7 @@ public final class FrameSyncAttachCheck {
                 loaders.add(loader);
                 Class<?> client = Class.forName(profile.client().replace('/', '.'), true, loader);
                 Class<?> camera = Class.forName(profile.camera().replace('/', '.'), true, loader);
+                Class.forName(profile.renderer().replace('/','.'),true,loader);
                 Method frame = client.getDeclaredMethod(profile.frame(), boolean.class);
                 Method update=camera.getDeclaredMethod(profile.update(),java.lang.invoke.MethodType.fromMethodDescriptorString(profile.updateDesc(),loader).parameterArray());
                 require(update != null, "Missing camera method " + profile.id());

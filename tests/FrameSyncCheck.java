@@ -14,6 +14,14 @@ public final class FrameSyncCheck {
         Object self=local.getConstructor().newInstance(),other=local.getConstructor().newInstance();
         Class<?> camera=Class.forName(p.camera().replace('/','.'),true,loader),client=Class.forName(p.client().replace('/','.'),true,loader);
         Object view=camera.getConstructor().newInstance(),owner=client.getConstructor().newInstance();
+        Class<?> renderer=Class.forName(p.renderer().replace('/','.'),true,loader);
+        Object handRenderer=renderer.getConstructor().newInstance();
+        Method hand=renderer.getDeclaredMethod(p.hand(),java.lang.invoke.MethodType.fromMethodDescriptorString(p.handDesc(),loader).parameterArray());
+        Object[] handArgs=new Object[hand.getParameterCount()];
+        for(int i=0;i<handArgs.length;i++) {
+            Class<?> t=hand.getParameterTypes()[i];
+            if(t==float.class) handArgs[i]=.5f; else if(t==boolean.class) handArgs[i]=false;
+        }
         require((FrameSignal.freecamProfiles&(1L<<index))!=0,"Missing freecam hooks "+p.id());
         Method update=camera.getDeclaredMethod(p.update(),java.lang.invoke.MethodType.fromMethodDescriptorString(p.updateDesc(),loader).parameterArray());
         Object[] args=new Object[update.getParameterCount()];
@@ -37,11 +45,14 @@ public final class FrameSyncCheck {
             local.getMethod(p.localStep()).invoke(other);
             require(movement.getFloat(other)!=-777,"Freecam froze another entity "+p.id());
             int uses=client.getField("testUses").getInt(null),clicks=client.getField("testClicks").getInt(null),breaks=client.getField("testBreaks").getInt(null);
+            int hands=renderer.getField("testHands").getInt(null); hand.invoke(handRenderer,handArgs);
+            require(renderer.getField("testHands").getInt(null)==hands,"Freecam rendered first-person hands "+p.id());
             client.getMethod(p.use()).invoke(owner); client.getMethod(p.attack()).invoke(owner); client.getMethod(p.continueAttack(),boolean.class).invoke(owner,true);
             require(client.getField("testUses").getInt(null)==uses&&client.getField("testClicks").getInt(null)==clicks&&client.getField("testBreaks").getInt(null)==breaks,"Freecam allowed interactions "+p.id());
             java.lang.reflect.Field at=FrameSignal.class.getDeclaredField("freecamAt"); at.setAccessible(true); at.setLong(null,System.nanoTime()-300_000_000L);
             require(!FrameSignal.freecamActive()&&!FrameSignal.freecamFrame(),"Freecam outlived its lease "+p.id());
             FrameSignal.stopFreecam(); local.getMethod(p.localStep()).invoke(self);
+            hand.invoke(handRenderer,handArgs); require(renderer.getField("testHands").getInt(null)==hands+1,"Freecam did not restore first-person hands "+p.id());
             require(movement.getFloat(self)!=-777,"Freecam did not restore player movement "+p.id());
             client.getMethod(p.use()).invoke(owner); client.getMethod(p.attack()).invoke(owner); client.getMethod(p.continueAttack(),boolean.class).invoke(owner,true);
             require(client.getField("testUses").getInt(null)==uses+1&&client.getField("testClicks").getInt(null)==clicks+1&&client.getField("testBreaks").getInt(null)==breaks+1,"Freecam did not restore interactions "+p.id());
