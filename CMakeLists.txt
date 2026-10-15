@@ -436,6 +436,10 @@ if(MCOV_BUILD_UI_CHECKS)
     target_include_directories(mcov_smp_check PRIVATE src)
     target_link_libraries(mcov_smp_check PRIVATE mcov_settings imgui)
     add_test(NAME smp_features COMMAND mcov_smp_check)
+    add_executable(mcov_knife_check tests/knife.cpp)
+    target_include_directories(mcov_knife_check PRIVATE src)
+    target_link_libraries(mcov_knife_check PRIVATE mcov_settings imgui)
+    add_test(NAME knives COMMAND mcov_knife_check)
     add_executable(mcov_rockstar_check tests/rockstar_features.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
     target_include_directories(mcov_rockstar_check PRIVATE src)
     target_link_libraries(mcov_rockstar_check PRIVATE mcov_settings imgui)
@@ -510,6 +514,21 @@ if(MCOV_BUILD_COMPAT_CHECKS)
         DEPENDS tests/BaseTextureCheck.java tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java VERBATIM)
     add_custom_target(mcov_base_texture_check ALL DEPENDS ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class)
     add_test(NAME base_texture_models COMMAND ${Java_JAVA_EXECUTABLE} -cp ${MCOV_BASE_TEST_DIR} mcov.BaseTextureCheck)
+    set(MCOV_KNIFE_TEST_DIR ${CMAKE_BINARY_DIR}/knife-test)
+    add_custom_command(OUTPUT ${MCOV_KNIFE_TEST_DIR}/mcov/KnifeCheck.class ${MCOV_KNIFE_TEST_DIR}/mcov/sync/KnifeHookCheck.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_KNIFE_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
+            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
+            -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_KNIFE_TEST_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/knife-fixtures/org/joml/Matrix4f.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/KnifeCheck.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/KnifeHookCheck.java
+        DEPENDS mcov_frame_agent tests/KnifeCheck.java tests/KnifeHookCheck.java tests/knife-fixtures/org/joml/Matrix4f.java
+            tools/frame-sync/KnifeBridge.java tools/frame-sync/KnifeGeometry.java VERBATIM)
+    add_custom_target(mcov_knife_models_check ALL DEPENDS ${MCOV_KNIFE_TEST_DIR}/mcov/KnifeCheck.class ${MCOV_KNIFE_TEST_DIR}/mcov/sync/KnifeHookCheck.class)
+    add_test(NAME knife_models COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_KNIFE_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.KnifeCheck "${CMAKE_BINARY_DIR}/knife-preview")
+    add_test(NAME knife_hooks COMMAND ${Java_JAVA_EXECUTABLE} "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
+        --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
+        -cp "${MCOV_KNIFE_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar" mcov.sync.KnifeHookCheck)
     add_executable(mcov_base_texture_probe tools/diagnostics/base_texture_probe.cpp src/common/ipc.cpp src/common/log.cpp)
     target_include_directories(mcov_base_texture_probe PRIVATE src)
     target_link_libraries(mcov_base_texture_probe PRIVATE mcov_settings)
