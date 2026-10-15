@@ -74,6 +74,23 @@ void Overlay::DrawItemAssistSettings(int section) {
     if(!totem&&macro.requireCrosshairHit) ImGui::TextWrapped("Real crosshair hit is on: keep the next interaction target under the crosshair. Blocks use Minecraft's actual hit face. The cycle pauses until you aim correctly.");
 }
 
+void Overlay::NormalizeChunkFinder() {
+    auto& old=smpConfig_.finder;
+    if(old.enabled&&!chunkFinder_.enabled) {
+        chunkFinder_.radius=old.radius; chunkFinder_.interval=old.interval;
+        chunkFinder_.maxDraw=std::clamp(old.maxDraw,8.f,128.f);
+        chunkFinder_.color=old.colour; chunkFinder_.labels=old.labels;
+    }
+    chunkFinder_.enabled=old.enabled=chunkFinder_.enabled||old.enabled;
+}
+smp::BaseFinderSettings Overlay::ChunkDetection() const {
+    auto c=smpConfig_.finder;
+    c.enabled=chunkFinder_.enabled||c.enabled;
+    c.radius=chunkFinder_.radius; c.interval=chunkFinder_.interval;
+    c.deepslate=chunkFinder_.deepslate; c.minDeepslate=chunkFinder_.minHints;
+    c.maxDraw=chunkFinder_.maxDraw; c.labels=chunkFinder_.labels; c.colour=chunkFinder_.color;
+    return c;
+}
 smp::BaseFinderSettings Overlay::ChunkDetection() const {
     auto c=smpConfig_.finder;
     c.enabled=chunkFinder_.enabled||c.enabled;

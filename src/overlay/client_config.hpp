@@ -123,6 +123,17 @@ inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
     std::istringstream in(out.str()); std::string line;
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
+inline void Chunks(Archive& a,ChunkFinderSettings& c) {
+    a.Value("chunks.enabled",c.enabled); a.Value("chunks.blocks",c.blocks); a.Value("chunks.labels",c.labels);
+    a.Value("chunks.chunks",c.chunks); a.Value("chunks.deepslate",c.deepslate);
+    a.Value("chunks.radius",c.radius,4,48); a.Value("chunks.interval",c.interval,200,3000);
+    a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,128); a.Color("chunks.color",c.color);
+}
+inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
+    if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
+        values.emplace("chunks.chunks","1"); values.emplace("chunks.deepslate","1");
+    }
+}
 inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
     const bool present=std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.base.");});
     if(present) { AddBaseTextureDefaults(values); return; }
@@ -218,8 +229,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(hat,enabled); FIELD(hat,firstPerson); FIELD(hat,auraColours); COLOR(hat,start); COLOR(hat,end);
     FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKindCount)-1); FIELD(blocks,radius,4,48);
     FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
-    FIELD(chunks,enabled); FIELD(chunks,blocks); FIELD(chunks,labels); FIELD(chunks,radius,4,48);
-    FIELD(chunks,interval,200,3000); FIELD(chunks,minHints,1,32); FIELD(chunks,maxDraw,8,128); COLOR(chunks,color);
+    Chunks(a,s.chunks);
     Smp(a,s.smp);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
@@ -343,6 +353,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace("combat.freecam.enabled","0"); values.emplace("combat.freecam.speed","8"); values.emplace("combat.freecam.boost","3");
         values.emplace(freecamBind+"key","0"); values.emplace(freecamBind+"modifiers","0"); values.emplace(freecamBind+"mode","0");
     }
+    AddChunkHighlightDefaults(values);
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

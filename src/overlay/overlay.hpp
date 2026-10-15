@@ -193,6 +193,7 @@ private:
     void  DrawItemAssistSettings(int section);
     void  DrawChunkFinderSettings();
     smp::BaseFinderSettings ChunkDetection() const;
+    void NormalizeChunkFinder();
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
     void  DrawBlocksTab();
     void DrawSmpSettings(int section);

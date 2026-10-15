@@ -219,6 +219,7 @@ void Overlay::SavePreferences() {
       out<<"freecam "<<combat_.freecam.speed<<' '<<combat_.freecam.boost<<'\n';
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
+      client_configs::Chunks(smpArchive,chunkFinder_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
       for(int i=0;i<2;++i) {
           auto c=i?anchorMacro_:crystalMacro_; c.Clamp();
@@ -251,7 +252,7 @@ void Overlay::LoadPreferences() {
         if(tag=="bind") { int i,k,mode; unsigned mods;
             if(row>>i>>k>>mods>>mode&&i>=0&&i<keys::kCount&&k>=0&&k<255&&mods<=7&&mode>=0&&mode<=1&&
                 (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
-        } else if(tag.starts_with("smp.")) {
+        } else if(tag.starts_with("smp.")||tag.starts_with("chunks.")) {
             const auto split=line.find(' ');
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
         } else if(tag=="freecam") {
@@ -293,8 +294,12 @@ void Overlay::LoadPreferences() {
     if(!smpValues.empty()) {
         client_configs::AddBaseDefaults(smpValues);
         client_configs::AddFinderDefaults(smpValues);
-        smp::Config candidate; client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
-        if(smpUnique&&archive.valid&&smpValues.empty()) smpConfig_=candidate;
+        const bool hasChunks=std::any_of(smpValues.begin(),smpValues.end(),[](const auto& entry){return entry.first.starts_with("chunks.");});
+        if(hasChunks) client_configs::AddChunkHighlightDefaults(smpValues);
+        smp::Config candidate; ChunkFinderSettings chunks;
+        client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
+        if(hasChunks) client_configs::Chunks(archive,chunks);
+        if(smpUnique&&archive.valid&&smpValues.empty()) { smpConfig_=candidate; chunkFinder_=chunks; NormalizeChunkFinder(); }
         else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";
     }
     rockstarConfig_.Clamp();
