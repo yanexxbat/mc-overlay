@@ -65,6 +65,36 @@ public final class FrameSignal {
         if (Double.isFinite(delta)) viewPitch=(float)Math.max(-90,Math.min(90,viewPitch+delta*ENTITY_TURN_SCALE));
         return 0;
     }
+    public static volatile long freecamProfiles;
+    private static final long[] freecamParts = new long[3];
+    public static synchronized void markFreecam(int part,long mask) {
+        freecamParts[part-1] |= mask;
+        freecamProfiles = freecamParts[0] & freecamParts[1] & freecamParts[2];
+    }
+    private static volatile long freecamAt;
+    private static double freecamX,freecamY,freecamZ,previousX,previousY,previousZ;
+    public static double renderX,renderY,renderZ;
+    public static boolean freecamActive() {
+        long at=freecamAt;
+        return at!=0 && silentPlayer!=null && System.nanoTime()-at<250_000_000L;
+    }
+    // Called only by the native client-tick bridge, never by the render sampler.
+    public static void updateFreecam(double x,double y,double z) {
+        boolean active=freecamActive();
+        previousX=active?freecamX:x; previousY=active?freecamY:y; previousZ=active?freecamZ:z;
+        freecamX=x; freecamY=y; freecamZ=z;
+        freecamAt=System.nanoTime();
+    }
+    public static void stopFreecam() { freecamAt=0; }
+    public static boolean freezePlayer(Object player) { return player==silentPlayer && freecamActive(); }
+    public static boolean freecamFrame() {
+        if(!freecamActive()) return false;
+        double partial=Math.max(0,Math.min(1,(System.nanoTime()-freecamAt)/50_000_000.0));
+        renderX=previousX+(freecamX-previousX)*partial;
+        renderY=previousY+(freecamY-previousY)*partial;
+        renderZ=previousZ+(freecamZ-previousZ)*partial;
+        return true;
+    }
     public static volatile boolean combatEnabled;
     // Nur nach RegisterNatives aktiviert. Der Hook läuft auf dem Minecraft-Client-Thread.
     private static native void nativeCombatTick(Object client);

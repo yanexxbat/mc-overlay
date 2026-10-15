@@ -26,12 +26,15 @@ final class FrameTransformer implements ClassFileTransformer {
         try {
             ClassReader reader = new ClassReader(original);
             boolean[] recognized = {false};
+            Set<String> declaredMethods=new HashSet<>(),declaredFields=new HashSet<>();
             reader.accept(new ClassVisitor(Opcodes.ASM8) {
                 @Override public FieldVisitor visitField(int access, String field, String descriptor, String signature, Object value) {
+                    if((access & Opcodes.ACC_STATIC)==0) declaredFields.add(field+descriptor);
                     if ((access & Opcodes.ACC_STATIC) == 0) recognized[0] |= FrameProfiles.fieldMarker(name, field, descriptor);
                     return null;
                 }
                 @Override public MethodVisitor visitMethod(int access, String method, String descriptor, String signature, String[] exceptions) {
+                    if((access & (Opcodes.ACC_STATIC|Opcodes.ACC_ABSTRACT|Opcodes.ACC_NATIVE))==0) declaredMethods.add(method+descriptor);
                     recognized[0] |= FrameProfiles.marker(name, method, descriptor, (access & Opcodes.ACC_STATIC) != 0);
                     if((access & Opcodes.ACC_STATIC)==0) recognized[0] |= DepthProfiles.marker(name,method,descriptor);
                     return null;
@@ -58,6 +61,11 @@ final class FrameTransformer implements ClassFileTransformer {
                     int movementAxis=concrete ? FrameProfiles.movementAxis(name,method,descriptor) : 0;
                     int movementPart=concrete ? FrameProfiles.movementPart(name,method,descriptor) : 0;
                     boolean depthPass=DepthProfiles.worldPass(name,method,descriptor);
+                    FrameProfiles.Profile cameraProfile=null;
+                    if(role==2) for(FrameProfiles.Profile p:FrameProfiles.PROFILES)
+                        if(p.camera().equals(name)&&p.update().equals(method)&&p.updateDesc().equals(descriptor)&&
+                            declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z")) { cameraProfile=p; break; }
+                    final FrameProfiles.Profile freeCamera=cameraProfile;
                     if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
                     if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
                     if (role != 0) changed[0] = true;
@@ -65,6 +73,16 @@ final class FrameTransformer implements ClassFileTransformer {
                         final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
                         @Override public void visitCode() {
                             super.visitCode();
+                            if(movementPart==4 || role==5 || role==6 || role==7) {
+                                Label vanilla=new Label();
+                                if(movementPart==4) super.visitVarInsn(Opcodes.ALOAD,0);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal",movementPart==4?"freezePlayer":"freecamActive",movementPart==4?"(Ljava/lang/Object;)Z":"()Z",false);
+                                super.visitJumpInsn(Opcodes.IFEQ,vanilla);
+                                if(role==6) super.visitInsn(Opcodes.ICONST_0);
+                                super.visitInsn(role==6?Opcodes.IRETURN:Opcodes.RETURN);
+                                super.visitLabel(vanilla);
+                                super.visitFrame(Opcodes.F_SAME,0,null,0,null);
+                            }
                             if(movementPart!=0) {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","beginMovement","()V",false);
                                 super.visitLabel(movementStart);
@@ -122,6 +140,33 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitVarInsn(Opcodes.ALOAD, 0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
                             }
+                            if(freeCamera!=null && opcode==Opcodes.RETURN) {
+                                Label vanilla=new Label();
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","freecamFrame","()Z",false);
+                                super.visitJumpInsn(Opcodes.IFEQ,vanilla);
+                                super.visitVarInsn(Opcodes.ALOAD,0);
+                                for(String axis:new String[]{"renderX","renderY","renderZ"}) super.visitFieldInsn(Opcodes.GETSTATIC,"mcov/FrameSignal",axis,"D");
+                                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,freeCamera.setPosition(),"(DDD)V",false);
+                                super.visitVarInsn(Opcodes.ALOAD,0);
+                                super.visitFieldInsn(Opcodes.GETSTATIC,"mcov/FrameSignal","viewYaw","F");
+                                super.visitFieldInsn(Opcodes.GETSTATIC,"mcov/FrameSignal","viewPitch","F");
+                                super.visitMethodInsn(Opcodes.INVOKEVIRTUAL,name,freeCamera.setRotation(),"(FF)V",false);
+                                super.visitVarInsn(Opcodes.ALOAD,0); super.visitInsn(Opcodes.ICONST_1);
+                                super.visitFieldInsn(Opcodes.PUTFIELD,name,freeCamera.detached(),"Z");
+                                super.visitLabel(vanilla);
+                                // Return sites may have different merged locals; only parameters are needed.
+                                Object[] locals=jdk.internal.org.objectweb.asm.Type.getArgumentTypes(descriptor);
+                                java.util.ArrayList<Object> frameLocals=new java.util.ArrayList<>(); frameLocals.add(name);
+                                for(Object argument:locals) {
+                                    jdk.internal.org.objectweb.asm.Type type=(jdk.internal.org.objectweb.asm.Type)argument;
+                                    frameLocals.add(switch(type.getSort()) {
+                                        case jdk.internal.org.objectweb.asm.Type.BOOLEAN,jdk.internal.org.objectweb.asm.Type.INT -> Opcodes.INTEGER;
+                                        case jdk.internal.org.objectweb.asm.Type.FLOAT -> Opcodes.FLOAT;
+                                        default -> type.getInternalName();
+                                    });
+                                }
+                                super.visitFrame(Opcodes.F_FULL,frameLocals.size(),frameLocals.toArray(),0,null);
+                            }
                             if (role == 2 && opcode == Opcodes.RETURN)
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "cameraReady", "()V", false);
                             super.visitInsn(opcode);
@@ -149,6 +194,14 @@ final class FrameTransformer implements ClassFileTransformer {
             for(int part=1;part<=4;++part) {
                 long mask=FrameProfiles.movementMask(name,movementMethods,part);
                 if(mask!=0) signals.getMethod("markMovement",int.class,long.class).invoke(null,part,mask);
+            }
+            for(int i=0;i<FrameProfiles.PROFILES.length;++i) {
+                FrameProfiles.Profile p=FrameProfiles.PROFILES[i]; long mask=1L<<i;
+                if(p.camera().equals(name)&&declaredMethods.contains(p.update()+p.updateDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
+                    signals.getMethod("markFreecam",int.class,long.class).invoke(null,1,mask);
+                if(p.localPlayer().equals(name)&&declaredMethods.contains(p.localStep()+"()V")) signals.getMethod("markFreecam",int.class,long.class).invoke(null,2,mask);
+                if(p.client().equals(name)&&declaredMethods.contains(p.attack()+"()Z")&&declaredMethods.contains(p.continueAttack()+"(Z)V")&&declaredMethods.contains(p.use()+p.useDesc()))
+                    signals.getMethod("markFreecam",int.class,long.class).invoke(null,3,mask);
             }
             return changed[0] ? writer.toByteArray() : null;
         } catch (Throwable error) {
