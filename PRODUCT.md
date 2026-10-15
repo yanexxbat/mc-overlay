@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v24. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v25. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering stays outside the JVM; textured Base ESP uses a dedicated
 JNI callback on the game's render thread.
 
@@ -24,7 +24,7 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 82 real sections remain reachable. Left-click or Space operates the real
+  All 83 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
@@ -87,6 +87,13 @@ camera/entity projection stability.
   Session results retain reasons, coordinates, copy and waypoint actions.
   Legacy growth profiles and bindings remain compatible. Natural clues can
   produce markers, so detections are never confirmation.
+- Visuals > CS Knife provides original Butterfly/Karambit/Katana sword cosmetics,
+  inspect/deploy motion and bounded blade trails in the 1.21.11 hand pass.
+  Size, speed, model, trails and two initially unbound bindings persist. Tap
+  Inspect once or hold to repeat; other players still see the original sword.
+  Use the existing compact module/settings pattern. Unsupported/failed/stale
+  requests preserve the original game item. New first-person render work is
+  explicitly authorized for this feature; JNI publishes leased settings only.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.
@@ -119,7 +126,7 @@ shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
 It keeps at most 128 discoveries and the highest observed count for each chunk.
 Truncated scans report lower-bound counts. The scan does not reveal inventory
 contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
-IPC v24 changes the shared layout: restart already running Minecraft before
+IPC v25 changes the shared layout: restart already running Minecraft before
 reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the
