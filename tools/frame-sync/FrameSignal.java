@@ -23,9 +23,9 @@ public final class FrameSignal {
         try { return nativeMacroUse(client); }
         catch (Throwable error) { macroEnabled=false; return false; }
     }
-    private static final double ENTITY_TURN_SCALE = 0.15; // Vanilla Entity.turn, nach Maussensitivität.
+    private static final double ENTITY_TURN_SCALE = 0.15; // Vanilla Entity.turn, nach MaussensitivitÃ¤t.
     // Kamera und Mouse-Look bleiben in Java: keine JNI-Abfrage pro Kameraframe.
-    // Das Modell behält seine echte Rotation; Spin-Movement nutzt separat die Kamera.
+    // Das Modell behÃ¤lt seine echte Rotation; Spin-Movement nutzt separat die Kamera.
     public static volatile Object silentPlayer;
     public static volatile float viewYaw, viewPitch;
     public static volatile long cameraProfiles, turnProfiles;
@@ -66,10 +66,10 @@ public final class FrameSignal {
         return 0;
     }
     public static volatile long freecamProfiles;
-    private static final long[] freecamParts = new long[3];
+    private static final long[] freecamParts = new long[4];
     public static synchronized void markFreecam(int part,long mask) {
         freecamParts[part-1] |= mask;
-        freecamProfiles = freecamParts[0] & freecamParts[1] & freecamParts[2];
+        freecamProfiles = freecamParts[0] & freecamParts[1] & freecamParts[2] & freecamParts[3];
     }
     private static volatile long freecamAt;
     private static double freecamX,freecamY,freecamZ,previousX,previousY,previousZ;
@@ -96,7 +96,7 @@ public final class FrameSignal {
         return true;
     }
     public static volatile boolean combatEnabled;
-    // Nur nach RegisterNatives aktiviert. Der Hook läuft auf dem Minecraft-Client-Thread.
+    // Nur nach RegisterNatives aktiviert. Der Hook lÃ¤uft auf dem Minecraft-Client-Thread.
     private static native void nativeCombatTick(Object client);
     public static void combatTick(Object client) {
         if (!combatEnabled) return;

@@ -68,6 +68,8 @@ def geometry_schema(version):
     add('freecamPosition', camera, 'setPosition', '(DDD)V', 'methods')
     add('freecamRotation', camera, 'setRotation', '(FF)V', 'methods')
     add('freecamDetached', camera, 'detached', 'Z')
+    hand_desc = {'26.2':'(Lnet/minecraft/client/renderer/state/level/CameraRenderState;FLorg/joml/Matrix4fc;)V','1.21.11':'(FZLorg/joml/Matrix4f;)V','1.21.1':'(Lnet/minecraft/client/Camera;FLorg/joml/Matrix4f;)V','1.20.1':'(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/Camera;F)V'}
+    add('freecamHand', 'net/minecraft/client/renderer/GameRenderer', 'renderItemInHand', hand_desc[version], 'methods')
     add('freecamAttack', client, 'startAttack', '()Z', 'methods')
     add('freecamContinueAttack', client, 'continueAttack', '(Z)V', 'methods')
     add('runFrame', client, 'runTick', '(Z)V', 'methods')

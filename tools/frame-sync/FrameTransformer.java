@@ -82,7 +82,7 @@ final class FrameTransformer implements ClassFileTransformer {
                         final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
                         @Override public void visitCode() {
                             super.visitCode();
-                            if(movementPart==4 || role==5 || role==6 || role==7) {
+                            if(movementPart==4 || role==5 || role==6 || role==7 || role==8) {
                                 Label vanilla=new Label();
                                 if(movementPart==4) super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal",movementPart==4?"freezePlayer":"freecamActive",movementPart==4?"(Ljava/lang/Object;)Z":"()Z",false);
@@ -97,7 +97,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitLabel(movementStart);
                             }
                             if (role == 5) {
-                                // Nur Ã¼bernommene Macro-Platzierungen unterdrÃ¼cken Vanilla-Use.
+                                // Nur ÃƒÂ¼bernommene Macro-Platzierungen unterdrÃƒÂ¼cken Vanilla-Use.
                                 Label vanilla=new Label();
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","macroUse","(Ljava/lang/Object;)Z",false);
@@ -135,7 +135,7 @@ final class FrameTransformer implements ClassFileTransformer {
                         }
                         @Override public void visitInsn(int opcode) {
                             if(movementAxis!=0 && opcode==Opcodes.FRETURN) {
-                                // Nur im Physik-Scope liefert der Getter die Kamera. AuÃŸerhalb
+                                // Nur im Physik-Scope liefert der Getter die Kamera. AuÃƒÅ¸erhalb
                                 // bleiben Modell, Netzwerk und Combat bei der echten Rotation.
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitInsn(Opcodes.SWAP);
@@ -145,7 +145,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                             if (role == 3 && opcode == Opcodes.RETURN) {
                                 // Erst nach Vanilla-Movement und Modell-Updates:
-                                // neue Zielpositionen, kein anschlieÃŸendes Ãœberschreiben.
+                                // neue Zielpositionen, kein anschlieÃƒÅ¸endes ÃƒÅ“berschreiben.
                                 super.visitVarInsn(Opcodes.ALOAD, 0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
                             }
@@ -176,7 +176,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitLabel(movementEnd);
                                 super.visitTryCatchBlock(movementStart,movementEnd,movementHandler,null);
                                 super.visitLabel(movementHandler);
-                                // Keine Locals im Handler nÃ¶tig; originale Stack-Maps bleiben erhalten.
+                                // Keine Locals im Handler nÃƒÂ¶tig; originale Stack-Maps bleiben erhalten.
                                 super.visitFrame(Opcodes.F_NEW,0,null,1,new Object[]{"java/lang/Throwable"});
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                                 super.visitInsn(Opcodes.ATHROW);
@@ -197,6 +197,7 @@ final class FrameTransformer implements ClassFileTransformer {
                 FrameProfiles.Profile p=FrameProfiles.PROFILES[i]; long mask=1L<<i;
                 if(p.camera().equals(name)&&declaredMethods.contains(p.freeSetup()+p.freeSetupDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
                     signals.getMethod("markFreecam",int.class,long.class).invoke(null,1,mask);
+                if(p.renderer().equals(name)&&declaredMethods.contains(p.hand()+p.handDesc())) signals.getMethod("markFreecam",int.class,long.class).invoke(null,4,mask);
                 if(p.localPlayer().equals(name)&&declaredMethods.contains(p.localStep()+"()V")) signals.getMethod("markFreecam",int.class,long.class).invoke(null,2,mask);
                 if(p.client().equals(name)&&declaredMethods.contains(p.attack()+"()Z")&&declaredMethods.contains(p.continueAttack()+"(Z)V")&&declaredMethods.contains(p.use()+p.useDesc()))
                     signals.getMethod("markFreecam",int.class,long.class).invoke(null,3,mask);

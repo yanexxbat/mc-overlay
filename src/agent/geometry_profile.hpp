@@ -22,8 +22,8 @@ struct GeometryProfile {
     Member partialTick, getDelta, cameraEntity, avatarState;
     Member walkDistance, walkDistanceOld, bob, bobOld;
     Member runFrame, updateCamera;
-    Member freecamSetup, freecamPosition, freecamRotation, freecamDetached, freecamAttack, freecamContinueAttack;
-    // Auch die Client-Tick-BrÃ¼cke nutzt ausschlieÃŸlich auditierte Signaturen.
+    Member freecamHand, freecamSetup, freecamPosition, freecamRotation, freecamDetached, freecamAttack, freecamContinueAttack;
+    // Auch die Client-Tick-BrÃƒÂ¼cke nutzt ausschlieÃƒÅ¸lich auditierte Signaturen.
     const char* handClass;
     const char* hitClass;
     Member clientTick, clientPaused, setYaw, setPitch, eyePosition, lineOfSight;
