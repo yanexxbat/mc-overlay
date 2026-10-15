@@ -2,8 +2,7 @@ package mcov;
 
 import java.util.*;
 
-/** Original procedural meshes and motion, inspired by the requested knife types.
- * No Anubis binaries, assets, Java sources or Minecraft resources are bundled. */
+/** Original, cached solid models. No third-party assets or game resources. */
 public final class KnifeGeometry {
     private KnifeGeometry() {}
     static float smooth(float t) { t=Math.max(0,Math.min(1,t)); return t*t*(3-2*t); }
@@ -16,12 +15,12 @@ public final class KnifeGeometry {
             for(int c=0;c<4;++c) for(int row=0;row<4;++row) for(int k=0;k<4;++k) r[c*4+row]+=a[k*4+row]*b.a[c*4+k];
             System.arraycopy(r,0,a,0,16); return this;
         }
-        Matrix move(float x,float y,float z) { Matrix b=new Matrix(); b.a[12]=x; b.a[13]=y; b.a[14]=z; return mul(b); }
-        Matrix scale(float x,float y,float z) { Matrix b=new Matrix(); b.a[0]=x; b.a[5]=y; b.a[10]=z; return mul(b); }
+        Matrix move(float x,float y,float z) { Matrix b=new Matrix(); b.a[12]=x;b.a[13]=y;b.a[14]=z;return mul(b); }
+        Matrix scale(float x,float y,float z) { Matrix b=new Matrix();b.a[0]=x;b.a[5]=y;b.a[10]=z;return mul(b); }
         Matrix turn(float x,float y,float z) {
             for(int axis=0;axis<3;++axis) {
-                float v=axis==0?x:axis==1?y:z,c=(float)Math.cos(v),s=(float)Math.sin(v); Matrix b=new Matrix();
-                int i=(axis+1)%3,j=(axis+2)%3; b.a[i*4+i]=b.a[j*4+j]=c; b.a[i*4+j]=s; b.a[j*4+i]=-s; mul(b);
+                float v=axis==0?x:axis==1?y:z,c=(float)Math.cos(v),s=(float)Math.sin(v);Matrix b=new Matrix();
+                int i=(axis+1)%3,j=(axis+2)%3;b.a[i*4+i]=b.a[j*4+j]=c;b.a[i*4+j]=s;b.a[j*4+i]=-s;mul(b);
             }
             return this;
         }
@@ -29,34 +28,22 @@ public final class KnifeGeometry {
         float[] point(float[] p) { return point(p[0],p[1],p[2]); }
     }
     public record Mesh(float[] xyz,int[] colours) { public int vertices() { return colours.length; } }
-    public record Frame(Mesh mesh,float[] base,float[] tip) {}
+    public record Frame(Mesh mesh,float[] base,float[] tip,float[] glowSegments) {}
     static final class Builder {
-        float[] xyz=new float[4096]; int[] colours=new int[2048]; int count;
+        float[] xyz=new float[4096];int[] colours=new int[2048];int count;
         Matrix transform=new Matrix();
         void vertex(float[] p,int colour) {
             if(count>=32768) throw new IllegalStateException("Knife geometry limit");
             if((count+1)*3>xyz.length) xyz=Arrays.copyOf(xyz,xyz.length*2);
             if(count==colours.length) colours=Arrays.copyOf(colours,colours.length*2);
-            System.arraycopy(p,0,xyz,count*3,3); colours[count++]=colour;
+            System.arraycopy(p,0,xyz,count*3,3);colours[count++]=colour;
         }
-        void quad(float[] a,float[] b,float[] c,float[] d,int colour) {
-            vertex(transform.point(a),colour); vertex(transform.point(b),colour); vertex(transform.point(c),colour); vertex(transform.point(d),colour);
+        void quad(float[] a,float[] b,float[] c,float[] d,int colour) { quad(a,b,c,d,colour,colour,colour,colour); }
+        void quad(float[] a,float[] b,float[] c,float[] d,int ca,int cb,int cc,int cd) {
+            vertex(transform.point(a),ca);vertex(transform.point(b),cb);vertex(transform.point(c),cc);vertex(transform.point(d),cd);
         }
-        void polygon(float[][] xy,float depth,int colour) {
-            int n=xy.length;
-            for(int i=1;i<n-1;++i) {
-                float[] a={xy[0][0],xy[0][1],depth},b={xy[i][0],xy[i][1],depth},c={xy[i+1][0],xy[i+1][1],depth};
-                quad(a,b,c,c,shade(colour,1));
-                a=new float[]{a[0],a[1],-depth}; b=new float[]{b[0],b[1],-depth}; c=new float[]{c[0],c[1],-depth};
-                quad(c,b,a,a,shade(colour,.65f));
-            }
-            for(int i=0;i<n;++i) {
-                float[] a=xy[i],b=xy[(i+1)%n];
-                quad(new float[]{a[0],a[1],depth},new float[]{a[0],a[1],-depth},new float[]{b[0],b[1],-depth},new float[]{b[0],b[1],depth},shade(colour,.8f));
-            }
-        }
-        void box(float x,float y,float w,float h,float depth,int colour) {
-            polygon(new float[][]{{x,y},{x+w,y},{x+w,y+h},{x,y+h}},depth,colour);
+        void append(Mesh mesh,Matrix matrix) {
+            for(int i=0;i<mesh.vertices();++i) vertex(matrix.point(mesh.xyz[i*3],mesh.xyz[i*3+1],mesh.xyz[i*3+2]),mesh.colours[i]);
         }
         Mesh finish() { return new Mesh(Arrays.copyOf(xyz,count*3),Arrays.copyOf(colours,count)); }
     }
@@ -64,69 +51,155 @@ public final class KnifeGeometry {
         return c&0xff000000|Math.min(255,Math.round((c>>16&255)*f))<<16|Math.min(255,Math.round((c>>8&255)*f))<<8|Math.min(255,Math.round((c&255)*f));
     }
     static int metal(String name) {
-        if(name.contains("diamond")) return 0xff69ddd5;
-        if(name.contains("netherite")) return 0xff867583;
-        if(name.contains("golden")) return 0xffe7bd5c;
-        if(name.contains("copper")) return 0xffc78f67;
-        if(name.contains("wooden")) return 0xffbc9163;
-        if(name.contains("stone")) return 0xffa7a8ad;
-        return 0xffd9e2ea;
+        if(name.contains("diamond"))return 0xff69ddd5;if(name.contains("netherite"))return 0xff867583;
+        if(name.contains("golden"))return 0xffe7bd5c;if(name.contains("copper"))return 0xffc78f67;
+        if(name.contains("wooden"))return 0xffbc9163;if(name.contains("stone"))return 0xffa7a8ad;return 0xffd9e2ea;
+    }
+    private record Model(Mesh blade,Mesh[] handles,float[] edges,float[] base,float[] tip) {}
+    // Seven canonical materials x three knives. Shape construction never runs per frame.
+    private static final Map<Long,Model> CACHE=new HashMap<>();
+    private static synchronized Model model(int skin,int colour) {
+        long key=((long)skin<<32)|(colour&0xffffffffL);
+        return CACHE.computeIfAbsent(key,k->create(skin,colour));
+    }
+    private static float[] p(float x,float y,float z) { return new float[]{x,y,z}; }
+    /** Rounded elliptical grip, end caps included, with machined circumferential grooves. */
+    private static void grip(Builder b,float x,float low,float high,float width,float depth,int colour,int grooves) {
+        int rings=40,sides=32;
+        for(int i=0;i<rings;++i) for(int j=0;j<sides;++j) {
+            float[][] q=new float[4][];int[] ink=new int[4];
+            for(int v=0;v<4;++v) {
+                int r=i+(v==1||v==2?1:0),s=j+(v>=2?1:0);float t=r/(float)rings;
+                double angle=s*Math.PI*2/sides;float cap=(float)Math.sqrt(Math.max(0,1-Math.pow(Math.max(0,Math.abs(2*t-1)-.8)/.2,2)));
+                float groove=grooves==0?1:1-.06f*(float)Math.pow(.5+.5*Math.cos(t*grooves*Math.PI*2),12);
+                q[v]=p(x+width*cap*groove*(float)Math.cos(angle),low+(high-low)*t,depth*cap*groove*(float)Math.sin(angle));
+                ink[v]=shade(colour,(float)(.62+.34*Math.max(0,Math.sin(angle))+.16*Math.max(0,Math.cos(angle))));
+            }
+            b.quad(q[0],q[1],q[2],q[3],ink[0],ink[1],ink[2],ink[3]);
+        }
+    }
+    /** Smooth torus in the XY plane; also used for screw heads and collars. */
+    private static void ring(Builder b,float x,float y,float z,float radius,float tube,int colour,int segments) {
+        for(int i=0;i<segments;++i)for(int j=0;j<12;++j) {
+            float[][] q=new float[4][];int[] ink=new int[4];
+            for(int v=0;v<4;++v) {
+                double a=(i+(v>=2?1:0))*Math.PI*2/segments,t=(j+(v==1||v==2?1:0))*Math.PI*2/12;
+                float r=radius+tube*(float)Math.cos(t);
+                q[v]=p(x+r*(float)Math.cos(a),y+r*(float)Math.sin(a),z+tube*(float)Math.sin(t));
+                ink[v]=shade(colour,(float)(.65+.4*Math.max(0,Math.sin(t))+.12*Math.cos(a)));
+            }
+            b.quad(q[0],q[1],q[2],q[3],ink[0],ink[1],ink[2],ink[3]);
+        }
+    }
+    private static void screw(Builder b,float x,float y,int colour) {
+        for(int side:new int[]{-1,1}) {
+            ring(b,x,y,side*.046f,.012f,.0045f,colour,24);
+            // Recessed, cross-shaped driver slot, visible from either side.
+            float z=side*.047f;
+            b.quad(p(x-.008f,y-.002f,z),p(x+.008f,y-.002f,z),p(x+.008f,y+.002f,z),p(x-.008f,y+.002f,z),0xff121820);
+        }
+    }
+    private static float[] centre(int skin,float t) {
+        if(skin==1)return p(.42f*t*t,-.37f-.52f*t,0);
+        if(skin==2)return p(.055f*1.3f*t*1.3f*t,.025f+1.275f*t,0);
+        return p(.012f*(float)Math.sin(t*Math.PI),.065f+.84f*t,0);
+    }
+    private static float width(int skin,float t) {
+        if(skin==1)return .072f*(float)Math.pow(1-t,.65);
+        if(skin==2)return .053f*(t<.87f?1:Math.max(0,(1-t)/.13f));
+        return .068f*(t<.67f?1+.12f*(float)Math.sin(t*4):Math.max(0,(1-t)/.33f));
+    }
+    private static Model create(int skin,int metal) {
+        Builder blade=new Builder();ArrayList<Float> edges=new ArrayList<>();int steps=64;
+        // Eight-sided lenticular section: spine, broad satin flats, polished bevels, cutting edges.
+        float[] crossX={1,.72f,0,-.72f,-1,-.72f,0,.72f},crossZ={0,.72f,1,.72f,0,-.72f,-1,-.72f};
+        for(int i=0;i<steps;++i) {
+            float t=i/(float)steps,u=(i+1)/(float)steps;
+            for(int side:new int[]{-1,1}) for(float v:new float[]{t,u}) {
+                float[] c=centre(skin,v);edges.add(c[0]+side*width(skin,v));edges.add(c[1]);edges.add(0.f);
+            }
+            for(int j=0;j<8;++j) {
+                float[][] q=new float[4][];int[] ink=new int[4];
+                for(int v=0;v<4;++v) {
+                    float f=(v==1||v==2)?u:t;int k=(j+(v>=2?1:0))%8;float[] c=centre(skin,f);
+                    float taper=f>.9f?(1-f)*10:1;
+                    q[v]=p(c[0]+crossX[k]*width(skin,f),c[1],crossZ[k]*.023f*taper);
+                    float polish=k==0||k==4?1.22f:k==2?1.02f:k==6?.63f:k<4?.82f:.52f;
+                    // Subtle longitudinal satin variation, baked into the cached mesh.
+                    ink[v]=shade(metal,polish*(.985f+.015f*(float)Math.sin(f*390)));
+                }
+                blade.quad(q[0],q[1],q[2],q[3],ink[0],ink[1],ink[2],ink[3]);
+            }
+        }
+        ArrayList<Mesh> handles=new ArrayList<>();int grip=0xff252e3b,accent=0xffbda477;
+        if(skin==0) {
+            // Separate, rounded handle assemblies retain independent butterfly pivots.
+            for(int side:new int[]{-1,1}) {
+                Builder h=new Builder();grip(h,0,-.54f,.035f,.043f,.039f,grip,12);
+                for(int i=0;i<6;++i) {
+                    float y=-.445f+i*.065f;
+                    // Dark pocket inset with a polished machined rim.
+                    ring(h,0,y,.034f,.014f,.003f,shade(metal,.75f),24);
+                    h.quad(p(-.012f,y-.01f,.035f),p(.012f,y-.01f,.035f),p(.012f,y+.01f,.035f),p(-.012f,y+.01f,.035f),0xff101722);
+                }
+                screw(h,0,.006f,metal);screw(h,0,-.505f,metal);handles.add(h.finish());
+            }
+        } else {
+            Builder h=new Builder();
+            if(skin==1) {
+                grip(h,-.005f,-.425f,-.045f,.069f,.049f,grip,9);
+                ring(h,0,.054f,0,.105f,.022f,metal,96);screw(h,0,-.1f,metal);screw(h,0,-.34f,metal);
+            } else {
+                grip(h,0,-.44f,-.015f,.055f,.042f,grip,0);
+                // Raised braid wraps cross both faces, ending in compact metal collars.
+                for(int i=0;i<10;++i)for(int side:new int[]{-1,1}) {
+                    float y=-.405f+i*.037f,z=side*.0425f;
+                    h.quad(p(-.052f,y,z),p(-.052f,y+.013f,z),p(.052f,y+.043f,z),p(.052f,y+.030f,z),shade(accent,side>0?.91f:.65f));
+                    h.quad(p(.052f,y,z),p(.052f,y+.013f,z),p(-.052f,y+.043f,z),p(-.052f,y+.030f,z),shade(accent,side>0?1.05f:.72f));
+                }
+                // Elliptical, rounded tsuba, oriented across the grip.
+                Matrix old=h.transform;h.transform=new Matrix().turn((float)Math.PI/2,0,0).scale(1.5f,1,1);
+                ring(h,0,0,0,.082f,.018f,accent,64);h.transform=old;
+                grip(h,0,-.445f,-.413f,.057f,.045f,accent,0);grip(h,0,-.035f,.025f,.06f,.046f,accent,0);
+            }
+            handles.add(h.finish());
+        }
+        float[] lines=new float[edges.size()];for(int i=0;i<lines.length;++i)lines[i]=edges.get(i);
+        return new Model(blade.finish(),handles.toArray(Mesh[]::new),lines,centre(skin,.06f),centre(skin,1));
     }
     public static Frame build(int skin,String item,float phase,int motion,float size) {
-        if(skin<0||skin>2||!Float.isFinite(size)||size<.5f||size>2) throw new IllegalArgumentException("Knife settings");
-        phase=Math.max(0,Math.min(1,phase)); float t=smooth(phase),lift=(float)Math.pow(Math.sin(Math.PI*phase),2);
-        Builder b=new Builder(); Matrix root=new Matrix().turn(0,-.35f,-.25f).scale(size*.75f,size*.75f,size*.75f);
+        if(skin<0||skin>2||!Float.isFinite(size)||size<.5f||size>2||!Float.isFinite(phase))throw new IllegalArgumentException("Knife settings");
+        phase=Math.max(0,Math.min(1,phase));float t=smooth(phase),lift=(float)Math.pow(Math.sin(Math.PI*phase),2);
+        Model cached=model(skin,metal(item));Matrix root=new Matrix().turn(0,-.35f,-.25f).scale(size*.75f,size*.75f,size*.75f);
         if(motion==1) {
             root.move(-.16f*lift,.13f*lift,.06f*lift);
-            if(skin==0) root.turn(.3f*lift,.55f*lift,.3f*lift);
-            else if(skin==1) root.turn(.4f*lift,0,(float)Math.PI*4*t);
-            else root.turn(.2f*lift,(float)Math.PI*2*t,-.6f*lift);
-        } else if(motion==2) root.move(0,-.22f*(1-t),0).turn(.2f*(1-t),0,(float)-Math.PI*(1-t));
-        b.transform=root; int metal=metal(item),edge=shade(metal,1.15f),grip=0xff272b35,accent=0xffbda477;
-        float[] base,tip;
-        if(skin==0) {
-            Matrix blade=new Matrix(root.a);
-            if(motion!=0) blade.turn(0,0,(float)Math.PI*4*t);
-            b.transform=blade;
-            b.polygon(new float[][]{{-.065f,.06f},{.065f,.06f},{.075f,.58f},{0,.9f},{-.075f,.58f}},.025f,metal);
-            b.polygon(new float[][]{{.045f,.1f},{.065f,.1f},{.075f,.58f},{0,.9f},{.04f,.56f}},.026f,edge);
-            base=blade.point(0,.13f,0); tip=blade.point(0,.89f,0);
-            for(int side:new int[]{-1,1}) {
-                b.transform=new Matrix(root.a).move(side*.067f,.055f,0);
-                if(motion!=0) b.transform.turn(0,0,side*(float)Math.PI*6*t);
-                b.box(-.045f,-.53f,.09f,.55f,.047f,grip);
-                b.box(-.026f,-.49f,.052f,.38f,.049f,shade(metal,.65f));
-                for(int i=0;i<4;++i) b.box(-.018f,-.43f+i*.085f,.036f,.025f,.05f,grip);
-                b.box(-.025f,-.02f,.05f,.05f,.052f,accent);
-            }
-        } else if(skin==1) {
-            b.box(-.07f,-.4f,.14f,.39f,.06f,grip);
-            for(int i=0;i<5;++i) b.box(-.075f,-.34f+i*.056f,.15f,.018f,.063f,0xff454b58);
-            for(int i=0;i<24;++i) {
-                double a=i*Math.PI*2/24,z=(i+1)*Math.PI*2/24;
-                b.polygon(new float[][]{{.13f*(float)Math.cos(a),.05f+.13f*(float)Math.sin(a)},
-                    {.13f*(float)Math.cos(z),.05f+.13f*(float)Math.sin(z)},
-                    {.085f*(float)Math.cos(z),.05f+.085f*(float)Math.sin(z)},
-                    {.085f*(float)Math.cos(a),.05f+.085f*(float)Math.sin(a)}},.04f,metal);
-            }
-            for(int i=0;i<16;++i) {
-                float a=i/16f,z=(i+1)/16f;
-                float x=.42f*a*a,y=-.38f-.5f*a,u=.42f*z*z,v=-.38f-.5f*z;
-                float w=.14f*(1-a),w2=.14f*(1-z);
-                b.polygon(new float[][]{{x-w,y},{u-w2,v},{u+.025f,v+.015f},{x+.025f,y+.015f}},.022f,metal);
-            }
-            base=root.point(-.04f,-.4f,0); tip=root.point(.42f,-.88f,0);
-        } else {
-            b.box(-.055f,-.43f,.11f,.43f,.045f,grip);
-            for(int i=0;i<8;++i) b.polygon(new float[][]{{-.055f,-.4f+i*.05f},{0,-.38f+i*.05f},{.055f,-.4f+i*.05f},{0,-.42f+i*.05f}},.048f,accent);
-            b.box(-.16f,-.02f,.32f,.055f,.07f,accent);
-            for(int i=0;i<20;++i) {
-                float y=i*.065f,v=(i+1)*.065f,x=.055f*y*y,u=.055f*v*v,w=i==19?.005f:.052f;
-                b.polygon(new float[][]{{x-.052f,y},{u-w,v},{u+w,v},{x+.052f,y}},.018f,metal);
-                b.polygon(new float[][]{{x+.032f,y},{u+w*.6f,v},{u+w,v},{x+.052f,y}},.019f,edge);
-            }
-            base=root.point(0,.08f,0); tip=root.point(.093f,1.3f,0);
+            if(skin==0)root.turn(.3f*lift,.55f*lift,.3f*lift);else if(skin==1)root.turn(.4f*lift,0,(float)Math.PI*4*t);else root.turn(.2f*lift,(float)Math.PI*2*t,-.6f*lift);
+        }else if(motion==2)root.move(0,-.22f*(1-t),0).turn(.2f*(1-t),0,(float)-Math.PI*(1-t));
+        Matrix blade=new Matrix(root.a);if(skin==0&&motion!=0)blade.turn(0,0,(float)Math.PI*4*t);
+        Builder b=new Builder();b.append(cached.blade,blade);
+        for(int i=0;i<cached.handles.length;++i) {
+            Matrix handle=new Matrix(root.a);
+            if(skin==0) {int side=i==0?-1:1;handle.move(side*.062f,.055f,0);if(motion!=0)handle.turn(0,0,side*(float)Math.PI*6*t);}
+            b.append(cached.handles[i],handle);
         }
-        return new Frame(b.finish(),base,tip);
+        float[] lines=new float[cached.edges.length];for(int i=0;i<lines.length;i+=3)System.arraycopy(blade.point(cached.edges[i],cached.edges[i+1],cached.edges[i+2]),0,lines,i,3);
+        return new Frame(b.finish(),blade.point(cached.base),blade.point(cached.tip),lines);
+    }
+    /** Camera-facing additive Gaussian ribbons. Transparent outer boundary; no depth writes. */
+    static Mesh glow(float[] segments,Matrix view,float width,float strength,int colour) {
+        Builder b=new Builder();if(strength<=0)return b.finish();
+        for(int i=0;i<segments.length;i+=6) {
+            float[] a=view.point(segments[i],segments[i+1],segments[i+2]),z=view.point(segments[i+3],segments[i+4],segments[i+5]);
+            float dx=z[0]-a[0],dy=z[1]-a[1],length=(float)Math.hypot(dx,dy);if(length<1e-7f)continue;
+            float nx=-dy/length*width,ny=dx/length*width;
+            for(int band=-10;band<10;++band) {
+                float v=band/10f,w=(band+1)/10f;
+                float av=(float)((Math.exp(-v*v*5)-Math.exp(-5))/(1-Math.exp(-5))),aw=(float)((Math.exp(-w*w*5)-Math.exp(-5))/(1-Math.exp(-5)));
+                int ca=(colour&0xffffff)|Math.min(255,Math.round(90*strength*av))<<24,cz=(colour&0xffffff)|Math.min(255,Math.round(90*strength*aw))<<24;
+                // Bias toward the camera so the luminous cutting edge clears its solid bevel.
+                b.quad(p(a[0]+nx*v,a[1]+ny*v,a[2]+.025f),p(z[0]+nx*v,z[1]+ny*v,z[2]+.025f),p(z[0]+nx*w,z[1]+ny*w,z[2]+.025f),p(a[0]+nx*w,a[1]+ny*w,a[2]+.025f),ca,ca,cz,cz);
+            }
+        }
+        return b.finish();
     }
 }
