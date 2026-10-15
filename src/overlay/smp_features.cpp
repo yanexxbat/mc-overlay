@@ -1,4 +1,5 @@
 #include "smp_features.hpp"
+#include "../common/chunk_hints.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -36,9 +37,9 @@ void Config::Clamp() {
     finder.minAmethyst=std::clamp(finder.minAmethyst,1,64); finder.maxDraw=Finite(finder.maxDraw,8,512,192); ClampColour(finder.colour);
 }
 void BaseFinder::Update(const WorldSnapshot& s,const BaseFinderSettings& c) {
-    if(!Matches(s)||mask_!=c.Mask()||height_!=c.minKelpHeight||columns_!=c.minKelpColumns||amethyst_!=c.minAmethyst||radius_!=c.radius) {
+    if(!Matches(s)||mask_!=c.Mask()||height_!=c.minKelpHeight||columns_!=c.minKelpColumns||amethyst_!=c.minAmethyst||radius_!=c.radius||deepslate_!=c.minDeepslate) {
         Reset(); std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
-        mask_=c.Mask(); height_=c.minKelpHeight; columns_=c.minKelpColumns; amethyst_=c.minAmethyst; radius_=c.radius;
+        mask_=c.Mask(); height_=c.minKelpHeight; columns_=c.minKelpColumns; amethyst_=c.minAmethyst; radius_=c.radius; deepslate_=c.minDeepslate;
     }
     if(!c.enabled||!s.dimension[0]||!mask_||!s.blockScanComplete||!s.blockScanId||s.blockScanId==scan_||
        (s.blockScanMask&mask_)!=mask_||s.blockScanRadius<static_cast<unsigned>(c.radius)) return;
@@ -48,7 +49,8 @@ void BaseFinder::Update(const WorldSnapshot& s,const BaseFinderSettings& c) {
     for(const auto& b:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) {
         const bool kelp=c.kelp&&b.kind==kBlockKelp&&b.kelpHeight>=c.minKelpHeight;
         const bool crystal=c.amethyst&&(b.kind==kBlockLargeAmethystBud||b.kind==kBlockAmethystCluster);
-        if((!kelp&&!crystal)||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
+        const bool deepslate=c.deepslate&&b.kind==kBlockRotatedDeepslate;
+        if((!kelp&&!crystal&&!deepslate)||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
            std::abs(b.x)>3e7||std::abs(b.z)>3e7||std::abs(b.y)>4096) continue;
         if(std::abs(b.x-s.blockScanX)>c.radius||std::abs(b.y-s.blockScanY)>c.radius||std::abs(b.z-s.blockScanZ)>c.radius) continue;
         const int x=static_cast<int>(std::floor(double(b.x)/16)),z=static_cast<int>(std::floor(double(b.z)/16));
@@ -59,33 +61,86 @@ void BaseFinder::Update(const WorldSnapshot& s,const BaseFinderSettings& c) {
             chunks.push_back(f); it=chunks.end()-1;
         }
         if(kelp) { ++it->kelpColumns; it->tallestKelp=std::max(it->tallestKelp,int(b.kelpHeight)); }
-        else ++it->amethyst;
+        else if(crystal) ++it->amethyst;
+        else ++it->deepslate;
         it->bounds.min.x=std::min(it->bounds.min.x,double(b.x)); it->bounds.min.y=std::min(it->bounds.min.y,bottom);
         it->bounds.min.z=std::min(it->bounds.min.z,double(b.z)); it->bounds.max.x=std::max(it->bounds.max.x,b.x+1.);
         it->bounds.max.y=std::max(it->bounds.max.y,b.y+1.); it->bounds.max.z=std::max(it->bounds.max.z,b.z+1.);
     }
     for(auto& f:chunks) {
-        if(!(c.kelp&&f.kelpColumns>=c.minKelpColumns)&&!(c.amethyst&&f.amethyst>=c.minAmethyst)) continue;
+        if(!(c.kelp&&f.kelpColumns>=c.minKelpColumns)&&!(c.amethyst&&f.amethyst>=c.minAmethyst)&&
+           !(c.deepslate&&f.deepslate>=c.minDeepslate)) continue;
         f.centre={(f.bounds.min.x+f.bounds.max.x)*.5,(f.bounds.min.y+f.bounds.max.y)*.5,(f.bounds.min.z+f.bounds.max.z)*.5};
         auto old=std::find_if(finds_.begin(),finds_.begin()+count_,[&](const PossibleBase& previous){return previous.chunkX==f.chunkX&&previous.chunkZ==f.chunkZ;});
-        if(old!=finds_.begin()+count_) { if(f.kelpColumns+f.amethyst>=old->kelpColumns+old->amethyst) *old=f; }
+        if(old!=finds_.begin()+count_) { if(f.kelpColumns+f.amethyst+f.deepslate>=old->kelpColumns+old->amethyst+old->deepslate) *old=f; }
         else if(count_<kMaxFinds) finds_[count_++]=f;
     }
 }
+WorldBounds PossibleChunkBounds(const PossibleBase& f,const WorldSnapshot& s) {
+    // The snapshot carries no custom dimension height. Use the vanilla column,
+    // expanding it to include any observed evidence outside that height range.
+    const auto dimension=std::string_view(s.dimension);
+    const bool shortWorld=dimension.find("nether")!=std::string_view::npos||dimension.find("end")!=std::string_view::npos;
+    return {{f.chunkX*16.,std::min(shortWorld?0.:-64.,f.bounds.min.y),f.chunkZ*16.},
+            {f.chunkX*16.+16,std::max(shortWorld?256.:320.,f.bounds.max.y),f.chunkZ*16.+16}};
+}
 void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const BaseFinderSettings& c,
-                       std::span<const PossibleBase> finds,ImVec2 viewport) {
+                       std::span<const PossibleBase> finds,ImVec2 viewport,bool chunks,bool blocks) {
     if(!c.enabled||c.colour.w<=0) return;
     auto* savedTags=depth::tags;
     struct Restore { std::vector<float>* previous; ~Restore() { depth::tags=previous; } } restore{savedTags};
     depth::tags=nullptr; const int first=draw.VtxBuffer.Size;
     const auto ink=ImGui::ColorConvertFloat4ToU32(c.colour);
+    const auto origin=ImGui::GetMainViewport()->Pos;
+    const auto segment=[&](WorldPoint from,WorldPoint to,ImU32 colour,float width) {
+        ScreenPoint a,b;
+        if(p.Segment(from,to,a,b)) {
+            const ImVec2 start{a.x+origin.x,a.y+origin.y},end{b.x+origin.x,b.y+origin.y};
+            draw.AddLine(start,end,IM_COL32(0,0,0,110),width+1.5f);
+            draw.AddLine(start,end,colour,width);
+        }
+    };
+    const auto wire=[&](const WorldBounds& bounds,ImU32 colour,float width) {
+        const auto corner=[&](int i)->WorldPoint {
+            return {i&1?bounds.max.x:bounds.min.x,i&2?bounds.max.y:bounds.min.y,i&4?bounds.max.z:bounds.min.z};
+        };
+        for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) segment(corner(i),corner(i|bit),colour,width);
+    };
     for(const auto& f:finds) {
         const double distance=Distance(f.centre,s); if(!std::isfinite(distance)||distance>c.maxDraw) continue;
+        if(chunks) {
+            const auto bounds=PossibleChunkBounds(f,s);
+            wire(bounds,ink,1.6f);
+            // Section rings make the enclosing column visible from inside it.
+            ImVec4 subtle=c.colour; subtle.w*=.4f;
+            const auto grid=ImGui::ColorConvertFloat4ToU32(subtle);
+            for(double y=std::ceil(bounds.min.y/16)*16;y<bounds.max.y;y+=16) {
+                const WorldPoint a{bounds.min.x,y,bounds.min.z},b{bounds.max.x,y,bounds.min.z},
+                    d{bounds.min.x,y,bounds.max.z},e{bounds.max.x,y,bounds.max.z};
+                segment(a,b,grid,1); segment(b,e,grid,1); segment(e,d,grid,1); segment(d,a,grid,1);
+            }
+        }
+        if(blocks) for(const auto& b:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) {
+            const bool kelp=c.kelp&&b.kind==kBlockKelp&&b.kelpHeight>=c.minKelpHeight;
+            const bool crystal=c.amethyst&&(b.kind==kBlockLargeAmethystBud||b.kind==kBlockAmethystCluster);
+            const bool slate=c.deepslate&&b.kind==kBlockRotatedDeepslate;
+            if((!kelp&&!crystal&&!slate)||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
+               std::abs(b.x)>3e7||std::abs(b.z)>3e7||std::abs(b.y)>4096||
+               ChunkCoordinate(b.x)!=f.chunkX||ChunkCoordinate(b.z)!=f.chunkZ) continue;
+            const double blockDistance=Distance({b.x+.5,b.y+.5,b.z+.5},s);
+            if(!std::isfinite(blockDistance)||blockDistance>c.maxDraw) continue;
+            // Keep every kelp stem block visible, although the scanner publishes
+            // one top/height record per plant instead of repeating its stems.
+            const int height=kelp?std::clamp(int(b.kelpHeight),1,64):1;
+            for(int offset=0;offset<height;++offset)
+                wire({{b.x,b.y-offset,b.z},{b.x+1.,b.y-offset+1.,b.z+1.}},ink,1.4f);
+        }
+        if(!c.tracers&&!c.labels) continue;
         ScreenRect rect; if(!p.Bounds(f.bounds,rect)) continue;
-        draw.AddRect({rect.left,rect.top},{rect.right,rect.bottom},ink,4,0,2);
         if(c.tracers) draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
         if(c.labels) {
-            char text[160]; std::snprintf(text,sizeof(text),"Possible Base | %d tall kelp / %d amethyst | %.0f m",f.kelpColumns,f.amethyst,distance);
+            char text[192]; std::snprintf(text,sizeof(text),"Possible Base | Chunk %d, %d | %d kelp / %d amethyst / %d deepslate | %.0f m",
+                f.chunkX,f.chunkZ,f.kelpColumns,f.amethyst,f.deepslate,distance);
             Label(draw,rect,text,ink,viewport);
         }
     }
