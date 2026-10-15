@@ -63,7 +63,7 @@ described below.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **22**; restart Minecraft and use the newly built
+Shared-memory version is now **23**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
 Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity

@@ -1,12 +1,16 @@
 # Portable client and launcher
 
 Open `build/client/mcov.exe`. Select an already running Minecraft window and
-click **Client starten**. The launcher automatically connects and starts the
+click **Start client**. The launcher automatically connects and starts the
 overlay for that exact instance. Starting again switches back to Minecraft.
 Only this EXE needs to be copied; all native and Java helpers are embedded.
 The ready-to-share `build/mcov-client.zip` contains exactly `mcov.exe` and the
-optional German `START.txt` guide, with no build directories or separate dependencies.
+optional English `START.txt` guide, with no build directories or separate dependencies.
 Both files are also available in `build/client/`. Extract the ZIP before starting.
+
+All app-owned launcher and overlay text is English, including connection states,
+errors, the debug HUD and named keys. Printable key legends follow your keyboard
+layout. Minecraft window titles, player names and user-entered text are preserved.
 
 ## Runtime requirements
 
@@ -14,7 +18,7 @@ Windows x64, Minecraft Java Edition, and an x64 JDK matching the game's Java
 major are required: normally Java 17 for 1.20.1, Java 21 for the 1.21 releases,
 and Java 25 for 26.2. A JRE alone cannot attach the agent. Discovery checks the
 build JDK, configured paths and installed JDKs. A missing match exposes
-**JDK-Ordner auswaehlen**. Select the installation root containing `bin/java.exe`,
+**Select JDK folder**. Select the installation root containing `bin/java.exe`,
 `bin/javac.exe`, `bin/attach.dll` and `release`. Selection is saved for later starts.
 The launcher does not install Java.
 
@@ -30,7 +34,7 @@ The launcher does not install Java.
   HUD layout, friend relations and waypoints.
 - `%LOCALAPPDATA%\mcov\launcher-jdk.txt`: selected JDK path.
 - `%LOCALAPPDATA%\mcov\mcov_client.log` and `mcov_overlay.log`: launcher/overlay logs.
-- `mcov_agent.log` beside the loaded DLL: agent log, also included under Diagnose.
+- `mcov_agent.log` beside the loaded DLL: agent log, also included under Logs.
 
 On the first portable start without local `client-settings.ini`, existing
 automatic preferences from `%LOCALAPPDATA%\mcov\client-settings.ini` are imported.
@@ -65,7 +69,7 @@ radius, and the sidebar adds `#15151B` at alpha 0.22. Controls use the shared
 small radii and coral accent `#EF8B70`. This presentation replaces the launcher's
 lavender Liquid Glass surface.
 
-The launcher opens at 640 × 640. Its left **Start / Diagnose** sidebar is
+The launcher opens at 640 × 640. Its left **Start / Logs** sidebar is
 142 pixels wide, or 112 pixels below 620 pixels viewport width, with simple
 authored icons. **Start** contains the native selectable Minecraft list,
 refresh, phase/status and JDK recovery. Long instance titles and PID/Java/client
@@ -73,7 +77,7 @@ details remain clipped to their row; hovering reveals the full text in a tooltip
 The list and content scroll while the 34-pixel primary action and close footer
 remain fixed. Enabled primary text is near-black (`#221B1B`); disabled text is
 soft white (`#ECECEF`) under the shared disabled alpha. Busy or absent selection
-disables the action. **Diagnose** contains connection details, copy/open-folder
+disables the action. **Logs** contains connection details, copy/open-folder
 actions and logs, with its own fixed close footer. Actions wrap when needed.
 The layout is also covered at 480 × 380.
 

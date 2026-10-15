@@ -110,6 +110,19 @@ inline void AddBaseTextureDefaults(std::map<std::string,std::string>& values) {
         values.emplace("smp.base.textured","1"); values.emplace("smp.base.textureOpacity","1");
     }
 }
+inline void Finder(Archive& a,smp::BaseFinderSettings& c) {
+    a.Value("smp.finder.enabled",c.enabled); a.Value("smp.finder.kelp",c.kelp); a.Value("smp.finder.amethyst",c.amethyst);
+    a.Value("smp.finder.labels",c.labels); a.Value("smp.finder.tracers",c.tracers);
+    a.Value("smp.finder.radius",c.radius,4,48); a.Value("smp.finder.interval",c.interval,200,3000);
+    a.Value("smp.finder.height",c.minKelpHeight,6,64); a.Value("smp.finder.columns",c.minKelpColumns,1,64);
+    a.Value("smp.finder.crystals",c.minAmethyst,1,64); a.Value("smp.finder.distance",c.maxDraw,8,512); a.Color("smp.finder.colour",c.colour);
+}
+inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
+    if(std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.finder.");})) return;
+    smp::BaseFinderSettings defaults; std::ostringstream out; Archive archive(out); Finder(archive,defaults);
+    std::istringstream in(out.str()); std::string line;
+    while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
+}
 inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
     const bool present=std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.base.");});
     if(present) { AddBaseTextureDefaults(values); return; }
@@ -132,6 +145,7 @@ inline void Smp(Archive& a,smp::Config& s) {
     a.Value("smp.spawner.radius",spawn.radius,4,48); a.Value("smp.spawner.interval",spawn.interval,200,3000);
     a.Value("smp.spawner.distance",spawn.maxDraw,8,128); a.Value("smp.spawner.glow",spawn.glow,0,2); a.Color("smp.spawner.colour",spawn.colour);
     Base(a,s.base);
+    Finder(a,s.finder);
     if((s.storage.mask&~smp::kStorageMask)||(stash.mask&~smp::kStorageMask)) a.valid=false;
 }
 inline void Visit(Archive& a,Snapshot& s) {
@@ -312,6 +326,14 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace(baseBind+"key","0"); values.emplace(baseBind+"modifiers","0"); values.emplace(baseBind+"mode","0");
     }
     AddBaseTextureDefaults(values);
+    const auto finderBind="bind."+std::to_string(keys::Index(keys::Action::BaseFinder))+".";
+    const bool hasFinder=std::any_of(values.begin(),values.end(),[&](const auto& entry) {
+        return entry.first.starts_with("smp.finder.")||entry.first.starts_with(finderBind);
+    });
+    if(!hasFinder) {
+        AddFinderDefaults(values);
+        values.emplace(finderBind+"key","0"); values.emplace(finderBind+"modifiers","0"); values.emplace(finderBind+"mode","0");
+    }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

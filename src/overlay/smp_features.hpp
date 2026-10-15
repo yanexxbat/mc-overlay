@@ -44,13 +44,44 @@ struct BaseSettings {
     float maxDraw=192,padding=4,fillOpacity=.12f,lineWidth=1.8f;
     ImVec4 colour{.35f,.85f,1,.95f};
 };
+struct BaseFinderSettings {
+    bool enabled=false,kelp=true,amethyst=true,labels=true,tracers=false;
+    int radius=32,interval=1000,minKelpHeight=18,minKelpColumns=3,minAmethyst=6;
+    float maxDraw=192;
+    ImVec4 colour{1,.75f,.3f,.95f};
+    std::uint32_t Mask() const {
+        return (kelp?1u<<kBlockKelp:0u)|(amethyst?(1u<<kBlockLargeAmethystBud)|(1u<<kBlockAmethystCluster):0u);
+    }
+};
 struct Config {
     StorageSettings storage{};
     StashSettings stash{};
     SpawnerSettings spawner{};
     BaseSettings base{};
+    BaseFinderSettings finder{};
     StashSettings Detection() const { auto c=stash; c.enabled=stash.enabled||base.enabled; return c; }
     void Clamp();
+};
+struct PossibleBase {
+    int chunkX=0,chunkZ=0,kelpColumns=0,tallestKelp=0,amethyst=0;
+    WorldPoint centre{};
+    WorldBounds bounds{};
+};
+class BaseFinder {
+public:
+    static constexpr int kMaxFinds=128;
+    void Reset() { *this=BaseFinder{}; }
+    void Clear() { count_=0; }
+    void Update(const WorldSnapshot& snapshot,const BaseFinderSettings& settings);
+    std::span<const PossibleBase> Finds() const { return {finds_.data(),static_cast<std::size_t>(count_)}; }
+    bool Matches(const WorldSnapshot& s) const { return !std::strncmp(dimension_.data(),s.dimension,kNameLen)&&!std::strncmp(server_.data(),s.serverAddress,kAddrLen); }
+private:
+    std::array<PossibleBase,kMaxFinds> finds_{};
+    std::array<char,kNameLen> dimension_{};
+    std::array<char,kAddrLen> server_{};
+    std::uint64_t scan_=0;
+    std::uint32_t mask_=0;
+    int count_=0,height_=0,columns_=0,amethyst_=0,radius_=0;
 };
 struct Stash {
     int chunkX=0,chunkZ=0,count=0;
@@ -84,6 +115,8 @@ void DrawStashes(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProj
                  const StashSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
 void DrawBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
                const BaseSettings& settings,std::span<const Stash> finds,ImVec2 viewport);
+void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& snapshot,const CameraProjection& projection,
+                       const BaseFinderSettings& settings,std::span<const PossibleBase> finds,ImVec2 viewport);
 base::Request BuildBaseRequest(const WorldSnapshot& snapshot,const BaseSettings& settings,
                               std::span<const Stash> finds,bool fresh,std::uint64_t now);
 } // namespace mcov::smp

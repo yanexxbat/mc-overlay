@@ -14,14 +14,19 @@ std::string BindName(keys::Bind b) {
     if(b.modifiers&keys::Ctrl) out+="Ctrl+";
     if(b.modifiers&keys::Shift) out+="Shift+";
     if(b.modifiers&keys::Alt) out+="Alt+";
-    const char* mouse=b.key==VK_LBUTTON?"Mouse 1":b.key==VK_RBUTTON?"Mouse 2":b.key==VK_MBUTTON?"Mouse 3":
-                      b.key==VK_XBUTTON1?"Mouse 4":b.key==VK_XBUTTON2?"Mouse 5":nullptr;
-    if(mouse) return out+mouse;
-    char text[80]{}; UINT scan=MapVirtualKeyW(b.key,MAPVK_VK_TO_VSC);
-    if(b.key==VK_INSERT||b.key==VK_DELETE||b.key==VK_HOME||b.key==VK_END||b.key==VK_PRIOR||b.key==VK_NEXT||
-       (b.key>=VK_LEFT&&b.key<=VK_DOWN)||b.key==VK_DIVIDE) scan|=0x100;
-    if(GetKeyNameTextA(static_cast<LONG>(scan<<16),text,sizeof(text))) return out+text;
-    return out+"Key "+std::to_string(b.key);
+    // Printable key legends follow the keyboard layout, like user-entered text.
+    // Named keys (Insert, Home, Shift, etc.) always use the English labels below.
+    if((b.key>=0xBA&&b.key<=0xC0)||(b.key>=0xDB&&b.key<=0xDF)||b.key==0xE2) {
+        wchar_t legend[80]{}; const auto scan=MapVirtualKeyW(b.key,MAPVK_VK_TO_VSC);
+        if(const int length=GetKeyNameTextW(static_cast<LONG>(scan<<16),legend,80); length>0) {
+            const int bytes=WideCharToMultiByte(CP_UTF8,0,legend,length,nullptr,0,nullptr,nullptr);
+            if(bytes>0) {
+                std::string text(bytes,'\0'); WideCharToMultiByte(CP_UTF8,0,legend,length,text.data(),bytes,nullptr,nullptr);
+                return out+text;
+            }
+        }
+    }
+    return out+keys::KeyName(b.key);
 }
 bool Overlay::ModuleEnabled(keys::Action a) const {
     if(a>=keys::Action::JumpCircles&&a<=keys::Action::Waypoints)
@@ -54,6 +59,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::StashFinder:return smpConfig_.stash.enabled;
         case keys::Action::SpawnerEsp:return smpConfig_.spawner.enabled;
         case keys::Action::BaseEsp:return smpConfig_.base.enabled;
+        case keys::Action::BaseFinder:return smpConfig_.finder.enabled;
         default:return false;
     }
 }
@@ -90,6 +96,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::StashFinder:smpConfig_.stash.enabled=value;preferencesDirty_=true;break;
         case keys::Action::SpawnerEsp:smpConfig_.spawner.enabled=value;preferencesDirty_=true;break;
         case keys::Action::BaseEsp:smpConfig_.base.enabled=value;preferencesDirty_=true;break;
+        case keys::Action::BaseFinder:smpConfig_.finder.enabled=value;preferencesDirty_=true;break;
         default:break;
     }
 }
@@ -279,6 +286,7 @@ void Overlay::LoadPreferences() {
     preferencesDirty_=false;
     if(!smpValues.empty()) {
         client_configs::AddBaseDefaults(smpValues);
+        client_configs::AddFinderDefaults(smpValues);
         smp::Config candidate; client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
         if(smpUnique&&archive.valid&&smpValues.empty()) smpConfig_=candidate;
         else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";

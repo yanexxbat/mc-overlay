@@ -1,15 +1,45 @@
-# SMP: Storage ESP, Stash Finder, Spawner ESP und Base ESP
+# SMP: Storage ESP, Stash Finder, Spawner ESP, Base ESP und Base Finder
 
-Die vier Module stehen unter **Blocks** im bestehenden kompakten Client-Menü.
+Die fünf Module stehen unter **Blocks** im bestehenden kompakten Client-Menü.
 **Linksklick** oder **Leertaste** schaltet ein Modul um. **Rechtsklick**,
 **Menü-Taste** oder **Shift+F10** öffnet seine Einstellungen im unabhängigen
 Fenster. In kleinen Viewports scrollt dieses Fenster bis zu allen Controls und
 Aktionen; **X** führt zurück zum Raster. **Strg-Klick** auf einen Slider erlaubt
 die direkte Zahleneingabe. [Menü und Keybinds](client-ui.md).
 
-Die Erweiterung verwendet **IPC v22**. Bereits laufendes Minecraft vollständig
+Die Erweiterung verwendet **IPC v23**. Bereits laufendes Minecraft vollständig
 neu starten, bevor der aktualisierte Client erneut angehängt wird. Ein schon
 geladener Agent behält sonst das alte gemeinsame Datenlayout.
+
+## Base Finder
+
+**Blocks → Base Finder** einschalten; Rechtsklick öffnet die Einstellungen.
+Das Modul markiert einen Chunk als **Possible Base**, sobald mindestens eine
+der beiden unabhängig einstellbaren Bedingungen erfüllt ist:
+
+- **Tall kelp**: standardmäßig mindestens drei Pflanzen mit jeweils mindestens
+  18 Blöcken Höhe. Jede Kelp-Spitze zählt einmal; der Scanner misst ihren
+  zusammenhängenden Stängel abwärts bis maximal 64 Blöcke, auch unterhalb des
+  Scanwürfels. Die Spitze muss innerhalb des Scanradius liegen.
+- **Large amethyst / clusters**: standardmäßig mindestens sechs große
+  Amethystknospen oder vollständig gewachsene Cluster im gescannten Chunk.
+  Kleine und mittlere Knospen sowie normale Amethystblöcke zählen nicht.
+
+Scanradius (Standard 32, Bereich 4–48), Intervall, Mindestwerte, Markerentfernung,
+Farbe, Labels und Tracer sind einstellbar. Die Markierung erscheint durch Wände
+und nennt die beobachteten Kelp- und Amethystzahlen. Wachstumshinweise können
+auch natürlich vorkommen und bestätigen keine Base. Der Client scannt nur die
+verfügbaren Blöcke um den Spieler, keine entfernten oder ungeladenen Chunks.
+
+Die Session-Liste enthält bis zu 128 mögliche Bases mit Koordinaten und Gründen.
+**Copy coordinates** kopiert eine Position; **Save waypoint** speichert sie über
+Neustarts hinweg. Die Liste behält die Beobachtung mit der höchsten Summe aus
+qualifizierten Kelp-Pflanzen und Amethyst und kann veraltet sein. **Clear possible
+bases** leert sie bis zum nächsten neuen Scan. Server-/Dimensionswechsel,
+Verbindungsabbruch, Panic sowie Änderungen an Filtern, Radius oder Mindestwerten
+setzen sie zurück. Einstellungen und der anfangs unbelegte Keybind werden in
+automatischen Preferences und benannten Configs gespeichert. Ältere vollständige
+Configs erhalten deaktivierte Base-Finder-Standardwerte.
 
 ## Storage ESP
 
@@ -253,3 +283,20 @@ Fix erneut erzeugten Bilder und bestätigte **ship**, ohne sichtbare Regression.
 Diese Belege prüfen Settings und synthetische Darstellung. Für SMP wurde kein
 Live-Minecraft-Test durchgeführt; Scanverhalten, Optik und Attach im laufenden
 Spiel sowie alle GPU-Kombinationen sind dadurch nicht bestätigt.
+
+## Base Finder: Prüfung
+
+Für Base Finder bestanden alle **27** Regressionsprüfungen über die abschließenden
+Läufe. `runtime_profiles` prüft Kelp-Höhen auch unterhalb des Scanwürfels, genau
+eine Meldung pro Pflanzenspitze und beide Amethyst-Typen über die vorhandenen
+JNI-Profile. `smp_features` prüft unabhängige Mindestwerte, kurze Pflanzen,
+negative Chunks, vollständige Scans, Filter, Session-Trennung, Config-Migration
+und Marker durch Wände. `control_panel` prüft erreichbare Controls und Aktionen,
+die feste Kopfzeile bei kleiner Fenstergröße, Preferences und Panic.
+Der isolierte `frame_attach`-Test bestand außerhalb der Sandbox nach deren
+Zugriffsfehler auf eine lokale Java-Pipe. Client und Share-ZIP wurden neu gebaut.
+
+Die sechs nativen synthetischen Screenshots und die unabhängige UI-Prüfung
+mit Ergebnis **ship** liegen unter `.impeccable/review/base-finder/`.
+Sie zeigen Einstellungen, leere Liste und Entdeckungen bei 1280 × 800 und
+480 × 360. Ein Live-Minecraft-Test wurde nicht durchgeführt.

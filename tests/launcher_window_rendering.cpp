@@ -84,7 +84,7 @@ int main(int argc,char** argv) {
         mcov::FlatAppRenderingCheck::Frame(app,view,output.empty()?output:output/"launcher-native-start.png");
         view.instances.push_back({123,"Minecraft fixture","Java 21",false,false}); view.selected=0;
         mcov::FlatAppRenderingCheck::Frame(app,view);
-        view.tab=1; view.diagnostic="Verbindung wird hier angezeigt.";
+        view.tab=1; view.diagnostic="Connection details appear here.";
         SetWindowPos(static_cast<HWND>(app.hwnd()),nullptr,0,0,480,380,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
         mcov::FlatAppRenderingCheck::Frame(app,view,output.empty()?output:output/"launcher-native-diagnose.png");
         std::cout<<"PASS native launcher: hidden initialization, translucent swapchain, controls, resize, rounded clipping\n";

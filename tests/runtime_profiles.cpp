@@ -609,6 +609,21 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     scanner.Begin(4,1u<<mcov::kBlockRotatedDeepslate,center);
     for(int step=0;step<1000&&scanner.running;++step) scanner.Step(env,b,client,cache,1);
     Require(!scanner.running&&scanner.accum.empty(),"scanner retained vertical deepslate hints");
+    auto kelp=makeState("block.minecraft.kelp",false),stem=makeState("block.minecraft.kelp_plant",false);
+    auto bud=makeState("block.minecraft.large_amethyst_bud",false),cluster=makeState("block.minecraft.amethyst_cluster",false);
+    for(int y=47;y<66;++y) worldState(y,stem);
+    worldState(66,kelp); worldState(67,bud); worldState(68,cluster);
+    SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",states);
+    const auto growthMask=(1u<<mcov::kBlockKelp)|(1u<<mcov::kBlockLargeAmethystBud)|(1u<<mcov::kBlockAmethystCluster);
+    scanner.Begin(4,growthMask,center);
+    for(int step=0;step<1000&&scanner.running;++step) scanner.Step(env,b,client,cache,1);
+    Require(!scanner.running&&scanner.successful&&scanner.accum.size()==243,"growth scanner lost kelp tops or amethyst");
+    int plants=0;
+    for(const auto& found:scanner.accum) if(found.kind==mcov::kBlockKelp) {
+        ++plants; Require(found.y==66&&found.kelpHeight==20,"kelp height was clipped to the scan cube or counted stems");
+    }
+    Require(plants==81,"kelp columns were counted more than once");
+    SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",nullptr);
     cache.Release(env); Healthy(env);
     std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, game Use, fixed crystal/anchor cycles, world confirmation/dimension, deepslate axis)"<<std::endl;
 }

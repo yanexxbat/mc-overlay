@@ -18,7 +18,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 22;
+inline constexpr std::uint32_t kSharedVersion = 23;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -53,6 +53,10 @@ enum BlockKind : std::uint8_t {
     kBlockSmoker,
     kBlockCrafter,
     kBlockBrewingStand,
+    kBlockKelp,
+    kBlockKelpPlant,
+    kBlockLargeAmethystBud,
+    kBlockAmethystCluster,
     kBlockKindCount,
 };
 static_assert(kBlockKindCount < 32);
@@ -85,6 +89,10 @@ inline const char* BlockKindKey(std::uint8_t kind) {
         case kBlockSmoker:        return "smoker";
         case kBlockCrafter:       return "crafter";
         case kBlockBrewingStand:  return "brewing_stand";
+        case kBlockKelp:          return "kelp";
+        case kBlockKelpPlant:     return "kelp_plant";
+        case kBlockLargeAmethystBud:return "large_amethyst_bud";
+        case kBlockAmethystCluster:return "amethyst_cluster";
         default:                  return "";
     }
 }
@@ -117,6 +125,10 @@ inline const char* BlockKindLabel(std::uint8_t kind) {
         case kBlockSmoker:        return "Smokers";
         case kBlockCrafter:       return "Crafters";
         case kBlockBrewingStand:  return "Brewing stands";
+        case kBlockKelp:          return "Kelp tops";
+        case kBlockKelpPlant:     return "Kelp stems";
+        case kBlockLargeAmethystBud:return "Large amethyst buds";
+        case kBlockAmethystCluster:return "Amethyst clusters";
         default:                  return "?";
     }
 }
@@ -255,7 +267,8 @@ static_assert(sizeof(EffectSnapshot) == 52, "EffectSnapshot layout changed - bum
 struct BlockSnapshot {
     float        x, y, z;
     std::uint8_t kind;      // BlockKind
-    std::uint8_t _pad[3];
+    std::uint8_t kelpHeight; // Observed column height below a kelp top, capped at 64.
+    std::uint8_t _pad[2];
 };
 
 static_assert(std::is_trivially_copyable_v<BlockSnapshot>);

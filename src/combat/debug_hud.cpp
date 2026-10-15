@@ -32,15 +32,15 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
             std::snprintf(text,sizeof(text),"%.*s  %.2fm  %.1f deg",static_cast<int>(s.target->name.size()),s.target->name.data(),s.target->range,s.target->angle);
             line(text);
             std::snprintf(text,sizeof(text),"Error %.2f deg  Cooldown %.0f%%",s.error,s.cooldown*100); line(text,kMuted);
-        } else { line("Combat Assist"); line("Kein gueltiges Ziel",kMuted); }
-        line(s.silentUnavailable ? "Silent-Adapter fehlt" : s.cooldownUnavailable ? "Cooldown unbekannt" : s.resyncing ? "Synchronisierung" : s.reacting ? "Reaktionspause" : s.enabled ? "Aktiv" : "Deaktiviert",kMuted);
+        } else { line("Combat Assist"); line("No valid target",kMuted); }
+        line(s.silentUnavailable ? "Silent adapter unavailable" : s.cooldownUnavailable ? "Cooldown unknown" : s.resyncing ? "Resyncing" : s.reacting ? "Reaction delay" : s.enabled ? "Active" : "Disabled",kMuted);
     }
     if(c.packetStats) {
-        std::snprintf(text,sizeof(text),"Ausgabe %llu  Puffer %zu",static_cast<unsigned long long>(s.packets.sent),s.packets.buffered); line(text,kMuted);
-        std::snprintf(text,sizeof(text),"Verworfen %llu  Fehler %llu",static_cast<unsigned long long>(s.packets.discarded),static_cast<unsigned long long>(s.packets.failed)); line(text,kMuted);
+        std::snprintf(text,sizeof(text),"Sent %llu  Buffered %zu",static_cast<unsigned long long>(s.packets.sent),s.packets.buffered); line(text,kMuted);
+        std::snprintf(text,sizeof(text),"Discarded %llu  Failed %llu",static_cast<unsigned long long>(s.packets.discarded),static_cast<unsigned long long>(s.packets.failed)); line(text,kMuted);
     }
     if(c.trace) {
-        line("Rotation: Ziel / gemessener Zustand",kMuted);
+        line("Rotation: target / actual",kMuted);
         const std::size_t count=std::min(s.traceCount,kTraceCapacity);
         if(count>=2) {
             double extent=1;

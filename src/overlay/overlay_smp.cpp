@@ -114,6 +114,54 @@ void Overlay::DrawSmpSettings(int section) {
             ImGui::EndTable();
         }
         ImGui::TextWrapped("Highlights scanned mob spawner blocks. The mob type and activation state are not sampled.");
+    } else if(section==4) {
+        auto& c=smpConfig_.finder;
+        if(panel::BeginRows("base_finder_settings")) {
+            dirty|=panel::CheckRow("Enable Base Finder",&c.enabled); DrawBind(keys::Action::BaseFinder,true);
+            dirty|=panel::SliderIntRow("Scan radius",&c.radius,4,48,"%d blocks");
+            dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
+            dirty|=panel::CheckRow("Tall kelp",&c.kelp);
+            ImGui::BeginDisabled(!c.kelp);
+            dirty|=panel::SliderIntRow("Minimum kelp height",&c.minKelpHeight,6,64,"%d blocks");
+            dirty|=panel::SliderIntRow("Tall plants / chunk",&c.minKelpColumns,1,64,"%d");
+            ImGui::EndDisabled();
+            dirty|=panel::CheckRow("Large amethyst / clusters",&c.amethyst);
+            ImGui::BeginDisabled(!c.amethyst);
+            dirty|=panel::SliderIntRow("Amethyst blocks / chunk",&c.minAmethyst,1,64,"%d");
+            ImGui::EndDisabled();
+            dirty|=panel::SliderRow("Marker distance",&c.maxDraw,8,512,"%.0f m");
+            dirty|=panel::CheckRow("Labels",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
+            dirty|=panel::ColorRow("Marker colour",&c.colour.x); ImGui::EndTable();
+        }
+        if(!c.Mask()) ImGui::TextWrapped("Select tall kelp or amethyst to start searching.");
+        ImGui::TextWrapped("Marks Possible Base when either minimum is met in a scanned chunk. Large amethyst buds and fully grown clusters count; small and medium buds do not. Kelp is counted once per plant, with height measured up to 64 blocks below its top.");
+        ImGui::TextWrapped("Growth clues can also occur naturally. Only loaded blocks around you are scanned; a marker is a possible base, not confirmation.");
+        panel::Section("Possible bases this session");
+        const auto finds=baseFinder_.Finds();
+        if(finds.empty()) ImGui::TextWrapped(c.enabled?"No possible base found yet. Wait for a completed scan or adjust the minimums.":"Enable Base Finder to search for growth clues.");
+        else {
+            ImGui::TextDisabled("%zu / %d discoveries",finds.size(),smp::BaseFinder::kMaxFinds);
+            const bool clear=ImGui::Button("Clear possible bases");
+            for(std::size_t i=0;i<finds.size();++i) {
+                const auto& f=finds[i]; ImGui::PushID(int(i)); ImGui::Separator();
+                ImGui::TextWrapped("Possible Base | Chunk %d, %d",f.chunkX,f.chunkZ);
+                ImGui::TextWrapped("%d tall kelp (max %d blocks), %d amethyst",f.kelpColumns,f.tallestKelp,f.amethyst);
+                char coordinates[64]; std::snprintf(coordinates,sizeof(coordinates),"%.0f %.0f %.0f",std::floor(f.centre.x),std::floor(f.centre.y),std::floor(f.centre.z));
+                ImGui::TextUnformatted(coordinates);
+                if(ImGui::SmallButton("Copy coordinates")) ImGui::SetClipboardText(coordinates);
+                ImGui::SameLine();
+                if(ImGui::SmallButton("Save waypoint")) {
+                    auto position=lastSnapshot_; position.posX=float(f.centre.x); position.posY=float(f.centre.y); position.posZ=float(f.centre.z);
+                    char name[kNameLen]; std::snprintf(name,sizeof(name),"Possible Base %d, %d",f.chunkX,f.chunkZ);
+                    if(rockstarPack_.AddMarker(position,name)) { rockstarConfig_[rockstar::Feature::Waypoints].enabled=true; dirty=true; }
+                    else rockstarPack_.Notify("Waypoint list is full. Remove a waypoint first.",double(GetTickCount64())/1000);
+                }
+                ImGui::PopID();
+            }
+            if(clear) baseFinder_.Clear();
+            if(finds.size()==smp::BaseFinder::kMaxFinds) ImGui::TextWrapped("Discovery limit reached. Save locations and clear the list to record more.");
+        }
+        ImGui::TextWrapped("Discoveries retain their strongest observation and may be outdated. Changing server, dimension, detection filters, radius or minimums clears the list. Save a waypoint to keep a location after restart.");
     } else {
         auto& c=smpConfig_.base; auto& detection=smpConfig_.stash;
         if(panel::BeginRows("base_settings")) {

@@ -31,6 +31,65 @@ void Config::Clamp() {
     base.maxDraw=Finite(base.maxDraw,8,512,192); base.padding=Finite(base.padding,0,16,4);
     base.textureOpacity=Finite(base.textureOpacity,0,1,1);
     base.fillOpacity=Finite(base.fillOpacity,0,.5f,.12f); base.lineWidth=Finite(base.lineWidth,.5f,4,1.8f); ClampColour(base.colour);
+    finder.radius=std::clamp(finder.radius,4,48); finder.interval=std::clamp(finder.interval,200,3000);
+    finder.minKelpHeight=std::clamp(finder.minKelpHeight,6,64); finder.minKelpColumns=std::clamp(finder.minKelpColumns,1,64);
+    finder.minAmethyst=std::clamp(finder.minAmethyst,1,64); finder.maxDraw=Finite(finder.maxDraw,8,512,192); ClampColour(finder.colour);
+}
+void BaseFinder::Update(const WorldSnapshot& s,const BaseFinderSettings& c) {
+    if(!Matches(s)||mask_!=c.Mask()||height_!=c.minKelpHeight||columns_!=c.minKelpColumns||amethyst_!=c.minAmethyst||radius_!=c.radius) {
+        Reset(); std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
+        mask_=c.Mask(); height_=c.minKelpHeight; columns_=c.minKelpColumns; amethyst_=c.minAmethyst; radius_=c.radius;
+    }
+    if(!c.enabled||!s.dimension[0]||!mask_||!s.blockScanComplete||!s.blockScanId||s.blockScanId==scan_||
+       (s.blockScanMask&mask_)!=mask_||s.blockScanRadius<static_cast<unsigned>(c.radius)) return;
+    if(s.blockScanId<scan_) count_=0;
+    scan_=s.blockScanId;
+    std::vector<PossibleBase> chunks;
+    for(const auto& b:std::span(s.blocks,std::min(s.blockCount,kMaxBlocks))) {
+        const bool kelp=c.kelp&&b.kind==kBlockKelp&&b.kelpHeight>=c.minKelpHeight;
+        const bool crystal=c.amethyst&&(b.kind==kBlockLargeAmethystBud||b.kind==kBlockAmethystCluster);
+        if((!kelp&&!crystal)||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
+           std::abs(b.x)>3e7||std::abs(b.z)>3e7||std::abs(b.y)>4096) continue;
+        if(std::abs(b.x-s.blockScanX)>c.radius||std::abs(b.y-s.blockScanY)>c.radius||std::abs(b.z-s.blockScanZ)>c.radius) continue;
+        const int x=static_cast<int>(std::floor(double(b.x)/16)),z=static_cast<int>(std::floor(double(b.z)/16));
+        auto it=std::find_if(chunks.begin(),chunks.end(),[&](const PossibleBase& f){return f.chunkX==x&&f.chunkZ==z;});
+        const double bottom=kelp?b.y-b.kelpHeight+1.:b.y;
+        if(it==chunks.end()) {
+            PossibleBase f; f.chunkX=x; f.chunkZ=z; f.bounds={{b.x,bottom,b.z},{b.x+1.,b.y+1.,b.z+1.}};
+            chunks.push_back(f); it=chunks.end()-1;
+        }
+        if(kelp) { ++it->kelpColumns; it->tallestKelp=std::max(it->tallestKelp,int(b.kelpHeight)); }
+        else ++it->amethyst;
+        it->bounds.min.x=std::min(it->bounds.min.x,double(b.x)); it->bounds.min.y=std::min(it->bounds.min.y,bottom);
+        it->bounds.min.z=std::min(it->bounds.min.z,double(b.z)); it->bounds.max.x=std::max(it->bounds.max.x,b.x+1.);
+        it->bounds.max.y=std::max(it->bounds.max.y,b.y+1.); it->bounds.max.z=std::max(it->bounds.max.z,b.z+1.);
+    }
+    for(auto& f:chunks) {
+        if(!(c.kelp&&f.kelpColumns>=c.minKelpColumns)&&!(c.amethyst&&f.amethyst>=c.minAmethyst)) continue;
+        f.centre={(f.bounds.min.x+f.bounds.max.x)*.5,(f.bounds.min.y+f.bounds.max.y)*.5,(f.bounds.min.z+f.bounds.max.z)*.5};
+        auto old=std::find_if(finds_.begin(),finds_.begin()+count_,[&](const PossibleBase& previous){return previous.chunkX==f.chunkX&&previous.chunkZ==f.chunkZ;});
+        if(old!=finds_.begin()+count_) { if(f.kelpColumns+f.amethyst>=old->kelpColumns+old->amethyst) *old=f; }
+        else if(count_<kMaxFinds) finds_[count_++]=f;
+    }
+}
+void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p,const BaseFinderSettings& c,
+                       std::span<const PossibleBase> finds,ImVec2 viewport) {
+    if(!c.enabled||c.colour.w<=0) return;
+    auto* savedTags=depth::tags;
+    struct Restore { std::vector<float>* previous; ~Restore() { depth::tags=previous; } } restore{savedTags};
+    depth::tags=nullptr; const int first=draw.VtxBuffer.Size;
+    const auto ink=ImGui::ColorConvertFloat4ToU32(c.colour);
+    for(const auto& f:finds) {
+        const double distance=Distance(f.centre,s); if(!std::isfinite(distance)||distance>c.maxDraw) continue;
+        ScreenRect rect; if(!p.Bounds(f.bounds,rect)) continue;
+        draw.AddRect({rect.left,rect.top},{rect.right,rect.bottom},ink,4,0,2);
+        if(c.tracers) draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
+        if(c.labels) {
+            char text[160]; std::snprintf(text,sizeof(text),"Possible Base | %d tall kelp / %d amethyst | %.0f m",f.kelpColumns,f.amethyst,distance);
+            Label(draw,rect,text,ink,viewport);
+        }
+    }
+    if(savedTags) { savedTags->resize(draw.VtxBuffer.Size,0.f); std::fill(savedTags->begin()+first,savedTags->end(),0.f); }
 }
 void StashFinder::Reset() {
     count_=0; scan_=0; mask_=0; minimum_=0; dimension_={}; server_={};

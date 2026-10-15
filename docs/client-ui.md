@@ -28,7 +28,7 @@ gilt auch bei geöffnetem Menü.
 ## Kategorien, Module und Einstellungen
 
 Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
-Raster mit einer bis drei Spalten. Alle 81 Bereiche bleiben erreichbar.
+Raster mit einer bis drei Spalten. Alle 82 Bereiche bleiben erreichbar.
 Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
 Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
@@ -220,7 +220,7 @@ Das neue Rockstar-Paket erweitert die Scanner-Typen mit IPC v19. JNI-Abfragen
 dieser Scanner bleiben außerhalb des Render-Threads.
 [Neue Funktionen und Bedienung](rockstar-features.md).
 
-Die aktuelle Base-Texturerweiterung verwendet IPC v22, einschließlich der
+Die aktuelle Base-Finder-Erweiterung verwendet IPC v23, einschließlich der
 gemeinsamen Blocktypen, Scan-Metadaten und Texturanfragen/-meldungen.
 Bereits laufendes Minecraft
 vor erneutem Attach mit dem aktualisierten Client und Agent vollständig neu starten.

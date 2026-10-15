@@ -1161,6 +1161,28 @@ struct BlockScanner {
     std::vector<BlockSnapshot> accum;
     BlockScanner() { accum.reserve(kMaxBlocks); }
 
+    // Only kelp tops enter the result buffer. Measuring their stems separately
+    // keeps dense kelp forests from consuming one result per stem block.
+    int KelpHeight(JNIEnv* env,const Bindings& b,jobject level,jobject cursor,BlockKindCache& cache,int x,int y,int z) {
+        int height=1;
+        while(height<64&&y-height>=-64) {
+            auto moved=env->CallObjectMethod(cursor,b.mMutableSet,x,y-height,z);
+            if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; break; }
+            if(moved) env->DeleteLocalRef(moved);
+            auto state=env->CallObjectMethod(level,b.mGetBlockState,cursor);
+            if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; break; }
+            if(!state) break;
+            auto block=env->CallObjectMethod(state,b.mGetBlock);
+            env->DeleteLocalRef(state);
+            if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; break; }
+            if(!block) break;
+            const auto kind=cache.Lookup(env,b,block); env->DeleteLocalRef(block);
+            if(kind!=kBlockKelpPlant) break;
+            ++height;
+        }
+        return height;
+    }
+
     void Begin(int r, std::uint32_t m, const WorldSnapshot& snap) {
         radius  = r;
         mask    = m;
@@ -1223,7 +1245,7 @@ struct BlockScanner {
                     if (!block) { env->DeleteLocalRef(state); continue; }
                     const std::int8_t kind=cache.Lookup(env,b,block);
                     env->DeleteLocalRef(block);
-                    bool selected=kind>=0&&(mask&(1u<<static_cast<std::uint32_t>(kind)));
+                    bool selected=kind>=0&&kind!=kBlockKelpPlant&&(mask&(1u<<static_cast<std::uint32_t>(kind)));
                     if(selected&&kind==kBlockRotatedDeepslate) selected=IsRotatedDeepslate(env,b,state);
                     env->DeleteLocalRef(state);
                     if(!selected) continue;
@@ -1233,6 +1255,7 @@ struct BlockScanner {
                     record.y    = static_cast<float>(y);
                     record.z    = static_cast<float>(z);
                     record.kind = static_cast<std::uint8_t>(kind);
+                    if(kind==kBlockKelp) record.kelpHeight=static_cast<std::uint8_t>(KelpHeight(env,b,level,cursor,cache,x,y,z));
                     accum.push_back(record);
         }
 

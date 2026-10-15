@@ -193,7 +193,7 @@ keep these operations consistent. World effects retain their styles.
 - Seven categories, searchable module widgets and independently movable settings.
 - Native keyboard input, visible slider values and real module state.
 - Local style/font ownership and direct transparency without backdrop capture.
-- Start/Diagnose navigation with a fixed launcher action and close footer.
+- Start/Logs navigation with a fixed launcher action and close footer.
 
 ## Colors
 
@@ -276,14 +276,14 @@ placements, Reset operates on the current category, and Close closes the menu
 and details.
 
 The launcher opens at 640 × 640 with 12-pixel exterior insets and a 58-pixel native
-title strip. Its Start/Diagnose sidebar is 142 pixels wide, reducing to 112 pixels
+title strip. Its Start/Logs sidebar is 142 pixels wide, reducing to 112 pixels
 below 620 pixels viewport width. Simple authored line icons and selected states
 match the client navigation. At 480 × 380 the same controls remain reachable.
 
 The native instance list scrolls within Start and exposes full titles and details
 in a tooltip. Status, JDK recovery and diagnostics use the scrolling content
 child. A 34-pixel coral primary action remains outside it, followed by the fixed
-close footer. Diagnose has the same close footer. Diagnostic actions wrap to
+close footer. Logs has the same close footer. Diagnostic actions wrap to
 another row when required. Native title drag, minimize and close remain available.
 
 The HUD editor toolbar is at most 540 pixels wide, clamped to viewport width
@@ -366,7 +366,7 @@ remain the source of truth.
 
 The launcher retains instance selection, refresh, busy/disabled state, missing-JDK
 recovery, log actions and close/minimize controls. Its main action starts the
-client or returns to running Minecraft. Its compact controls and Start/Diagnose
+client or returns to running Minecraft. Its compact controls and Start/Logs
 navigation use the shared theme. The primary action uses near-black text when
 enabled and soft-white text when disabled; busy or absent selection disables it.
 Long instance labels remain clipped within their row, with full title/details on

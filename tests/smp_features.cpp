@@ -92,6 +92,52 @@ void Profiles() {
     config.stash.enabled=false; config.base.enabled=true;
     Require(config.Detection().enabled&&!config.stash.enabled,"Base ESP depends on enabled Stash Finder");
 }
+void GrowthDetection() {
+    smp::BaseFinderSettings c; c.enabled=true; smp::BaseFinder finder; auto s=Scene(); s.blockScanMask=c.Mask();
+    for(int i=0;i<3;++i) { Add(s,-1-i,20,1,kBlockKelp); s.blocks[s.blockCount-1].kelpHeight=18; }
+    for(int i=0;i<6;++i) Add(s,1+i,3,4,i%2?kBlockAmethystCluster:kBlockLargeAmethystBud);
+    s.blockScanComplete=0; finder.Update(s,c); Require(finder.Finds().empty(),"Partial growth scan became a possible base");
+    s.blockScanComplete=1; s.blockScanMask=1u<<kBlockKelp; finder.Update(s,c);
+    Require(finder.Finds().empty(),"Incomplete growth filter coverage was consumed");
+    s.blockScanMask=c.Mask(); finder.Update(s,c);
+    Require(finder.Finds().size()==2,"Independent kelp/amethyst thresholds or negative chunks failed");
+    Require(finder.Finds()[0].chunkX==-1&&finder.Finds()[0].kelpColumns==3&&finder.Finds()[0].bounds.min.y==3,
+        "Kelp height/count/bounds incorrect");
+    finder.Update(s,c); Require(finder.Finds().size()==2,"Repeated scan duplicated growth discoveries");
+    ++s.blockScanId; s.blockCount=0; finder.Update(s,c); Require(finder.Finds().size()==2,"Travelling removed session discoveries");
+    c.minKelpColumns=4; finder.Update(s,c); Require(finder.Finds().empty(),"Changed growth thresholds retained old finds");
+    ++s.blockScanId;
+    for(int i=0;i<3;++i) { Add(s,1+i,20,4,kBlockKelp); s.blocks[s.blockCount-1].kelpHeight=18; }
+    for(int i=0;i<5;++i) Add(s,1+i,3,4,kBlockAmethystCluster);
+    finder.Update(s,c); Require(finder.Finds().empty(),"Different subthreshold clues were added together");
+    c.minKelpColumns=3; s.blocks[0].kelpHeight=17; finder.Update(s,c);
+    Require(finder.Finds().empty(),"Short kelp satisfied the height threshold");
+    s.blocks[0].kelpHeight=18; ++s.blockScanId; s.blockScanTruncated=1; finder.Update(s,c);
+    Require(finder.Finds().size()==1,"Positive lower-bound growth evidence was discarded");
+    c.radius=4; finder.Update(s,c); Require(finder.Finds().empty(),"Larger shared scan escaped finder radius");
+    c.radius=32; finder.Update(s,c); Require(finder.Finds().size()==1,"Growth evidence could not be re-evaluated after radius change");
+    CopyField(s.dimension,"nether"); s.blockCount=0; finder.Update(s,c); Require(finder.Finds().empty(),"Growth discoveries crossed dimensions");
+    CopyField(s.serverAddress,"different.example"); finder.Update(s,c); Require(finder.Matches(s),"Growth finder did not follow server identity");
+    c.enabled=false; ++s.blockScanId; Add(s,1,0,4,kBlockAmethystCluster); c.minAmethyst=1;
+    finder.Update(s,c); Require(finder.Finds().empty(),"Disabled growth finder collected evidence");
+    Require(ClassifyBlock("block.minecraft.small_amethyst_bud")==-1&&ClassifyBlock("block.minecraft.medium_amethyst_bud")==-1&&
+        ClassifyBlock("block.minecraft.dried_kelp_block")==-1,"Unrelated growth blocks became hints");
+}
+void GrowthProfiles() {
+    using namespace client_configs;
+    Snapshot s; s.smp.finder.enabled=true; s.smp.finder.minKelpHeight=25; s.smp.finder.minAmethyst=12;
+    s.binds[keys::Index(keys::Action::BaseFinder)]={0x47,keys::Ctrl,keys::Mode::Hold};
+    std::string text; Require(Encode(s,text),"Growth profile encoding failed"); Snapshot restored;
+    Require(Decode(text,restored)&&restored.smp.finder.enabled&&restored.smp.finder.minKelpHeight==25&&restored.smp.finder.minAmethyst==12&&
+        restored.binds[keys::Index(keys::Action::BaseFinder)].mode==keys::Mode::Hold,"Growth settings/binding roundtrip failed");
+    const auto bind="bind."+std::to_string(keys::Index(keys::Action::BaseFinder))+".";
+    std::istringstream in(text); std::ostringstream old; std::string line;
+    while(std::getline(in,line)) if(!line.starts_with("smp.finder.")&&!line.starts_with(bind)) old<<line<<'\n';
+    Require(Decode(old.str(),restored)&&!restored.smp.finder.enabled&&restored.smp.finder.minKelpHeight==18&&
+        !restored.binds[keys::Index(keys::Action::BaseFinder)].key,"Older profile did not receive disabled finder defaults");
+    auto broken=text; const auto start=broken.find("smp.finder.height "); broken.erase(start,broken.find('\n',start)-start+1);
+    Require(!Decode(broken,restored),"Partially damaged growth profile was silently repaired");
+}
 void Rendering() {
     auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
     c.storage.mask=(1u<<kBlockChest)|(1u<<kBlockEnderChest); Add(s,-2,0,6); Add(s,2,0,6,kBlockEnderChest); Add(s,0,0,8,kBlockSpawner);
@@ -133,12 +179,23 @@ void Rendering() {
     Require(!smp::BuildBaseRequest(s,c.base,finder.Finds(),false,1100).enabled,"Stale snapshot kept game rendering active");
     const int end=draw.VtxBuffer.Size; c.base.enabled=false;
     smp::DrawBases(draw,s,projection,c.base,finder.Finds(),{1280,720}); Require(draw.VtxBuffer.Size==end,"Disabled Base ESP drew geometry");
+    smp::BaseFinderSettings growth; growth.enabled=true; growth.minAmethyst=1;
+    smp::BaseFinder growthFinder; s.blockScanMask|=growth.Mask(); ++s.blockScanId; Add(s,0,0,6,kBlockAmethystCluster);
+    growthFinder.Update(s,growth); Require(growthFinder.Finds().size()==1,"Growth render fixture not detected");
+    const int growthStart=draw.VtxBuffer.Size; std::vector<float> growthTags(growthStart,.4f);
+    { depth::Scope scope(growthTags); smp::DrawPossibleBases(draw,s,projection,growth,growthFinder.Finds(),{1280,720});
+      Require(depth::tags==&growthTags,"Growth renderer did not restore depth scope"); }
+    Require(draw.VtxBuffer.Size>growthStart,"Possible Base marker generated no geometry");
+    for(int i=growthStart;i<draw.VtxBuffer.Size;++i) Require(growthTags[i]==0,"Possible Base marker became occluded");
+    growth.enabled=false; const int growthEnd=draw.VtxBuffer.Size;
+    smp::DrawPossibleBases(draw,s,projection,growth,growthFinder.Finds(),{1280,720});
+    Require(draw.VtxBuffer.Size==growthEnd,"Disabled Base Finder drew markers");
     for(const auto& v:draw.VtxBuffer) Require(std::isfinite(v.pos.x)&&std::isfinite(v.pos.y),"SMP renderer emitted an invalid vertex");
 }
 }
 int main() {
     try {
-        Detection(); Profiles(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+        Detection(); Profiles(); GrowthDetection(); GrowthProfiles(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.DisplaySize={1280,720}; io.DeltaTime=1.f/60; io.Fonts->AddFontDefault(); io.Fonts->Build();
         ImGui::NewFrame(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
         std::cout<<"PASS SMP: block classification, completed scans, filters, world isolation, limits, profiles and per-type rendering\n"; return 0;

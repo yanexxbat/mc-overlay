@@ -535,7 +535,7 @@
       "kind": "button",
       "refersTo": "button-primary",
       "description": "Injector action stays outside scrolling content at 34px high. Enabled ink is near-black; busy or absent selection uses soft-white disabled ink and 0.48 alpha.",
-      "html": "<button class=\"ds-primary-action\">Client starten</button>",
+      "html": "<button class=\"ds-primary-action\">Start client</button>",
       "css": ".ds-primary-action{font:500 14px Inter,sans-serif;color:#221B1B;background:#EF8B70;border:0;border-radius:4px;padding:3px 7px;height:34px;width:280px}.ds-primary-action:hover:not(:disabled){background:#FFA388}.ds-primary-action:active:not(:disabled){background:#DC7D64}.ds-primary-action:focus-visible{outline:1px solid #FFA388;outline-offset:2px}.ds-primary-action:disabled{color:#ECECEF;opacity:.48}"
     },
     {
@@ -543,7 +543,7 @@
       "kind": "custom",
       "refersTo": "launcher-root",
       "description": "Static approximation of the shared alpha-composited injector surface, normally 640x640 with 480x380 coverage. Native DWM/region behavior is not reproduced by this web preview.",
-      "html": "<section class=\"ds-launcher-root\"><strong>mcov</strong><p>Start / Diagnose</p><span>Translucent dark / 88% opacity</span></section>",
+      "html": "<section class=\"ds-launcher-root\"><strong>mcov</strong><p>Start / Logs</p><span>Translucent dark / 88% opacity</span></section>",
       "css": ".ds-launcher-root{font:500 14px Inter,sans-serif;color:#ECECEF;width:280px;padding:14px 16px;border-radius:12px;background:rgba(34,34,41,.88);border:0}.ds-launcher-root strong{font-size:14px;font-weight:600}.ds-launcher-root p{margin:8px 0;color:#F5D0C4}.ds-launcher-root span{color:#AEAEB8}"
     },
     {
@@ -563,7 +563,7 @@
       "Seven categories, searchable module widgets and independently movable settings.",
       "Native keyboard input, visible slider values and real module state.",
       "Local style/font ownership and direct transparency without backdrop capture.",
-      "Start/Diagnose navigation with a fixed launcher action and close footer."
+      "Start/Logs navigation with a fixed launcher action and close footer."
     ],
     "rules": [
       {

@@ -11,7 +11,7 @@ std::string FormatLastError(const char* what) {
     const DWORD code = ::GetLastError();
     char  buffer[512] = {};
     ::FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                     nullptr, code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                     nullptr, code, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
                      buffer, static_cast<DWORD>(sizeof(buffer)), nullptr);
     std::string message = what;
     message += " failed (0x";

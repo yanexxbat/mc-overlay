@@ -8,6 +8,12 @@ using namespace mcov;
 void Require(bool v,const char* text) { if(!v) throw std::runtime_error(text); }
 int main() {
     try {
+        Require(keys::KeyName(0x2D)=="Insert"&&keys::KeyName(0x2E)=="Delete"&&keys::KeyName(0x24)=="Home"&&
+            keys::KeyName(0x23)=="End"&&keys::KeyName(0x11)=="Ctrl"&&keys::KeyName(0x20)=="Space"&&
+            keys::KeyName(0xA0)=="Left Shift","Named key labels depend on the Windows language");
+        Require(keys::KeyName(0x30)=="0"&&keys::KeyName(0x5A)=="Z"&&keys::KeyName(0x70)=="F1"&&
+            keys::KeyName(0x87)=="F24"&&keys::KeyName(0x69)=="Numpad 9"&&keys::KeyName(0x05)=="Mouse 4"&&
+            keys::KeyName(0xFF)=="Key 255","English key labels lost a key identity");
         auto bindings=keys::Defaults(); keys::Input input{}; keys::Engine engine;
         std::array<bool,keys::kCount> modules{}; int invocations=0;
         const auto action=keys::Action::KillAura; const auto index=keys::Index(action);

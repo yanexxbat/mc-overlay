@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v22. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v23. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering stays outside the JVM; textured Base ESP uses a dedicated
 JNI callback on the game's render thread.
 
@@ -24,16 +24,20 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 81 real sections remain reachable. Left-click or Space operates the real
+  All 82 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   muted coral, embedded Inter and rounded fills remain the visual identity.
   This replaces the module tabs, inline settings and Quick toggles.
 - The injector uses the same approved compact coral design as the client:
   scoped `CompactStyle`, embedded Inter at 14 pixels, an 88%-opaque anthracite
-  root and a narrow Start/Diagnose sidebar. It performs Minecraft selection,
+  root and a narrow Start/Logs sidebar. It performs Minecraft selection,
   connection and overlay startup. The fixed primary action and close footer
   remain reachable while status, JDK recovery and diagnostics scroll.
+- All app-owned injector and overlay text is English, including connection
+  states, package errors, debug HUD and named keys. Printable key legends follow
+  the keyboard layout. Minecraft titles, player names and user content retain
+  their original text. The portable quick-start guide uses the same English labels.
 - The 19 snapshot HUD elements and optional Combat debug HUD use the same
   compact anthracite/coral design and embedded Inter at 14 pixels. Rounded fills,
   quiet headings and semantic green/amber/red feedback preserve readability.
@@ -67,6 +71,11 @@ camera/entity projection stability.
   Texture opacity, appearance and the unbound module key persist. Scan radius,
   minimum and filters are shared with Stash Finder. Detection estimates storage
   extent plus an adjustable margin; it does not trace entire building bounds.
+- Base Finder independently searches loaded blocks for tall kelp and large
+  amethyst buds/clusters. Adjustable per-chunk thresholds mark Possible Base
+  clues in amber through walls. Session results expose reasons, coordinates,
+  copy and waypoint actions; settings and an initially unbound key persist.
+  Natural clues can produce markers, so detections are never confirmation.
 - ThunderHack-Recode-inspired visuals prioritize particles and trails. The
   Rockstar-inspired catalog describes actual coverage rather than promising a
   complete Java port.
@@ -99,7 +108,7 @@ shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
 It keeps at most 128 discoveries and the highest observed count for each chunk.
 Truncated scans report lower-bound counts. The scan does not reveal inventory
 contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
-IPC v22 changes the shared layout: restart already running Minecraft before
+IPC v23 changes the shared layout: restart already running Minecraft before
 reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the

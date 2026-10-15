@@ -21,7 +21,7 @@ void InstanceList(View& v,float height) {
     listStyle.Var(ImGuiStyleVar_WindowPadding,ImVec2(8,8));
     ImGui::BeginChild("instances",{0,height},ImGuiChildFlags_AlwaysUseWindowPadding);
     if(v.instances.empty()) {
-        ImGui::TextWrapped("Kein Minecraft-Fenster gefunden. Starte das Spiel bis zum Hauptmenue und klicke auf Aktualisieren.");
+        ImGui::TextWrapped("No Minecraft window found. Open the game to the main menu, then click Refresh.");
     }
     ImGui::BeginDisabled(v.busy);
     for(int i=0;i<static_cast<int>(v.instances.size());++i) {
@@ -38,7 +38,7 @@ void InstanceList(View& v,float height) {
         if(v.selected==i) draw.AddCircleFilled({row.x+11,row.y+14},2,accent,12);
         draw.AddText({row.x+25,row.y+5},ink,p.title.c_str());
         const std::string detail="PID "+std::to_string(p.pid)+" | "+p.java+
-            (p.running?" | Client laeuft":p.connected?" | Verbunden":"");
+            (p.running?" | Client running":p.connected?" | Connected":"");
         draw.AddText({row.x+25,row.y+23},muted,detail.c_str());
         draw.PopClipRect();
         if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s",p.title.c_str(),detail.c_str());
@@ -62,7 +62,7 @@ Actions Render(View& v,ImVec2 size) {
     draw.AddLine({sidebar+32,58},{size.x-28,58},ImGui::GetColorU32(ImGuiCol_Separator));
     draw.AddCircle({33,35},6,accent,20,1.5f); draw.AddCircleFilled({33,35},2.3f,accent,16);
     draw.AddText(style::MenuFont(true),14,{48,28},ink,"mcov");
-    draw.AddText(style::MenuFont(true),14,{sidebar+32,28},ink,v.tab==0?"Client starten":"Diagnose");
+    draw.AddText(style::MenuFont(true),14,{sidebar+32,28},ink,v.tab==0?"Start client":"Diagnostics");
 
     // Native caption dragging owns the rest of this strip; exclude these controls.
     const ImVec2 closeMin{size.x-44,22},closeMax{size.x-22,44},minMin{size.x-70,22},minMax{size.x-48,44};
@@ -84,7 +84,7 @@ Actions Render(View& v,ImVec2 size) {
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(10,14));
         ImGui::BeginChild("launcher_navigation",{sidebar,0},ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
-        const char* tabs[]={"Start","Diagnose"};
+        const char* tabs[]={"Start","Logs"};
         for(int i=0;i<2;++i) {
             const bool active=v.tab==i; const auto p=ImGui::GetCursorScreenPos();
             style::StyleScope selected;
@@ -107,58 +107,76 @@ Actions Render(View& v,ImVec2 size) {
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,14));
         ImGui::BeginChild("launcher_content",contentSize,ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
-        if(v.tab==0) {
-            ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Minecraft auswaehlen");
-            const float refreshWidth=ImGui::CalcTextSize("Aktualisieren").x+14;
+        if(v.tab==0&&!v.licensed) {
+            control_panel::Section("License");
+            ImGui::TextWrapped("Verify your mcov license to start the client.");
+            ImGui::Spacing(); ImGui::TextUnformatted("License key");
+            ImGui::BeginDisabled(v.authBusy);
+            ImGui::SetNextItemWidth(-1);
+            const auto inputFlags=ImGuiInputTextFlags_EnterReturnsTrue|(v.showLicense?0:ImGuiInputTextFlags_Password);
+            if(ImGui::InputTextWithHint("##license_key","Enter license key",v.licenseKey.data(),v.licenseKey.size(),inputFlags)&&v.licenseKey[0]) a.verifyLicense=true;
+            ImGui::Checkbox("Show key",&v.showLicense);
+            ImGui::EndDisabled();
+            ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+            style::StyleScope status;
+            if(v.authError) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
+            ImGui::TextWrapped("%s",v.authBusy?"Checking your license with KeyAuth...":v.authMessage.c_str());
+            ImGui::Spacing(); ImGui::TextWrapped("An internet connection is required. Your key is not saved on this device.");
+        } else if(v.tab==0) {
+            ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Select Minecraft");
+            const float refreshWidth=ImGui::CalcTextSize("Refresh").x+14;
             if(ImGui::GetItemRectMax().x+refreshWidth+12<=ImGui::GetCursorScreenPos().x+width) ImGui::SameLine(0,12);
             ImGui::BeginDisabled(v.busy);
-            if(ImGui::SmallButton("Aktualisieren")) a.refresh=true;
+            if(ImGui::SmallButton("Refresh")) a.refresh=true;
             ImGui::EndDisabled();
-            ImGui::TextWrapped("Verbinden und Client starten mit einem Klick.");
+            ImGui::TextWrapped("Connect and start the client with one click.");
             ImGui::Dummy({0,3});
             InstanceList(v,std::clamp(size.y*.28f,96.f,180.f));
-            control_panel::Section(v.busy?"Verbindung":"Status");
+            control_panel::Section(v.busy?"Connection":"Status");
             if(v.busy) {
                 ImGui::TextWrapped("%s",v.phase.c_str());
-                ImGui::TextDisabled("Das Fenster bleibt bedienbar.");
+                ImGui::TextDisabled("You can still use this window.");
             } else {
                 style::StyleScope status;
                 if(v.error) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
                 ImGui::TextWrapped("%s",v.status.c_str());
-                if(v.needsJdk&&ImGui::Button("JDK-Ordner auswaehlen")) a.chooseJdk=true;
-                if(v.error&&ImGui::SmallButton("Details anzeigen")) v.tab=1;
+                if(v.needsJdk&&ImGui::Button("Select JDK folder")) a.chooseJdk=true;
+                if(v.error&&ImGui::SmallButton("Show details")) v.tab=1;
             }
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-            ImGui::TextWrapped("Nach dem Start zu Minecraft wechseln. Standard-Tasten: INSERT oeffnet das Menue, F6 den HUD-Editor und END beendet den Client.");
+            ImGui::TextWrapped("After starting, switch to Minecraft. Default keys: INSERT opens the menu, F6 opens the HUD editor, and END quits the client.");
         } else {
-            control_panel::Section("Verbindungsdetails");
-            ImGui::TextWrapped("%s",v.diagnostic.empty()?"Noch kein Verbindungsversuch. Waehle unter Start deine Minecraft-Instanz aus.":v.diagnostic.c_str());
-            if(ImGui::Button("Protokollordner oeffnen")) a.openLogs=true;
-            const float copyWidth=ImGui::CalcTextSize("Protokoll kopieren").x+14;
+            control_panel::Section("Connection details");
+            ImGui::TextWrapped("%s",v.diagnostic.empty()?"No connection attempt yet. Select your Minecraft instance under Start.":v.diagnostic.c_str());
+            if(ImGui::Button("Open log folder")) a.openLogs=true;
+            const float copyWidth=ImGui::CalcTextSize("Copy log").x+14;
             if(ImGui::GetItemRectMax().x+copyWidth+9<=ImGui::GetCursorScreenPos().x+width) ImGui::SameLine();
-            if(ImGui::Button("Protokoll kopieren")) ImGui::SetClipboardText((v.diagnostic+"\n"+v.log).c_str());
-            control_panel::Section("Protokoll");
-            ImGui::TextWrapped("%s",v.log.empty()?"Noch keine Eintraege.":v.log.c_str());
+            if(ImGui::Button("Copy log")) ImGui::SetClipboardText((v.diagnostic+"\n"+v.log).c_str());
+            control_panel::Section("Log");
+            ImGui::TextWrapped("%s",v.log.empty()?"No log entries yet.":v.log.c_str());
         }
         ImGui::EndChild();
     }
     if(v.tab==0) {
         const bool selected=v.selected>=0&&v.selected<static_cast<int>(v.instances.size());
         const bool running=selected&&v.instances[v.selected].running;
-        ImGui::BeginDisabled(v.busy||!selected);
+        const bool disabled=v.licensed?(v.busy||!selected):(v.authBusy||!v.licenseKey[0]);
+        ImGui::BeginDisabled(disabled);
         {
             style::StyleScope primary;
             primary.Color(ImGuiCol_Button,style::Color(0xEF8B70));
             primary.Color(ImGuiCol_ButtonHovered,style::Color(0xFFA388));
             primary.Color(ImGuiCol_ButtonActive,style::Color(0xDC7D64));
-            primary.Color(ImGuiCol_Text,style::Color(v.busy||!selected?0xECECEF:0x221B1B));
-            if(ImGui::Button(v.busy?"Verbindung wird vorbereitet...":running?"Zu Minecraft wechseln":"Client starten",{width,34})) a.start=true;
+            primary.Color(ImGuiCol_Text,style::Color(disabled?0xECECEF:0x221B1B));
+            const char* label=!v.licensed?(v.authBusy?"Verifying license...":"Verify license"):
+                v.busy?"Preparing connection...":running?"Switch to Minecraft":"Start client";
+            if(ImGui::Button(label,{width,34})) { if(v.licensed) a.start=true; else a.verifyLicense=true; }
         }
         ImGui::EndDisabled();
     }
     ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("mcov");
     ImGui::SameLine(0,std::max(9.f,width-ImGui::CalcTextSize("mcov").x-80));
-    if(ImGui::Button("Schliessen",{80,22})) a.close=true;
+    if(ImGui::Button("Close",{80,22})) a.close=true;
     ImGui::EndGroup(); ImGui::End(); return a;
 }
 } // namespace mcov::launcher

@@ -70,6 +70,12 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
                 code+=b'\x2a\xbb'+u2(cp.cls('java/lang/Object'))+b'\x59\xb7'+u2(cp.ref(10,'java/lang/Object','<init>','()V'))
                 code+=b'\xb5'+u2(cp.ref(9,name,'testMovementGuard','Ljava/lang/Object;'))
             code += b'\xb1'
+        elif special and special[0]=='mutable_position':
+            owner,coordinates=special[1:]
+            code=b''
+            for i,field in enumerate(coordinates):
+                code+=b'\x2a'+bytes([0x1b+i])+b'\xb5'+u2(cp.ref(9,owner,field,'I'))
+            code+=b'\x2a\xb0'
         elif special and special[0]=='world_states':
             pos,get_y,state=special[1:]
             code=b'\xb2'+u2(cp.ref(9,name,'testStates','Ljava/util/Map;'))+b'\x59\xc7\x00\x08\x57'
@@ -451,6 +457,9 @@ def generate(profiles_path, output):
             add(owner,'fields',backing,desc,static)
             cls(owner)['specials'][tuple(member)]=('field' if static else 'instance_field',backing,desc)
         pos=geometry['classes']['blockPosClass']; vec=core['vec3']; hit=geometry['classes']['blockHitClass']
+        mutable=core['blockPosMut']; cls(mutable)['parent_name']=pos
+        cls(mutable)['specials'][tuple(profile['members']['methodMutableSet'])]=('mutable_position',pos,
+            [geometry['members']['pos'+axis][0] for axis in 'XYZ'])
         for key,owner,fields_to_load in [('blockPosCtor',pos,[(geometry['members']['pos'+axis][0],'I',bytes([0x1b+i])) for i,axis in enumerate('XYZ')]),
             ('vecCtor',vec,[(profile['members']['fieldVec'+axis][0],'D',load) for axis,load in zip('XYZ',(b'\x27',b'\x29',b'\x18\x05'))]),
             ('blockHitCtor',hit,[('testOwnLocation','L'+vec+';',b'\x2b'),('testDirection','L'+geometry['classes']['directionClass']+';',b'\x2c'),('testOwnPos','L'+pos+';',b'\x2d')])]:

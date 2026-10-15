@@ -671,7 +671,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
-    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !auraConfig_.enabled &&
+    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !smpConfig_.finder.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !extraEffects && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
@@ -710,6 +710,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
         {width,height},auraBlend_.GlowTexture());
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
     if(stashFinder_.Matches(snapshot)) smp::DrawBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.base,stashFinder_.Finds(),{width,height});
+    if(baseFinder_.Matches(snapshot)) smp::DrawPossibleBases(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.finder,baseFinder_.Finds(),{width,height});
     if (!entitiesEnabled) return;
 
     auto visualConfig=visuals_; visualConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);
@@ -1084,14 +1085,15 @@ void Overlay::PushScanRequest() {
 
     const bool storage=rockstarConfig_.Enabled(rockstar::Feature::ChestEsp),beacon=rockstarConfig_.Enabled(rockstar::Feature::BeaconRadius);
     const auto stash=smpConfig_.Detection(); const auto& spawner=smpConfig_.spawner;
+    const auto& finder=smpConfig_.finder;
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
         (chunkFinder_.enabled ? 1u<<kBlockRotatedDeepslate : 0u)|(storage?smpConfig_.storage.mask:0)|(beacon?1u<<kBlockBeacon:0)|
-        (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0);
+        (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0)|(finder.enabled?finder.Mask():0);
     const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
         storage?int(rockstarConfig_[rockstar::Feature::ChestEsp].range):4,beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
-        stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4});
+        stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4,finder.enabled?finder.radius:4});
     const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,storage||beacon?1000:3000,
-        stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000});
+        stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000,finder.enabled?finder.interval:3000});
     block->scanMask.store(mask, std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
@@ -1163,6 +1165,9 @@ void Overlay::DrawBlockEsp(const WorldSnapshot& snapshot, const CameraProjection
         IM_COL32(120, 215, 255, 255),  // rotated deepslate
         IM_COL32(110,255,220,255), IM_COL32(190,130,230,255), IM_COL32(200,160,90,255),
         IM_COL32(170,170,180,255), IM_COL32(235,160,90,255),
+        IM_COL32(100,220,190,255), IM_COL32(240,110,70,255), IM_COL32(140,170,240,255), IM_COL32(120,210,230,255),
+        IM_COL32(180,180,190,255), IM_COL32(200,140,100,255), IM_COL32(160,230,110,255), IM_COL32(240,160,180,255),
+        IM_COL32(100,220,130,255), IM_COL32(100,220,130,255), IM_COL32(190,135,245,255), IM_COL32(210,160,255,255),
     };
 
     for (std::uint32_t i = 0; i < snapshot.blockCount && i < kMaxBlocks; ++i) {
@@ -1304,7 +1309,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset();
             for(int i=0;i<=rockstar::Index(rockstar::Feature::Arrows);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
-        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset();
+        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset(); baseFinder_.Reset();
             for(int i=rockstar::Index(rockstar::Feature::ChestEsp);i<=rockstar::Index(rockstar::Feature::ChunkBorders);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
         case panel::Page::Hud: hud_=HudSettings{};
             rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;
@@ -1616,7 +1621,7 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP","Base Finder"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     if(blocksSection_==4||blocksSection_>=7) { DrawSmpSettings(blocksSection_==4?0:blocksSection_-6); return; }
@@ -1637,7 +1642,7 @@ void Overlay::DrawBlocksTab() {
     } else if(blocksSection_==1) {
         if(panel::BeginRows("block_filters")) {
             for(std::uint8_t kind=0;kind<kBlockKindCount;++kind) {
-                if(kind==kBlockRotatedDeepslate) continue;
+                if(kind==kBlockRotatedDeepslate||kind==kBlockKelpPlant) continue;
                 const std::uint32_t bit=1u<<kind; bool on=(blocks_.mask&bit)!=0;
                 if(panel::CheckRow(BlockKindLabel(kind),&on)) { blocks_.mask=on ? blocks_.mask|bit : blocks_.mask&~bit; dirty=true; }
             }

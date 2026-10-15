@@ -255,6 +255,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                 std::clamp(placement.position.y,0.f,std::max(0.f,work.y-detailSize.y))};
             const ImVec2 detailPos{std::floor(viewport->WorkPos.x+placement.position.x),std::floor(viewport->WorkPos.y+placement.position.y)};
             ImGui::SetNextWindowPos(detailPos); ImGui::SetNextWindowSize(detailSize);
+            ImGui::SetNextWindowScroll({0,0}); // Only the content child scrolls; keep the header fixed.
             if(openSettings) ImGui::SetNextWindowFocus();
             constexpr auto detailFlags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollWithMouse;
             if(ImGui::Begin("mcov module settings",nullptr,detailFlags)) {

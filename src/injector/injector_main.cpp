@@ -37,7 +37,7 @@ std::wstring Wide(const std::string& value) {
 std::filesystem::path Storage() {
 #ifdef MCOV_BUNDLED
     PWSTR path=nullptr;
-    if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&path))) throw std::runtime_error("Der lokale Datenordner ist nicht verfuegbar.");
+    if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&path))) throw std::runtime_error("The local data folder is unavailable.");
     const auto root=std::filesystem::path(path)/L"mcov"; CoTaskMemFree(path); return root;
 #else
     return ExecutableDirectory();
@@ -58,12 +58,12 @@ std::filesystem::path AgentPath(std::uint32_t pid) {
 enum class Phase { Idle, Package, Runtime, Attach, Agent, Overlay };
 const char* PhaseText(Phase phase) {
     switch(phase) {
-        case Phase::Package:return "Client-Dateien werden vorbereitet...";
-        case Phase::Runtime:return "Minecraft und Java werden geprueft...";
-        case Phase::Attach:return "Verbindung mit Minecraft wird hergestellt...";
-        case Phase::Agent:return "Minecraft-Verbindung wird geprueft...";
-        case Phase::Overlay:return "Menue und HUD werden gestartet...";
-        default:return "Bereit";
+        case Phase::Package:return "Preparing client files...";
+        case Phase::Runtime:return "Checking Minecraft and Java...";
+        case Phase::Attach:return "Connecting to Minecraft...";
+        case Phase::Agent:return "Checking the Minecraft connection...";
+        case Phase::Overlay:return "Starting the menu and HUD...";
+        default:return "Ready";
     }
 }
 struct Result {
@@ -73,7 +73,7 @@ struct Result {
     std::filesystem::path agentLog;
     WinHandle overlay;
 };
-void Cancel(std::stop_token stop) { if(stop.stop_requested()) throw std::runtime_error("Verbindung abgebrochen."); }
+void Cancel(std::stop_token stop) { if(stop.stop_requested()) throw std::runtime_error("Connection canceled."); }
 // Erst ein fortschreitender Heartbeat bestaetigt, dass ein vorhandener Agent lebt.
 bool LiveAgent(std::uint32_t pid,std::stop_token stop,std::uint64_t timeout,bool existing) {
     SharedChannel probe;
@@ -84,7 +84,7 @@ bool LiveAgent(std::uint32_t pid,std::stop_token stop,std::uint64_t timeout,bool
         if(!probe.valid()) probe.OpenReader(pid,nullptr);
         if(const auto* block=probe.block()) {
             const auto state=static_cast<AgentStatus>(block->status.load(std::memory_order_acquire));
-            if(state==AgentStatus::MappingsFailed) throw std::runtime_error("Minecraft-Version oder Mappings werden nicht erkannt. Details stehen im Agent-Protokoll.");
+            if(state==AgentStatus::MappingsFailed) throw std::runtime_error("Minecraft version or mappings not recognized. See the agent log for details.");
             const auto heartbeat=block->heartbeat.load(std::memory_order_acquire);
             if(!seen) { first=heartbeat; seen=true; }
             else if(heartbeat!=first&&state!=AgentStatus::Booting&&state!=AgentStatus::ResolvingMappings&&state!=AgentStatus::Detaching) return true;
@@ -100,48 +100,48 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
         const auto runtime=launcher::PreparePackage(root);
         phase=Phase::Runtime; Cancel(stop);
         TargetProcess target; std::string detail;
-        if(!FindMinecraftProcess(target,&detail,pid)) { result.detail=detail; throw std::runtime_error("Diese Minecraft-Instanz ist nicht mehr verfuegbar. Liste aktualisieren und erneut waehlen."); }
+        if(!FindMinecraftProcess(target,&detail,pid)) { result.detail=detail; throw std::runtime_error("This Minecraft instance is no longer available. Refresh the list and select it again."); }
         const auto loaded=AgentPath(pid);
         result.agentLog=(loaded.empty()?runtime:loaded.parent_path())/L"mcov_agent.log";
         // Check before the already-running shortcut: even a healthy IPC v22
         // agent may still contain the previous Java mesh consumer.
         if(!loaded.empty()&&!launcher::MatchingAgentRuntime(runtime,loaded)) {
-            result.detail="Die geladene mcov-Version passt nicht zu diesem Client.\n";
+            result.detail="The loaded mcov version does not match this client.\n";
             MCOV_LOG_WARN("loaded agent/runtime differs: loaded=%s expected=%s",Utf8(loaded.wstring()).c_str(),Utf8(runtime.wstring()).c_str());
-            throw std::runtime_error("Ein alter oder gestoppter Agent ist geladen. Minecraft vollstaendig beenden und erneut starten.");
+            throw std::runtime_error("An outdated or stopped agent is loaded. Fully close Minecraft and restart it.");
         }
         if(ClientRunning(pid)) {
-            if(loaded.empty()) throw std::runtime_error("Die laufende Minecraft-Verbindung kann nicht geprueft werden. Minecraft vollstaendig beenden und erneut starten.");
-            result.success=true; result.status="Der Client laeuft bereits. Zu Minecraft wechseln und das Menue oeffnen."; return result;
+            if(loaded.empty()) throw std::runtime_error("The current Minecraft connection could not be verified. Fully close Minecraft and restart it.");
+            result.success=true; result.status="The client is already running. Switch to Minecraft and open the menu."; return result;
         }
         if(!loaded.empty()) {
-            if(!LiveAgent(pid,stop,2200,true)) throw std::runtime_error("Ein alter oder gestoppter Agent ist geladen. Minecraft vollstaendig beenden und erneut starten.");
-            result.detail="Vorhandene Minecraft-Verbindung wiederverwendet.\n";
+            if(!LiveAgent(pid,stop,2200,true)) throw std::runtime_error("An outdated or stopped agent is loaded. Fully close Minecraft and restart it.");
+            result.detail="Reusing the existing Minecraft connection.\n";
         } else {
             const auto java=FindAttachCapableJava(target,&detail);
             if(java.empty()) {
                 result.needsJdk=true; result.detail=detail;
-                throw std::runtime_error("Passendes JDK "+std::to_string(ReadJavaMajor(target.javaHome))+" fehlt. Den Ordner einer vollstaendigen JDK-Installation auswaehlen.");
+                throw std::runtime_error("A matching JDK "+std::to_string(ReadJavaMajor(target.javaHome))+" is missing. Select the folder of a full JDK installation.");
             }
             result.detail="Minecraft PID "+std::to_string(pid)+"\nJava: "+Utf8(java)+"\n";
             phase=Phase::Attach; Cancel(stop);
             std::uint32_t code=0; std::string failure;
             if(!LaunchAgentLoader(target,(runtime/L"tools").wstring(),(runtime/L"mcov_agent.dll").wstring(),&code,&failure,stop)) {
-                result.detail+=failure; throw std::runtime_error("Verbindung fehlgeschlagen. Diagnose zeigt den Grund; danach erneut versuchen.");
+                result.detail+=failure; throw std::runtime_error("Connection failed. Open Logs for details, then try again.");
             }
             phase=Phase::Agent;
-            if(!LiveAgent(pid,stop,10000,false)) throw std::runtime_error("Minecraft antwortet nicht auf den Client. Minecraft neu starten und erneut verbinden.");
+            if(!LiveAgent(pid,stop,10000,false)) throw std::runtime_error("Minecraft is not responding to the client. Restart Minecraft and reconnect.");
         }
         phase=Phase::Overlay; Cancel(stop);
         const auto executable=runtime/L"mcov_overlay.exe";
         const auto eventName=L"Local\\mcov_ready_"+std::to_wstring(pid)+L"_"+std::to_wstring(GetCurrentProcessId());
         WinHandle ready(CreateEventW(nullptr,TRUE,FALSE,eventName.c_str()));
-        if(!ready) throw std::runtime_error("Client-Start konnte nicht vorbereitet werden.");
+        if(!ready) throw std::runtime_error("Could not prepare to start the client.");
         std::wstring command=L"\""+executable.wstring()+L"\" --no-agent --pid "+std::to_wstring(pid)+L" --ready-event "+eventName;
         STARTUPINFOW startup{}; startup.cb=sizeof(startup); startup.dwFlags=STARTF_USESHOWWINDOW; startup.wShowWindow=SW_HIDE;
         PROCESS_INFORMATION process{};
         if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,runtime.c_str(),&startup,&process))
-            throw std::runtime_error("Client konnte nicht gestartet werden. Fehler "+std::to_string(GetLastError())+".");
+            throw std::runtime_error("Could not start the client. Error "+std::to_string(GetLastError())+".");
         WinHandle thread(process.hThread); result.overlay=WinHandle(process.hProcess);
         HANDLE handles[]={ready.get(),result.overlay.get()};
         const auto until=GetTickCount64()+10000;
@@ -153,12 +153,12 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
             if(signaled==WAIT_OBJECT_0+1) {
                 DWORD code=0; GetExitCodeProcess(result.overlay.get(),&code);
                 result.detail+="Overlay exit code "+std::to_string(code)+"\n";
-                throw std::runtime_error("Das Overlay konnte nicht oeffnen. Das Overlay-Protokoll unter Diagnose pruefen.");
+                throw std::runtime_error("Could not open the overlay. Check the overlay log under Logs.");
             }
-            if(signaled==WAIT_FAILED||GetTickCount64()>=until) throw std::runtime_error("Der Client-Start dauert zu lange. Diagnose pruefen und erneut versuchen.");
+            if(signaled==WAIT_FAILED||GetTickCount64()>=until) throw std::runtime_error("The client took too long to start. Check Logs and try again.");
         }
-        result.success=true; result.status="Client gestartet. Zu Minecraft wechseln; INSERT oeffnet das Menue (Standard).";
-        result.detail+="Client bereit.\nRuntime: "+Utf8(runtime.wstring());
+        result.success=true; result.status="Client started. Switch to Minecraft; INSERT opens the menu by default.";
+        result.detail+="Client ready.\nRuntime: "+Utf8(runtime.wstring());
     } catch(const std::exception& e) { result.status=e.what(); }
     MCOV_LOG_INFO("%s\n%s",result.status.c_str(),result.detail.c_str()); return result;
 }
@@ -173,7 +173,9 @@ std::filesystem::path ChooseJdk(HWND owner) {
     Microsoft::WRL::ComPtr<IFileDialog> dialog;
     if(FAILED(CoCreateInstance(CLSID_FileOpenDialog,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&dialog)))) return {};
     DWORD flags=0; dialog->GetOptions(&flags); dialog->SetOptions(flags|FOS_PICKFOLDERS|FOS_FORCEFILESYSTEM|FOS_PATHMUSTEXIST);
-    dialog->SetTitle(L"JDK-Ordner mit bin und release auswaehlen");
+    dialog->SetTitle(L"Select the JDK folder containing bin and release");
+    dialog->SetOkButtonLabel(L"Select folder");
+    dialog->SetFileNameLabel(L"Folder:");
     if(FAILED(dialog->Show(owner))) return {};
     Microsoft::WRL::ComPtr<IShellItem> item; if(FAILED(dialog->GetResult(&item))) return {};
     PWSTR path=nullptr; if(FAILED(item->GetDisplayName(SIGDN_FILESYSPATH,&path))) return {};
@@ -193,7 +195,7 @@ struct AppState {
         processes.clear(); view.instances.clear();
         for(auto& p:EnumerateJvmProcesses()) if(p.looksLikeMinecraft&&p.window) {
             const auto major=ReadJavaMajor(p.javaHome);
-            view.instances.push_back({p.pid,Utf8(p.windowTitle),major?"Java "+std::to_string(major):"Java-Version unbekannt",p.alreadyInjected,ClientRunning(p.pid)});
+            view.instances.push_back({p.pid,Utf8(p.windowTitle),major?"Java "+std::to_string(major):"Unknown Java version",p.alreadyInjected,ClientRunning(p.pid)});
             processes.push_back(std::move(p));
         }
         view.selected=view.instances.empty()?-1:0;
@@ -272,8 +274,8 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                            std::filesystem::exists(chosen/L"bin"/L"attach.dll")) {
                             SetEnvironmentVariableW(L"MCOV_JDK_HOME",chosen.c_str());
                             std::ofstream saved(jdkFile,std::ios::binary|std::ios::trunc); saved<<Utf8(chosen.wstring());
-                            state.view.needsJdk=state.view.error=false; state.view.status="JDK gespeichert. Client starten, um die Verbindung erneut zu pruefen.";
-                        } else state.view.status="Dieser Ordner ist kein vollstaendiges Windows-x64-JDK. Den JDK-Hauptordner mit bin und release auswaehlen.";
+                            state.view.needsJdk=state.view.error=false; state.view.status="JDK saved. Start the client to check the connection again.";
+                        } else state.view.status="This folder is not a full Windows x64 JDK. Select the main JDK folder containing bin and release.";
                     }
                 }
                 if(a.start&&!state.view.busy&&state.view.selected>=0&&state.view.selected<int(state.processes.size())) {
@@ -288,7 +290,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
         } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.
         log::Shutdown();
     } catch(const std::exception& e) {
-        MessageBoxW(nullptr,Wide(e.what()).c_str(),L"mcov konnte nicht starten",MB_OK|MB_ICONERROR); log::Shutdown(); exit=1;
+        MessageBoxW(nullptr,Wide(e.what()).c_str(),L"mcov could not start",MB_OK|MB_ICONERROR); log::Shutdown(); exit=1;
     }
     CoUninitialize(); return exit;
 }
