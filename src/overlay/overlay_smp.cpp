@@ -117,9 +117,6 @@ void Overlay::DrawSmpSettings(int section) {
     } else if(section==4) {
         auto& c=smpConfig_.finder;
         if(panel::BeginRows("base_finder_settings")) {
-            dirty|=panel::CheckRow("Enable Base Finder",&c.enabled); DrawBind(keys::Action::BaseFinder,true);
-            dirty|=panel::SliderIntRow("Scan radius",&c.radius,4,48,"%d blocks");
-            dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
             dirty|=panel::CheckRow("Tall kelp",&c.kelp);
             ImGui::BeginDisabled(!c.kelp);
             dirty|=panel::SliderIntRow("Minimum kelp height",&c.minKelpHeight,6,64,"%d blocks");
@@ -129,23 +126,22 @@ void Overlay::DrawSmpSettings(int section) {
             ImGui::BeginDisabled(!c.amethyst);
             dirty|=panel::SliderIntRow("Amethyst blocks / chunk",&c.minAmethyst,1,64,"%d");
             ImGui::EndDisabled();
-            dirty|=panel::SliderRow("Marker distance",&c.maxDraw,8,512,"%.0f m");
-            dirty|=panel::CheckRow("Labels",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
-            dirty|=panel::ColorRow("Marker colour",&c.colour.x); ImGui::EndTable();
+            ImGui::EndTable();
         }
-        if(!c.Mask()) ImGui::TextWrapped("Select tall kelp or amethyst to start searching.");
-        ImGui::TextWrapped("Marks Possible Base when either minimum is met in a scanned chunk. Large amethyst buds and fully grown clusters count; small and medium buds do not. Kelp is counted once per plant, with height measured up to 64 blocks below its top.");
+        if(!ChunkDetection().Mask()) ImGui::TextWrapped("Select deepslate, tall kelp or amethyst to start searching.");
+        ImGui::TextWrapped("Marks Possible Base when any selected clue reaches its own minimum in a scanned chunk. Raw deepslate with a horizontal X/Z axis, tall kelp, large amethyst buds and fully grown clusters count. Small and medium buds do not. Kelp is counted once per plant, with height measured up to 64 blocks below its top.");
+        ImGui::TextWrapped("Whole chunks and individual clue blocks are highlighted through walls. Chunk frames cover the full 16 x 16 footprint and vanilla build height; custom dimension heights are not sampled.");
         ImGui::TextWrapped("Growth clues can also occur naturally. Only loaded blocks around you are scanned; a marker is a possible base, not confirmation.");
         panel::Section("Possible bases this session");
         const auto finds=baseFinder_.Finds();
-        if(finds.empty()) ImGui::TextWrapped(c.enabled?"No possible base found yet. Wait for a completed scan or adjust the minimums.":"Enable Base Finder to search for growth clues.");
+        if(finds.empty()) ImGui::TextWrapped(ModuleEnabled(keys::Action::ChunkFinder)?"No possible base found yet. Wait for a completed scan or adjust the minimums.":"Enable Chunkfinder to search for suspicious blocks.");
         else {
             ImGui::TextDisabled("%zu / %d discoveries",finds.size(),smp::BaseFinder::kMaxFinds);
             const bool clear=ImGui::Button("Clear possible bases");
             for(std::size_t i=0;i<finds.size();++i) {
                 const auto& f=finds[i]; ImGui::PushID(int(i)); ImGui::Separator();
                 ImGui::TextWrapped("Possible Base | Chunk %d, %d",f.chunkX,f.chunkZ);
-                ImGui::TextWrapped("%d tall kelp (max %d blocks), %d amethyst",f.kelpColumns,f.tallestKelp,f.amethyst);
+                ImGui::TextWrapped("%d tall kelp (max %d blocks), %d amethyst, %d deepslate",f.kelpColumns,f.tallestKelp,f.amethyst,f.deepslate);
                 char coordinates[64]; std::snprintf(coordinates,sizeof(coordinates),"%.0f %.0f %.0f",std::floor(f.centre.x),std::floor(f.centre.y),std::floor(f.centre.z));
                 ImGui::TextUnformatted(coordinates);
                 if(ImGui::SmallButton("Copy coordinates")) ImGui::SetClipboardText(coordinates);
