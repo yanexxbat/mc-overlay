@@ -141,6 +141,15 @@ public final class KnifeCheck {
                 System.out.println(name+": "+a.mesh().vertices()+" solid vertices, "+glow.vertices()+" glow vertices");
             }
         }
+        for(int skin=0;skin<3;++skin)for(float progress:new float[]{.15f,.35f,.5f,.65f,.85f}) {
+            var animated=KnifeGeometry.build(skin,"item.minecraft.iron_sword",progress,1,2);
+            var glow=KnifeGeometry.glow(animated.glowSegments(),new KnifeGeometry.Matrix().turn(.5f,1.57f,.3f),.09f,3,0xff6600);
+            check(glow.vertices()<32768,"Animated glow exceeded geometry budget");for(float v:glow.xyz())check(Float.isFinite(v),"Edge-on inspect produced invalid glow joins");
+        }
+        for(int skin=0;skin<3;++skin)for(String material:new String[]{"wooden","stone","iron","golden","copper","diamond","netherite"})
+            KnifeGeometry.build(skin,"item.minecraft."+material+"_sword",.5f,1,1);
+        Field cache=KnifeGeometry.class.getDeclaredField("CACHE");cache.setAccessible(true);
+        check(((Map<?,?>)cache.get(null)).size()==21,"Static model cache did not remain bounded to models/materials");
         check(KnifeProfiles.get("intermediary-1.21.11")!=null&&KnifeProfiles.get("mojmap-1.20.1")==null,"Unsupported hand profile accepted");
         System.out.println("PASS knives: real submission callback, models, materials, left hand, inspect, cancellation, looping, trails, leases and fallback");
     }

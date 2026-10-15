@@ -190,7 +190,7 @@ public final class KnifeGeometry {
         final float[] p;float nx,ny,dx,dy;int degree;
         Joint(float[] point) { p=point; }
         void connect(float x,float y,float direction) { nx+=-y;ny+=x;dx+=x*direction;dy+=y*direction;++degree; }
-        float[] offset(float width,float amount) { float length=(float)Math.hypot(nx,ny);return new float[]{p[0]+nx/length*width*amount,p[1]+ny/length*width*amount,p[2]+.025f}; }
+        float[] offset(float width,float amount) { float length=(float)Math.hypot(nx,ny);float x=length<1e-7f?1:nx/length,y=length<1e-7f?0:ny/length;return new float[]{p[0]+x*width*amount,p[1]+y*width*amount,p[2]+.025f}; }
     }
     private record Segment(Joint a,Joint z) {}
     private static int glowInk(int colour,float strength,float radius) {
