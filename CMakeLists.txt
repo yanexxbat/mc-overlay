@@ -514,8 +514,8 @@ if(MCOV_BUILD_COMPAT_CHECKS)
     add_custom_command(OUTPUT ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_AV_TEST_DIR}
         COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -cp ${MCOV_SIGNAL_CLASSES}
-            -d ${MCOV_AV_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishCheck.java
-        DEPENDS mcov_frame_agent tests/AntiVanishCheck.java tools/frame-sync/AntiVanishTracker.java VERBATIM)
+            -d ${MCOV_AV_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/antivanish-fixtures/com/mojang/authlib/GameProfile.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishCheck.java
+        DEPENDS mcov_frame_agent tests/AntiVanishCheck.java tests/antivanish-fixtures/com/mojang/authlib/GameProfile.java tools/frame-sync/AntiVanishTracker.java VERBATIM)
     add_custom_target(mcov_antivanish_check ALL DEPENDS ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class)
     add_test(NAME anti_vanish COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_AV_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.AntiVanishCheck)
     add_executable(mcov_base_texture_probe tools/diagnostics/base_texture_probe.cpp src/common/ipc.cpp src/common/log.cpp)
@@ -546,7 +546,7 @@ if(MCOV_BUILD_COMPAT_CHECKS)
             ${MCOV_FRAME_TEST_DIR}/mcov/sync/DepthHookCheck.class
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_TEST_DIR}
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
-            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED -d ${MCOV_FRAME_TEST_DIR}
+            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_FRAME_TEST_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncAttachCheck.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/DepthHookCheck.java

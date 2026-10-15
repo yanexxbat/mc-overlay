@@ -287,6 +287,7 @@ private:
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
+    std::uint64_t antiVanishNoticeWindow_{};int antiVanishNoticeCount_{};
     antivanish::Config antiVanishConfig_{};
     antivanish::Report antiVanishReport_{},antiVanishPrevious_{};
     smp::Config smpConfig_{};

@@ -5,7 +5,41 @@ public final class AntiVanishCheck {
  static UUID id(int n){return new UUID(1,n);}
  static AntiVanishTracker.Player p(int n,boolean listed,boolean online,boolean nearby,boolean invisible){return new AntiVanishTracker.Player(id(n),"Player"+n,listed,online,nearby,invisible);}
  static List<AntiVanishTracker.Detection> sample(AntiVanishTracker t,long now,AntiVanishTracker.Player... rows){return t.sample(List.of(rows),id(0),now,false);}
- public static void main(String[] args){
+ public static final class Entity {
+  final com.mojang.authlib.GameProfile profile;boolean invisible;
+  Entity(int n){profile=new com.mojang.authlib.GameProfile(id(n),"Player"+n);}
+  public UUID uuid(){return profile.id();}public com.mojang.authlib.GameProfile profile(){return profile;}
+  public boolean invisible(){return invisible;}public double distance(Entity other){return 4;}
+ }
+ public static final class Info {final Entity entity;Info(Entity e){entity=e;}public com.mojang.authlib.GameProfile profile(){return entity.profile;}}
+ public static final class World {final List<Entity> players=new ArrayList<>();public List<Entity> players(){return players;}}
+ public static final class Connection {
+  final Collection<Info> online=new ArrayList<>(),listed=new ArrayList<>();boolean fail;
+  public Collection<Info> online(){if(fail)throw new IllegalStateException("fixture failure");return online;}
+  public Collection<Info> listed(){return listed;}
+ }
+ public static final class Client {public World level=new World();public Entity player=new Entity(0);final Connection connection=new Connection();public Connection connection(){return connection;}}
+ static String[] field(String alias,Class<?> owner,String name,Class<?> type){return new String[]{alias,owner.getName(),name,type.descriptorString()};}
+ static String[] method(String alias,Class<?> owner,String name,Class<?> out,Class<?>... args){return new String[]{alias,owner.getName(),name,java.lang.invoke.MethodType.methodType(out,args).toMethodDescriptorString()};}
+ static void next()throws Exception{var f=AntiVanishBridge.class.getDeclaredField("next");f.setAccessible(true);f.setLong(null,0);}
+ static void bridgeChecks()throws Exception {
+  Class<?> gp=com.mojang.authlib.GameProfile.class;
+  String[][] table={field("level",Client.class,"level",World.class),field("player",Client.class,"player",Entity.class),method("connection",Client.class,"connection",Connection.class),
+   method("online",Connection.class,"online",Collection.class),method("listed",Connection.class,"listed",Collection.class),method("profile",Info.class,"profile",gp),
+   method("players",World.class,"players",List.class),method("playerProfile",Entity.class,"profile",gp),method("uuid",Entity.class,"uuid",UUID.class),
+   method("invisible",Entity.class,"invisible",boolean.class),method("distance",Entity.class,"distance",double.class,Entity.class)};
+  var api=new AntiVanishBridge.Api(AntiVanishCheck.class.getClassLoader(),table);var f=AntiVanishBridge.class.getDeclaredField("api");f.setAccessible(true);f.set(null,api);
+  var client=new Client();var e=new Entity(1);client.level.players.add(e);var info=new Info(e);client.connection.online.add(info);client.connection.listed.add(info);
+  AntiVanishBridge.update(true,false,64,500);check(FrameSignal.antiVanishEnabled,"Valid bridge did not enable client ticks");AntiVanishBridge.tick(client);
+  check(AntiVanishBridge.view.status==3&&AntiVanishBridge.view.names.length==0,"Client roster sampling failed");
+  for(int n=2;n<900;++n)client.connection.online.add(new Info(new Entity(n)));next();AntiVanishBridge.tick(client);check(AntiVanishBridge.view.limited,"Oversized roster was not capped/reported");
+  client.connection.fail=true;next();AntiVanishBridge.tick(client);check(AntiVanishBridge.view.status==4&&!FrameSignal.antiVanishEnabled,"Sampling exception escaped containment");
+  AntiVanishBridge.update(true,false,64,500);check(!FrameSignal.antiVanishEnabled&&AntiVanishBridge.view.status==4,"Failed sampler retried without a toggle");
+  AntiVanishBridge.disable();client.connection.fail=false;AntiVanishBridge.update(true,false,64,500);next();AntiVanishBridge.tick(client);check(AntiVanishBridge.view.status==3,"Off/on did not recover sampler");
+  client.level=null;next();AntiVanishBridge.tick(client);check(AntiVanishBridge.view.status==2&&AntiVanishBridge.view.names.length==0,"Disconnect retained old results");
+  AntiVanishBridge.update(true,false,64,0);AntiVanishBridge.tick(client);check(!FrameSignal.antiVanishEnabled,"Expired lease retained sampling");
+ }
+ public static void main(String[] args)throws Exception{
   var t=new AntiVanishTracker();
   check(sample(t,0,p(1,false,true,false,false)).isEmpty(),"Untrusted/unlisted NPC produced a warning");
   sample(t,100,p(1,true,true,true,false));sample(t,1700,p(1,true,true,true,false));
@@ -26,6 +60,7 @@ public final class AntiVanishCheck {
   check(AntiVanishProfiles.get("intermediary-1.21.11")!=null&&AntiVanishProfiles.get("mojmap-1.20.1")==null,"Version guard incorrect");
   AntiVanishBridge.update(true,true,Float.NaN,500);check(!FrameSignal.antiVanishEnabled,"Invalid or unconfigured bridge enabled ticks");
   AntiVanishBridge.disable();AntiVanishBridge.tick(new Object());check(AntiVanishBridge.view.names.length==0&&!FrameSignal.antiVanishEnabled,"Disable did not clear runtime");
+  bridgeChecks();
   System.out.println("PASS Anti Vanish: trusted TAB transitions, debounce, relisting, disconnect rejection, opt-in invisibility, self/world guards and bounded/expired caches");
  }
 }

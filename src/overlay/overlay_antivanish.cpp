@@ -4,10 +4,11 @@ void Overlay::UpdateAntiVanish() {
     const auto now=GetTickCount64();
     if(!antiVanishConfig_.enabled||panicActive_||!agentConnected_||!haveSnapshot_||!heartbeatClock_.Alive(now)||!antiVanishReport_.sampledAtMs||now<antiVanishReport_.sampledAtMs||now-antiVanishReport_.sampledAtMs>1500||antiVanishReport_.status!=antivanish::Status::Active){antiVanishPrevious_={};return;}
     if(antiVanishPrevious_.sampledAtMs==antiVanishReport_.sampledAtMs)return;
+    if(now-antiVanishNoticeWindow_>=4000){antiVanishNoticeWindow_=now;antiVanishNoticeCount_=0;}
     if(antiVanishConfig_.notifications&&rockstarConfig_.Enabled(rockstar::Feature::Notifications)) {
         for(std::uint32_t i=0;i<std::min(antiVanishReport_.count,std::uint32_t(antivanish::kRows));++i){const auto& row=antiVanishReport_.rows[i];bool found=false;
             for(std::uint32_t j=0;j<std::min(antiVanishPrevious_.count,std::uint32_t(antivanish::kRows));++j)if(antiVanishPrevious_.rows[j].id==row.id&&antiVanishPrevious_.rows[j].evidence==row.evidence){found=true;break;}
-            if(!found){char text[112];const char* name=rockstar::Pack::DisplayName(row.name,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true);std::snprintf(text,sizeof(text),"Anti Vanish: %s - %s",name,row.evidence&1?"hidden from TAB":"invisible player");rockstarPack_.Notify(text,double(now)/1000);}
+            if(!found&&antiVanishNoticeCount_<6){++antiVanishNoticeCount_;char text[112];const char* name=rockstar::Pack::DisplayName(row.name,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true);std::snprintf(text,sizeof(text),"Anti Vanish: %s - %s",name,row.evidence&1?"hidden from TAB":"invisible player");rockstarPack_.Notify(text,double(now)/1000);}
         }
     }
     antiVanishPrevious_=antiVanishReport_;
