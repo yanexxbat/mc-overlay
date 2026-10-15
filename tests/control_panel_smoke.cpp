@@ -73,6 +73,7 @@ struct OverlayUiCheck {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
+    static smp::BaseFinderSettings ChunkSettings(const Overlay& o) { return o.ChunkDetection(); }
     static smp::Config& Smp(Overlay& o) { return o.smpConfig_; }
     static void BaseStatus(Overlay& o,base::Status status) {
         o.baseReport_={}; o.baseReport_.sampledAtMs=GetTickCount64(); o.baseReport_.status=status;
@@ -344,7 +345,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(int i=0;i<12;++i) { auto& b=scene->blocks[scene->blockCount++]; b.x=float(i%4); b.y=64; b.z=float(i/4); b.kind=mcov::kBlockChest; }
     scene->blockScanY=64; Require(mcov::OverlayUiCheck::Stashes(overlay).Update(*scene,c.stash)==1,"SMP UI discovery fixture failed");
     scene->fovDeg=70; scene->health=scene->maxHealth=20; mcov::OverlayUiCheck::Snapshot(overlay,*scene);
-    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,11);
+    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,10);
     auto storageFrame=[&] { Draw(overlay,Page::Blocks,0,{1280,800}); };
     auto* storageContent=Child("/content_"); ImGui::SetScrollY(storageContent,storageContent->ScrollMax.y); storageFrame(); storageFrame();
     auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(storageContent->GetID("storage_colours"));
@@ -363,11 +364,11 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     ImGui::GetIO().AddMousePosEvent(-100,-100); storageFrame();
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
-        for(int index:{4,7,8,9,10}) {
-            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,11,size);
+        for(int index:{4,7,8,9,3}) {
+            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,10,size);
             auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
             auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
-            const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":index==9?"base-esp-settings-":"base-finder-empty-";
+            const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":index==9?"base-esp-settings-":"chunkfinder-empty-";
             SaveFrame(device,context,output/(name+suffix));
             Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
             if(index==9&&size.x<500) {
@@ -379,19 +380,19 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             }
         }
     }
-    c.finder.enabled=true; c.finder.minAmethyst=1;
-    scene->blockScanMask|=c.finder.Mask(); ++scene->blockScanId;
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::ChunkFinder,true); c.finder.minAmethyst=1;
+    scene->blockScanMask|=mcov::OverlayUiCheck::ChunkSettings(overlay).Mask(); ++scene->blockScanId;
     auto& crystal=scene->blocks[scene->blockCount++]; crystal.x=2; crystal.y=64; crystal.z=2; crystal.kind=mcov::kBlockAmethystCluster;
-    mcov::OverlayUiCheck::Growth(overlay).Update(*scene,c.finder);
+    mcov::OverlayUiCheck::Growth(overlay).Update(*scene,mcov::OverlayUiCheck::ChunkSettings(overlay));
     Require(mcov::OverlayUiCheck::Growth(overlay).Finds().size()==1,"Base Finder UI discovery fixture failed");
     mcov::OverlayUiCheck::Snapshot(overlay,*scene);
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",10,11,size);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
-        SaveFrame(device,context,output/(size.x>500?"base-finder-settings-desktop.png":"base-finder-settings-small.png"));
+        SaveFrame(device,context,output/(size.x>500?"chunkfinder-settings-desktop.png":"chunkfinder-settings-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
-        SaveFrame(device,context,output/(size.x>500?"base-finder-discoveries-desktop.png":"base-finder-discoveries-small.png"));
+        SaveFrame(device,context,output/(size.x>500?"chunkfinder-discoveries-desktop.png":"chunkfinder-discoveries-small.png"));
         auto* pane=ImGui::FindWindowByName("mcov module settings");
         Require(pane->Scroll.y==0&&content->InnerClipRect.Min.y>=pane->Pos.y+42,"Base Finder content overlaps its fixed header");
         Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Base Finder discoveries/footer unreachable");
@@ -400,7 +401,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::CopyField(scene->gameVersion,"1.21.11"); mcov::OverlayUiCheck::Snapshot(overlay,*scene);
     for(auto state:{mcov::base::Status::Building,mcov::base::Status::Failed}) {
         mcov::OverlayUiCheck::BaseStatus(overlay,state);
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,11,{480,360});
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,10,{480,360});
         auto frame=[&]{ Draw(overlay,Page::Blocks,0,{480,360}); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(state==mcov::base::Status::Building?"base-textures-loading-small.png":"base-textures-error-small.png"));
@@ -1222,7 +1223,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,26,11,20,3,5,9};
+        constexpr int sectionCounts[]={9,26,10,20,3,5,9};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1494,25 +1495,29 @@ int main(int argc,char** argv) {
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size); mcov::OverlayUiCheck::Center(overlay);
+            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
         }
         auto& finder=mcov::OverlayUiCheck::Chunk(overlay); finder.enabled=true; finder.minHints=2; finder.labels=false;
         mcov::WorldSnapshot chunkScene{}; chunkScene.camY=2; chunkScene.camZ=-4; chunkScene.fovDeg=70; chunkScene.nearPlane=.05f; chunkScene.farPlane=1024;
+        mcov::CopyField(chunkScene.dimension,"overworld"); mcov::CopyField(chunkScene.serverAddress,"chunk fixture");
+        chunkScene.blockScanId=1; chunkScene.blockScanComplete=1; chunkScene.blockScanRadius=finder.radius;
+        chunkScene.blockScanMask=mcov::OverlayUiCheck::ChunkSettings(overlay).Mask();
         chunkScene.blockCount=3;
         chunkScene.blocks[0]={0,0,4,mcov::kBlockRotatedDeepslate,{}};
         chunkScene.blocks[1]={1,0,4,mcov::kBlockRotatedDeepslate,{}};
         chunkScene.blocks[2]={2,0,4,mcov::kBlockDiamond,{}};
         auto chunkFrame=[&] {
             io.DisplaySize={1280,800}; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            mcov::OverlayUiCheck::Growth(overlay).Update(chunkScene,mcov::OverlayUiCheck::ChunkSettings(overlay));
             const int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene); ImGui::Render(); return vertices;
         };
         Require(chunkFrame()>0,"qualified deepslate chunk did not render");
         SaveFrame(device.Get(),context.Get(),output/"chunkfinder-blocks.png");
         finder.minHints=3; Require(chunkFrame()==0,"chunk threshold counted ordinary ores");
-        finder={};
+        finder={}; mcov::OverlayUiCheck::Smp(overlay).finder.enabled=false;
         auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
         aura.pulseAmplitude=0;
         mcov::OverlayUiCheck::ReduceMotion(overlay,true);
