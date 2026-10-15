@@ -118,9 +118,11 @@ Actions Render(View& v,ImVec2 size) {
             ImGui::Checkbox("Show key",&v.showLicense);
             ImGui::EndDisabled();
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-            style::StyleScope status;
-            if(v.authError) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
-            ImGui::TextWrapped("%s",v.authBusy?"Checking your license with KeyAuth...":v.authMessage.c_str());
+            {
+                style::StyleScope status;
+                if(v.authError) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
+                ImGui::TextWrapped("%s",v.authBusy?"Checking your license with KeyAuth...":v.authMessage.c_str());
+            }
             ImGui::Spacing(); ImGui::TextWrapped("An internet connection is required. Your key is not saved on this device.");
         } else if(v.tab==0) {
             ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Select Minecraft");

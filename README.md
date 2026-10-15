@@ -16,6 +16,7 @@ Dear ImGui and Direct3D 11.
 - Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
 - Named configs saved beside the client.
 - A portable single-file client.
+- KeyAuth license-only sign-in for mcov 1.0, required before startup.
 
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**.
 See [compatibility](docs/compatibility.md) for supported profiles and verification limits.
@@ -24,8 +25,12 @@ See [compatibility](docs/compatibility.md) for supported profiles and verificati
 
 1. Start Minecraft.
 2. Open `build/client/mcov.exe`.
-3. Select your Minecraft instance and click **Start client**.
-4. Switch back to the game.
+3. Enter your license key and click **Verify license**.
+4. Select your Minecraft instance and click **Start client**.
+5. Switch back to the game.
+
+An internet connection and an active mcov license are required. Keys are held
+in memory for sign-in and are not saved in configs or logs.
 
 | Default key | Action |
 |---|---|

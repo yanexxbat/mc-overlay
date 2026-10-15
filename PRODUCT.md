@@ -48,6 +48,13 @@ camera/entity projection stability.
 - Keep one canonical `build` directory and existing version/Forge compatibility.
 - Ship one portable `mcov.exe` containing the client payload. The optional
   `START.txt` guide is the only other file in the share ZIP.
+- Require license-only KeyAuth 1.3 sign-in for mcov / Uhn5Z5WPCa / 1.0 before
+  startup. Preserve the compact English launcher, masked input and background
+  verification. Never persist or log license keys. Validate signed responses,
+  owner, subscription expiry and session before launch and independently in
+  the overlay; periodic online checks close the overlay on invalidation.
+  Session handoff uses a restricted inherited pipe; direct unauthenticated
+  overlay startup is refused. Minecraft remains running on license failure.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Named profiles and automatic preferences live directly beside the portable

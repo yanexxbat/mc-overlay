@@ -1,7 +1,8 @@
 # Portable client and launcher
 
-Open `build/client/mcov.exe`. Select an already running Minecraft window and
-click **Start client**. The launcher automatically connects and starts the
+Open `build/client/mcov.exe`. Enter your license key and choose **Verify license**.
+Then select an already running Minecraft window and click **Start client**.
+The launcher automatically connects and starts the
 overlay for that exact instance. Starting again switches back to Minecraft.
 Only this EXE needs to be copied; all native and Java helpers are embedded.
 The ready-to-share `build/mcov-client.zip` contains exactly `mcov.exe` and the
@@ -21,6 +22,41 @@ build JDK, configured paths and installed JDKs. A missing match exposes
 **Select JDK folder**. Select the installation root containing `bin/java.exe`,
 `bin/javac.exe`, `bin/attach.dll` and `release`. Selection is saved for later starts.
 The launcher does not install Java.
+
+## KeyAuth license sign-in
+
+The client uses KeyAuth API 1.3, application **mcov**, owner **Uhn5Z5WPCa**,
+version **1.0**, with license-only authentication. No Seller API credential or
+app secret is embedded. The endpoint is fixed to `https://keyauth.win/api/1.3/`.
+**Show key** controls the masked input. Verification runs in the background;
+Close and Logs remain usable. Invalid keys, expired subscriptions, clock skew,
+unsigned or malformed responses and network errors leave startup locked.
+
+Keys are not saved to disk, profiles, environment variables, command-line
+arguments or logs. The input clears after submission. KeyAuth receives the
+license and the Windows account SID, matching its C++ reference's hardware
+identity convention; HWID enforcement follows the application's dashboard.
+Restarting the launcher requires a fresh sign-in. After doing so, close an
+already running overlay with END before starting it with the new session.
+
+HTTPS certificate validation remains enabled and redirects are rejected.
+Ed25519 verifies the response body and timestamp using KeyAuth's published
+public key; successful responses must match the owner and protocol success code.
+The session is accepted only with a future subscription expiry. The launcher
+checks it again before connection; the overlay independently checks it before
+any discovery/attach. A restricted inherited pipe carries the session token,
+not the license. Direct overlay startup without a verified handoff is refused.
+
+During use, the overlay checks the session in the background every 60 seconds.
+Expiry, rejection, network failure or a 90-second verification lease timeout
+closes the overlay, leaving Minecraft running. There is no offline unlock.
+The next login creates a new session; abandoned sessions may remain visible in
+the KeyAuth dashboard until replaced or expired.
+
+Validation uses isolated signed fixtures for altered/missing signatures, wrong
+owner/code, expiry, malformed data, rejection, cancellation, parameter encoding
+and the inherited pipe. The configured app's live initialization succeeded;
+successful real-license login and live Minecraft use have not been tested.
 
 ## Data and lifetime
 
