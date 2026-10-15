@@ -62,10 +62,19 @@ final class FrameTransformer implements ClassFileTransformer {
                     int movementPart=concrete ? FrameProfiles.movementPart(name,method,descriptor) : 0;
                     boolean depthPass=DepthProfiles.worldPass(name,method,descriptor);
                     FrameProfiles.Profile cameraProfile=null;
-                    if(role==2) for(FrameProfiles.Profile p:FrameProfiles.PROFILES)
-                        if(p.camera().equals(name)&&p.update().equals(method)&&p.updateDesc().equals(descriptor)&&
+                    for(FrameProfiles.Profile p:FrameProfiles.PROFILES)
+                        if(p.camera().equals(name)&&p.freeSetup().equals(method)&&p.freeSetupDesc().equals(descriptor)&&
                             declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z")) { cameraProfile=p; break; }
                     final FrameProfiles.Profile freeCamera=cameraProfile;
+                    java.util.ArrayList<Object> parameters=new java.util.ArrayList<>(); parameters.add(name);
+                    for(jdk.internal.org.objectweb.asm.Type type:jdk.internal.org.objectweb.asm.Type.getArgumentTypes(descriptor)) parameters.add(switch(type.getSort()) {
+                        case jdk.internal.org.objectweb.asm.Type.BOOLEAN,jdk.internal.org.objectweb.asm.Type.INT -> Opcodes.INTEGER;
+                        case jdk.internal.org.objectweb.asm.Type.FLOAT -> Opcodes.FLOAT;
+                        case jdk.internal.org.objectweb.asm.Type.DOUBLE -> Opcodes.DOUBLE;
+                        case jdk.internal.org.objectweb.asm.Type.LONG -> Opcodes.LONG;
+                        default -> type.getInternalName();
+                    });
+                    final Object[] initialLocals=parameters.toArray();
                     if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
                     if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
                     if (role != 0) changed[0] = true;
@@ -81,21 +90,21 @@ final class FrameTransformer implements ClassFileTransformer {
                                 if(role==6) super.visitInsn(Opcodes.ICONST_0);
                                 super.visitInsn(role==6?Opcodes.IRETURN:Opcodes.RETURN);
                                 super.visitLabel(vanilla);
-                                super.visitFrame(Opcodes.F_SAME,0,null,0,null);
+                                super.visitFrame(Opcodes.F_NEW,initialLocals.length,initialLocals,0,null);
                             }
                             if(movementPart!=0) {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","beginMovement","()V",false);
                                 super.visitLabel(movementStart);
                             }
                             if (role == 5) {
-                                // Nur übernommene Macro-Platzierungen unterdrücken Vanilla-Use.
+                                // Nur Ã¼bernommene Macro-Platzierungen unterdrÃ¼cken Vanilla-Use.
                                 Label vanilla=new Label();
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","macroUse","(Ljava/lang/Object;)Z",false);
                                 super.visitJumpInsn(Opcodes.IFEQ,vanilla);
                                 super.visitInsn(Opcodes.RETURN);
                                 super.visitLabel(vanilla);
-                                super.visitFrame(Opcodes.F_SAME,0,null,0,null);
+                                super.visitFrame(Opcodes.F_NEW,initialLocals.length,initialLocals,0,null);
                             } else if (role == 1 || role == 2) super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "begin", "()V", false);
                             else if (role == 4) {
                                 turnBits[0] |= FrameProfiles.turnMask(name,method,descriptor);
@@ -126,7 +135,7 @@ final class FrameTransformer implements ClassFileTransformer {
                         }
                         @Override public void visitInsn(int opcode) {
                             if(movementAxis!=0 && opcode==Opcodes.FRETURN) {
-                                // Nur im Physik-Scope liefert der Getter die Kamera. Außerhalb
+                                // Nur im Physik-Scope liefert der Getter die Kamera. AuÃŸerhalb
                                 // bleiben Modell, Netzwerk und Combat bei der echten Rotation.
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitInsn(Opcodes.SWAP);
@@ -136,7 +145,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                             if (role == 3 && opcode == Opcodes.RETURN) {
                                 // Erst nach Vanilla-Movement und Modell-Updates:
-                                // neue Zielpositionen, kein anschließendes Überschreiben.
+                                // neue Zielpositionen, kein anschlieÃŸendes Ãœberschreiben.
                                 super.visitVarInsn(Opcodes.ALOAD, 0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
                             }
@@ -154,18 +163,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitVarInsn(Opcodes.ALOAD,0); super.visitInsn(Opcodes.ICONST_1);
                                 super.visitFieldInsn(Opcodes.PUTFIELD,name,freeCamera.detached(),"Z");
                                 super.visitLabel(vanilla);
-                                // Return sites may have different merged locals; only parameters are needed.
-                                Object[] locals=jdk.internal.org.objectweb.asm.Type.getArgumentTypes(descriptor);
-                                java.util.ArrayList<Object> frameLocals=new java.util.ArrayList<>(); frameLocals.add(name);
-                                for(Object argument:locals) {
-                                    jdk.internal.org.objectweb.asm.Type type=(jdk.internal.org.objectweb.asm.Type)argument;
-                                    frameLocals.add(switch(type.getSort()) {
-                                        case jdk.internal.org.objectweb.asm.Type.BOOLEAN,jdk.internal.org.objectweb.asm.Type.INT -> Opcodes.INTEGER;
-                                        case jdk.internal.org.objectweb.asm.Type.FLOAT -> Opcodes.FLOAT;
-                                        default -> type.getInternalName();
-                                    });
-                                }
-                                super.visitFrame(Opcodes.F_FULL,frameLocals.size(),frameLocals.toArray(),0,null);
+                                super.visitFrame(Opcodes.F_NEW,initialLocals.length,initialLocals,0,null);
                             }
                             if (role == 2 && opcode == Opcodes.RETURN)
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "cameraReady", "()V", false);
@@ -178,8 +176,8 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitLabel(movementEnd);
                                 super.visitTryCatchBlock(movementStart,movementEnd,movementHandler,null);
                                 super.visitLabel(movementHandler);
-                                // Keine Locals im Handler nötig; originale Stack-Maps bleiben erhalten.
-                                super.visitFrame(Opcodes.F_FULL,0,null,1,new Object[]{"java/lang/Throwable"});
+                                // Keine Locals im Handler nÃ¶tig; originale Stack-Maps bleiben erhalten.
+                                super.visitFrame(Opcodes.F_NEW,0,null,1,new Object[]{"java/lang/Throwable"});
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                                 super.visitInsn(Opcodes.ATHROW);
                             }
@@ -187,7 +185,7 @@ final class FrameTransformer implements ClassFileTransformer {
                         }
                     };
                 }
-            }, 0);
+            }, ClassReader.EXPAND_FRAMES);
             // Preserve stack-map frames; markers have no arguments/new locals.
             if(cameraAxes[0] && cameraAxes[1]) signals.getMethod("markCamera",long.class).invoke(null,FrameProfiles.cameraMask(name));
             if(turnBits[0]!=0) signals.getMethod("markTurn",long.class).invoke(null,turnBits[0]);
@@ -197,7 +195,7 @@ final class FrameTransformer implements ClassFileTransformer {
             }
             for(int i=0;i<FrameProfiles.PROFILES.length;++i) {
                 FrameProfiles.Profile p=FrameProfiles.PROFILES[i]; long mask=1L<<i;
-                if(p.camera().equals(name)&&declaredMethods.contains(p.update()+p.updateDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
+                if(p.camera().equals(name)&&declaredMethods.contains(p.freeSetup()+p.freeSetupDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
                     signals.getMethod("markFreecam",int.class,long.class).invoke(null,1,mask);
                 if(p.localPlayer().equals(name)&&declaredMethods.contains(p.localStep()+"()V")) signals.getMethod("markFreecam",int.class,long.class).invoke(null,2,mask);
                 if(p.client().equals(name)&&declaredMethods.contains(p.attack()+"()Z")&&declaredMethods.contains(p.continueAttack()+"(Z)V")&&declaredMethods.contains(p.use()+p.useDesc()))

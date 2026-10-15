@@ -64,6 +64,7 @@ def geometry_schema(version):
     else:
         add('partialTick', camera, 'getPartialTickTime', '()F', 'methods')
     add('cameraEntity', camera, 'entity', 'L' + entity + ';')
+    add('freecamSetup', camera, 'alignWithEntity' if version == '26.2' else 'setup', '(F)V' if version == '26.2' else '(L' + ('net/minecraft/world/level/Level' if version == '1.21.11' else 'net/minecraft/world/level/BlockGetter') + ';L' + entity + ';ZZF)V', 'methods')
     add('freecamPosition', camera, 'setPosition', '(DDD)V', 'methods')
     add('freecamRotation', camera, 'setRotation', '(FF)V', 'methods')
     add('freecamDetached', camera, 'detached', 'Z')
