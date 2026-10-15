@@ -66,7 +66,7 @@ void Overlay::Panic() {
 void Overlay::UpdateRockstar() {
     const double now=double(GetTickCount64())/1000;
     for(int i=3;i<keys::kCount;++i) {
-        const auto action=static_cast<keys::Action>(i); if(keys::System(action)) continue;
+        const auto action=static_cast<keys::Action>(i); if(keys::System(action)||action==keys::Action::BaseFinder) continue;
         const bool on=ModuleEnabled(action);
         if(moduleObservationReady_&&on!=observedModules_[i]&&!panicActive_) {
             if(rockstarConfig_.Enabled(Feature::Notifications)) { char text[112]; std::snprintf(text,sizeof(text),"%s %s",keys::kNames[i],on?"enabled":"disabled"); rockstarPack_.Notify(text,now); }

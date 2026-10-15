@@ -80,7 +80,8 @@ WorldBounds PossibleChunkBounds(const PossibleBase& f,const WorldSnapshot& s) {
     // The snapshot carries no custom dimension height. Use the vanilla column,
     // expanding it to include any observed evidence outside that height range.
     const auto dimension=std::string_view(s.dimension);
-    const bool shortWorld=dimension.find("nether")!=std::string_view::npos||dimension.find("end")!=std::string_view::npos;
+    const bool shortWorld=dimension.find("minecraft:the_nether")!=std::string_view::npos||dimension.find("minecraft:the_end")!=std::string_view::npos||
+        dimension=="nether"||dimension=="the_nether"||dimension=="Nether"||dimension=="end"||dimension=="the_end"||dimension=="End";
     return {{f.chunkX*16.,std::min(shortWorld?0.:-64.,f.bounds.min.y),f.chunkZ*16.},
             {f.chunkX*16.+16,std::max(shortWorld?256.:320.,f.bounds.max.y),f.chunkZ*16.+16}};
 }

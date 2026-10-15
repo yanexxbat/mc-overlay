@@ -57,7 +57,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
     const int effects=std::min<int>(s.effectCount,kMaxEffects);
     int active=0,assigned=0;
     for(int i=3;i<keys::kCount;++i) if(i!=keys::Index(keys::Action::Hud)) {
-        active+=ModuleEnabled(static_cast<keys::Action>(i)); assigned+=bindings_[i].key!=0;
+        if(i!=keys::Index(keys::Action::BaseFinder)) active+=ModuleEnabled(static_cast<keys::Action>(i));
+        assigned+=bindings_[i].key!=0;
     }
     float stackY=44;
     const float lineHeight=ImGui::GetTextLineHeight();
@@ -137,6 +138,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                 DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
                 for(int a=3;a<keys::kCount;++a) {
                     if(a==keys::Index(keys::Action::Hud)) continue;
+                    if(kind==HudModule::Modules&&a==keys::Index(keys::Action::BaseFinder)) continue;
                     const bool on=ModuleEnabled(static_cast<keys::Action>(a));
                     if(kind==HudModule::Modules?!on:!bindings_[a].key) continue;
                     if(kind==HudModule::Keybinds) {

@@ -91,14 +91,6 @@ smp::BaseFinderSettings Overlay::ChunkDetection() const {
     c.maxDraw=chunkFinder_.maxDraw; c.labels=chunkFinder_.labels; c.colour=chunkFinder_.color;
     return c;
 }
-smp::BaseFinderSettings Overlay::ChunkDetection() const {
-    auto c=smpConfig_.finder;
-    c.enabled=chunkFinder_.enabled||c.enabled;
-    c.radius=chunkFinder_.radius; c.interval=chunkFinder_.interval;
-    c.deepslate=chunkFinder_.deepslate; c.minDeepslate=chunkFinder_.minHints;
-    c.maxDraw=chunkFinder_.maxDraw; c.labels=chunkFinder_.labels; c.colour=chunkFinder_.color;
-    return c;
-}
 void Overlay::DrawChunkFinderSettings() {
     bool dirty=false;
     if(panel::BeginRows("chunkfinder_controls")) {
