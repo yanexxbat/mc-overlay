@@ -315,6 +315,27 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     request.config.enabled=false; request.spin.enabled=false; ++request.revision; step();
     Require(report.spinStatus==mcov::combat::SpinStatus::Disabled&&std::abs(view(cameraYaw)-9)<.001f,
         "Disabling Spinbot disturbed camera restoration");
+    const auto freecamAttacks=report.attacks;
+    request.freecam.enabled=true; request.config.enabled=true; request.spin.enabled=true; ++request.revision; step();
+    Require(report.freecamStatus==mcov::freecam::Status::Active&&!report.debug.target&&report.attacks==freecamAttacks,"Freecam did not take priority over combat/spin");
+    const auto bodyBeforeFreecam=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    env->CallVoidMethod(player,turn,40.0,20.0); Healthy(env); step();
+    Require(std::abs(env->CallFloatMethod(player,b.mEntityYaw)-bodyBeforeFreecam)<.001,"Freecam mouse look rotated player"); Healthy(env);
+    auto freeSignal=env->FindClass("mcov/FrameSignal"); Healthy(env);
+    const auto cameraX=field(freeSignal,"freecamX","D",true),cameraZ=field(freeSignal,"freecamZ","D",true);
+    const auto firstX=env->GetStaticDoubleField(freeSignal,cameraX),firstZ=env->GetStaticDoubleField(freeSignal,cameraZ); Healthy(env);
+    request.freecamInput.forward=1; Sleep(30); step();
+    const auto movedX=env->GetStaticDoubleField(freeSignal,cameraX),movedZ=env->GetStaticDoubleField(freeSignal,cameraZ); Healthy(env);
+    Require(std::hypot(movedX-firstX,movedZ-firstZ)>.01&&report.attacks==freecamAttacks,"Freecam input did not move independent camera");
+    auto freeActive=jvm::TryMethod(env,freeSignal,"freecamActive","()Z",true);
+    request.inputAllowed=false; step();
+    Require(report.freecamStatus==mcov::freecam::Status::Paused&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam survived menu/focus pause"); Healthy(env);
+    request.inputAllowed=true; step();
+    request.sentAtMs=GetTickCount64()-1000; step(1,false);
+    Require(report.freecamStatus==mcov::freecam::Status::Paused&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam survived expired IPC lease"); Healthy(env);
+    request.config.enabled=false; request.spin.enabled=false; request.freecam.enabled=false; ++request.revision; step();
+    Require(report.freecamStatus==mcov::freecam::Status::Disabled&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam did not release camera"); Healthy(env);
+    env->DeleteLocalRef(freeSignal);
     const auto afterSilentAttacks=report.attacks;
     request.config.enabled=true; ++request.revision;
     request.inputAllowed=false;

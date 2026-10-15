@@ -77,7 +77,7 @@ final class FrameTransformer implements ClassFileTransformer {
                     final Object[] initialLocals=parameters.toArray();
                     if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
                     if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
-                    if (role != 0) changed[0] = true;
+                    if (role != 0 || freeCamera!=null) changed[0] = true;
                     return new MethodVisitor(Opcodes.ASM8, next) {
                         final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
                         @Override public void visitCode() {

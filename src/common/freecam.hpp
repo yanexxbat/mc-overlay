@@ -19,7 +19,8 @@ inline const char* Text(Status s) {
 inline bool Valid(Config c) { return std::isfinite(c.speed)&&c.speed>=1&&c.speed<=40&&std::isfinite(c.boost)&&c.boost>=1&&c.boost<=10; }
 // Normalize combined axes so diagonal flight has the same maximum speed.
 inline combat::Vec3 Move(combat::Vec3 position,combat::Angles view,Config c,Input input,double dt) {
-    if(!Valid(c)||!std::isfinite(dt)||dt<=0||!std::isfinite(input.forward)||!std::isfinite(input.right)||!std::isfinite(input.up)) return position;
+    if(!Valid(c)||!combat::Finite(view)||!std::isfinite(dt)||dt<=0||!std::isfinite(input.forward)||!std::isfinite(input.right)||!std::isfinite(input.up)) return position;
+    input.forward=std::clamp(input.forward,-1.f,1.f); input.right=std::clamp(input.right,-1.f,1.f); input.up=std::clamp(input.up,-1.f,1.f);
     const auto forward=combat::Direction(view);
     const double yaw=view.yaw/combat::kDegrees;
     combat::Vec3 delta{forward.x*input.forward+std::cos(yaw)*input.right,forward.y*input.forward+input.up,forward.z*input.forward+std::sin(yaw)*input.right};

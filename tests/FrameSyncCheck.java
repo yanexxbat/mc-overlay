@@ -10,13 +10,12 @@ import mcov.FrameSignal;
 public final class FrameSyncCheck {
     private static void require(boolean value, String message) { if (!value) throw new AssertionError(message); }
     private static void checkFreecam(URLClassLoader loader,FrameProfiles.Profile p,int index) throws Exception {
-        Class<?> local=Class.forName(p.localPlayer().replace('/','.'),true,loader),entity=local.getSuperclass();
+        Class<?> local=Class.forName(p.localPlayer().replace('/','.'),true,loader);
         Object self=local.getConstructor().newInstance(),other=local.getConstructor().newInstance();
         Class<?> camera=Class.forName(p.camera().replace('/','.'),true,loader),client=Class.forName(p.client().replace('/','.'),true,loader);
         Object view=camera.getConstructor().newInstance(),owner=client.getConstructor().newInstance();
         require((FrameSignal.freecamProfiles&(1L<<index))!=0,"Missing freecam hooks "+p.id());
-        Method update=null;
-        for(Method m:camera.getDeclaredMethods()) if(m.getName().equals(p.update())&&m.getReturnType()==void.class) update=m;
+        Method update=camera.getDeclaredMethod(p.update(),java.lang.invoke.MethodType.fromMethodDescriptorString(p.updateDesc(),loader).parameterArray());
         Object[] args=new Object[update.getParameterCount()];
         for(int i=0;i<args.length;i++) {
             Class<?> t=update.getParameterTypes()[i];
@@ -96,9 +95,7 @@ public final class FrameSyncCheck {
                 Class<?> camera = Class.forName(profile.camera().replace('/', '.'), true, loader);
                 Object owner = client.getConstructor().newInstance(), view = camera.getConstructor().newInstance();
                 Method frame = client.getDeclaredMethod(profile.frame(), boolean.class);
-                Method update = null;
-                for (Method method : camera.getDeclaredMethods()) if (method.getName().equals(profile.update()) && method.getReturnType() == void.class)
-                    update = method;
+                Method update=camera.getDeclaredMethod(profile.update(),java.lang.invoke.MethodType.fromMethodDescriptorString(profile.updateDesc(),loader).parameterArray());
                 require(update != null, "Missing camera method");
                 Class<?>[] types = update.getParameterTypes();
                 checkMovement(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
