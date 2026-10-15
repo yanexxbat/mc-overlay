@@ -386,6 +386,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::OverlayUiCheck::Growth(overlay).Update(*scene,mcov::OverlayUiCheck::ChunkSettings(overlay));
     Require(mcov::OverlayUiCheck::Growth(overlay).Finds().size()==1,"Base Finder UI discovery fixture failed");
     mcov::OverlayUiCheck::Snapshot(overlay,*scene);
+    mcov::OverlayUiCheck::Chunk(overlay).chunks=false; mcov::OverlayUiCheck::Chunk(overlay).deepslate=false;
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
@@ -426,6 +427,8 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
         c.base.enabled&&c.base.padding==7&&c.base.fillOpacity==.21f&&c.base.colour.w==.3f&&c.finder.enabled&&c.finder.minKelpHeight==24,
         "Automatic preferences lost SMP colours/filters/settings");
+    Require(!mcov::OverlayUiCheck::Chunk(overlay).chunks&&!mcov::OverlayUiCheck::Chunk(overlay).deepslate,
+        "Automatic preferences lost Chunkfinder highlight/filter choices");
     for(const auto action:{mcov::keys::Action::StashFinder,mcov::keys::Action::SpawnerEsp,mcov::keys::Action::BaseEsp}) mcov::OverlayUiCheck::SetModule(overlay,action,true);
     mcov::OverlayUiCheck::Panic(overlay);
     Require(!c.stash.enabled&&!c.spawner.enabled&&!c.base.enabled&&!c.finder.enabled&&mcov::OverlayUiCheck::Stashes(overlay).Finds().empty()&&

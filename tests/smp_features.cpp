@@ -137,6 +137,38 @@ void GrowthProfiles() {
         !restored.binds[keys::Index(keys::Action::BaseFinder)].key,"Older profile did not receive disabled finder defaults");
     auto broken=text; const auto start=broken.find("smp.finder.height "); broken.erase(start,broken.find('\n',start)-start+1);
     Require(!Decode(broken,restored),"Partially damaged growth profile was silently repaired");
+    s.chunks.chunks=false; s.chunks.deepslate=false; s.chunks.blocks=false;
+    Require(Encode(s,text)&&Decode(text,restored)&&!restored.chunks.chunks&&!restored.chunks.deepslate&&!restored.chunks.blocks,
+        "Chunk/block highlight settings did not round-trip");
+    std::istringstream oldChunks(text); std::ostringstream beforeChunkHighlight;
+    while(std::getline(oldChunks,line)) if(!line.starts_with("chunks.chunks ")&&!line.starts_with("chunks.deepslate ")) beforeChunkHighlight<<line<<'\n';
+    Require(Decode(beforeChunkHighlight.str(),restored)&&restored.chunks.chunks&&restored.chunks.deepslate,
+        "Older chunk profiles did not receive whole-chunk highlight defaults");
+    auto partial=text; const auto field=partial.find("chunks.chunks "); partial.erase(field,partial.find('\n',field)-field+1);
+    Require(!Decode(partial,restored),"Partly damaged chunk-highlight settings were accepted");
+}
+void UnifiedChunks() {
+    smp::BaseFinderSettings c; c.enabled=true; c.deepslate=true; c.minDeepslate=2;
+    auto s=Scene(); s.blockScanMask=c.Mask(); smp::BaseFinder finder;
+    Add(s,-16,0,6,kBlockRotatedDeepslate); Add(s,-15,0,6,kBlockRotatedDeepslate);
+    Add(s,-17,0,6,kBlockRotatedDeepslate); Add(s,-18,0,6,kBlockDiamond);
+    Add(s,0,0,6,kBlockAmethystCluster);
+    finder.Update(s,c);
+    Require(finder.Finds().size()==1&&finder.Finds()[0].chunkX==-1&&finder.Finds()[0].deepslate==2,
+        "Unified finder crossed negative chunk boundaries or counted ore");
+    const auto column=smp::PossibleChunkBounds(finder.Finds()[0],s);
+    Require(column.min.x==-16&&column.max.x==0&&column.min.z==0&&column.max.z==16&&column.min.y==-64&&column.max.y==320,
+        "Whole-chunk bounds did not cover the exact footprint/build height");
+    c.minAmethyst=1; finder.Update(s,c);
+    Require(finder.Finds().size()==2,"Unified finder dropped an independently qualifying growth chunk");
+    c.deepslate=false; finder.Update(s,c);
+    Require(finder.Finds().size()==1&&finder.Finds()[0].deepslate==0,"Old deepslate results survived filter changes");
+    s.blockScanMask=c.Mask(); ++s.blockScanId; finder.Update(s,c);
+    Require(finder.Finds().size()==1&&finder.Finds()[0].amethyst==1&&finder.Finds()[0].deepslate==0,
+        "Disabling deepslate removed growth detection");
+    CopyField(s.dimension,"minecraft:the_nether");
+    const auto nether=smp::PossibleChunkBounds(finder.Finds()[0],s);
+    Require(nether.min.y==0&&nether.max.y==256,"Nether chunk column used Overworld height");
 }
 void Rendering() {
     auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
@@ -187,6 +219,15 @@ void Rendering() {
       Require(depth::tags==&growthTags,"Growth renderer did not restore depth scope"); }
     Require(draw.VtxBuffer.Size>growthStart,"Possible Base marker generated no geometry");
     for(int i=growthStart;i<draw.VtxBuffer.Size;++i) Require(growthTags[i]==0,"Possible Base marker became occluded");
+    growth.labels=growth.tracers=false;
+    const auto vertices=[&](bool chunks,bool blocks) {
+        const int start=draw.VtxBuffer.Size;
+        smp::DrawPossibleBases(draw,s,projection,growth,growthFinder.Finds(),{1280,720},chunks,blocks);
+        return draw.VtxBuffer.Size-start;
+    };
+    Require(vertices(true,false)>0,"Whole chunk disappeared with individual block boxes off");
+    Require(vertices(false,true)>0,"Individual clue blocks disappeared with whole chunks off");
+    Require(vertices(false,false)==0,"Disabled chunk/block highlights still drew geometry");
     growth.enabled=false; const int growthEnd=draw.VtxBuffer.Size;
     smp::DrawPossibleBases(draw,s,projection,growth,growthFinder.Finds(),{1280,720});
     Require(draw.VtxBuffer.Size==growthEnd,"Disabled Base Finder drew markers");
@@ -195,7 +236,7 @@ void Rendering() {
 }
 int main() {
     try {
-        Detection(); Profiles(); GrowthDetection(); GrowthProfiles(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+        Detection(); Profiles(); GrowthDetection(); GrowthProfiles(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.DisplaySize={1280,720}; io.DeltaTime=1.f/60; io.Fonts->AddFontDefault(); io.Fonts->Build();
         ImGui::NewFrame(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
         std::cout<<"PASS SMP: block classification, completed scans, filters, world isolation, limits, profiles and per-type rendering\n"; return 0;
