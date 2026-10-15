@@ -5,16 +5,19 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import com.sun.tools.attach.VirtualMachine;
 
 /** Verifies transformed installed classes without initializing or starting Minecraft. */
 public final class RealFrameVerify {
     public static void main(String[] args) throws Exception {
         ArrayList<URL> urls=new ArrayList<>();
         for(String line:Files.readAllLines(Path.of(args[0]))) if(!line.isBlank()) urls.add(Path.of(line).toUri().toURL());
-        FrameTransformer transformer=new FrameTransformer(null,Class.forName("mcov.FrameSignal"));
+        boolean attach=args.length>2;
+        FrameTransformer transformer=attach?null:new FrameTransformer(null,Class.forName("mcov.FrameSignal"));
         try(URLClassLoader loader=new URLClassLoader(urls.toArray(URL[]::new),RealFrameVerify.class.getClassLoader()) {
             @Override protected Class<?> findClass(String name) throws ClassNotFoundException {
                 String internal=name.replace('.','/');
+                if(attach) return super.findClass(name);
                 if(!FrameProfiles.isTarget(internal)&&!DepthProfiles.isTarget(internal)) return super.findClass(name);
                 try {
                     URL source=findResource(internal+".class");
@@ -33,6 +36,15 @@ public final class RealFrameVerify {
                 Class<?> type=Class.forName(name,false,loader);
                 type.getDeclaredMethods(); type.getDeclaredConstructors();
                 System.out.println("PASS "+name);
+            }
+            if(attach) {
+                VirtualMachine vm=VirtualMachine.attach(Long.toString(ProcessHandle.current().pid()));
+                try { vm.loadAgent(Path.of(args[2]).toAbsolutePath().toString()); }
+                finally { vm.detach(); }
+                Class<?> signal=Class.forName("mcov.FrameSignal",true,null);
+                if(!signal.getField("enabled").getBoolean(null)) throw new AssertionError("Attach did not enable hooks");
+                if(signal.getField("freecamProfiles").getLong(null)==0) throw new AssertionError("Real freecam hooks missing");
+                System.out.println("PASS dynamic attach to installed Minecraft classes (no game initialization)");
             }
         }
     }
