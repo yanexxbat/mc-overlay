@@ -24,10 +24,15 @@ public final class KnifeBridge {
         int index=profile.startsWith("mojmap")?0:profile.startsWith("vanilla")?1:2;
         try {
             Class.forName(KnifeProfiles.row(table,"class.Hand")[1].replace('/','.'),false,client.getClassLoader());
-            if((FrameSignal.knifeProfiles&(1L<<index))==0) return false;
+            if((FrameSignal.knifeProfiles&(1L<<index))==0) { System.err.println("[mcov] knife initialization failed: hand hook not installed for "+profile);return false; }
             api=new Api(client.getClassLoader(),table); status=1; return true;
         }
-        catch(ReflectiveOperationException|LinkageError error) { api=null; status=0; return false; }
+        catch(ReflectiveOperationException|LinkageError|RuntimeException error) {
+            api=null;status=0;
+            Throwable cause=error;while(cause.getCause()!=null&&cause.getCause()!=cause)cause=cause.getCause();
+            System.err.println("[mcov] knife initialization failed for "+profile+": "+cause);
+            return false;
+        }
     }
     public static void update(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,boolean held,long serial,long remainingMs,boolean glow,float strength,float width,int colour) {
         boolean valid=skin>=0&&skin<=2&&Float.isFinite(speed)&&speed>=.5f&&speed<=2&&Float.isFinite(size)&&size>=.5f&&size<=2&&
@@ -170,7 +175,9 @@ public final class KnifeBridge {
             quads=s.call("quads",null); identity=s.type("Pose").getConstructor().newInstance();
             Object snippets=Array.newInstance(s.type("Snippet"),1);Array.set(snippets,0,s.get("glowSnippet",null));
             Object builder=s.call("pipelineBuilder",null,snippets);
-            s.call("pipelineLocation",builder,"mcov:knife_glow");
+            // This String overload adds the default namespace itself; it accepts
+            // a path, not a namespaced identifier (a colon aborts initialization).
+            s.call("pipelineLocation",builder,"mcov/knife_glow");
             s.call("pipelineBlend",builder,s.get("glowBlend",null));
             s.call("pipelineCull",builder,false);s.call("pipelineDepth",builder,false);
             s.call("pipelineFormat",builder,s.get("colourFormat",null),s.get("quadMode",null));

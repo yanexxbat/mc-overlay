@@ -35,7 +35,7 @@ public final class KnifeCheck {
         public static final String BLEND="additive",FORMAT="position_colour",MODE="quads",MAIN="main";
         boolean cull=true,depth=true;String blend,format,mode,location;
         public static Pipeline builder(Snippet[] snippets) { check(snippets.length==1&&snippets[0]==SNIPPET,"Missing glow shader snippet");return new Pipeline(); }
-        public Pipeline location(String s) { location=s;return this; }
+        public Pipeline location(String s) { check(s.matches("[a-z0-9/._-]+"),"Minecraft withLocation(String) accepts a default-namespace path only: "+s);location=s;return this; }
         public Pipeline blend(String s) { blend=s;return this; }
         public Pipeline cull(boolean value) { cull=value;return this; }
         public Pipeline depth(boolean value) { depth=value;return this; }
