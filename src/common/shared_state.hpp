@@ -8,6 +8,7 @@
 #include "combat_bridge_state.hpp"
 #include "item_assist.hpp"
 #include "base_render_state.hpp"
+#include "knife_state.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -18,7 +19,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 24;
+inline constexpr std::uint32_t kSharedVersion = 25;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -387,6 +388,8 @@ struct SharedBlock {
     SharedMailbox<items::Report> itemReport;
     SharedMailbox<base::Request> baseRequest;
     SharedMailbox<base::Report> baseReport;
+    SharedMailbox<knife::Request> knifeRequest;
+    SharedMailbox<knife::Report> knifeReport;
     WorldSnapshot snapshot;
 };
 
