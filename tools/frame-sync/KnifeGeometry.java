@@ -185,19 +185,46 @@ public final class KnifeGeometry {
         float[] lines=new float[cached.edges.length];for(int i=0;i<lines.length;i+=3)System.arraycopy(blade.point(cached.edges[i],cached.edges[i+1],cached.edges[i+2]),0,lines,i,3);
         return new Frame(b.finish(),blade.point(cached.base),blade.point(cached.tip),lines);
     }
-    /** Camera-facing additive Gaussian ribbons. Transparent outer boundary; no depth writes. */
-    static Mesh glow(float[] segments,Matrix view,float width,float strength,int colour) {
+    private record Position(float x,float y,float z) {}
+    private static final class Joint {
+        final float[] p;float nx,ny,dx,dy;int degree;
+        Joint(float[] point) { p=point; }
+        void connect(float x,float y,float direction) { nx+=-y;ny+=x;dx+=x*direction;dy+=y*direction;++degree; }
+        float[] offset(float width,float amount) { float length=(float)Math.hypot(nx,ny);return new float[]{p[0]+nx/length*width*amount,p[1]+ny/length*width*amount,p[2]+.025f}; }
+    }
+    private record Segment(Joint a,Joint z) {}
+    private static int glowInk(int colour,float strength,float radius) {
+        float falloff=(float)((Math.exp(-radius*radius*5)-Math.exp(-5))/(1-Math.exp(-5)));
+        return (colour&0xffffff)|Math.min(255,Math.round(90*strength*Math.max(0,falloff)))<<24;
+    }
+    /** Camera-facing additive Gaussian ribbons with shared curve joins and rounded tips. */
+    static Mesh glow(float[] segments,Matrix view,float width,float strength,int colour) { return glow(segments,view,width,strength,colour,true); }
+    static Mesh glow(float[] segments,Matrix view,float width,float strength,int colour,boolean caps) {
         Builder b=new Builder();if(strength<=0)return b.finish();
+        Map<Position,Joint> joints=new LinkedHashMap<>();List<Segment> lines=new ArrayList<>();
         for(int i=0;i<segments.length;i+=6) {
             float[] a=view.point(segments[i],segments[i+1],segments[i+2]),z=view.point(segments[i+3],segments[i+4],segments[i+5]);
             float dx=z[0]-a[0],dy=z[1]-a[1],length=(float)Math.hypot(dx,dy);if(length<1e-7f)continue;
-            float nx=-dy/length*width,ny=dx/length*width;
-            for(int band=-10;band<10;++band) {
-                float v=band/10f,w=(band+1)/10f;
-                float av=(float)((Math.exp(-v*v*5)-Math.exp(-5))/(1-Math.exp(-5))),aw=(float)((Math.exp(-w*w*5)-Math.exp(-5))/(1-Math.exp(-5)));
-                int ca=(colour&0xffffff)|Math.min(255,Math.round(90*strength*av))<<24,cz=(colour&0xffffff)|Math.min(255,Math.round(90*strength*aw))<<24;
-                // Bias toward the camera so the luminous cutting edge clears its solid bevel.
-                b.quad(p(a[0]+nx*v,a[1]+ny*v,a[2]+.025f),p(z[0]+nx*v,z[1]+ny*v,z[2]+.025f),p(z[0]+nx*w,z[1]+ny*w,z[2]+.025f),p(a[0]+nx*w,a[1]+ny*w,a[2]+.025f),ca,ca,cz,cz);
+            Joint first=joints.computeIfAbsent(new Position(a[0],a[1],a[2]),key->new Joint(a));
+            Joint last=joints.computeIfAbsent(new Position(z[0],z[1],z[2]),key->new Joint(z));
+            first.connect(dx/length,dy/length,1);last.connect(dx/length,dy/length,-1);lines.add(new Segment(first,last));
+        }
+        for(Segment line:lines)for(int band=-10;band<10;++band) {
+            float v=band/10f,w=(band+1)/10f;
+            int ca=glowInk(colour,strength,v),cz=glowInk(colour,strength,w);
+            b.quad(line.a.offset(width,v),line.z.offset(width,v),line.z.offset(width,w),line.a.offset(width,w),ca,ca,cz,cz);
+        }
+        if(caps)for(Joint joint:joints.values()) {
+            // Endpoints and acute cutting tips; smooth interior joints need no overlapping disks.
+            if(joint.degree>1&&Math.hypot(joint.dx,joint.dy)/joint.degree<.6)continue;
+            for(int ring=0;ring<10;++ring)for(int side=0;side<32;++side) {
+                float[][] q=new float[4][];int[] ink=new int[4];
+                for(int v=0;v<4;++v) {
+                    float radius=(ring+(v==1||v==2?1:0))/10f;double angle=(side+(v>=2?1:0))*Math.PI*2/32;
+                    q[v]=p(joint.p[0]+width*radius*(float)Math.cos(angle),joint.p[1]+width*radius*(float)Math.sin(angle),joint.p[2]+.025f);
+                    ink[v]=glowInk(colour,strength,radius);
+                }
+                b.quad(q[0],q[1],q[2],q[3],ink[0],ink[1],ink[2],ink[3]);
             }
         }
         return b.finish();

@@ -5,7 +5,10 @@ independent native settings pane. Keep the compact anthracite/coral system,
 embedded Inter, fixed header, native focus and scrolling. No global redesign.
 
 First viewport: module toggle/binding, model, Inspect binding, size, speed,
-deploy, trails and duration. Instructions distinguish the two keys and explain
+deploy, trails and duration, then glow with strength/width/RGB colour. The
+whole control list scrolls within the fixed-header pane. Detailed solid meshes
+use bevelled blades, rounded grips and hardware, with soft additive edge/trail
+glow enabled by default. Instructions distinguish the two keys and explain
 that other players see the normal sword. Status reports unsupported 1.21.11
 renderers, waiting, active and failure/retry states. All fields persist.
 

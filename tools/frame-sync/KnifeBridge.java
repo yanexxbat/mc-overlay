@@ -153,7 +153,7 @@ public final class KnifeBridge {
                 float alpha=Math.max(0,1-(now-previous.time)/(lifetime*1e9f));
                 float[] lines=new float[12];System.arraycopy(previous.tip,0,lines,0,3);System.arraycopy(next.tip,0,lines,3,3);
                 System.arraycopy(previous.base,0,lines,6,3);System.arraycopy(next.base,0,lines,9,3);
-                result.append(KnifeGeometry.glow(lines,new KnifeGeometry.Matrix(),width,strength*alpha,colour),new KnifeGeometry.Matrix());
+                result.append(KnifeGeometry.glow(lines,new KnifeGeometry.Matrix(),width,strength*alpha,colour,false),new KnifeGeometry.Matrix());
             }
             previous=next;
         }

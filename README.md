@@ -47,7 +47,7 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The current client uses IPC v25; restart an
+when replacing an already loaded agent. The current client uses IPC v26; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
@@ -67,7 +67,8 @@ stash counting, saved waypoints and scan limits.
 ## CS Knife
 
 Open **Visuals > CS Knife** for Butterfly, Karambit and Katana models with inspect
-and deploy animations, adjustable size/speed and blade trails. Assign an **Inspect
+and deploy animations, detailed bevels and rounded grips, adjustable size/speed,
+blade trails and soft additive glow. Glow colour, strength and width are adjustable. Assign an **Inspect
 key** (such as R); tap once or hold to repeat. It changes your local main-hand
 sword appearance on **1.21.11**. Other players see your normal sword. Restart
 Minecraft after this update. See [CS Knife](docs/knives.md).

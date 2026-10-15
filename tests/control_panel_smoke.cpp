@@ -1200,7 +1200,7 @@ void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("knife_controls"))!=nullptr,"CS Knife controls are missing");
         SaveFrame(device,context,output/(size.x>500?"knife-settings-desktop.png":"knife-settings-small.png"));
-        ImGui::SetScrollY(content,8*(ImGui::GetFrameHeight()+ImGui::GetStyle().CellPadding.y*2)); frame();frame();
+        ImGui::SetScrollY(content,6*(ImGui::GetFrameHeight()+ImGui::GetStyle().CellPadding.y*2)); frame();frame();
         SaveFrame(device,context,output/(size.x>500?"knife-glow-desktop.png":"knife-glow-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"knife-status-desktop.png":"knife-status-small.png"));
