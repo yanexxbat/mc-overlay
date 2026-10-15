@@ -81,6 +81,7 @@ int main(int argc,char** argv) {
         if(!app.Initialize(L"mcov hidden launcher check",640,640,&failure)) throw std::runtime_error(failure);
         Require(!IsWindowVisible(static_cast<HWND>(app.hwnd())),"Launcher shown before first frame");
         mcov::launcher::View view;
+        view.licensed=true;
         mcov::FlatAppRenderingCheck::Frame(app,view,output.empty()?output:output/"launcher-native-start.png");
         view.instances.push_back({123,"Minecraft fixture","Java 21",false,false}); view.selected=0;
         mcov::FlatAppRenderingCheck::Frame(app,view);

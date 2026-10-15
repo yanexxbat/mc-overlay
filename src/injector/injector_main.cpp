@@ -19,6 +19,8 @@
 #include "../common/win_handle.hpp"
 #include "../common/ipc.hpp"
 #include "../common/log.hpp"
+#include "../common/keyauth.hpp"
+#include "../common/auth_handoff.hpp"
 #include "../overlay/java_runtime.hpp"
 #include "../overlay/process.hpp"
 
@@ -55,9 +57,10 @@ std::filesystem::path AgentPath(std::uint32_t pid) {
     } while(Module32NextW(snapshot.get(),&entry));
     return {};
 }
-enum class Phase { Idle, Package, Runtime, Attach, Agent, Overlay };
+enum class Phase { Idle, License, Package, Runtime, Attach, Agent, Overlay };
 const char* PhaseText(Phase phase) {
     switch(phase) {
+        case Phase::License:return "Checking your license session...";
         case Phase::Package:return "Preparing client files...";
         case Phase::Runtime:return "Checking Minecraft and Java...";
         case Phase::Attach:return "Connecting to Minecraft...";
@@ -67,7 +70,7 @@ const char* PhaseText(Phase phase) {
     }
 }
 struct Result {
-    bool success=false,needsJdk=false;
+    bool success=false,needsJdk=false,authRejected=false;
     std::string status,detail;
     std::uint32_t pid{};
     std::filesystem::path agentLog;
@@ -93,9 +96,11 @@ bool LiveAgent(std::uint32_t pid,std::stop_token stop,std::uint64_t timeout,bool
     } while(GetTickCount64()<until);
     return false;
 }
-Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<Phase>& phase,std::stop_token stop) {
+Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<Phase>& phase,std::stop_token stop,const auth::Session& license) {
     Result result; result.pid=pid;
     try {
+        phase=Phase::License; Cancel(stop);
+        if(!auth::Client{}.Check(license,stop).success) { result.authRejected=true; throw std::runtime_error("License verification failed. Verify your key again."); }
         phase=Phase::Package; Cancel(stop);
         const auto runtime=launcher::PreparePackage(root);
         phase=Phase::Runtime; Cancel(stop);
@@ -138,10 +143,9 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
         WinHandle ready(CreateEventW(nullptr,TRUE,FALSE,eventName.c_str()));
         if(!ready) throw std::runtime_error("Could not prepare to start the client.");
         std::wstring command=L"\""+executable.wstring()+L"\" --no-agent --pid "+std::to_wstring(pid)+L" --ready-event "+eventName;
-        STARTUPINFOW startup{}; startup.cb=sizeof(startup); startup.dwFlags=STARTF_USESHOWWINDOW; startup.wShowWindow=SW_HIDE;
         PROCESS_INFORMATION process{};
-        if(!CreateProcessW(executable.c_str(),command.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,runtime.c_str(),&startup,&process))
-            throw std::runtime_error("Could not start the client. Error "+std::to_string(GetLastError())+".");
+        std::string launchError;
+        if(!auth::LaunchOverlay(executable,runtime,std::move(command),license,process,launchError)) throw std::runtime_error(launchError);
         WinHandle thread(process.hThread); result.overlay=WinHandle(process.hProcess);
         HANDLE handles[]={ready.get(),result.overlay.get()};
         const auto until=GetTickCount64()+10000;
@@ -187,9 +191,11 @@ struct AppState {
     std::atomic<Phase> phase=Phase::Idle;
     std::stop_source stop;
     std::future<Result> job;
+    auth::Session license;
+    std::future<auth::LoginResult> authJob;
     std::uint64_t refreshAt=0,logsAt=0;
     std::filesystem::path agentLog;
-    ~AppState() { stop.request_stop(); if(job.valid()) job.wait(); }
+    ~AppState() { stop.request_stop(); if(job.valid()) job.wait(); if(authJob.valid()) authJob.wait(); SecureZeroMemory(view.licenseKey.data(),view.licenseKey.size()); }
     void Refresh() {
         const auto previous=view.selected>=0&&view.selected<int(view.instances.size())?view.instances[view.selected].pid:0;
         processes.clear(); view.instances.clear();
@@ -246,13 +252,22 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
             if(!app.Initialize(L"mcov - Client",640,640,&failure)) throw std::runtime_error(failure);
             app.Run([&] {
                 const auto now=GetTickCount64();
+                if(state.view.authBusy&&state.authJob.valid()&&state.authJob.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
+                    auto result=state.authJob.get(); state.view.authBusy=false; state.view.licensed=result.success;
+                    state.view.authError=!result.success; state.view.authMessage=result.message; state.license=std::move(result.session);
+                    if(result.success) state.view.status="License verified. Select Minecraft to start.";
+                }
                 if(state.view.busy&&state.job.valid()&&state.job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
                     auto result=state.job.get(); state.view.busy=false; state.view.error=!result.success; state.view.needsJdk=result.needsJdk;
                     state.view.status=result.status; state.view.diagnostic=result.detail; state.agentLog=result.agentLog; state.Refresh();
+                    if(result.authRejected) { state.view.licensed=false; state.view.authError=true; state.view.authMessage=result.status; state.license={}; }
                     if(result.success&&GetForegroundWindow()==app.hwnd()) {
                         ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
                         for(const auto& p:state.processes) if(p.pid==result.pid) SetForegroundWindow(static_cast<HWND>(p.window));
                     }
+                }
+                if(state.view.licensed&&!state.view.busy&&!state.license.Valid(auth::UnixTime())) {
+                    state.view.licensed=false; state.view.authError=true; state.view.authMessage="Your license has expired. Verify an active key to continue."; state.license={};
                 }
                 if(!state.view.busy&&now>=state.refreshAt) state.Refresh();
                 if(state.view.tab==1&&now>=state.logsAt) {
@@ -265,6 +280,12 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                 if(a.minimize) ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
                 if(a.refresh&&!state.view.busy) state.Refresh();
                 if(a.openLogs) ShellExecuteW(static_cast<HWND>(app.hwnd()),L"open",root.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
+                if(a.verifyLicense&&!state.view.authBusy&&!state.view.busy&&!state.view.licensed&&state.view.licenseKey[0]) {
+                    std::string key(state.view.licenseKey.data()); SecureZeroMemory(state.view.licenseKey.data(),state.view.licenseKey.size());
+                    state.view.showLicense=false; state.view.authBusy=true; state.view.authError=false; state.stop=std::stop_source{};
+                    const auto token=state.stop.get_token();
+                    state.authJob=std::async(std::launch::async,[key=std::move(key),token]() mutable { return auth::Client{}.Login(std::move(key),token); });
+                }
                 if(a.chooseJdk&&!state.view.busy) {
                     const auto chosen=ChooseJdk(static_cast<HWND>(app.hwnd()));
                     if(!chosen.empty()) {
@@ -278,13 +299,13 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                         } else state.view.status="This folder is not a full Windows x64 JDK. Select the main JDK folder containing bin and release.";
                     }
                 }
-                if(a.start&&!state.view.busy&&state.view.selected>=0&&state.view.selected<int(state.processes.size())) {
+                if(a.start&&state.view.licensed&&state.license.Valid(auth::UnixTime())&&!state.view.authBusy&&!state.view.busy&&state.view.selected>=0&&state.view.selected<int(state.processes.size())) {
                     const auto target=state.processes[state.view.selected];
                     // Reconnection goes through the same package verification
                     // even while the old overlay window is still running.
                     state.view.busy=true; state.view.error=state.view.needsJdk=false; state.stop=std::stop_source{};
                     const auto token=state.stop.get_token();
-                    state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token); });
+                    state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token,state.license); });
                 }
             });
         } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.

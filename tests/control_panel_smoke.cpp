@@ -951,6 +951,7 @@ void TargetCubePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
 }
 void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     mcov::launcher::View view;
+    view.licensed=true;
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
