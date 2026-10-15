@@ -10,10 +10,14 @@ struct Config {
     bool enabled=false,deploy=true,trails=true;
     int skin=0;
     float speed=1,size=1,trailSeconds=.14f;
+    bool glow=true;
+    float glowStrength=1.2f,glowWidth=1;
+    std::uint32_t glowColour=0x69ddd5;
 };
 inline bool Valid(const Config& c) {
     return c.skin>=0&&c.skin<=2&&std::isfinite(c.speed)&&c.speed>=.5f&&c.speed<=2&&
-        std::isfinite(c.size)&&c.size>=.5f&&c.size<=2&&std::isfinite(c.trailSeconds)&&c.trailSeconds>=.05f&&c.trailSeconds<=.35f;
+        std::isfinite(c.size)&&c.size>=.5f&&c.size<=2&&std::isfinite(c.trailSeconds)&&c.trailSeconds>=.05f&&c.trailSeconds<=.35f&&
+        std::isfinite(c.glowStrength)&&c.glowStrength>=0&&c.glowStrength<=3&&std::isfinite(c.glowWidth)&&c.glowWidth>=.25f&&c.glowWidth<=3&&c.glowColour<=0xffffff;
 }
 struct Request {
     std::uint64_t sentAtMs{},inspectSerial{};

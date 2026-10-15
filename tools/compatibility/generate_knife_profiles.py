@@ -15,8 +15,14 @@ C={
  'Types':'net/minecraft/client/renderer/rendertype/RenderTypes','Type':'net/minecraft/client/renderer/rendertype/RenderType',
  'Screen':'net/minecraft/client/gui/screens/Screen','Level':'net/minecraft/client/multiplayer/ClientLevel',
  'Arm':'net/minecraft/world/entity/HumanoidArm',
+ 'Pipeline':'com/mojang/blaze3d/pipeline/RenderPipeline','PipelineBuilder':'com/mojang/blaze3d/pipeline/RenderPipeline$Builder',
+ 'Snippet':'com/mojang/blaze3d/pipeline/RenderPipeline$Snippet','Blend':'com/mojang/blaze3d/pipeline/BlendFunction',
+ 'Format':'com/mojang/blaze3d/vertex/VertexFormat','FormatMode':'com/mojang/blaze3d/vertex/VertexFormat$Mode',
+ 'Formats':'com/mojang/blaze3d/vertex/DefaultVertexFormat','Pipelines':'net/minecraft/client/renderer/RenderPipelines',
+ 'Setup':'net/minecraft/client/renderer/rendertype/RenderSetup','SetupBuilder':'net/minecraft/client/renderer/rendertype/RenderSetup$RenderSetupBuilder',
+ 'Output':'net/minecraft/client/renderer/rendertype/OutputTarget',
 }
-def t(n): return type_descriptor(C.get(n,n))
+def t(n): return '['+t(n[:-2]) if n.endswith('[]') else type_descriptor(C.get(n,n))
 def d(args,out): return '('+''.join(map(t,args))+')'+t(out)
 S=[]
 def m(key,owner,name,args,out,static=False): S.append((key,C[owner],name,d(args,out),'methods',static))
@@ -35,6 +41,18 @@ m('empty','Stack','isEmpty',[],'boolean'); m('item','Stack','getItem',[],'Item')
 m('last','Pose','last',[],'Entry'); m('matrix','Entry','pose',[],'org.joml.Matrix4f')
 m('order','Collector','order',['int'],'Ordered'); m('submit','Ordered','submitCustomGeometry',['Pose','Type','Custom'],'void')
 m('quads','Types','debugQuads',[],'Type',True)
+f('glowSnippet','Pipelines','DEBUG_FILLED_SNIPPET','Snippet',True)
+f('glowBlend','Blend','LIGHTNING','Blend',True); f('colourFormat','Formats','POSITION_COLOR','Format',True)
+f('quadMode','FormatMode','QUADS','FormatMode',True); f('mainOutput','Output','MAIN_TARGET','Output',True)
+m('pipelineBuilder','Pipeline','builder',['Snippet[]'],'PipelineBuilder',True)
+m('pipelineLocation','PipelineBuilder','withLocation',['java.lang.String'],'PipelineBuilder')
+m('pipelineBlend','PipelineBuilder','withBlend',['Blend'],'PipelineBuilder')
+m('pipelineCull','PipelineBuilder','withCull',['boolean'],'PipelineBuilder'); m('pipelineDepth','PipelineBuilder','withDepthWrite',['boolean'],'PipelineBuilder')
+m('pipelineFormat','PipelineBuilder','withVertexFormat',['Format','FormatMode'],'PipelineBuilder')
+m('pipelineBuild','PipelineBuilder','build',[],'Pipeline')
+m('setupBuilder','Setup','builder',['Pipeline'],'SetupBuilder',True); m('setupOutput','SetupBuilder','setOutputTarget',['Output'],'SetupBuilder')
+m('setupBuild','SetupBuilder','createRenderSetup',[],'Setup')
+m('renderType','Type','create',['java.lang.String','Setup'],'Type',True)
 m('vertex','Consumer','addVertex',['float','float','float'],'Consumer'); m('colour','Consumer','setColor',['int'],'Consumer')
 def generate(cache,target):
  jar=NamedJar(cache,'1.21.11'); resolved=[]

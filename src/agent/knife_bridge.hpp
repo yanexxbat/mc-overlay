@@ -17,7 +17,7 @@ public:
         auto local=env->FindClass("mcov/KnifeBridge"); if(Error(env)||!local) return false;
         bridge_=static_cast<jclass>(env->NewGlobalRef(local));
         const auto configure=env->GetStaticMethodID(bridge_,"configure","(Ljava/lang/Class;Ljava/lang/String;)Z");
-        update_=env->GetStaticMethodID(bridge_,"update","(ZIFFFZZZJJ)V");
+        update_=env->GetStaticMethodID(bridge_,"update","(ZIFFFZZZJJZFFI)V");
         status_=env->GetStaticMethodID(bridge_,"status","()I"); disable_=env->GetStaticMethodID(bridge_,"disable","()V");
         if(Error(env)||!configure||!update_||!status_||!disable_) return false;
         const auto profile=env->NewStringUTF(b.set->id);
@@ -34,7 +34,8 @@ public:
         const bool enabled=fresh&&r.config.enabled&&!(flags&(kCtrlPauseSampling|kCtrlRequestUnload));
         const auto& c=r.config;
         env->CallStaticVoidMethod(bridge_,update_,jboolean(enabled),jint(c.skin),jfloat(c.speed),jfloat(c.size),jfloat(c.trailSeconds),
-            jboolean(c.deploy),jboolean(c.trails),jboolean(enabled&&r.inspectHeld),jlong(r.inspectSerial),jlong(fresh?knife::kLeaseMs-(now-r.sentAtMs):0));
+            jboolean(c.deploy),jboolean(c.trails),jboolean(enabled&&r.inspectHeld),jlong(r.inspectSerial),jlong(fresh?knife::kLeaseMs-(now-r.sentAtMs):0),
+            jboolean(c.glow),jfloat(c.glowStrength),jfloat(c.glowWidth),jint(c.glowColour));
         knife::Report report; report.sampledAtMs=now;
         if(Error(env)) report.status=knife::Status::Failed;
         else {
