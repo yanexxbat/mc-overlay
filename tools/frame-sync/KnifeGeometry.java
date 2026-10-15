@@ -88,7 +88,7 @@ public final class KnifeGeometry {
                 q[v]=p(x+r*(float)Math.cos(a),y+r*(float)Math.sin(a),z+tube*(float)Math.sin(t));
                 ink[v]=shade(colour,(float)(.65+.4*Math.max(0,Math.sin(t))+.12*Math.cos(a)));
             }
-            b.quad(q[0],q[1],q[2],q[3],ink[0],ink[1],ink[2],ink[3]);
+            b.quad(q[0],q[3],q[2],q[1],ink[0],ink[3],ink[2],ink[1]);
         }
     }
     private static void screw(Builder b,float x,float y,int colour) {

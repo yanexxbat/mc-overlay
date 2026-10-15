@@ -87,14 +87,15 @@ public final class KnifeBridge {
             float[] base=current.point(mirror.point(frame.base())),tip=current.point(mirror.point(frame.tip()));
             if(c.trails&&(motion!=0||attack>.01f)&&!busy) record(now,base,tip);
             else streaks.clear();
-            KnifeGeometry.Mesh trail=trail(now,c.lifetime,c.glow?(0xff000000|c.colour):KnifeGeometry.metal(name));
+            boolean glowing=c.glow&&c.strength>0;
+            KnifeGeometry.Mesh trail=trail(now,c.lifetime,glowing?(0xff000000|c.colour):KnifeGeometry.metal(name));
             Object ordered=a.s.call("order",collector,0);
             // Submission may defer until the end of the hand pass. Capture only
             // immutable per-frame geometry, never the next frame's mutable state.
             Object submission=a.callback(mesh);
             a.s.call("submit",ordered,pose,a.quads,submission);
-            if(trail.vertices()!=0) a.s.call("submit",ordered,a.identity,c.glow?a.glow:a.quads,a.callback(trail));
-            if(c.glow&&c.strength>0) {
+            if(trail.vertices()!=0) a.s.call("submit",ordered,a.identity,glowing?a.glow:a.quads,a.callback(trail));
+            if(glowing) {
                 KnifeGeometry.Mesh halo=KnifeGeometry.glow(frame.glowSegments(),new KnifeGeometry.Matrix(current.a).mul(mirror),.032f*c.width*c.size,c.strength,c.colour);
                 Object luminous=a.s.call("order",collector,1);
                 a.s.call("submit",luminous,a.identity,a.glow,a.callback(halo));

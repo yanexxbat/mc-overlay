@@ -1191,7 +1191,7 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
 void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     using Check=mcov::OverlayUiCheck;
     auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
-    auto& c=Check::Knife(o); c={true,true,true,2,1.5f,1.25f,.21f};
+    auto& c=Check::Knife(o); c={true,true,true,2,1.5f,1.25f,.21f}; c.glow=true; c.glowStrength=1.6f; c.glowWidth=1.3f; c.glowColour=0x69ddd5;
     Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::KnifeInspect)]={0x52,0,mcov::keys::Mode::Toggle};
     Check::KnifeStatus(o,mcov::knife::Status::Ready);
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
@@ -1200,6 +1200,8 @@ void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("knife_controls"))!=nullptr,"CS Knife controls are missing");
         SaveFrame(device,context,output/(size.x>500?"knife-settings-desktop.png":"knife-settings-small.png"));
+        ImGui::SetScrollY(content,8*(ImGui::GetFrameHeight()+ImGui::GetStyle().CellPadding.y*2)); frame();frame();
+        SaveFrame(device,context,output/(size.x>500?"knife-glow-desktop.png":"knife-glow-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"knife-status-desktop.png":"knife-status-small.png"));
         auto* pane=ImGui::FindWindowByName("mcov module settings");
@@ -1214,13 +1216,13 @@ void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::
     mcov::keys::Input input{}; Check::Input(o,input);
     auto before=Check::KnifeRequest(o); input[0x52]=true; Check::Input(o,input);
     auto pressed=Check::KnifeRequest(o);
-    Require(pressed.config.enabled&&pressed.inspectHeld&&pressed.inspectSerial==before.inspectSerial+1,"Inspect key did not reach the hand renderer request");
+    Require(pressed.config.enabled&&pressed.config.glow&&pressed.config.glowStrength==1.6f&&pressed.config.glowWidth==1.3f&&pressed.config.glowColour==0x69ddd5&&pressed.inspectHeld&&pressed.inspectSerial==before.inspectSerial+1,"Inspect key did not reach the hand renderer request");
     Check::Input(o,input); Require(Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Held Inspect generated duplicate press events");
     Check::FocusInput(o,input,false); Require(!Check::KnifeRequest(o).inspectHeld,"Focus loss left Inspect held");
     input={}; Check::Input(o,input); input[0x52]=true; Check::Input(o,input,true);
     Require(!Check::KnifeRequest(o).inspectHeld&&Check::KnifeRequest(o).inspectSerial==pressed.inspectSerial,"Overlay menu activated Inspect");
     Check::PrefPath(o,output/"knife-preferences.ini"); Check::Save(o); c={}; Check::Load(o);
-    Require(c.enabled&&c.skin==2&&c.speed==1.5f&&c.size==1.25f&&c.trailSeconds==.21f,"Knife preferences lost settings");
+    Require(c.enabled&&c.skin==2&&c.speed==1.5f&&c.size==1.25f&&c.trailSeconds==.21f&&c.glow&&c.glowStrength==1.6f&&c.glowWidth==1.3f&&c.glowColour==0x69ddd5,"Knife preferences lost settings");
     Check::Panic(o); Require(!c.enabled&&!Check::KnifeRequest(o).config.enabled,"Panic left knife replacement active");
 }
 void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
