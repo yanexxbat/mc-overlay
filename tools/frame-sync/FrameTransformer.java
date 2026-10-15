@@ -28,6 +28,7 @@ final class FrameTransformer implements ClassFileTransformer {
             ClassReader reader = new ClassReader(original);
             boolean[] recognized = {false};
             Set<String> declaredMethods=new HashSet<>(),declaredFields=new HashSet<>();
+            Set<String> overwrittenReceivers=new HashSet<>();
             reader.accept(new ClassVisitor(Opcodes.ASM8) {
                 @Override public FieldVisitor visitField(int access, String field, String descriptor, String signature, Object value) {
                     if((access & Opcodes.ACC_STATIC)==0) declaredFields.add(field+descriptor);
@@ -38,9 +39,19 @@ final class FrameTransformer implements ClassFileTransformer {
                     if((access & (Opcodes.ACC_STATIC|Opcodes.ACC_ABSTRACT|Opcodes.ACC_NATIVE))==0) declaredMethods.add(method+descriptor);
                     recognized[0] |= FrameProfiles.marker(name, method, descriptor, (access & Opcodes.ACC_STATIC) != 0);
                     if((access & Opcodes.ACC_STATIC)==0) recognized[0] |= DepthProfiles.marker(name,method,descriptor);
-                    return null;
+                    boolean cameraSetup=false;
+                    for(FrameProfiles.Profile p:FrameProfiles.PROFILES) if(p.camera().equals(name)&&p.freeSetup().equals(method)&&p.freeSetupDesc().equals(descriptor)) cameraSetup=true;
+                    if(!cameraSetup) return null;
+                    return new MethodVisitor(Opcodes.ASM8) {
+                        @Override public void visitVarInsn(int opcode,int variable) {
+                            if(variable==0 && opcode>=Opcodes.ISTORE && opcode<=Opcodes.ASTORE) overwrittenReceivers.add(method+descriptor);
+                        }
+                        @Override public void visitIincInsn(int variable,int increment) {
+                            if(variable==0) overwrittenReceivers.add(method+descriptor);
+                        }
+                    };
                 }
-            }, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             // Obfuscated class names can be reused by unrelated Minecraft classes.
             // Require a second audited signature before adding frame markers.
             // Camera's position field also works when the optional accessor is
@@ -65,6 +76,7 @@ final class FrameTransformer implements ClassFileTransformer {
                     FrameProfiles.Profile cameraProfile=null;
                     for(FrameProfiles.Profile p:FrameProfiles.PROFILES)
                         if(p.camera().equals(name)&&p.freeSetup().equals(method)&&p.freeSetupDesc().equals(descriptor)&&
+                            !overwrittenReceivers.contains(method+descriptor)&&
                             declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z")) { cameraProfile=p; break; }
                     final FrameProfiles.Profile freeCamera=cameraProfile;
                     java.util.ArrayList<Object> parameters=new java.util.ArrayList<>(); parameters.add(name);
@@ -82,6 +94,17 @@ final class FrameTransformer implements ClassFileTransformer {
                     final AnalyzerAdapter analyzer=freeCamera!=null?new AnalyzerAdapter(name,access,method,descriptor,next):null;
                     return new MethodVisitor(Opcodes.ASM8, analyzer!=null?analyzer:next) {
                         final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
+                        @Override public void visitFrame(int type,int count,Object[] locals,int stackCount,Object[] stack) {
+                            if(freeCamera!=null && (count==0 || Opcodes.TOP.equals(locals[0]))) {
+                                // Minecraft deliberately chops even `this` before a terminal
+                                // return. Our hook still needs it. Slot 0 is proven unchanged
+                                // by the first pass, so retain it in the original frames too.
+                                Object[] retained=new Object[Math.max(1,count)];
+                                if(count>0) System.arraycopy(locals,0,retained,0,count);
+                                retained[0]=name;
+                                super.visitFrame(Opcodes.F_NEW,retained.length,retained,stackCount,stack);
+                            } else super.visitFrame(type,count,locals,stackCount,stack);
+                        }
                         @Override public void visitCode() {
                             super.visitCode();
                             if(movementPart==4 || role==5 || role==6 || role==7 || role==8) {
@@ -206,7 +229,7 @@ final class FrameTransformer implements ClassFileTransformer {
             }
             for(int i=0;i<FrameProfiles.PROFILES.length;++i) {
                 FrameProfiles.Profile p=FrameProfiles.PROFILES[i]; long mask=1L<<i;
-                if(p.camera().equals(name)&&declaredMethods.contains(p.freeSetup()+p.freeSetupDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
+                if(p.camera().equals(name)&&declaredMethods.contains(p.freeSetup()+p.freeSetupDesc())&&!overwrittenReceivers.contains(p.freeSetup()+p.freeSetupDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
                     signals.getMethod("markFreecam",int.class,long.class).invoke(null,1,mask);
                 if(p.renderer().equals(name)&&declaredMethods.contains(p.hand()+p.handDesc())) signals.getMethod("markFreecam",int.class,long.class).invoke(null,4,mask);
                 if(p.localPlayer().equals(name)&&declaredMethods.contains(p.localStep()+"()V")) signals.getMethod("markFreecam",int.class,long.class).invoke(null,2,mask);
