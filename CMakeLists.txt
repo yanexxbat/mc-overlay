@@ -316,6 +316,7 @@ if(Java_JAVAC_EXECUTABLE)
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
         COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
             --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
+            --add-exports java.base/jdk.internal.org.objectweb.asm.commons=ALL-UNNAMED
             -d ${MCOV_FRAME_CLASSES} ${MCOV_FRAME_SOURCES}
         COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-signal.jar
             -C ${MCOV_SIGNAL_CLASSES} .

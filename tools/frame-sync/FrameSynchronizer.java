@@ -23,7 +23,8 @@ public final class FrameSynchronizer {
         Module helperModule = FrameSynchronizer.class.getModule();
         // Target-JDK ASM understands its own game bytecode version (61/65/69).
         inst.redefineModule(Object.class.getModule(), Set.of(),
-                Map.of("jdk.internal.org.objectweb.asm", Set.of(helperModule)), Map.of(), Set.of(), Map.of());
+                Map.of("jdk.internal.org.objectweb.asm", Set.of(helperModule),
+                       "jdk.internal.org.objectweb.asm.commons", Set.of(helperModule)), Map.of(), Set.of(), Map.of());
         // Resolve the profile table before registering a transformer that uses
         // it, otherwise loading that table recursively re-enters transform().
         FrameProfiles.isTarget("");

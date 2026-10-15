@@ -13,6 +13,7 @@ import jdk.internal.org.objectweb.asm.FieldVisitor;
 import jdk.internal.org.objectweb.asm.MethodVisitor;
 import jdk.internal.org.objectweb.asm.Opcodes;
 import jdk.internal.org.objectweb.asm.Label;
+import jdk.internal.org.objectweb.asm.commons.AnalyzerAdapter;
 
 final class FrameTransformer implements ClassFileTransformer {
     private final Instrumentation inst;
@@ -78,7 +79,8 @@ final class FrameTransformer implements ClassFileTransformer {
                     if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
                     if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
                     if (role != 0 || freeCamera!=null) changed[0] = true;
-                    return new MethodVisitor(Opcodes.ASM8, next) {
+                    final AnalyzerAdapter analyzer=freeCamera!=null?new AnalyzerAdapter(name,access,method,descriptor,next):null;
+                    return new MethodVisitor(Opcodes.ASM8, analyzer!=null?analyzer:next) {
                         final Label movementStart=new Label(),movementEnd=new Label(),movementHandler=new Label();
                         @Override public void visitCode() {
                             super.visitCode();
@@ -149,7 +151,16 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitVarInsn(Opcodes.ALOAD, 0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
                             }
-                            if(freeCamera!=null && opcode==Opcodes.RETURN) {
+                            if(freeCamera!=null && opcode==Opcodes.RETURN && analyzer.locals!=null) {
+                                // Keep all live locals, including mod-added ones. An enclosing
+                                // exception handler can still read them after this branch.
+                                java.util.ArrayList<Object> returnLocals=new java.util.ArrayList<>();
+                                for(int i=0;i<analyzer.locals.size();i++) {
+                                    Object type=analyzer.locals.get(i); returnLocals.add(type);
+                                    // Analyzer locals are JVM slots; stack-map locals count
+                                    // a long/double once, without its second TOP slot.
+                                    if(Opcodes.LONG.equals(type)||Opcodes.DOUBLE.equals(type)) ++i;
+                                }
                                 Label vanilla=new Label();
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","freecamFrame","()Z",false);
                                 super.visitJumpInsn(Opcodes.IFEQ,vanilla);
@@ -163,7 +174,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitVarInsn(Opcodes.ALOAD,0); super.visitInsn(Opcodes.ICONST_1);
                                 super.visitFieldInsn(Opcodes.PUTFIELD,name,freeCamera.detached(),"Z");
                                 super.visitLabel(vanilla);
-                                super.visitFrame(Opcodes.F_NEW,initialLocals.length,initialLocals,0,null);
+                                super.visitFrame(Opcodes.F_NEW,returnLocals.size(),returnLocals.toArray(),0,null);
                             }
                             if (role == 2 && opcode == Opcodes.RETURN)
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "cameraReady", "()V", false);
