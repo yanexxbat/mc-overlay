@@ -29,7 +29,11 @@ def draw_mesh(canvas,depth,vertices,faces,scale,offset,additive=False):
             zz=w0*z[0]+w1*z[1]+w2*z[2]
             d=depth[lo[1]:hi[1]+1,lo[0]:hi[0]+1];part=canvas[lo[1]:hi[1]+1,lo[0]:hi[0]+1]
             # Half-open edge inclusion avoids additive double hits on a shared diagonal.
-            inside=(w0>=0)&(w1>=0)&(w2>0)&(zz>=d-1e-6)
+            def edge(weight,start,end):
+                direction=(end-start)*(1 if den>0 else -1)
+                inclusive=direction[1]<0 or (abs(direction[1])<1e-10 and direction[0]>0)
+                return (weight>1e-9)|((abs(weight)<=1e-9)&inclusive)
+            inside=edge(w0,b,c)&edge(w1,c,a)&edge(w2,a,b)&(zz>=d-1e-6)
             rgba=w0[...,None]*colours[0]+w1[...,None]*colours[1]+w2[...,None]*colours[2]
             if additive:part[inside]+=rgba[inside,:3]*rgba[inside,3,None]*255
             else:part[inside]=rgba[inside,:3]*255;d[inside]=zz[inside]
