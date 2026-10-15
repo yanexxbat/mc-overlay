@@ -5,6 +5,7 @@
 // padding surprises. Bump kSharedVersion whenever anything below changes, or a
 // stale agent DLL will happily scribble a mismatched layout into the mapping.
 #pragma once
+#include "antivanish_state.hpp"
 #include "combat_bridge_state.hpp"
 #include "item_assist.hpp"
 #include "base_render_state.hpp"
@@ -18,7 +19,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 27;
+inline constexpr std::uint32_t kSharedVersion = 28;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -387,6 +388,8 @@ struct SharedBlock {
     SharedMailbox<items::Report> itemReport;
     SharedMailbox<base::Request> baseRequest;
     SharedMailbox<base::Report> baseReport;
+    SharedMailbox<antivanish::Request> antiVanishRequest;
+    SharedMailbox<antivanish::Report> antiVanishReport;
     WorldSnapshot snapshot;
 };
 

@@ -15,7 +15,7 @@ public final class AntiVanishBridge {
     private record Request(boolean enabled,boolean invisible,float range,long deadline,long generation) {}
     private static volatile Request request=new Request(false,false,64,0,0);
     public static volatile View view=new View(0,false,List.of());
-    private static volatile Api api;
+    private static volatile Api api;private static volatile boolean fault;
     private static final AntiVanishTracker tracker=new AntiVanishTracker();
     private static Object level,connection;
     private static long next,generation=-1;
@@ -25,10 +25,10 @@ public final class AntiVanishBridge {
         catch(ReflectiveOperationException|LinkageError|RuntimeException e){api=null;System.err.println("[mcov] Anti Vanish unavailable: "+e);return false;}
     }
     public static void update(boolean enabled,boolean invisible,float range,long remaining) {
-        Request previous=request;boolean on=enabled&&api!=null&&remaining>0&&Float.isFinite(range)&&range>=8&&range<=128;
+        Request previous=request;if(!enabled)fault=false;boolean on=enabled&&!fault&&api!=null&&remaining>0&&Float.isFinite(range)&&range>=8&&range<=128;
         request=new Request(on,invisible,range,System.nanoTime()+Math.max(0,Math.min(500,remaining))*1_000_000L,previous.generation+(on!=previous.enabled?1:0));
         if(on)FrameSignal.antiVanishEnabled=true;
-        else if(view.status!=0&&view.status!=1)view=new View(api==null?0:1,false,List.of());
+        else if(view.status!=0&&view.status!=1&&!(enabled&&fault))view=new View(api==null?0:1,false,List.of());
     }
     public static void disable(){update(false,false,64,0);}
     private static void clear(){tracker.clear();level=connection=null;next=0;}
@@ -59,7 +59,7 @@ public final class AntiVanishBridge {
                 players.put(id,new AntiVanishTracker.Player(id,a.name(profile),listed.contains(id),old!=null,true,(Boolean)a.s.call("invisible",player)));
             }
             view=new View(3,limited,tracker.sample(new ArrayList<>(players.values()),self,now/1_000_000,r.invisible));
-        }catch(Throwable e){clear();view=new View(4,false,List.of());request=new Request(false,false,64,0,r.generation+1);FrameSignal.antiVanishEnabled=false;System.err.println("[mcov] Anti Vanish sampling failed: "+e);}
+        }catch(Throwable e){fault=true;clear();view=new View(4,false,List.of());request=new Request(false,false,64,0,r.generation+1);FrameSignal.antiVanishEnabled=false;System.err.println("[mcov] Anti Vanish sampling failed: "+e);}
     }
     static final class Api {
         final BaseTextureBridge.Symbols s;final Method id,name;

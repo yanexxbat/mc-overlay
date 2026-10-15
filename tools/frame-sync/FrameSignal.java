@@ -95,10 +95,12 @@ public final class FrameSignal {
         renderZ=previousZ+(freecamZ-previousZ)*partial;
         return true;
     }
+    public static volatile boolean antiVanishEnabled;
     public static volatile boolean combatEnabled;
     // Nur nach RegisterNatives aktiviert. Der Hook läuft auf dem Minecraft-Client-Thread.
     private static native void nativeCombatTick(Object client);
     public static void combatTick(Object client) {
+        if(antiVanishEnabled) AntiVanishBridge.tick(client);
         if (!combatEnabled) return;
         try { nativeCombatTick(client); }
         catch (Throwable error) {
