@@ -22,7 +22,10 @@ the existing Minecraft controls appear. Close and logs remain reachable at
 
 FORM: Assigned extension of existing controls; no concept seed applies.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+FINISH: Complete. The independent [finish review](../review/keyauth/review.md)
+returned SHIP with no material findings. The [documentation finish](../review/keyauth/documentation.md)
+records the inherited-system match, actual proof and verification limits.
+DESIGN.md and its sidecar remain unchanged; there are no new shipping rasters.
 
 ## Verification boundary
 
