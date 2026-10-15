@@ -9,8 +9,8 @@ public final class KnifeBridge {
     private KnifeBridge() {}
     static final long LEASE=500_000_000L;
     record Settings(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,
-                    boolean held,long serial,long deadline) {}
-    private static volatile Settings settings=new Settings(false,0,1,1,.14f,true,true,false,0,0);
+                    boolean held,long serial,long deadline,boolean glow,float strength,float width,int colour) {}
+    private static volatile Settings settings=new Settings(false,0,1,1,.14f,true,true,false,0,0,true,1.2f,1,0x69ddd5);
     private static volatile int status;
     private static volatile Api api;
     private static long started,consumed,lastFrame;
@@ -29,18 +29,18 @@ public final class KnifeBridge {
         }
         catch(ReflectiveOperationException|LinkageError error) { api=null; status=0; return false; }
     }
-    public static void update(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,boolean held,long serial,long remainingMs) {
+    public static void update(boolean enabled,int skin,float speed,float size,float lifetime,boolean deploy,boolean trails,boolean held,long serial,long remainingMs,boolean glow,float strength,float width,int colour) {
         boolean valid=skin>=0&&skin<=2&&Float.isFinite(speed)&&speed>=.5f&&speed<=2&&Float.isFinite(size)&&size>=.5f&&size<=2&&
-            Float.isFinite(lifetime)&&lifetime>=.05f&&lifetime<=.35f;
+            Float.isFinite(lifetime)&&lifetime>=.05f&&lifetime<=.35f&&Float.isFinite(strength)&&strength>=0&&strength<=3&&Float.isFinite(width)&&width>=.25f&&width<=3&&colour>=0&&colour<=0xffffff;
         settings=new Settings(enabled&&valid&&remainingMs>0,skin,speed,size,lifetime,deploy,trails,held,serial,
-            System.nanoTime()+Math.max(0,Math.min(500,remainingMs))*1_000_000L);
+            System.nanoTime()+Math.max(0,Math.min(500,remainingMs))*1_000_000L,glow,strength,width,colour);
         if(api!=null) {
             if(!enabled||!valid||remainingMs<=0) status=1;
             else if(status!=3&&status!=4) status=2;
         }
     }
     public static int status() { return status; }
-    public static void disable() { update(false,0,1,1,.14f,false,false,false,0,0); }
+    public static void disable() { update(false,0,1,1,.14f,false,false,false,0,0,false,0,1,0); }
     private static void reset(long serial) {
         started=lastFrame=0; consumed=serial; motion=0; slot=model=-1; item=""; world=null; streaks.clear();
     }
@@ -87,13 +87,20 @@ public final class KnifeBridge {
             float[] base=current.point(mirror.point(frame.base())),tip=current.point(mirror.point(frame.tip()));
             if(c.trails&&(motion!=0||attack>.01f)&&!busy) record(now,base,tip);
             else streaks.clear();
-            KnifeGeometry.Mesh trail=trail(now,c.lifetime,KnifeGeometry.metal(name));
+            KnifeGeometry.Mesh trail=trail(now,c.lifetime,c.glow?(0xff000000|c.colour):KnifeGeometry.metal(name));
             Object ordered=a.s.call("order",collector,0);
             // Submission may defer until the end of the hand pass. Capture only
             // immutable per-frame geometry, never the next frame's mutable state.
             Object submission=a.callback(mesh);
             a.s.call("submit",ordered,pose,a.quads,submission);
-            if(trail.vertices()!=0) a.s.call("submit",ordered,a.identity,a.quads,a.callback(trail));
+            if(trail.vertices()!=0) a.s.call("submit",ordered,a.identity,c.glow?a.glow:a.quads,a.callback(trail));
+            if(c.glow&&c.strength>0) {
+                KnifeGeometry.Mesh halo=KnifeGeometry.glow(frame.glowSegments(),new KnifeGeometry.Matrix(current.a).mul(mirror),.032f*c.width*c.size,c.strength,c.colour);
+                Object luminous=a.s.call("order",collector,1);
+                a.s.call("submit",luminous,a.identity,a.glow,a.callback(halo));
+                KnifeGeometry.Mesh wake=trailGlow(now,c.lifetime,.04f*c.width*c.size,c.strength,c.colour);
+                if(wake.vertices()!=0)a.s.call("submit",luminous,a.identity,a.glow,a.callback(wake));
+            }
             lastFrame=now; status=3; return true;
         } catch(Throwable error) {
             // A failed optional visual must preserve Vanilla item rendering.
@@ -138,14 +145,36 @@ public final class KnifeBridge {
         }
         return b.finish();
     }
+    static KnifeGeometry.Mesh trailGlow(long now,float lifetime,float width,float strength,int colour) {
+        KnifeGeometry.Builder result=new KnifeGeometry.Builder();Streak previous=null;
+        for(Streak next:streaks) {
+            if(previous!=null) {
+                float alpha=Math.max(0,1-(now-previous.time)/(lifetime*1e9f));
+                float[] lines=new float[12];System.arraycopy(previous.tip,0,lines,0,3);System.arraycopy(next.tip,0,lines,3,3);
+                System.arraycopy(previous.base,0,lines,6,3);System.arraycopy(next.base,0,lines,9,3);
+                result.append(KnifeGeometry.glow(lines,new KnifeGeometry.Matrix(),width,strength*alpha,colour),new KnifeGeometry.Matrix());
+            }
+            previous=next;
+        }
+        return result.finish();
+    }
     static final class Api {
         final BaseTextureBridge.Symbols s;
         final Method matrixGet;
-        final Object quads,identity;
+        final Object quads,identity,glow;
         Api(ClassLoader loader,String[][] table) throws ReflectiveOperationException {
             s=new BaseTextureBridge.Symbols(loader,Arrays.stream(table).filter(row->!row[0].equals("mainItem")).toArray(String[][]::new));
             matrixGet=Class.forName("org.joml.Matrix4f",false,loader).getMethod("get",float[].class);
             quads=s.call("quads",null); identity=s.type("Pose").getConstructor().newInstance();
+            Object snippets=Array.newInstance(s.type("Snippet"),1);Array.set(snippets,0,s.get("glowSnippet",null));
+            Object builder=s.call("pipelineBuilder",null,snippets);
+            s.call("pipelineLocation",builder,"mcov:knife_glow");
+            s.call("pipelineBlend",builder,s.get("glowBlend",null));
+            s.call("pipelineCull",builder,false);s.call("pipelineDepth",builder,false);
+            s.call("pipelineFormat",builder,s.get("colourFormat",null),s.get("quadMode",null));
+            Object setup=s.call("setupBuilder",null,s.call("pipelineBuild",builder));
+            s.call("setupOutput",setup,s.get("mainOutput",null));
+            glow=s.call("renderType",null,"mcov_knife_glow",s.call("setupBuild",setup));
         }
         Object callback(KnifeGeometry.Mesh mesh) {
             return Proxy.newProxyInstance(s.type("Custom").getClassLoader(),new Class<?>[]{s.type("Custom")},(proxy,method,args)->{

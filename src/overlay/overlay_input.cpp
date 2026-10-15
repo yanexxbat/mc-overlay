@@ -313,6 +313,7 @@ void Overlay::LoadPreferences() {
     }
     rockstarConfig_.Clamp();
     if(!knifeValues.empty()) {
+        client_configs::AddKnifeGlowDefaults(knifeValues);
         knife::Config candidate; client_configs::Archive archive(knifeValues); client_configs::Knife(archive,candidate);
         if(knifeUnique&&archive.valid&&knifeValues.empty()) knifeConfig_=candidate;
         else preferenceStatus_="Invalid knife preferences; CS Knife defaults retained.";

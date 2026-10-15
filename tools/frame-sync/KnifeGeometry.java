@@ -65,7 +65,7 @@ public final class KnifeGeometry {
     private static float[] p(float x,float y,float z) { return new float[]{x,y,z}; }
     /** Rounded elliptical grip, end caps included, with machined circumferential grooves. */
     private static void grip(Builder b,float x,float low,float high,float width,float depth,int colour,int grooves) {
-        int rings=40,sides=32;
+        int rings=32,sides=24;
         for(int i=0;i<rings;++i) for(int j=0;j<sides;++j) {
             float[][] q=new float[4][];int[] ink=new int[4];
             for(int v=0;v<4;++v) {
@@ -80,10 +80,10 @@ public final class KnifeGeometry {
     }
     /** Smooth torus in the XY plane; also used for screw heads and collars. */
     private static void ring(Builder b,float x,float y,float z,float radius,float tube,int colour,int segments) {
-        for(int i=0;i<segments;++i)for(int j=0;j<12;++j) {
+        for(int i=0;i<segments;++i)for(int j=0;j<8;++j) {
             float[][] q=new float[4][];int[] ink=new int[4];
             for(int v=0;v<4;++v) {
-                double a=(i+(v>=2?1:0))*Math.PI*2/segments,t=(j+(v==1||v==2?1:0))*Math.PI*2/12;
+                double a=(i+(v>=2?1:0))*Math.PI*2/segments,t=(j+(v==1||v==2?1:0))*Math.PI*2/8;
                 float r=radius+tube*(float)Math.cos(t);
                 q[v]=p(x+r*(float)Math.cos(a),y+r*(float)Math.sin(a),z+tube*(float)Math.sin(t));
                 ink[v]=shade(colour,(float)(.65+.4*Math.max(0,Math.sin(t))+.12*Math.cos(a)));
@@ -93,7 +93,7 @@ public final class KnifeGeometry {
     }
     private static void screw(Builder b,float x,float y,int colour) {
         for(int side:new int[]{-1,1}) {
-            ring(b,x,y,side*.046f,.012f,.0045f,colour,24);
+            ring(b,x,y,side*.046f,.012f,.0045f,colour,16);
             // Recessed, cross-shaped driver slot, visible from either side.
             float z=side*.047f;
             b.quad(p(x-.008f,y-.002f,z),p(x+.008f,y-.002f,z),p(x+.008f,y+.002f,z),p(x-.008f,y+.002f,z),0xff121820);
@@ -139,7 +139,7 @@ public final class KnifeGeometry {
                 for(int i=0;i<6;++i) {
                     float y=-.445f+i*.065f;
                     // Dark pocket inset with a polished machined rim.
-                    ring(h,0,y,.034f,.014f,.003f,shade(metal,.75f),24);
+                    ring(h,0,y,.034f,.014f,.003f,shade(metal,.75f),16);
                     h.quad(p(-.012f,y-.01f,.035f),p(.012f,y-.01f,.035f),p(.012f,y+.01f,.035f),p(-.012f,y+.01f,.035f),0xff101722);
                 }
                 screw(h,0,.006f,metal);screw(h,0,-.505f,metal);handles.add(h.finish());

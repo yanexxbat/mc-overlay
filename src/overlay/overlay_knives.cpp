@@ -24,8 +24,20 @@ void Overlay::DrawKnifeSettings() {
         ImGui::BeginDisabled(!c.trails);
         dirty|=panel::SliderRow("Trail duration",&c.trailSeconds,.05f,.35f,"%.2f s");
         ImGui::EndDisabled();
+        dirty|=panel::CheckRow("Glow",&c.glow);
+        ImGui::BeginDisabled(!c.glow);
+        dirty|=panel::SliderRow("Glow strength",&c.glowStrength,0,3,"%.2fx");
+        dirty|=panel::SliderRow("Glow width",&c.glowWidth,.25f,3,"%.2fx");
+        ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0); ImGui::TextUnformatted("Glow colour");
+        ImGui::TableSetColumnIndex(1);
+        float rgb[]={float(c.glowColour>>16&255)/255,float(c.glowColour>>8&255)/255,float(c.glowColour&255)/255};
+        if(ImGui::ColorEdit3("##knife_glow_colour",rgb,ImGuiColorEditFlags_NoInputs)) {
+            c.glowColour=(std::uint32_t(std::lround(rgb[0]*255))<<16)|(std::uint32_t(std::lround(rgb[1]*255))<<8)|std::uint32_t(std::lround(rgb[2]*255)); dirty=true;
+        }
+        ImGui::EndDisabled();
         ImGui::EndTable();
     }
+    ImGui::TextWrapped("Glow adds a soft luminous edge to the blade and its trails. It does not light the surrounding world.");
     panel::Section("How to use");
     ImGui::TextWrapped("Hold a sword in your main hand. Its first-person appearance changes to the selected knife; its material follows the sword. Other players still see your normal sword.");
     ImGui::TextWrapped("Assign an Inspect key that Minecraft does not use, such as R. Tap to inspect once, or hold to repeat. Attacking, using an item or changing slots cancels the inspect. The module key only toggles CS Knife.");

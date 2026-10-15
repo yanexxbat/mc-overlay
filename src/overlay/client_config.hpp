@@ -134,6 +134,13 @@ inline void Knife(Archive& a,knife::Config& c) {
     a.Value("knife.enabled",c.enabled); a.Value("knife.skin",c.skin,0,2);
     a.Value("knife.speed",c.speed,.5,2); a.Value("knife.size",c.size,.5,2);
     a.Value("knife.trails",c.trails); a.Value("knife.deploy",c.deploy); a.Value("knife.duration",c.trailSeconds,.05,.35);
+    a.Value("knife.glow",c.glow); a.Value("knife.glowStrength",c.glowStrength,0,3);
+    a.Value("knife.glowWidth",c.glowWidth,.25,3); a.Value("knife.glowColour",c.glowColour,0,0xffffff);
+}
+inline void AddKnifeGlowDefaults(std::map<std::string,std::string>& values) {
+    if(values.contains("knife.glow")||values.contains("knife.glowStrength")||values.contains("knife.glowWidth")||values.contains("knife.glowColour")) return;
+    values.emplace("knife.glow","1"); values.emplace("knife.glowStrength","1.2");
+    values.emplace("knife.glowWidth","1"); values.emplace("knife.glowColour","6938069");
 }
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
@@ -372,6 +379,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         while(std::getline(input,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
         for(const auto& bind:{knifeBind,inspectBind}) { values.emplace(bind+"key","0"); values.emplace(bind+"modifiers","0"); values.emplace(bind+"mode","0"); }
     }
+    AddKnifeGlowDefaults(values);
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;
