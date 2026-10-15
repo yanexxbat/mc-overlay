@@ -98,6 +98,8 @@ struct OverlayUiCheck {
     static void PrefPath(Overlay& o,const std::filesystem::path& path) { o.preferencesPath_=path; }
     static void Save(Overlay& o) { o.SavePreferences(); }
     static void Load(Overlay& o) { o.LoadPreferences(); }
+    static freecam::Config& Freecam(Overlay& o) { return o.combat_.freecam; }
+    static void FreecamStatus(Overlay& o,freecam::Status status) { o.combatReport_.freecamStatus=status; o.combatReport_.sampledAtMs=GetTickCount64(); }
     static void ConfigName(Overlay& o,const char* name) { std::snprintf(o.configName_,sizeof(o.configName_),"%s",name); }
     static bool SaveConfig(Overlay& o,const std::string& name,bool overwrite=false) { return o.SaveConfig(name,overwrite); }
     static bool LoadConfig(Overlay& o,const std::string& name) { return o.LoadConfig(name); }
@@ -1162,6 +1164,30 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
         Require(item.path().filename().string().find(".tmp-")==std::string::npos,"Successful/failed writes left temporary config files");
     Check::PrefPath(overlay,{});
 }
+void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using Check=mcov::OverlayUiCheck;
+    auto storage=std::make_unique<mcov::Overlay>(); auto& o=*storage; Check::Seed(o);
+    auto& camera=Check::Freecam(o); camera={true,17,4};
+    Check::Bind(o,mcov::keys::Action::Freecam)={0x46,mcov::keys::Alt,mcov::keys::Mode::Hold};
+    Check::PrefPath(o,output/"freecam-preferences.ini"); Check::Save(o); camera={};
+    Check::Bind(o,mcov::keys::Action::Freecam)={}; Check::Load(o);
+    Require(camera.speed==17&&camera.boost==4&&!camera.enabled&&Check::Bind(o,mcov::keys::Action::Freecam).mode==mcov::keys::Mode::Hold,"Freecam preferences did not retain speed/binding with safe startup");
+    OpenModuleSettings(o,Page::Misc,"",8,9);
+    auto* pane=Child("/content_");
+    Require(ImGui::GetCurrentContext()->Tables.GetByKey(pane->GetID("freecam_controls"))!=nullptr,"Freecam settings did not render real controls");
+    ImGui::FocusWindow(pane); ImGui::GetCurrentContext()->NavNextActivateId=pane->GetID("Enable Freecam");
+    Draw(o,Page::Misc,0,{1280,800});
+    Require(camera.enabled,"Freecam checkbox did not change real module state");
+    for(auto status:{mcov::freecam::Status::Active,mcov::freecam::Status::Unsupported}) {
+        Check::FreecamStatus(o,status); Draw(o,Page::Misc,0,{1280,800});
+        SaveFrame(device,context,output/(status==mcov::freecam::Status::Active?"freecam-desktop.png":"freecam-unsupported.png"));
+    }
+    Check::FreecamStatus(o,mcov::freecam::Status::Paused);
+    Draw(o,Page::Misc,0,{480,360}); Draw(o,Page::Misc,0,{480,360});
+    SaveFrame(device,context,output/"freecam-small.png");
+    Check::Panic(o); Require(!camera.enabled,"Panic left Freecam enabled");
+    Check::PrefPath(o,{});
+}
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     _set_error_mode(_OUT_TO_STDERR);
@@ -1201,6 +1227,7 @@ int main(int argc,char** argv) {
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
         SmpUiChecks(device.Get(),context.Get(),output);
+        FreecamUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
                 OpenModuleSettings(overlay,pages[p],sectionIds[p],section,sectionCounts[p]);

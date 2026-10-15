@@ -31,7 +31,7 @@ public final class FrameSyncCheck {
             require(camera.getField(p.detached()).getBoolean(view),"Freecam kept first-person hand/model mode "+p.id());
             for(java.lang.reflect.Field f:pos.getClass().getFields()) if(f.getType()==double.class)
                 require(java.util.Set.of(123.0,81.0,-46.0).contains(f.getDouble(pos)),"Freecam did not reach the render camera "+p.id());
-            java.lang.reflect.Field movement=local.getField("testMovementYaw"); movement.setFloat(self,-777);
+            java.lang.reflect.Field movement=local.getField("testMovementYaw"); movement.setFloat(self,-777); movement.setFloat(other,-777);
             local.getMethod(p.localStep()).invoke(self);
             require(movement.getFloat(self)==-777,"Freecam moved the real player "+p.id());
             local.getMethod(p.localStep()).invoke(other);
