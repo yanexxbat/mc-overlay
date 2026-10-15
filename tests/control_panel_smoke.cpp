@@ -1193,7 +1193,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,26,11,20,3,5,8};
+        constexpr int sectionCounts[]={9,26,11,20,3,5,9};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);

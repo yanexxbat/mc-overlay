@@ -9,6 +9,45 @@ import mcov.FrameSignal;
 /** Actual instrumented Java fixture bytecode; no game code or render JNI. */
 public final class FrameSyncCheck {
     private static void require(boolean value, String message) { if (!value) throw new AssertionError(message); }
+    private static void checkFreecam(URLClassLoader loader,FrameProfiles.Profile p,int index) throws Exception {
+        Class<?> local=Class.forName(p.localPlayer().replace('/','.'),true,loader),entity=local.getSuperclass();
+        Object self=local.getConstructor().newInstance(),other=local.getConstructor().newInstance();
+        Class<?> camera=Class.forName(p.camera().replace('/','.'),true,loader),client=Class.forName(p.client().replace('/','.'),true,loader);
+        Object view=camera.getConstructor().newInstance(),owner=client.getConstructor().newInstance();
+        require((FrameSignal.freecamProfiles&(1L<<index))!=0,"Missing freecam hooks "+p.id());
+        Method update=null;
+        for(Method m:camera.getDeclaredMethods()) if(m.getName().equals(p.update())&&m.getReturnType()==void.class) update=m;
+        Object[] args=new Object[update.getParameterCount()];
+        for(int i=0;i<args.length;i++) {
+            Class<?> t=update.getParameterTypes()[i];
+            if(t==boolean.class) args[i]=false; else if(t==float.class) args[i]=.5f;
+        }
+        FrameSignal.silentPlayer=self; FrameSignal.viewYaw=57; FrameSignal.viewPitch=-23;
+        try {
+            FrameSignal.updateFreecam(123,81,-46); update.invoke(view,args);
+            Object pos=camera.getField(p.positionField()).get(view);
+            require(pos!=null,"Camera setter not executed "+p.id());
+            // The synthetic camera records actual setter arguments independently of view getters.
+            require(camera.getField("testFreeYaw").getFloat(view)==57&&camera.getField("testFreePitch").getFloat(view)==-23,"F5 changed freecam rotation "+p.id());
+            require(camera.getField(p.detached()).getBoolean(view),"Freecam kept first-person hand/model mode "+p.id());
+            for(java.lang.reflect.Field f:pos.getClass().getFields()) if(f.getType()==double.class)
+                require(java.util.Set.of(123.0,81.0,-46.0).contains(f.getDouble(pos)),"Freecam did not reach the render camera "+p.id());
+            java.lang.reflect.Field movement=local.getField("testMovementYaw"); movement.setFloat(self,-777);
+            local.getMethod(p.localStep()).invoke(self);
+            require(movement.getFloat(self)==-777,"Freecam moved the real player "+p.id());
+            local.getMethod(p.localStep()).invoke(other);
+            require(movement.getFloat(other)!=-777,"Freecam froze another entity "+p.id());
+            int uses=client.getField("testUses").getInt(null),clicks=client.getField("testClicks").getInt(null),breaks=client.getField("testBreaks").getInt(null);
+            client.getMethod(p.use()).invoke(owner); client.getMethod(p.attack()).invoke(owner); client.getMethod(p.continueAttack(),boolean.class).invoke(owner,true);
+            require(client.getField("testUses").getInt(null)==uses&&client.getField("testClicks").getInt(null)==clicks&&client.getField("testBreaks").getInt(null)==breaks,"Freecam allowed interactions "+p.id());
+            java.lang.reflect.Field at=FrameSignal.class.getDeclaredField("freecamAt"); at.setAccessible(true); at.setLong(null,System.nanoTime()-300_000_000L);
+            require(!FrameSignal.freecamActive()&&!FrameSignal.freecamFrame(),"Freecam outlived its lease "+p.id());
+            FrameSignal.stopFreecam(); local.getMethod(p.localStep()).invoke(self);
+            require(movement.getFloat(self)!=-777,"Freecam did not restore player movement "+p.id());
+            client.getMethod(p.use()).invoke(owner); client.getMethod(p.attack()).invoke(owner); client.getMethod(p.continueAttack(),boolean.class).invoke(owner,true);
+            require(client.getField("testUses").getInt(null)==uses+1&&client.getField("testClicks").getInt(null)==clicks+1&&client.getField("testBreaks").getInt(null)==breaks+1,"Freecam did not restore interactions "+p.id());
+        } finally { FrameSignal.stopFreecam(); FrameSignal.silentPlayer=null; }
+    }
     private static void checkMovement(URLClassLoader loader, FrameProfiles.Profile p, int index) throws Exception {
         Class<?> entity=Class.forName(p.entity().replace('/','.'),true,loader);
         Class<?> living=Class.forName(p.living().replace('/','.'),true,loader);
@@ -63,6 +102,7 @@ public final class FrameSyncCheck {
                 require(update != null, "Missing camera method");
                 Class<?>[] types = update.getParameterTypes();
                 checkMovement(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
+                checkFreecam(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
                 for (int iteration = 0; iteration < 200; iteration++) {
                     frame.invoke(owner, true);
                     require((FrameSignal.epoch & 1) != 0, "New entity tick accepted with stale camera");
