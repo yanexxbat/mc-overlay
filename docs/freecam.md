@@ -54,3 +54,8 @@ Fixtures contain no Minecraft code. No live Minecraft attach, rendering or
 server check was performed. Mods that replace camera or player movement,
 server corrections, visibility through terrain and chunk loading remain
 live-game verification limits.
+
+All 29 regression checks passed across the final verification runs. The dynamic
+attach check passed separately outside the sandbox after Windows denied access
+to its disposable fixture pipe. The final focused run passed the Freecam core,
+all 22 JNI profiles, frame hooks, depth hook, native menu and portable package.
