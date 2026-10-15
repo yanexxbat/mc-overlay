@@ -1512,14 +1512,34 @@ int main(int argc,char** argv) {
         chunkScene.blocks[0]={0,0,4,mcov::kBlockRotatedDeepslate,{}};
         chunkScene.blocks[1]={1,0,4,mcov::kBlockRotatedDeepslate,{}};
         chunkScene.blocks[2]={2,0,4,mcov::kBlockDiamond,{}};
+        ImVec2 chunkViewport{1280,800};
         auto chunkFrame=[&] {
-            io.DisplaySize={1280,800}; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            io.DisplaySize=chunkViewport; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},chunkViewport,IM_COL32(24,26,30,255));
+            draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: suspicious blocks and whole chunks");
             mcov::OverlayUiCheck::Growth(overlay).Update(chunkScene,mcov::OverlayUiCheck::ChunkSettings(overlay));
             const int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene); ImGui::Render(); return vertices;
         };
         Require(chunkFrame()>0,"qualified deepslate chunk did not render");
         SaveFrame(device.Get(),context.Get(),output/"chunkfinder-blocks.png");
         finder.minHints=3; Require(chunkFrame()==0,"chunk threshold counted ordinary ores");
+        auto& growthSettings=mcov::OverlayUiCheck::Smp(overlay).finder; growthSettings.minAmethyst=1;
+        for(int i=0;i<3;++i) {
+            auto& b=chunkScene.blocks[chunkScene.blockCount++]; b={}; b.x=float(i); b.y=12; b.z=8; b.kind=mcov::kBlockKelp; b.kelpHeight=18;
+        }
+        auto& crystal=chunkScene.blocks[chunkScene.blockCount++]; crystal={}; crystal.x=-1; crystal.y=3; crystal.z=8; crystal.kind=mcov::kBlockAmethystCluster;
+        ++chunkScene.blockScanId; chunkScene.camX=22; chunkScene.camY=20; chunkScene.camZ=-20; chunkScene.yawDeg=30; chunkScene.pitchDeg=15;
+        finder.chunks=finder.blocks=true; const int both=chunkFrame();
+        Require(both>0&&mcov::OverlayUiCheck::Growth(overlay).Finds().size()==2,"Growth clues did not join Chunkfinder across chunk boundaries");
+        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-desktop.png");
+        chunkViewport={480,360}; Require(chunkFrame()>0,"Small viewport lost whole chunk rendering");
+        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-small.png"); chunkViewport={1280,800};
+        finder.chunks=false; const int onlyBlocks=chunkFrame(); Require(onlyBlocks>0&&onlyBlocks<both,"Whole-chunk toggle also removed individual blocks");
+        finder.chunks=true; finder.blocks=false; Require(chunkFrame()>0,"Individual-block toggle removed whole chunk outlines");
+        finder.chunks=false; Require(chunkFrame()==0,"Turning both highlight options off left geometry");
+        finder.chunks=finder.blocks=true;
+        mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::ChunkFinder,false);
+        Require(chunkFrame()==0&&!mcov::OverlayUiCheck::ChunkSettings(overlay).enabled,"Chunkfinder off left growth markers active");
         finder={}; mcov::OverlayUiCheck::Smp(overlay).finder.enabled=false;
         auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
         aura.pulseAmplitude=0;
