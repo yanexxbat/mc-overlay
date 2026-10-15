@@ -163,5 +163,5 @@ int main(int argc, char** argv) {
     MCOV_LOG_INFO("overlay exited cleanly");
     mcov::log::Shutdown();
     std::printf("  bye\n");
-    return 0;
+    return licenseLost?5:0;
 }

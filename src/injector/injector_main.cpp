@@ -12,6 +12,7 @@
 #include <chrono>
 #include <thread>
 #include <stdexcept>
+#include <algorithm>
 #include "launcher_ui.hpp"
 #include "portable_package.hpp"
 #include "../common/flat_app.hpp"
@@ -96,7 +97,7 @@ bool LiveAgent(std::uint32_t pid,std::stop_token stop,std::uint64_t timeout,bool
     } while(GetTickCount64()<until);
     return false;
 }
-Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<Phase>& phase,std::stop_token stop,const auth::Session& license) {
+Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<Phase>& phase,std::stop_token stop,const auth::Session& license,bool reuseExisting) {
     Result result; result.pid=pid;
     try {
         phase=Phase::License; Cancel(stop);
@@ -116,6 +117,7 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
             throw std::runtime_error("An outdated or stopped agent is loaded. Fully close Minecraft and restart it.");
         }
         if(ClientRunning(pid)) {
+            if(!reuseExisting) throw std::runtime_error("A client is already running. Close it with END, then start again to use this license session.");
             if(loaded.empty()) throw std::runtime_error("The current Minecraft connection could not be verified. Fully close Minecraft and restart it.");
             result.success=true; result.status="The client is already running. Switch to Minecraft and open the menu."; return result;
         }
@@ -193,6 +195,7 @@ struct AppState {
     std::future<Result> job;
     auth::Session license;
     std::future<auth::LoginResult> authJob;
+    std::vector<std::uint32_t> licensedClients;
     std::uint64_t refreshAt=0,logsAt=0;
     std::filesystem::path agentLog;
     ~AppState() { stop.request_stop(); if(job.valid()) job.wait(); if(authJob.valid()) authJob.wait(); SecureZeroMemory(view.licenseKey.data(),view.licenseKey.size()); }
@@ -255,11 +258,13 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                 if(state.view.authBusy&&state.authJob.valid()&&state.authJob.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
                     auto result=state.authJob.get(); state.view.authBusy=false; state.view.licensed=result.success;
                     state.view.authError=!result.success; state.view.authMessage=result.message; state.license=std::move(result.session);
+                    state.licensedClients.clear();
                     if(result.success) state.view.status="License verified. Select Minecraft to start.";
                 }
                 if(state.view.busy&&state.job.valid()&&state.job.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
                     auto result=state.job.get(); state.view.busy=false; state.view.error=!result.success; state.view.needsJdk=result.needsJdk;
                     state.view.status=result.status; state.view.diagnostic=result.detail; state.agentLog=result.agentLog; state.Refresh();
+                    if(result.success&&std::find(state.licensedClients.begin(),state.licensedClients.end(),result.pid)==state.licensedClients.end()) state.licensedClients.push_back(result.pid);
                     if(result.authRejected) { state.view.licensed=false; state.view.authError=true; state.view.authMessage=result.status; state.license={}; }
                     if(result.success&&GetForegroundWindow()==app.hwnd()) {
                         ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
@@ -305,7 +310,8 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                     // even while the old overlay window is still running.
                     state.view.busy=true; state.view.error=state.view.needsJdk=false; state.stop=std::stop_source{};
                     const auto token=state.stop.get_token();
-                    state.job=std::async(std::launch::async,[&,pid=target.pid,token] { return Connect(pid,root,state.phase,token,state.license); });
+                    const bool reuse=std::find(state.licensedClients.begin(),state.licensedClients.end(),target.pid)!=state.licensedClients.end();
+                    state.job=std::async(std::launch::async,[&,pid=target.pid,token,reuse] { return Connect(pid,root,state.phase,token,state.license,reuse); });
                 }
             });
         } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.
