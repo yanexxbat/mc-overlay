@@ -11,7 +11,7 @@ and the game's `WorldVersion` ID, rather than guessing from the window title.
 | 1.21.1 | 21 | `mojmap-1.21.1` | Vanilla obfuscated, Fabric intermediary |
 | 1.20.1 | 17 | `forge-srg-1.20.1` | Mojmap development clients, vanilla obfuscated, Fabric intermediary |
 
-Forge 1.20.1 uses Mojang class names with SRG field/method names (`f_…`, `m_…`).
+Forge 1.20.1 uses Mojang class names with SRG field/method names (`f_â€¦`, `m_â€¦`).
 Forge's production Mojmap transition began with Minecraft 1.20.6 / Forge 50.
 Minecraft 26.1 and later ship unobfuscated classes and use Java 25.
 Sources: [Forge maintainer](https://forums.minecraftforge.net/profile/150347-jonathing/content/page/2/?type=forums_topic_post),
@@ -28,7 +28,7 @@ Sources: [Forge maintainer](https://forums.minecraftforge.net/profile/150347-jon
 3. Start Minecraft with the desired version and Forge; use the injector or the
    overlay's existing attach action. This remains an EXE/DLL tool; installation
    does not use a Forge mods-folder JAR.
-4. Open **Settings → Agent** to see the detected Minecraft version and profile.
+4. Open **Settings â†’ Agent** to see the detected Minecraft version and profile.
 
 The attach helper needs a full **64-bit JDK with the same Java major as the
 running game**. Discovery checks `MCOV_JDK_HOME`, `JAVA_HOME`, the build JDK,
@@ -63,10 +63,10 @@ described below.
 Camera and entity bindings must succeed before a profile becomes active. Unknown
 versions fail with a mapping diagnostic. Container IDs use the selected profile,
 and the existing inventory action stays disabled if its screen guard cannot bind.
-Shared-memory version is now **23**; restart Minecraft and use the newly built
+Shared-memory version is now **24**; restart Minecraft and use the newly built
 agent, injector and overlay together. An already loaded DLL keeps the old layout.
 
-Entity nametags use audited UUID → PlayerInfo → latency lookups and living-entity
+Entity nametags use audited UUID â†’ PlayerInfo â†’ latency lookups and living-entity
 equipment slots for every supported profile. Optional detail sampling is cached,
 bounded and follows geometry publication. Missing player info remains unknown;
 it is never replaced with the local client's ping. World changes clear the cache.
@@ -205,8 +205,8 @@ coherent completed-scan metadata; restart already running Minecraft before
 reattaching with the updated portable client or matching development binaries.
 The overlay, injector and loaded agent must use the same shared-memory version.
 
-The scanner reads loaded client-world blocks in a 4–48 block-radius cube and
-currently visits Y = −64 through 319. Results are limited to 1024 matching blocks
+The scanner reads loaded client-world blocks in a 4â€“48 block-radius cube and
+currently visits Y = âˆ’64 through 319. Results are limited to 1024 matching blocks
 across active block modules; truncated scans report lower-bound counts. Stash
 Finder evaluates successful completed scans, records at most 128 session/world-
 scoped discoveries and retains the highest observed count per chunk. It does
@@ -224,7 +224,7 @@ the independent finish review checked all six final captures and returned
 
 ## Base texture rendering (1.21.11)
 
-**Base ESP → Minecraft textures** is the default display, with texture opacity
+**Base ESP â†’ Minecraft textures** is the default display, with texture opacity
 1. It supports Mojmap, vanilla obfuscated and Fabric intermediary **1.21.11**.
 The texture bridge's 38 classes and 73 mapped members were audited against
 cached official 1.21.11 classes. Other supported versions retain the optional
@@ -266,7 +266,7 @@ requests and the embedded portable bundle.
 
 The final five `-verified.png` settings captures under
 `.impeccable/review/base-textures/` are native ImGui/D3D11 WARP synthetic fixtures
-at 1280 × 800 and 480 × 360. The independent finish review returned **ship for
+at 1280 Ã— 800 and 480 Ã— 360. The independent finish review returned **ship for
 the UI scope**. Earlier `.impeccable/review/base-esp/` evidence covers the
 coloured Area marker only. The EXE and ZIP were rebuilt. **No live Minecraft
 texture, appearance or attach test was performed; shader and mod graphics

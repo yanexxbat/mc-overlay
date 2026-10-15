@@ -31,9 +31,7 @@ public final class FrameSyncAttachCheck {
                 Class<?> client = Class.forName(profile.client().replace('/', '.'), true, loader);
                 Class<?> camera = Class.forName(profile.camera().replace('/', '.'), true, loader);
                 Method frame = client.getDeclaredMethod(profile.frame(), boolean.class);
-                Method update = null;
-                for (Method method : camera.getDeclaredMethods())
-                    if (method.getName().equals(profile.update()) && method.getReturnType() == void.class) update = method;
+                Method update=camera.getDeclaredMethod(profile.update(),java.lang.invoke.MethodType.fromMethodDescriptorString(profile.updateDesc(),loader).parameterArray());
                 require(update != null, "Missing camera method " + profile.id());
                 Class<?> entity = Class.forName(profile.entity().replace('/', '.'), true, loader);
                 Class<?> local = Class.forName(profile.localPlayer().replace('/', '.'), true, loader);
@@ -79,6 +77,13 @@ public final class FrameSyncAttachCheck {
                 require(Math.abs(target.entity().getClass().getField("testMovementYaw").getFloat(target.entity())-18)<.001f,
                     "Loaded movement scope was not retransformed "+target.id());
                 signal.getField("movementEnabled").setBoolean(null,false);
+                signal.getMethod("updateFreecam",double.class,double.class,double.class).invoke(null,123d,81d,-46d);
+                target.update().invoke(target.camera(),values);
+                require(target.camera().getClass().getField(p.detached()).getBoolean(target.camera()),"Loaded freecam camera hook missing "+target.id());
+                target.entity().getClass().getField("testMovementYaw").setFloat(target.entity(),-777);
+                target.entity().getClass().getMethod(p.localStep()).invoke(target.entity());
+                require(target.entity().getClass().getField("testMovementYaw").getFloat(target.entity())==-777,"Loaded freecam freeze hook missing "+target.id());
+                signal.getMethod("stopFreecam").invoke(null);
                 signal.getField("silentPlayer").set(null, null);
                 target.turn().invoke(target.entity(), 20d, 20d);
                 require(Math.abs((float)target.yaw().invoke(target.camera(), target.entity(), .5f)-3)<.001f,

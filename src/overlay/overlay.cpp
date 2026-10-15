@@ -622,8 +622,8 @@ void Overlay::DrawAura(const WorldSnapshot& snapshot, const CameraProjection& pr
             target = &selected;
         }
     }
-    // Der eigene Aura-Schalter steuert die Umlaufbahn. Die Einstellungen fÃ¼r
-    // reduzierte MenÃ¼-/Windows-Animationen dÃ¼rfen diesen Spieleffekt nicht stoppen.
+    // Der eigene Aura-Schalter steuert die Umlaufbahn. Die Einstellungen fÃƒÂ¼r
+    // reduzierte MenÃƒÂ¼-/Windows-Animationen dÃƒÂ¼rfen diesen Spieleffekt nicht stoppen.
     const auto& config = auraConfig_;
     auraRenderer_.UpdateTarget(target, ImGui::GetIO().DeltaTime, config);
     auto& draw = *ImGui::GetBackgroundDrawList();
@@ -652,8 +652,8 @@ void Overlay::DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjectio
             selected=&e; break;
         }
     }
-    // Windows-MenÃ¼animationen steuern diesen Spieleffekt nicht. Der explizite
-    // Reduced-Motion-Schalter lÃ¤sst den Marker sichtbar und friert seine Drehung ein.
+    // Windows-MenÃƒÂ¼animationen steuern diesen Spieleffekt nicht. Der explizite
+    // Reduced-Motion-Schalter lÃƒÂ¤sst den Marker sichtbar und friert seine Drehung ein.
     targetCube_.Update(selected,ImGui::GetIO().DeltaTime,!menu_.reduceMotion,targetCubeConfig_);
     if(!selected) return;
     TargetCubeWorld world; TargetCubeScreen screen;
@@ -692,7 +692,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
         auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),auraBlend_.GlowTexture(),ImGui::GetMainViewport()->Pos,menu_.reduceMotion);
 
-    // Die Aura liegt unter ESP und HUD. Sie teilt deren kohÃ¤renten Snapshot.
+    // Die Aura liegt unter ESP und HUD. Sie teilt deren kohÃƒÂ¤renten Snapshot.
     DrawAura(snapshot, projection, width, height);
     DrawTargetCube(snapshot,projection,{width,height});
     if(haveFriends && agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()))
@@ -1304,8 +1304,8 @@ void Overlay::DrawMenu() {
 void Overlay::ResetMenuPage(panel::Page page) {
     const rockstar::Config defaults;
     switch (page) {
-        case panel::Page::Combat: combat_=CombatSettings{}; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0;
-            rockstarConfig_[rockstar::Feature::HitSounds]=defaults[rockstar::Feature::HitSounds]; break;
+        case panel::Page::Combat: { const auto camera=combat_.freecam; combat_=CombatSettings{}; combat_.freecam=camera; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0;
+            rockstarConfig_[rockstar::Feature::HitSounds]=defaults[rockstar::Feature::HitSounds]; break; }
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
             worldVisualsConfig_=WorldVisualsConfig{}; worldVisuals_.Reset();
@@ -1524,7 +1524,7 @@ void Overlay::DrawTargetMarkerSettings() {
         ImGui::EndDisabled();
         panel::ColorRow("Frame colour",&c.lime.x);
         panel::ColorRow("Highlight colour",&c.yellow.x);
-        // Die Details bleiben in derselben Tabelle, damit ihre HÃ¶he auch unterhalb
+        // Die Details bleiben in derselben Tabelle, damit ihre HÃƒÂ¶he auch unterhalb
         // des sichtbaren Scrollbereichs erfasst wird und alle Regler erreichbar sind.
         ImGui::TableNextRow(); ImGui::TableSetColumnIndex(0);
         ImGui::SetNextItemOpen(markerDetailsOpen_,ImGuiCond_Always);

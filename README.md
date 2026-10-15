@@ -12,6 +12,7 @@ Dear ImGui and Direct3D 11.
 - Base Finder marks possible bases from tall kelp and large amethyst buds/clusters.
 - Combat and item-assist controls with friend management.
 - Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
+- Freecam with independent flight, adjustable speed/boost and Toggle/Hold binding.
 - 19 HUD elements with individual visibility, drag-and-drop placement and scaling.
 - Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
 - Named configs saved beside the client.
@@ -38,29 +39,41 @@ in memory for sign-in and are not saved in configs or logs.
 | F6 | Open or close the HUD editor |
 | END | Quit the overlay |
 
-Bindings can be changed under **Settings → Keybinds**. Automatic preferences
-save in `client-settings.ini` beside `mcov.exe`. Under **Settings → Configs**,
+Bindings can be changed under **Settings â†’ Keybinds**. Automatic preferences
+save in `client-settings.ini` beside `mcov.exe`. Under **Settings â†’ Configs**,
 enter a name and **Save config**, or choose a saved profile and **Load selected**.
 Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 `client-settings.ini` when moving your setup.
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The Base Finder update uses IPC v23; restart an
+when replacing an already loaded agent. The Freecam update uses IPC v24; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
 or **Base Finder** to configure them. **Base Finder** marks growth clues as
 **Possible Base**, with adjustable kelp height, plant count and amethyst count.
-These clues can also occur naturally. **Base ESP → Display → Minecraft textures**
+These clues can also occur naturally. **Base ESP â†’ Display â†’ Minecraft textures**
 renders loaded blocks around detected container clusters through walls. It also
 works with Stash Finder off. Minecraft textures are the default display at full
 opacity on 1.21.11. Texture opacity and area expansion are adjustable; detection
 uses container bounds plus padding and does not trace a whole building.
 The optional **Area marker** mode keeps the coloured frame and fill.
 Scans use loaded client blocks within a
-4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
+4â€“48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
 stash counting, saved waypoints and scan limits.
+
+## Freecam
+
+Open **Misc → Freecam** to toggle; right-click the widget for speed, boost and
+its initially unbound key. Close the menu to fly with **WASD**, look with the
+mouse, rise with **Space**, descend with **Shift**, and boost with **Ctrl**.
+The player stays in place; attacks, block breaking, item use and combat/item
+assists pause. Disable Freecam to return. Menus, focus loss, world changes and
+an expired client connection release the camera; resuming starts at the player.
+Flight only shows chunks already loaded by Minecraft. Settings and the binding
+persist; automatic startup keeps Freecam off. Named profiles retain its state.
+See [Freecam implementation and checks](docs/freecam.md).
 
 ## Build
 
