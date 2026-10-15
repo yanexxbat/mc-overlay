@@ -333,6 +333,9 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     request.inputAllowed=true; step();
     request.sentAtMs=GetTickCount64()-1000; step(1,false);
     Require(report.freecamStatus==mcov::freecam::Status::Paused&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam survived expired IPC lease"); Healthy(env);
+    step(); env->SetObjectField(client,b.fPlayer,nullptr); Healthy(env); step();
+    Require(report.freecamStatus==mcov::freecam::Status::NoWorld&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam survived world exit"); Healthy(env);
+    env->SetObjectField(client,b.fPlayer,player); Healthy(env); step();
     request.config.enabled=false; request.spin.enabled=false; request.freecam.enabled=false; ++request.revision; step();
     Require(report.freecamStatus==mcov::freecam::Status::Disabled&&!env->CallStaticBooleanMethod(freeSignal,freeActive),"Freecam did not release camera"); Healthy(env);
     env->DeleteLocalRef(freeSignal);
@@ -384,6 +387,15 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.spinStatus==mcov::combat::SpinStatus::SilentUnavailable &&
         env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Spinbot started without safe movement hooks"); Healthy(env);
     unsupportedMovement.Close(env); testCombat=nullptr;
+    const auto freecamBits=field(movementSignal,"freecamProfiles","J",true);
+    const auto savedFreecam=env->GetStaticLongField(movementSignal,freecamBits); Healthy(env);
+    env->SetStaticLongField(movementSignal,freecamBits,0); Healthy(env);
+    mcov::agent::MinecraftCombat unsupportedFreecam;
+    Require(unsupportedFreecam.Install(env,b,block.get(),reinterpret_cast<void*>(&TestCombatTick)),"Freecam diagnostic bridge did not install");
+    env->SetStaticLongField(movementSignal,freecamBits,savedFreecam); Healthy(env);
+    request.spin.enabled=false; request.freecam.enabled=true; testCombat=&unsupportedFreecam; step();
+    Require(report.freecamStatus==mcov::freecam::Status::Unsupported&&report.attacks==0,"Freecam started without verified hooks");
+    unsupportedFreecam.Close(env); testCombat=nullptr;
     std::cout<<"PASS live Kill Aura "<<set.id<<" (client tick, cooldown, filters, silent camera, target switch, GUI, hook guard)"<<std::endl;
 }
 void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) {

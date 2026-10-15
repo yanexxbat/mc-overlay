@@ -1174,9 +1174,12 @@ void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     Require(camera.speed==17&&camera.boost==4&&!camera.enabled&&Check::Binds(o)[mcov::keys::Index(mcov::keys::Action::Freecam)].mode==mcov::keys::Mode::Hold,"Freecam preferences did not retain speed/binding with safe startup");
     OpenModuleSettings(o,Page::Misc,"",8,9);
     auto* pane=Child("/content_");
-    Require(ImGui::GetCurrentContext()->Tables.GetByKey(pane->GetID("freecam_controls"))!=nullptr,"Freecam settings did not render real controls");
-    ImGui::FocusWindow(pane); ImGui::GetCurrentContext()->NavNextActivateId=ImHashStr("Enable Freecam",0,pane->GetID("Enable Freecam"));
-    Draw(o,Page::Misc,0,{1280,800});
+    auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(pane->GetID("freecam_controls"));
+    Require(table!=nullptr,"Freecam settings did not render real controls");
+    auto& io=ImGui::GetIO();
+    io.AddMousePosEvent(table->Columns[0].WorkMinX+24,table->OuterRect.Min.y+table->RowCellPaddingY+ImGui::GetFrameHeight()*.5f);
+    Draw(o,Page::Misc,0,{1280,800}); io.AddMouseButtonEvent(0,true); Draw(o,Page::Misc,0,{1280,800});
+    io.AddMouseButtonEvent(0,false); Draw(o,Page::Misc,0,{1280,800});
     Require(camera.enabled,"Freecam checkbox did not change real module state");
     for(auto status:{mcov::freecam::Status::Active,mcov::freecam::Status::Unsupported}) {
         Check::FreecamStatus(o,status); Draw(o,Page::Misc,0,{1280,800});
