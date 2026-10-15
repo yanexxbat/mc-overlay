@@ -1207,6 +1207,9 @@ void KnifeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::
             "Knife controls/status overlap the header or are unreachable");
     }
     Check::KnifeStatus(o,mcov::knife::Status::Failed); Draw(o,Page::Visuals,0,{480,360});
+    auto* errorContent=Child("/content_"); ImGui::SetScrollY(errorContent,errorContent->ScrollMax.y);
+    Draw(o,Page::Visuals,0,{480,360}); Draw(o,Page::Visuals,0,{480,360});
+    Require(errorContent->DC.CursorPosPrevLine.y<=errorContent->InnerRect.Max.y+2,"Knife error recovery text is unreachable");
     SaveFrame(device,context,output/"knife-error-small.png");
     mcov::keys::Input input{}; Check::Input(o,input);
     auto before=Check::KnifeRequest(o); input[0x52]=true; Check::Input(o,input);
