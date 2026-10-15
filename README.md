@@ -39,8 +39,8 @@ in memory for sign-in and are not saved in configs or logs.
 | F6 | Open or close the HUD editor |
 | END | Quit the overlay |
 
-Bindings can be changed under **Settings â†’ Keybinds**. Automatic preferences
-save in `client-settings.ini` beside `mcov.exe`. Under **Settings â†’ Configs**,
+Bindings can be changed under **Settings → Keybinds**. Automatic preferences
+save in `client-settings.ini` beside `mcov.exe`. Under **Settings → Configs**,
 enter a name and **Save config**, or choose a saved profile and **Load selected**.
 Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 `client-settings.ini` when moving your setup.
@@ -53,14 +53,14 @@ already running Minecraft instance before reattaching with the updated client.
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
 or **Base Finder** to configure them. **Base Finder** marks growth clues as
 **Possible Base**, with adjustable kelp height, plant count and amethyst count.
-These clues can also occur naturally. **Base ESP â†’ Display â†’ Minecraft textures**
+These clues can also occur naturally. **Base ESP → Display → Minecraft textures**
 renders loaded blocks around detected container clusters through walls. It also
 works with Stash Finder off. Minecraft textures are the default display at full
 opacity on 1.21.11. Texture opacity and area expansion are adjustable; detection
 uses container bounds plus padding and does not trace a whole building.
 The optional **Area marker** mode keeps the coloured frame and fill.
 Scans use loaded client blocks within a
-4â€“48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
+4–48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
 stash counting, saved waypoints and scan limits.
 
 ## Freecam

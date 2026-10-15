@@ -58,7 +58,7 @@ camera/entity projection stability.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Named profiles and automatic preferences live directly beside the portable
-  client. **Settings â†’ Configs** saves, explicitly overwrites and loads profiles;
+  client. **Settings → Configs** saves, explicitly overwrites and loads profiles;
   loading restores saved module states only after full validation. No named
   profile is selected or loaded automatically at startup.
 - Support keyboard/mouse bindings, modifier chords, Toggle/Hold operation and
@@ -108,7 +108,7 @@ layout, binds, friend UUID relations and waypoints. Profiles are self-contained,
 fully validated before application and saved atomically within the local folder.
 Copy `configs` and `client-settings.ini` with the client to retain the setup.
 
-Block scans cover a cube with a 4â€“48 block radius and only blocks available in
+Block scans cover a cube with a 4–48 block radius and only blocks available in
 the client world. Each result set is bounded to 1024 matching blocks. Stash Finder
 evaluates successful completed scans, defaults to eight chest, trapped-chest,
 shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
@@ -121,7 +121,7 @@ reattaching with the updated client and agent.
 The client menu composites an 88%-opaque dark ImGui fill directly over the
 transparent overlay. It requires no desktop capture, blur or refraction; the
 client glass renderer receives visibility false. The configured overlay capture
-preference applies while the menu is open. Settings â†’ Overlay reports
+preference applies while the menu is open. Settings → Overlay reports
 `Translucent dark / 88% opacity` and `Not required`.
 
 The injector also uses direct ImGui alpha compositing. Its native shell clears
@@ -159,7 +159,7 @@ cached official classes for Mojmap, vanilla and Fabric intermediary.
 Native UI checks cover the existing Base settings and texture loading/error
 states. The five final `-verified.png` captures under
 `.impeccable/review/base-textures/` use synthetic ImGui/D3D11 WARP fixtures at
-1280 Ã— 800 and 480 Ã— 360. The independent finish review returned **ship for the
+1280 × 800 and 480 × 360. The independent finish review returned **ship for the
 UI scope**. The EXE and ZIP were rebuilt. Earlier coloured-marker checks and
 captures under `.impeccable/review/base-esp/` remain historical Area marker
 evidence, not texture-rendering evidence. No live Minecraft texture, appearance
@@ -188,7 +188,7 @@ fixed footer and title controls. Hidden native HWND/swapchain checks cover alpha
 control ink, hidden initialization, resize and rounded clipping.
 
 Current client images under `.impeccable/review/module-widgets/` use native
-ImGui/D3D11 WARP with synthetic fixtures at 1280 Ã— 800, 1920 Ã— 1080 and 480 Ã— 360.
+ImGui/D3D11 WARP with synthetic fixtures at 1280 × 800, 1920 × 1080 and 480 × 360.
 The independent finish review opened all 11 images and returned **ship** with no
 material findings. Native checks cover real right-clicks for all 77 sections,
 actual toggle stores, Space / Shift+F10, independent drag/close, compact close
@@ -197,7 +197,7 @@ persistence and style/font ownership. Production build, native check and
 `portable_client` passed; `mcov.exe` and the share ZIP were updated.
 Earlier `.impeccable/review/compact-client/` tab images are historical.
 Five Configs captures under `.impeccable/review/configs/` cover empty, loaded,
-error and small scrolling states at 1280 Ã— 800 and 480 Ã— 360. The finish review
+error and small scrolling states at 1280 × 800 and 480 × 360. The finish review
 returned **ship** after confirming the explicit-overwrite fix. Native profile
 round-trips, invalid-file preservation, local storage and portable exact-payload
 checks passed; HUD and Rockstar regression checks remained green.

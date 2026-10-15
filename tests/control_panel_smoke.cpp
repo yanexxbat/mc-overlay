@@ -639,7 +639,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     Require(!config.enabled,"Enable marker checkbox did not update renderer config");
     click({top.x+32,top.y+8});
     Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
-    // Die erste GrÃ¶ÃŸenzeile nutzt denselben echten Slider wie Target Aura.
+    // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
     const float frameHeight=mcov::style::MenuFont()->FontSize+6;
     const float row=frameHeight+2*controls()->RowCellPaddingY;
     const auto& column=controls()->Columns[1];
@@ -750,7 +750,7 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     const auto& binds=mcov::OverlayUiCheck::Binds(overlay);
     for(int index=mcov::keys::Index(mcov::keys::Action::Trails);index<mcov::keys::kCount;++index)
         Require(!binds[index].key,"New visual binds collided with existing Minecraft keys");
-    // Neue Keybind-Aktionen schalten die tatsÃ¤chlichen Module, inklusive des eigenen Huts.
+    // Neue Keybind-Aktionen schalten die tatsächlichen Module, inklusive des eigenen Huts.
     mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input);
     const mcov::keys::Action actions[]={mcov::keys::Action::HitBubbles,mcov::keys::Action::KillEffect,
         mcov::keys::Action::BreadCrumbs,mcov::keys::Action::ChinaHat};
@@ -863,7 +863,7 @@ void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* 
     entity.health=8;
     Require(frame({1280,800})>0,"Partially depleted entity lost its ESP");
     SaveFrame(device,context,output/"esp-health.png");
-    // Namen ohne Nullterminator, fehlende Messwerte und Randpositionen sind echte IPC-GrenzfÃ¤lle.
+    // Namen ohne Nullterminator, fehlende Messwerte und Randpositionen sind echte IPC-Grenzfälle.
     std::memset(entity.name,'W',sizeof(entity.name));
     scene.ping=-1; entity.details.ping=-1; entity.x=2.2; entity.health=0;
     Require(frame({480,360})>0,"Clipped ESP with a long name was rejected");
@@ -1215,7 +1215,7 @@ int main(int argc,char** argv) {
         mcov::LiquidGlass glass;
         Require(glass.Initialize(device.Get(),context.Get()),"Liquid glass shaders failed to initialize");
         previewGlass=&glass;
-        // Die erweiterte Fixture plus mehrere groÃŸe Snapshots passen nicht auf den 1-MB-Teststack.
+        // Die erweiterte Fixture plus mehrere große Snapshots passen nicht auf den 1-MB-Teststack.
         auto overlayStorage=std::make_unique<mcov::Overlay>(); auto& overlay=*overlayStorage; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
         auto frame=[&](Page page,bool preserve=false) { Draw(overlay,page,0,{1280,800},preserve); };
@@ -1469,7 +1469,7 @@ int main(int argc,char** argv) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
         };
-        // Das Overlay Ã¼bertrÃ¤gt Bereitschaft/Fokus; Place/Use liest Minecraft selbst.
+        // Das Overlay überträgt Bereitschaft/Fokus; Place/Use liest Minecraft selbst.
         mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
         auto& macroBinds=mcov::OverlayUiCheck::Binds(overlay);
         macroBinds[mcov::keys::Index(mcov::keys::Action::CrystalMacro)]={0x43,0,mcov::keys::Mode::Toggle};

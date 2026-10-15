@@ -97,7 +97,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitLabel(movementStart);
                             }
                             if (role == 5) {
-                                // Nur ÃƒÂ¼bernommene Macro-Platzierungen unterdrÃƒÂ¼cken Vanilla-Use.
+                                // Nur übernommene Macro-Platzierungen unterdrücken Vanilla-Use.
                                 Label vanilla=new Label();
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","macroUse","(Ljava/lang/Object;)Z",false);
@@ -135,7 +135,7 @@ final class FrameTransformer implements ClassFileTransformer {
                         }
                         @Override public void visitInsn(int opcode) {
                             if(movementAxis!=0 && opcode==Opcodes.FRETURN) {
-                                // Nur im Physik-Scope liefert der Getter die Kamera. AuÃƒÅ¸erhalb
+                                // Nur im Physik-Scope liefert der Getter die Kamera. Außerhalb
                                 // bleiben Modell, Netzwerk und Combat bei der echten Rotation.
                                 super.visitVarInsn(Opcodes.ALOAD,0);
                                 super.visitInsn(Opcodes.SWAP);
@@ -145,7 +145,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                             if (role == 3 && opcode == Opcodes.RETURN) {
                                 // Erst nach Vanilla-Movement und Modell-Updates:
-                                // neue Zielpositionen, kein anschlieÃƒÅ¸endes ÃƒÅ“berschreiben.
+                                // neue Zielpositionen, kein anschließendes Überschreiben.
                                 super.visitVarInsn(Opcodes.ALOAD, 0);
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC, "mcov/FrameSignal", "combatTick", "(Ljava/lang/Object;)V", false);
                             }
@@ -176,7 +176,7 @@ final class FrameTransformer implements ClassFileTransformer {
                                 super.visitLabel(movementEnd);
                                 super.visitTryCatchBlock(movementStart,movementEnd,movementHandler,null);
                                 super.visitLabel(movementHandler);
-                                // Keine Locals im Handler nÃƒÂ¶tig; originale Stack-Maps bleiben erhalten.
+                                // Keine Locals im Handler nötig; originale Stack-Maps bleiben erhalten.
                                 super.visitFrame(Opcodes.F_NEW,0,null,1,new Object[]{"java/lang/Throwable"});
                                 super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal","endMovement","()V",false);
                                 super.visitInsn(Opcodes.ATHROW);

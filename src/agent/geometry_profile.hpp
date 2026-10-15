@@ -23,7 +23,7 @@ struct GeometryProfile {
     Member walkDistance, walkDistanceOld, bob, bobOld;
     Member runFrame, updateCamera;
     Member freecamHand, freecamSetup, freecamPosition, freecamRotation, freecamDetached, freecamAttack, freecamContinueAttack;
-    // Auch die Client-Tick-BrÃƒÂ¼cke nutzt ausschlieÃƒÅ¸lich auditierte Signaturen.
+    // Auch die Client-Tick-Brücke nutzt ausschließlich auditierte Signaturen.
     const char* handClass;
     const char* hitClass;
     Member clientTick, clientPaused, setYaw, setPitch, eyePosition, lineOfSight;
