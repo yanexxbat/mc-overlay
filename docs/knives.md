@@ -51,3 +51,9 @@ old client before launching the rebuilt portable EXE.
 Verification is documented in `.impeccable/review/knife-glow/review.md`. Synthetic
 native UI, bytecode and game-API fixtures do not establish live Minecraft appearance
 or shader/mod compatibility. No live Minecraft attach has been performed.
+
+If the hand renderer is unavailable, check the Minecraft log for
+`[mcov] knife initialization failed`. Initialization errors now include the root
+cause. The 2026-10-15 initialization fix corrects the Glow pipeline location:
+Minecraft's String overload accepts a default-namespace path, not a colon-bearing
+identifier. Restart both Minecraft and the previous client after replacing it.
