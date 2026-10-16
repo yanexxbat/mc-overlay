@@ -151,6 +151,10 @@ Randomize charge is enabled by default and adds 0–3 ticks, for a 10–13 tick 
 The extra range is adjustable from 0–10 ticks and the total never exceeds 40.
 A duration is sampled once per charge; disabling randomization uses the fixed
 charge time. Preferences and named configs retain both randomization settings.
+Automatic release also waits for the previous Riptide boost to finish, using
+LivingEntity.isAutoSpinAttack from the game. A ready charge waits without choosing
+a new duration. This prevents overlapping automated boosts; server behavior
+still needs a live check and is not validated by the namespace fixtures.
 Vanilla starts each following use and enforces its normal reuse and durability rules.
 Unenchanted tridents and offhand use are never automatically released.
 
@@ -162,4 +166,4 @@ the enabled state; old profiles default to disabled/unbound.
 The implementation checks only the held/active stacks on the existing client-tick
 callback and calls the mapped MultiPlayerGameMode.releaseUsingItem action.
 Eleven checksum-audited namespace/version profiles cover 1.20.1, 1.21.1, 1.21.11
-and 26.2. IPC v32 requires a full Minecraft restart after updating an older agent.
+and 26.2. IPC v33 requires a full Minecraft restart after updating an older agent.

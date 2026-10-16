@@ -643,6 +643,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     auto usingId=field(b.clsLiving,"testTridentUsing","Z"),ticksId=field(b.clsLiving,"testTridentTicks","I");
     auto activeId=field(b.clsLiving,"testTridentStack",equipmentDesc);
     auto wetId=field(b.clsEntity,"testTridentWet","Z");
+    auto autoSpinId=field(b.clsLiving,"testTridentAutospin","Z");
     const auto handDesc=tridentProfile->hand.signature+2;
     auto handId=field(b.clsLiving,"testTridentHand",handDesc);
     auto handClass=LoadClass(env,loader,g.handClass);
@@ -670,18 +671,24 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     request.inputAllowed=false; report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Focus lease did not gate native Riptide"); request.inputAllowed=true;
     env->SetObjectField(screenOwner,b.fCurrentScreen,otherMenu); report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Menu permitted native Riptide"); env->SetObjectField(screenOwner,b.fCurrentScreen,nullptr);
     request.combatActive=true; report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Combat conflict permitted native Riptide"); request.combatActive=false;
-    request.trident.enabled=false; report=tick(); Require(report.trident==Status::Off&&report.tridentActions==2,"Disabled Auto Trident released");
+    env->SetBooleanField(player,autoSpinId,JNI_TRUE); env->SetIntField(player,ticksId,40);
+    for(int repeat=0;repeat<3;++repeat) {
+        report=tick(); Require(report.trident==Status::WaitingTridentRecovery&&report.tridentActions==2,"Native release overlapped an active Riptide boost");
+    }
+    env->SetBooleanField(player,autoSpinId,JNI_FALSE); report=tick();
+    Require(report.trident==Status::ReleaseTrident&&report.tridentActions==3,"Native release did not resume when Riptide ended");
+    request.trident.enabled=false; report=tick(); Require(report.trident==Status::Off&&report.tridentActions==3,"Disabled Auto Trident released");
     request.trident.enabled=request.trident.randomizeCharge=true;
     for(int cycle=0;cycle<8;++cycle) {
         env->SetBooleanField(player,usingId,JNI_FALSE); report=tick();
         env->SetBooleanField(player,usingId,JNI_TRUE);
         int release=0;
-        for(int charge=0;charge<=13;++charge) {
-            env->SetIntField(player,ticksId,charge); report=tick();
-            if(report.trident==Status::ReleaseTrident) { release=charge; break; }
+        for(int chargeTick=0;chargeTick<=13;++chargeTick) {
+            env->SetIntField(player,ticksId,chargeTick); report=tick();
+            if(report.trident==Status::ReleaseTrident) { release=chargeTick; break; }
             Require(report.trident==Status::ChargingTrident,"Randomized native charge stopped unexpectedly");
         }
-        Require(release>=10&&release<=13&&report.tridentActions==static_cast<std::uint64_t>(3+cycle),"Randomized native release outside 10-13 ticks");
+        Require(release>=10&&release<=13&&report.tridentActions==static_cast<std::uint64_t>(4+cycle),"Randomized native release outside 10-13 ticks");
         Require(env->GetBooleanField(player,usingId)==JNI_FALSE,"Randomized charge did not call game release API");
     }
     request.trident.enabled=false;

@@ -280,4 +280,6 @@ The extra range is configurable from 0–10 ticks, capped at 40 total; disabling
 randomization restores the fixed charge time. No new scan, render hook or timer.
 Native action gating uses the existing client-tick lease. Automatic preferences
 retain charge time/randomization/binding and start disabled; named profiles retain
-all settings. IPC v32 requires restarting Minecraft after updating the client.
+all settings. Automatic releases wait for the previous Riptide boost to finish
+using the game's isAutoSpinAttack state, retaining the sampled charge duration
+while waiting. IPC v33 requires restarting Minecraft after updating the client.

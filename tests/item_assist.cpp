@@ -182,6 +182,17 @@ int main() try {
             Check(timing.Tick(cfg,sample,held,30000)==Status::Ready,"Duplicate release in same use");
         }
         Check(seen==15,"Random charge did not cover all four durations");
+        timing.Reset(); held.ticks=0; held.spinning=true;
+        timing.Tick(cfg,sample,held,30000);
+        const int recoveryTarget=timing.TargetTicks();
+        held.ticks=40;
+        for(int repeat=0;repeat<20;++repeat) {
+            Check(timing.Tick(cfg,sample,held,30000)==Status::WaitingTridentRecovery,"Released a second Riptide while the previous boost was still active");
+            Check(timing.TargetTicks()==recoveryTarget,"Recovery rerolled the current charge");
+        }
+        held.spinning=false;
+        Check(timing.Tick(cfg,sample,held,30000)==Status::ReleaseTrident,"Finished Riptide boost did not allow the waiting release");
+        Check(timing.Tick(cfg,sample,held,30000)==Status::Ready,"Recovery sent duplicate releases");
         timing.Reset(); held.ticks=0; timing.Tick(cfg,sample,held,30000);
         const int target=timing.TargetTicks();
         for(int repeat=0;repeat<20;++repeat) timing.Tick(cfg,sample,held,30000);

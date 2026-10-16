@@ -58,7 +58,7 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The current client uses IPC v32; restart an
+when replacing an already loaded agent. The current client uses IPC v33; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
