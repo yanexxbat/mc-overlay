@@ -1,18 +1,19 @@
 ---
-name: mcov Compact Controls
-description: Shared compact translucent anthracite and coral controls for the client, injector and snapshot HUD.
+name: Keim Compact Controls
+description: Shared compact translucent anthracite and lime-green controls for the client, injector and snapshot HUD.
 colors:
-  primary: "#EF8B70"
-  primary-active: "#FFA388"
-  primary-pressed: "#DC7D64"
-  primary-ink: "#221B1B"
+  primary: "#8EDB1A"
+  primary-active: "#A6EF42"
+  primary-pressed: "#72B411"
+  primary-ink: "#17200B"
   positive: "#A5C7AD"
   warning: "#E8BB73"
   danger: "#F28080"
+  error-text: "#FFA6A6"
   text: "#ECECEF"
   text-muted: "#AEAEB8"
   navigation-text: "#C2C2CC"
-  navigation-selected-text: "#F5D0C4"
+  navigation-selected-text: "#D4F3B8"
   surface-window: "rgba(34,34,41,0.88)"
   surface-sidebar: "rgba(21,21,27,0.22)"
   surface-child: "rgba(0,0,0,0)"
@@ -21,12 +22,12 @@ colors:
   surface-control-hover: "rgba(255,255,255,0.085)"
   surface-control-active: "rgba(255,255,255,0.12)"
   surface-button-hover: "rgba(255,255,255,0.09)"
-  surface-button-active: "rgba(239,139,112,0.18)"
+  surface-button-active: "rgba(142,219,26,0.18)"
   surface-navigation-selected: "rgba(255,255,255,0.065)"
   surface-tab: "rgba(255,255,255,0.035)"
-  surface-tab-selected: "rgba(239,139,112,0.16)"
-  surface-widget-enabled: "rgba(239,139,112,0.10)"
-  surface-widget-active: "rgba(239,139,112,0.22)"
+  surface-tab-selected: "rgba(142,219,26,0.16)"
+  surface-widget-enabled: "rgba(142,219,26,0.10)"
+  surface-widget-active: "rgba(142,219,26,0.22)"
   surface-value: "rgba(37,37,44,0.72)"
   surface-instance-list: "rgba(255,255,255,0.025)"
   border: "rgba(255,255,255,0.08)"
@@ -167,18 +168,19 @@ components:
     rounded: "{rounded.child}"
 ---
 
-# Design System: mcov Compact Controls
+# Design System: Keim Compact Controls
 
 ## Overview
 
 **Creative North Star: "Compact Translucent Controls"**
 
 The approved visual system is compact anthracite with a narrow sidebar and a
-muted coral accent, established by `design/reference-translucent-menu.png` and
-shared with the injector and snapshot HUD. The client's current layout follows
+lime-green accent, shared with the injector and snapshot HUD. The user selected
+this green on 2026-10-15 to match the Keim mascot; it replaces the earlier coral
+in `design/reference-translucent-menu.png` while preserving the compact layout. The client's current layout follows
 the user's Paint sketch, `design/reference-module-widgets.png`: categories contain
 module widgets, and right-click opens an independent settings window. This
-replaces the client's module tabs, inline settings and Quick toggles. mcov
+replaces the client's module tabs, inline settings and Quick toggles. Keim
 retains its real module names, settings and actions.
 
 Client controls, injector and HUD editor use direct ImGui alpha compositing,
@@ -189,7 +191,11 @@ keep these operations consistent. World effects retain their styles.
 
 **Key Characteristics:**
 
-- Shared compact anthracite roots with restrained coral interaction states.
+- Lowercase **keim** wordmark with the user's green germ mascot. The transparent
+  master is `src/resources/keim-logo.png`; the packed 128px RGBA atlas cell and
+  multi-size Windows ICO ship as executable resources. The mascot is 28px in
+  the launcher/menu header and 24px in the HUD watermark, without a white plate.
+- Shared compact anthracite roots with restrained lime-green interaction states.
 - Seven categories, searchable module widgets and independently movable settings.
 - Native keyboard input, visible slider values and real module state.
 - Local style/font ownership and direct transparency without backdrop capture.
@@ -204,10 +210,10 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
 
 ### Primary
 
-- **Muted coral** (`primary`): checkmarks, slider fill, active category icons and
-  enabled widget tint, plus the launcher's main action. **Warm coral**
+- **Lime green** (`primary`): checkmarks, slider fill, active category icons and
+  enabled widget tint, plus the launcher's main action. **Light lime green**
   (`primary-active`) marks slider activity, keyboard navigation, text links and
-  primary-button hover, plus HUD selection and active states. **Pressed coral** (`primary-pressed`) marks that button's
+  primary-button hover, plus HUD selection and active states. **Deep lime green** (`primary-pressed`) marks that button's
   pressed state.
 
 ### Neutral
@@ -217,19 +223,19 @@ The frontmatter is normative; obsolete launcher lavender primitives are removed.
 - **Anthracite** (`surface-window`): client/injector roots and HUD panels. The sidebar adds its darker
   overlay; children remain transparent. Popups use a nearly opaque dark fill.
 - **Translucent white fills**: control and navigation tokens distinguish rest
-  and hover. Module widgets reuse control fills; coral tint distinguishes enabled,
+  and hover. Module widgets reuse control fills; lime-green tint distinguishes enabled,
   enabled-hover and pressed widget states. Retained tab tokens serve native tabs
   used by other callers.
 - **Dark value lozenge** (`surface-value`): keeps numeric slider text legible
   across the filled and unfilled portions.
-- **Near-black primary ink** (`primary-ink`): enabled coral action text. Disabled
+- **Near-black primary ink** (`primary-ink`): enabled lime-green action text. Disabled
   actions use soft white with the shared disabled alpha (0.48).
 - **Quiet instance surface** (`surface-instance-list`): the native selectable
   instance list within the launcher's transparent content area.
 
 HUD feedback uses **soft green** (`positive`) for favorable health/friends,
 **amber** (`warning`) for durability warnings and **soft red** (`danger`) for
-danger or depleted durability. Coral continues to identify activity.
+danger or depleted durability. Lime green continues to identify activity.
 
 **The Material Scope Rule.** Client, injector and snapshot HUD use the same compact palette
 and direct alpha compositing. World effects retain their styles.
@@ -237,13 +243,13 @@ and direct alpha compositing. World effects retain their styles.
 ## Typography
 
 Client, injector and snapshot HUD use embedded Inter at the same compact size. Medium body text and
-semibold labels keep controls and headings aligned; the mcov/category/page header
+semibold labels keep controls and headings aligned; the Keim/category/page header
 is not a display title. Fonts remain part of the executable and existing ESP
 atlas entries remain intact.
 
 ### Hierarchy
 
-- **Title:** mcov, client category and launcher page headers.
+- **Title:** Keim, client category and launcher page headers.
 - **Body:** controls, widget state labels, category names and supporting text.
 - **Label:** section headings.
 
@@ -282,8 +288,11 @@ match the client navigation. At 480 × 380 the same controls remain reachable.
 
 The native instance list scrolls within Start and exposes full titles and details
 in a tooltip. Status, JDK recovery and diagnostics use the scrolling content
-child. A 34-pixel coral primary action remains outside it, followed by the fixed
-close footer. Logs has the same close footer. Diagnostic actions wrap to
+child. A 34-pixel lime-green primary action remains outside it, followed by the fixed
+HWID and close footer. Start and Logs both show the read-only HWID field and
+**Copy HWID** before the Keim/Close row, including before sign-in. The field
+scrolls horizontally at compact widths and exposes the full ID in a tooltip;
+copying always uses the full value. Unavailable IDs disable copying. Diagnostic actions wrap to
 another row when required. Native title drag, minimize and close remain available.
 
 The HUD editor toolbar is at most 540 pixels wide, clamped to viewport width
@@ -323,17 +332,17 @@ border. Scrollbars are six pixels wide. The launcher's native window region uses
 a 24-pixel corner diameter to match the 12-pixel panel radius and clips the outer
 transparent margin. Viewport resize updates that region.
 HUD panels reuse the gently rounded child radius (8 pixels); only editor
-selection adds a coral outline. A disabled badge appears on the selected element.
+selection adds a lime-green outline. A disabled badge appears on the selected element.
 
 ## Components
 
 ### Buttons and navigation
 
-Small native buttons use neutral fills, coral activity and a warm keyboard cursor.
-Selected categories use a quiet white fill, warm text and coral line icons.
+Small native buttons use neutral fills, lime-green activity and a light green keyboard cursor.
+Selected categories use a quiet white fill, pale green text and lime-green line icons.
 Module widgets use shared neutral control fills at rest and hover. Enabled
-widgets use a quiet coral fill, the retained selected-tab tint on hover and a
-stronger coral fill while pressed. The native button supplies keyboard focus.
+widgets use a quiet lime-green fill, the retained selected-tab tint on hover and a
+stronger lime-green fill while pressed. The native button supplies keyboard focus.
 
 ### Inputs and sliders
 
@@ -342,7 +351,7 @@ the right; clicking a checkbox label also toggles its real value. Existing
 keybind fields remain beside module activation controls. Combos and color editors
 retain native popups and IDs.
 
-Sliders retain ImGui mouse and keyboard interaction with a compact coral fill
+Sliders retain ImGui mouse and keyboard interaction with a compact lime-green fill
 and centered value lozenge. Ctrl-click and keyboard direct entry show a native
 numeric field with visible text and caret. Existing bounds and clamping apply.
 Below 420 pixels content width, Keybinds places each module name above its
@@ -362,6 +371,23 @@ remain the source of truth.
 `RenderMenu()` is production code; `Render()` is the compatible entry point.
 `ApplyCustomStyle()` is applied locally through `CompactStyle`.
 
+Block ESP and Chunkfinder retain the existing native slider rows with a 4–512
+block scan radius and 8–1024 m draw distance. Increasing scan radius raises the
+draw distance as needed to cover the cube diagonal. The user can then reduce it
+independently. Their existing default radii stay unchanged. Plain help text
+explains nearby-first scanning, loaded-block availability and longer completion
+times; Block ESP reuses the existing scan status. No new theme or layout is added.
+
+Hole ESP is the last Blocks module, with the same toggle/settings interaction.
+Low 3D frames and a translucent floor distinguish bedrock (lime), obsidian
+(purple) and mixed (amber) holes. Radius, distance, height, opacity, type colours
+and optional labels use the incumbent native rows and compact scrolling pane.
+
+Storage ESP uses the same native radius row up to 512 blocks. Its status reflects
+the independent loaded-container scan, with a clearly named compatibility fallback.
+Scan interval controls the post-sweep pause; Pulse cycle controls the existing
+visual pulse. Preserve type colours, 3D frames and known matches between sweeps.
+
 ### Launcher
 
 The launcher retains instance selection, refresh, busy/disabled state, missing-JDK
@@ -376,7 +402,7 @@ prevention remain unchanged.
 ### Snapshot HUD and editor
 
 All 19 snapshot HUD elements and the optional Combat debug HUD share compact
-tokens and the 14-pixel `MenuFont`. Active modules and pressed keys use coral;
+tokens and the 14-pixel `MenuFont`. Active modules and pressed keys use lime-green;
 health, friends and durability use semantic feedback. Long name, item, effect
 and keybind text is clipped within its row, including after element scaling.
 The Reach readout has an anthracite surface below the open crosshair brackets;

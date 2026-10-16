@@ -53,14 +53,14 @@ bool TargetCubeRenderer::BuildWorld(const EntitySnapshot& e,const WorldSnapshot&
     if(!Finite(bounds.min)||!Finite(bounds.max)||w<=0||h<=0||d<=0||std::max({w,h,d})>32) return false;
     const double side=std::clamp(std::max({h*Safe(c.sizeFraction,.68f,.3f,1.5f),w*1.25,d*1.25}),.2,6.0);
     out.center={std::midpoint(bounds.min.x,bounds.max.x),std::midpoint(bounds.min.y,bounds.max.y),std::midpoint(bounds.min.z,bounds.max.z)};
-    out.worldStroke=static_cast<float>(side*Safe(c.strokeFraction,.05f,.005f,.08f));
+    out.worldStroke=static_cast<float>(side*Safe(c.strokeFraction,.025f,.005f,.08f));
     const double y=camera.yawDeg*std::numbers::pi/180,p=camera.pitchDeg*std::numbers::pi/180;
     const WorldPoint right{-std::cos(y),0,-std::sin(y)},up{-std::sin(y)*std::sin(p),std::cos(p),std::cos(y)*std::sin(p)},
                      forward{-std::sin(y)*std::cos(p),-std::sin(p),std::cos(y)*std::cos(p)};
     const double ca=std::cos(angle_),sa=std::sin(angle_);
     const WorldPoint r{right.x*ca+up.x*sa,right.y*ca+up.y*sa,right.z*ca+up.z*sa},
                      u{up.x*ca-right.x*sa,up.y*ca-right.y*sa,up.z*ca-right.z*sa};
-    const double arm=side*Safe(c.cornerFraction,.28f,.1f,.4f),round=side*Safe(c.roundFraction,.045f,.005f,.09f);
+    const double arm=side*Safe(c.cornerFraction,.28f,.1f,.4f),round=side*Safe(c.roundFraction,.085f,.005f,.09f);
     for(int i=0;i<8;++i) {
         const double sx=i&1?1:-1,sy=i&2?1:-1,sz=i&4?1:-1;
         auto point=[&](double a,double b) {
@@ -71,7 +71,9 @@ bool TargetCubeRenderer::BuildWorld(const EntitySnapshot& e,const WorldSnapshot&
         auto& path=out.corners[i]; path[0]=point(arm,0);
         for(int j=1;j<kCubeCornerPoints-1;++j) {
             const double t=double(j-1)/(kCubeCornerPoints-3);
-            path[j]=point(round*(1-t)*(1-t),round*t*t);
+            // Circular fillet joins both arms tangentially, without a pinched corner.
+            const double angle=t*std::numbers::pi*.5;
+            path[j]=point(round*(1-std::sin(angle)),round*(1-std::cos(angle)));
         }
         path.back()=point(0,arm);
     }
@@ -103,8 +105,8 @@ void TargetCubeRenderer::Draw(ImDrawList& draw,const TargetCubeScreen& screen,co
     for(const auto& path:screen.corners) for(auto p:path) if(!std::isfinite(p.x)||!std::isfinite(p.y)) return;
     // Dezente hintere Ecken und Tiefenlinien halten die Würfelform lesbar.
     if(c.showDepth) {
-        for(int i=4;i<8;++i) { const int first=draw.VtxBuffer.Size; draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.lime,alpha*.13f),0,screen.stroke*.6f); depth::Tag(draw,first,screen.depth[i]); }
-        for(int i=0;i<4;++i) { const int first=draw.VtxBuffer.Size; draw.AddLine(screen.corners[i][5],screen.corners[i+4][5],Tint(c.lime,alpha*.12f),screen.stroke*.45f); depth::Tag(draw,first,(screen.depth[i]+screen.depth[i+4])*.5f); }
+        for(int i=4;i<8;++i) { const int first=draw.VtxBuffer.Size; draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.lime,alpha*.065f),0,screen.stroke*.6f); depth::Tag(draw,first,screen.depth[i]); }
+        for(int i=0;i<4;++i) { const int first=draw.VtxBuffer.Size; draw.AddLine(screen.corners[i][5],screen.corners[i+4][5],Tint(c.lime,alpha*.035f),screen.stroke*.45f); depth::Tag(draw,first,(screen.depth[i]+screen.depth[i+4])*.5f); }
     }
     if(texture && glow>0) {
         GlowScope scope(draw,blend,texture);
@@ -122,10 +124,10 @@ void TargetCubeRenderer::Draw(ImDrawList& draw,const TargetCubeScreen& screen,co
                 const float t=length>0?(position-distance[segment-1])/length:0;
                 const ImVec2 p{std::lerp(path[segment-1].x,path[segment].x,t),std::lerp(path[segment-1].y,path[segment].y,t)};
                 for(int layer=0;layer<2;++layer) {
-                    const float radius=screen.stroke*(layer?2.2f:4.f);
+                    const float radius=screen.stroke*(layer?2.8f:4.f);
                     if(p.x+radius<lo.x || p.x-radius>hi.x || p.y+radius<lo.y || p.y-radius>hi.y) continue;
                     const int first=draw.VtxBuffer.Size;
-                    draw.AddImage(texture,{p.x-radius,p.y-radius},{p.x+radius,p.y+radius},{0,0},{1,1},Tint(color,alpha*glow*(layer?.065f:.018f)));
+                    draw.AddImage(texture,{p.x-radius,p.y-radius},{p.x+radius,p.y+radius},{0,0},{1,1},Tint(color,alpha*glow*(layer?.042f:.022f)));
                     depth::Tag(draw,first,screen.depth[corner]);
                 }
             }
@@ -135,10 +137,10 @@ void TargetCubeRenderer::Draw(ImDrawList& draw,const TargetCubeScreen& screen,co
     for(int i=0;i<4;++i) {
         const int first=draw.VtxBuffer.Size;
         draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(i==3?c.yellow:c.lime,alpha*.95f),0,screen.stroke);
-        draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.yellow,alpha*.7f),0,screen.stroke*.42f);
+        draw.AddPolyline(screen.corners[i].data(),kCubeCornerPoints,Tint(c.yellow,alpha*.28f),0,screen.stroke*.42f);
         for(auto end:{screen.corners[i].front(),screen.corners[i].back()}) {
             draw.AddCircleFilled(end,screen.stroke*.5f,Tint(i==3?c.yellow:c.lime,alpha*.95f),16);
-            draw.AddCircleFilled(end,screen.stroke*.21f,Tint(c.yellow,alpha*.7f),16);
+            draw.AddCircleFilled(end,screen.stroke*.21f,Tint(c.yellow,alpha*.28f),16);
         }
         depth::Tag(draw,first,screen.depth[i]);
     }

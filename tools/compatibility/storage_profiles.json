@@ -1,0 +1,640 @@
+[
+  {
+    "id": "mojmap-26.2",
+    "classes": {
+      "level": "net/minecraft/client/multiplayer/ClientLevel",
+      "source": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "chunk": "net/minecraft/world/level/chunk/LevelChunk",
+      "pos": "net/minecraft/core/BlockPos"
+    },
+    "members": {
+      "source": [
+        "getChunkSource",
+        "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+      ],
+      "storage": [
+        "storage",
+        "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+      ],
+      "chunks": [
+        "chunks",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "getBlockEntities",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "getX",
+        "()I"
+      ],
+      "y": [
+        "getY",
+        "()I"
+      ],
+      "z": [
+        "getZ",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/client/multiplayer/ClientLevel",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "chunks": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "entities": "net/minecraft/world/level/chunk/LevelChunk",
+      "x": "net/minecraft/core/BlockPos",
+      "y": "net/minecraft/core/BlockPos",
+      "z": "net/minecraft/core/BlockPos"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "mojmap-1.21.11",
+    "classes": {
+      "level": "net/minecraft/client/multiplayer/ClientLevel",
+      "source": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "chunk": "net/minecraft/world/level/chunk/LevelChunk",
+      "pos": "net/minecraft/core/BlockPos"
+    },
+    "members": {
+      "source": [
+        "getChunkSource",
+        "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+      ],
+      "storage": [
+        "storage",
+        "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+      ],
+      "chunks": [
+        "chunks",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "getBlockEntities",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "getX",
+        "()I"
+      ],
+      "y": [
+        "getY",
+        "()I"
+      ],
+      "z": [
+        "getZ",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/client/multiplayer/ClientLevel",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "chunks": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "entities": "net/minecraft/world/level/chunk/LevelChunk",
+      "x": "net/minecraft/core/BlockPos",
+      "y": "net/minecraft/core/BlockPos",
+      "z": "net/minecraft/core/BlockPos"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "vanilla-1.21.11",
+    "classes": {
+      "level": "hif",
+      "source": "hhz",
+      "storage": "hhz$a",
+      "chunk": "eqq",
+      "pos": "is"
+    },
+    "members": {
+      "source": [
+        "j",
+        "()Lhhz;"
+      ],
+      "storage": [
+        "d",
+        "Lhhz$a;"
+      ],
+      "chunks": [
+        "b",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "J",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "u",
+        "()I"
+      ],
+      "y": [
+        "v",
+        "()I"
+      ],
+      "z": [
+        "w",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "hif",
+      "storage": "hhz",
+      "chunks": "hhz$a",
+      "entities": "eqq",
+      "x": "is",
+      "y": "is",
+      "z": "is"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "intermediary-1.21.11",
+    "classes": {
+      "level": "net/minecraft/class_638",
+      "source": "net/minecraft/class_631",
+      "storage": "net/minecraft/class_631$class_3681",
+      "chunk": "net/minecraft/class_2818",
+      "pos": "net/minecraft/class_2338"
+    },
+    "members": {
+      "source": [
+        "method_2935",
+        "()Lnet/minecraft/class_631;"
+      ],
+      "storage": [
+        "field_16246",
+        "Lnet/minecraft/class_631$class_3681;"
+      ],
+      "chunks": [
+        "field_16251",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "method_12214",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "method_10263",
+        "()I"
+      ],
+      "y": [
+        "method_10264",
+        "()I"
+      ],
+      "z": [
+        "method_10260",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/class_638",
+      "storage": "net/minecraft/class_631",
+      "chunks": "net/minecraft/class_631$class_3681",
+      "entities": "net/minecraft/class_2818",
+      "x": "net/minecraft/class_2338",
+      "y": "net/minecraft/class_2338",
+      "z": "net/minecraft/class_2338"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "mojmap-1.21.1",
+    "classes": {
+      "level": "net/minecraft/client/multiplayer/ClientLevel",
+      "source": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "chunk": "net/minecraft/world/level/chunk/LevelChunk",
+      "pos": "net/minecraft/core/BlockPos"
+    },
+    "members": {
+      "source": [
+        "getChunkSource",
+        "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+      ],
+      "storage": [
+        "storage",
+        "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+      ],
+      "chunks": [
+        "chunks",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "getBlockEntities",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "getX",
+        "()I"
+      ],
+      "y": [
+        "getY",
+        "()I"
+      ],
+      "z": [
+        "getZ",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/client/multiplayer/ClientLevel",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "chunks": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "entities": "net/minecraft/world/level/chunk/LevelChunk",
+      "x": "net/minecraft/core/BlockPos",
+      "y": "net/minecraft/core/BlockPos",
+      "z": "net/minecraft/core/BlockPos"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "vanilla-1.21.1",
+    "classes": {
+      "level": "fzf",
+      "source": "fzb",
+      "storage": "fzb$a",
+      "chunk": "dvi",
+      "pos": "jd"
+    },
+    "members": {
+      "source": [
+        "i",
+        "()Lfzb;"
+      ],
+      "storage": [
+        "d",
+        "Lfzb$a;"
+      ],
+      "chunks": [
+        "b",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "G",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "u",
+        "()I"
+      ],
+      "y": [
+        "v",
+        "()I"
+      ],
+      "z": [
+        "w",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "fzf",
+      "storage": "fzb",
+      "chunks": "fzb$a",
+      "entities": "dvi",
+      "x": "jd",
+      "y": "jd",
+      "z": "jd"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "intermediary-1.21.1",
+    "classes": {
+      "level": "net/minecraft/class_638",
+      "source": "net/minecraft/class_631",
+      "storage": "net/minecraft/class_631$class_3681",
+      "chunk": "net/minecraft/class_2818",
+      "pos": "net/minecraft/class_2338"
+    },
+    "members": {
+      "source": [
+        "method_2935",
+        "()Lnet/minecraft/class_631;"
+      ],
+      "storage": [
+        "field_16246",
+        "Lnet/minecraft/class_631$class_3681;"
+      ],
+      "chunks": [
+        "field_16251",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "method_12214",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "method_10263",
+        "()I"
+      ],
+      "y": [
+        "method_10264",
+        "()I"
+      ],
+      "z": [
+        "method_10260",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/class_638",
+      "storage": "net/minecraft/class_631",
+      "chunks": "net/minecraft/class_631$class_3681",
+      "entities": "net/minecraft/class_2818",
+      "x": "net/minecraft/class_2338",
+      "y": "net/minecraft/class_2338",
+      "z": "net/minecraft/class_2338"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "mojmap-1.20.1",
+    "classes": {
+      "level": "net/minecraft/client/multiplayer/ClientLevel",
+      "source": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "chunk": "net/minecraft/world/level/chunk/LevelChunk",
+      "pos": "net/minecraft/core/BlockPos"
+    },
+    "members": {
+      "source": [
+        "getChunkSource",
+        "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+      ],
+      "storage": [
+        "storage",
+        "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+      ],
+      "chunks": [
+        "chunks",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "getBlockEntities",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "getX",
+        "()I"
+      ],
+      "y": [
+        "getY",
+        "()I"
+      ],
+      "z": [
+        "getZ",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/client/multiplayer/ClientLevel",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "chunks": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "entities": "net/minecraft/world/level/chunk/LevelChunk",
+      "x": "net/minecraft/core/BlockPos",
+      "y": "net/minecraft/core/BlockPos",
+      "z": "net/minecraft/core/BlockPos"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "vanilla-1.20.1",
+    "classes": {
+      "level": "few",
+      "source": "feu",
+      "storage": "feu$a",
+      "chunk": "dei",
+      "pos": "gu"
+    },
+    "members": {
+      "source": [
+        "i",
+        "()Lfeu;"
+      ],
+      "storage": [
+        "d",
+        "Lfeu$a;"
+      ],
+      "chunks": [
+        "b",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "G",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "u",
+        "()I"
+      ],
+      "y": [
+        "v",
+        "()I"
+      ],
+      "z": [
+        "w",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "few",
+      "storage": "feu",
+      "chunks": "feu$a",
+      "entities": "dei",
+      "x": "gu",
+      "y": "gu",
+      "z": "gu"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "intermediary-1.20.1",
+    "classes": {
+      "level": "net/minecraft/class_638",
+      "source": "net/minecraft/class_631",
+      "storage": "net/minecraft/class_631$class_3681",
+      "chunk": "net/minecraft/class_2818",
+      "pos": "net/minecraft/class_2338"
+    },
+    "members": {
+      "source": [
+        "method_2935",
+        "()Lnet/minecraft/class_631;"
+      ],
+      "storage": [
+        "field_16246",
+        "Lnet/minecraft/class_631$class_3681;"
+      ],
+      "chunks": [
+        "field_16251",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "method_12214",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "method_10263",
+        "()I"
+      ],
+      "y": [
+        "method_10264",
+        "()I"
+      ],
+      "z": [
+        "method_10260",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/class_638",
+      "storage": "net/minecraft/class_631",
+      "chunks": "net/minecraft/class_631$class_3681",
+      "entities": "net/minecraft/class_2818",
+      "x": "net/minecraft/class_2338",
+      "y": "net/minecraft/class_2338",
+      "z": "net/minecraft/class_2338"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  },
+  {
+    "id": "forge-srg-1.20.1",
+    "classes": {
+      "level": "net/minecraft/client/multiplayer/ClientLevel",
+      "source": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "chunk": "net/minecraft/world/level/chunk/LevelChunk",
+      "pos": "net/minecraft/core/BlockPos"
+    },
+    "members": {
+      "source": [
+        "m_7726_",
+        "()Lnet/minecraft/client/multiplayer/ClientChunkCache;"
+      ],
+      "storage": [
+        "f_104410_",
+        "Lnet/minecraft/client/multiplayer/ClientChunkCache$Storage;"
+      ],
+      "chunks": [
+        "f_104466_",
+        "Ljava/util/concurrent/atomic/AtomicReferenceArray;"
+      ],
+      "entities": [
+        "m_62954_",
+        "()Ljava/util/Map;"
+      ],
+      "x": [
+        "m_123341_",
+        "()I"
+      ],
+      "y": [
+        "m_123342_",
+        "()I"
+      ],
+      "z": [
+        "m_123343_",
+        "()I"
+      ]
+    },
+    "owners": {
+      "source": "net/minecraft/client/multiplayer/ClientLevel",
+      "storage": "net/minecraft/client/multiplayer/ClientChunkCache",
+      "chunks": "net/minecraft/client/multiplayer/ClientChunkCache$Storage",
+      "entities": "net/minecraft/world/level/chunk/LevelChunk",
+      "x": "net/minecraft/core/BlockPos",
+      "y": "net/minecraft/core/BlockPos",
+      "z": "net/minecraft/core/BlockPos"
+    },
+    "kinds": {
+      "source": "methods",
+      "storage": "fields",
+      "chunks": "fields",
+      "entities": "methods",
+      "x": "methods",
+      "y": "methods",
+      "z": "methods"
+    }
+  }
+]

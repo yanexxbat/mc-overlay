@@ -117,7 +117,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     const bool compactDetails=state.settingsOpen&&state.page==state.renderedPage&&work.x<1260;
     if(!compactDetails) {
     ImGui::SetNextWindowPos(pos); ImGui::SetNextWindowSize(size);
-    if(!ImGui::Begin("mcov control panel",nullptr,flags)) { ImGui::End(); return actions; }
+    if(!ImGui::Begin("Keim control panel",nullptr,flags)) { ImGui::End(); return actions; }
     auto& draw=*ImGui::GetWindowDrawList();
     const float sidebar=size.x>=620?150.f:112.f;
     draw.AddRectFilled(pos,{pos.x+size.x,pos.y+size.y},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
@@ -126,9 +126,8 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-58),32});
     if(ImGui::IsItemActivated()) { state.dragging=true; const auto m=ImGui::GetIO().MousePos; state.dragOffset={m.x-pos.x,m.y-pos.y}; }
     if(ImGui::IsItemHovered()||state.dragging) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-    draw.AddCircle({pos.x+25,pos.y+23},6,ImGui::GetColorU32(ImGuiCol_CheckMark),20,1.5f);
-    draw.AddCircleFilled({pos.x+25,pos.y+23},2.3f,ImGui::GetColorU32(ImGuiCol_CheckMark),16);
-    draw.AddText(style::MenuFont(true),14,{pos.x+40,pos.y+16},ImGui::GetColorU32(ImGuiCol_Text),"mcov");
+    style::DrawBrandLogo(draw,{pos.x+12,pos.y+9},28);
+    draw.AddText(style::MenuFont(true),14,{pos.x+48,pos.y+16},ImGui::GetColorU32(ImGuiCol_Text),"keim");
     draw.AddText(style::MenuFont(true),14,{pos.x+sidebar+22,pos.y+16},ImGui::GetColorU32(ImGuiCol_Text),kPages[int(state.page)]);
     ImGui::SetCursorScreenPos({pos.x+size.x-34,pos.y+12});
     if(ImGui::SmallButton("X##close")) actions.close=true;
@@ -141,7 +140,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
             style::StyleScope selected;
             selected.Var(ImGuiStyleVar_ButtonTextAlign,ImVec2(0,.5f)); selected.Var(ImGuiStyleVar_FramePadding,ImVec2(32,4));
             selected.Color(ImGuiCol_Button,active?style::Color(0xFFFFFF,.065f):ImVec4(0,0,0,0));
-            selected.Color(ImGuiCol_Text,active?style::Color(0xF5D0C4):style::Color(0xC2C2CC));
+            selected.Color(ImGuiCol_Text,active?style::Color(style::compact::SelectedTextRGB):style::Color(0xC2C2CC));
             if(ImGui::Button(kPages[i],{-1,29})) state.page=static_cast<Page>(i);
             Icon(*ImGui::GetWindowDrawList(),{p.x+15,p.y+14.5f},i,ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_TextDisabled));
         }
@@ -174,9 +173,9 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                     {
                         style::StyleScope widget;
                         widget.Var(ImGuiStyleVar_FrameRounding,8);
-                        widget.Color(ImGuiCol_Button,active?style::Color(0xEF8B70,.10f):style::Color(0xFFFFFF,.045f));
-                        widget.Color(ImGuiCol_ButtonHovered,active?style::Color(0xEF8B70,.16f):style::Color(0xFFFFFF,.085f));
-                        widget.Color(ImGuiCol_ButtonActive,style::Color(0xEF8B70,.22f));
+                        widget.Color(ImGuiCol_Button,active?style::Color(style::compact::AccentRGB,.10f):style::Color(0xFFFFFF,.045f));
+                        widget.Color(ImGuiCol_ButtonHovered,active?style::Color(style::compact::AccentRGB,.16f):style::Color(0xFFFFFF,.085f));
+                        widget.Color(ImGuiCol_ButtonActive,style::Color(style::compact::AccentRGB,.22f));
                         clicked=ImGui::Button("##module_widget",{width,66});
                         details=ImGui::IsItemClicked(ImGuiMouseButton_Right)||
                             (ImGui::IsItemFocused()&&(ImGui::IsKeyPressed(ImGuiKey_Menu)||
@@ -189,7 +188,9 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                     tile.PopClipRect();
                     const char* label=module.mode==TileMode::Toggle?(active?"Enabled":"Disabled"):
                         module.mode==TileMode::Action?"Run action":"Open settings";
-                    tile.AddText({p.x+12,p.y+39},ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_TextDisabled),label);
+                    const ImU32 labelInk=active?ImGui::GetColorU32(style::Color(style::compact::SelectedTextRGB)):
+                        ImGui::GetColorU32(ImGui::IsItemActive()?ImGuiCol_Text:ImGuiCol_TextDisabled);
+                    tile.AddText({p.x+12,p.y+39},labelInk,label);
                     if(module.mode==TileMode::Toggle) {
                         const ImVec2 a{p.x+width-38,p.y+39},b{p.x+width-12,p.y+53};
                         tile.AddRectFilled(a,b,ImGui::GetColorU32(active?ImGuiCol_CheckMark:ImGuiCol_FrameBgActive),7);
@@ -219,7 +220,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     }
     ImGui::EndChild();
     ImGui::SetCursorScreenPos({pos.x+18,pos.y+size.y-34});
-    draw.AddCircleFilled({pos.x+22,pos.y+size.y-23},2.5f,ImGui::GetColorU32(status.connected?style::Color(0xA5C7AD):style::Color(0xEF8B70)),12);
+    draw.AddCircleFilled({pos.x+22,pos.y+size.y-23},2.5f,ImGui::GetColorU32(status.connected?ImGui::ColorConvertU32ToFloat4(style::compact::Positive):ImGui::ColorConvertU32ToFloat4(style::compact::Warning)),12);
     ImGui::SetCursorScreenPos({pos.x+32,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.connected?"Connected":"Offline");
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-48}); ImGui::TextDisabled("Right-click a module for settings");
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.version);
@@ -258,7 +259,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
             ImGui::SetNextWindowScroll({0,0}); // Only the content child scrolls; keep the header fixed.
             if(openSettings) ImGui::SetNextWindowFocus();
             constexpr auto detailFlags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings|ImGuiWindowFlags_NoScrollWithMouse;
-            if(ImGui::Begin("mcov module settings",nullptr,detailFlags)) {
+            if(ImGui::Begin("Keim module settings",nullptr,detailFlags)) {
                 ImGui::SetCursorScreenPos({detailPos.x+8,detailPos.y+5});
                 ImGui::InvisibleButton("##drag",{std::max(1.f,detailSize.x-154),32});
                 if(ImGui::IsItemActivated()) { placement.dragging=true; const auto m=ImGui::GetIO().MousePos; placement.offset={m.x-detailPos.x,m.y-detailPos.y}; }

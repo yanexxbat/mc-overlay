@@ -46,6 +46,22 @@ void InstanceList(View& v,float height) {
     }
     ImGui::EndDisabled(); ImGui::EndChild();
 }
+void HardwareId(View& v,float width) {
+    ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("HWID");
+    ImGui::SameLine();
+    const float copyWidth=80;
+    ImGui::SetNextItemWidth(std::max(1.f,width-ImGui::CalcTextSize("HWID").x-copyWidth-2*ImGui::GetStyle().ItemSpacing.x));
+    ImGui::InputTextWithHint("##hardware_id","Unavailable",v.hardwareId.data(),v.hardwareId.size()+1,
+        ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_AutoSelectAll);
+    if(ImGui::IsItemHovered()) {
+        if(v.hardwareId.empty()) ImGui::SetTooltip("Could not read the Windows account ID. Restart Keim to try again.");
+        else ImGui::SetTooltip("%s\nWindows account ID used for license verification.",v.hardwareId.c_str());
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(v.hardwareId.empty());
+    if(ImGui::Button("Copy HWID",{copyWidth,22})) ImGui::SetClipboardText(v.hardwareId.c_str());
+    ImGui::EndDisabled();
+}
 }
 
 Actions Render(View& v,ImVec2 size) {
@@ -60,8 +76,8 @@ Actions Render(View& v,ImVec2 size) {
     draw.AddRectFilled({12,12},{12+sidebar,size.y-12},ImGui::GetColorU32(style::Color(0x15151B,.22f)),12,ImDrawFlags_RoundCornersLeft);
     draw.AddLine({12+sidebar,24},{12+sidebar,size.y-24},ImGui::GetColorU32(ImGuiCol_Separator));
     draw.AddLine({sidebar+32,58},{size.x-28,58},ImGui::GetColorU32(ImGuiCol_Separator));
-    draw.AddCircle({33,35},6,accent,20,1.5f); draw.AddCircleFilled({33,35},2.3f,accent,16);
-    draw.AddText(style::MenuFont(true),14,{48,28},ink,"mcov");
+    style::DrawBrandLogo(draw,{20,21},28);
+    draw.AddText(style::MenuFont(true),14,{56,28},ink,"keim");
     draw.AddText(style::MenuFont(true),14,{sidebar+32,28},ink,v.tab==0?"Start client":"Diagnostics");
 
     // Native caption dragging owns the rest of this strip; exclude these controls.
@@ -80,7 +96,7 @@ Actions Render(View& v,ImVec2 size) {
     style::StyleScope shell; shell.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,0));
     constexpr auto flags=ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|
         ImGuiWindowFlags_NoBackground|ImGuiWindowFlags_NoSavedSettings;
-    ImGui::Begin("##mcov_launcher",nullptr,flags);
+    ImGui::Begin("##keim_launcher",nullptr,flags);
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(10,14));
         ImGui::BeginChild("launcher_navigation",{sidebar,0},ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
@@ -91,7 +107,7 @@ Actions Render(View& v,ImVec2 size) {
             selected.Var(ImGuiStyleVar_ButtonTextAlign,ImVec2(0,.5f));
             selected.Var(ImGuiStyleVar_FramePadding,ImVec2(32,4));
             selected.Color(ImGuiCol_Button,active?style::Color(0xFFFFFF,.065f):ImVec4(0,0,0,0));
-            selected.Color(ImGuiCol_Text,active?style::Color(0xF5D0C4):style::Color(0xC2C2CC));
+            selected.Color(ImGuiCol_Text,active?style::Color(style::compact::SelectedTextRGB):style::Color(0xC2C2CC));
             if(ImGui::Button(tabs[i],{-1,29})) { v.tab=i; ImGui::SetWindowFocus(); }
             NavigationIcon(*ImGui::GetWindowDrawList(),{p.x+15,p.y+14.5f},i,active?accent:muted);
         }
@@ -102,14 +118,14 @@ Actions Render(View& v,ImVec2 size) {
     ImGui::SameLine(0,20);
     ImGui::BeginGroup();
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x-16);
-    const float footer=v.tab==0?70.f:36.f;
+    const float footer=v.tab==0?98.f:64.f;
     const ImVec2 contentSize{width,std::max(1.f,ImGui::GetContentRegionAvail().y-footer)};
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,14));
         ImGui::BeginChild("launcher_content",contentSize,ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
         if(v.tab==0&&!v.licensed) {
             control_panel::Section("License");
-            ImGui::TextWrapped("Verify your mcov license to start the client.");
+            ImGui::TextWrapped("Verify your Keim license to start the client.");
             ImGui::Spacing(); ImGui::TextUnformatted("License key");
             ImGui::BeginDisabled(v.authBusy);
             ImGui::SetNextItemWidth(-1);
@@ -120,7 +136,7 @@ Actions Render(View& v,ImVec2 size) {
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
             {
                 style::StyleScope status;
-                if(v.authError) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
+                if(v.authError) status.Color(ImGuiCol_Text,ImGui::ColorConvertU32ToFloat4(style::compact::ErrorText));
                 ImGui::TextWrapped("%s",v.authBusy?"Checking your license with KeyAuth...":v.authMessage.c_str());
             }
             ImGui::Spacing(); ImGui::TextWrapped("An internet connection is required. Your key is not saved on this device.");
@@ -140,7 +156,7 @@ Actions Render(View& v,ImVec2 size) {
                 ImGui::TextDisabled("You can still use this window.");
             } else {
                 style::StyleScope status;
-                if(v.error) status.Color(ImGuiCol_Text,style::Color(0xFFA388));
+                if(v.error) status.Color(ImGuiCol_Text,ImGui::ColorConvertU32ToFloat4(style::compact::ErrorText));
                 ImGui::TextWrapped("%s",v.status.c_str());
                 if(v.needsJdk&&ImGui::Button("Select JDK folder")) a.chooseJdk=true;
                 if(v.error&&ImGui::SmallButton("Show details")) v.tab=1;
@@ -166,18 +182,19 @@ Actions Render(View& v,ImVec2 size) {
         ImGui::BeginDisabled(disabled);
         {
             style::StyleScope primary;
-            primary.Color(ImGuiCol_Button,style::Color(0xEF8B70));
-            primary.Color(ImGuiCol_ButtonHovered,style::Color(0xFFA388));
-            primary.Color(ImGuiCol_ButtonActive,style::Color(0xDC7D64));
-            primary.Color(ImGuiCol_Text,style::Color(disabled?0xECECEF:0x221B1B));
+            primary.Color(ImGuiCol_Button,style::Color(style::compact::AccentRGB));
+            primary.Color(ImGuiCol_ButtonHovered,style::Color(style::compact::AccentActiveRGB));
+            primary.Color(ImGuiCol_ButtonActive,style::Color(style::compact::AccentPressedRGB));
+            primary.Color(ImGuiCol_Text,style::Color(disabled?0xECECEF:style::compact::AccentInkRGB));
             const char* label=!v.licensed?(v.authBusy?"Verifying license...":"Verify license"):
                 v.busy?"Preparing connection...":running?"Switch to Minecraft":"Start client";
             if(ImGui::Button(label,{width,34})) { if(v.licensed) a.start=true; else a.verifyLicense=true; }
         }
         ImGui::EndDisabled();
     }
-    ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("mcov");
-    ImGui::SameLine(0,std::max(9.f,width-ImGui::CalcTextSize("mcov").x-80));
+    HardwareId(v,width);
+    ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("Keim");
+    ImGui::SameLine(0,std::max(9.f,width-ImGui::CalcTextSize("Keim").x-80));
     if(ImGui::Button("Close",{80,22})) a.close=true;
     ImGui::EndGroup(); ImGui::End(); return a;
 }

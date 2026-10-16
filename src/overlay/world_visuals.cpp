@@ -44,15 +44,15 @@ void Sprite(ImDrawList& draw,ImTextureID texture,ImVec2 p,float size,ImVec4 colo
 // Dieselbe Gauß-Textur und Kern-/Nebel-Schichtung wie bei der Target Aura.
 void Halo(ImDrawList& draw,ImVec2 p,float size,ImVec4 colour,float alpha,ImTextureID texture,float intensity) {
     if(!texture||intensity<=0) return;
-    Sprite(draw,texture,p,size*4,colour,alpha*.45f*intensity);
-    Sprite(draw,texture,p,size*2,colour,alpha*.22f*intensity);
+    Sprite(draw,texture,p,size*4,colour,alpha*.24f*intensity);
+    Sprite(draw,texture,p,size*2,colour,alpha*.18f*intensity);
 }
 void Orb(ImDrawList& draw,ImVec2 p,float size,ImVec4 colour,float alpha,ImTextureID glow,float intensity) {
     TextureScope texture(draw,glow);
     Halo(draw,p,size,colour,alpha,glow,intensity);
     if(glow) {
-        Sprite(draw,glow,p,size,Mix(colour,{1,1,1,colour.w},.88f),alpha*.92f);
-        Sprite(draw,glow,p,size*.6f,{1,1,1,colour.w},alpha*.70f);
+        Sprite(draw,glow,p,size,Mix(colour,{1,1,1,colour.w},.5f),alpha*.8f);
+        Sprite(draw,glow,p,size*.6f,Mix(colour,{1,1,1,colour.w},.75f),alpha*.35f);
     }
     else {
         draw.AddCircleFilled(p,size*2.5f,Colour(colour,alpha*.055f),12);
@@ -71,18 +71,27 @@ void Star(ImDrawList& draw,ImVec2 p,float size,float angle,ImVec4 colour,float a
     }
     const float c=std::cos(angle),s=std::sin(angle);
     for(int axis=0;axis<2;++axis) {
-        const std::array<ImVec2,4> local={ImVec2{-size,0},{0,-size*.18f},{size,0},{0,size*.18f}};
-        std::array<ImVec2,4> points;
-        for(int i=0;i<4;++i) {
-            const float x=axis ? -local[i].y : local[i].x,y=axis ? local[i].x : local[i].y;
-            points[i]={p.x+x*c-y*s,p.y+x*s+y*c};
-        }
-        draw.AddConvexPolyFilled(points.data(),4,Colour(Mix(colour,{1,1,1,colour.w},.5f),alpha));
+        const ImVec2 direction=axis ? ImVec2{-s,c} : ImVec2{c,s};
+        const ImVec2 a{p.x-direction.x*size,p.y-direction.y*size};
+        const ImVec2 b{p.x+direction.x*size,p.y+direction.y*size};
+        const float width=std::max(.7f,size*.22f);
+        const auto ink=Colour(Mix(colour,{1,1,1,colour.w},.35f),alpha*.65f);
+        draw.AddLine(a,b,ink,width);
+        draw.AddCircleFilled(a,width*.5f,ink,12);
+        draw.AddCircleFilled(b,width*.5f,ink,12);
     }
 }
 void GlowLine(ImDrawList& draw,ImVec2 a,ImVec2 b,float width,ImVec4 colour,float alpha,float intensity,ImTextureID texture,float aDepth=0,float bDepth=0) {
     soft::TextureScope scope(draw,texture); colour.w*=alpha;
     soft::Stroke(draw,a,b,width,colour,intensity,texture,aDepth,bDepth);
+    // Close segment ends with soft, depth-tagged caps, including curved ring joints.
+    if(texture) {
+        for(int end=0;end<2;++end) {
+            const int first=draw.VtxBuffer.Size;
+            Sprite(draw,texture,end?b:a,std::max(.65f,width*1.1f),colour,.32f);
+            depth::Tag(draw,first,end?bDepth:aDepth);
+        }
+    }
 }
 // Der normale ImGui-Zustand wird auch nach leeren/geclippten Effekten wiederhergestellt.
 struct BlendScope {

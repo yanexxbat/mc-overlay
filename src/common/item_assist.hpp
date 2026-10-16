@@ -10,7 +10,8 @@ enum class Item : std::uint8_t { Empty, Other, Totem, Crystal, Anchor, Glowstone
 enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crystal };
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
     MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel,
-    LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout, CrosshairMismatch };
+    LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout, CrosshairMismatch,
+    NeedTrident, NeedRiptide, NeedWater, ChargingTrident, ReleaseTrident };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
@@ -34,10 +35,16 @@ inline const char* Text(Status s) {
         case Status::OutOfRange:return "Saved position exceeds configured range";
         case Status::ConfirmationTimeout:return "No world confirmation - release Use to reset";
         case Status::CrosshairMismatch:return "Paused - aim directly at the crystal / interaction block";
+        case Status::NeedTrident:return "Hold a trident in your main hand";
+        case Status::NeedRiptide:return "This trident needs Riptide";
+        case Status::NeedWater:return "Riptide needs water or rain";
+        case Status::ChargingTrident:return "Charging trident";
+        case Status::ReleaseTrident:return "Riptide release sent";
     }
     return "Unavailable";
 }
 struct TotemConfig { bool enabled=false; std::uint32_t retryMs=100; };
+struct TridentConfig { bool enabled=false; int chargeTicks=10; };
 struct MacroConfig {
     bool enabled=false,restoreSlot=true;
     std::uint32_t intervalMs=150,confirmationMs=750;
@@ -64,10 +71,13 @@ struct Request {
     std::uint64_t sentAtMs{};
     bool inputAllowed=false,combatActive=false;
     TotemConfig totem{}; MacroConfig crystal{},anchor{};
+    TridentConfig trident{};
 };
 struct Report {
     std::uint64_t sampledAtMs{},swaps{},crystalActions{},anchorActions{};
     Status totem=Status::Unsupported,crystal=Status::Unsupported,anchor=Status::Unsupported;
+    std::uint64_t tridentActions{};
+    Status trident=Status::Unsupported;
 };
 struct Frame {
     bool world=false,alive=false,paused=false,screen=false,ownMenu=false,cursorEmpty=true;
@@ -87,6 +97,24 @@ struct Frame {
 enum class Operation { None, SwapTotem, PlaceCrystal, AttackCrystal, PlaceAnchor, ChargeAnchor, DetonateAnchor, RestoreSlot };
 struct Action { Operation operation=Operation::None; int slot=-1; bool anchor=false; };
 inline bool Lease(const Request& r,std::uint64_t now) { return r.sentAtMs&&r.sentAtMs<=now&&now-r.sentAtMs<=250&&r.inputAllowed; }
+struct TridentFrame {
+    bool supported=false,holding=false,riptide=false,wet=false,usingMain=false,busy=false;
+    int ticks=0;
+};
+inline Status TridentDecision(const Request& r,const Frame& f,const TridentFrame& t,std::uint64_t now) {
+    if(!r.trident.enabled) return Status::Off;
+    if(!f.world||!f.alive) return Status::NoWorld;
+    if(!t.supported) return Status::Unsupported;
+    if(!Lease(r,now)||f.paused||f.screen||r.combatActive) return Status::Paused;
+    if(!f.ownMenu||!f.cursorEmpty) return Status::InventoryBusy;
+    if(t.busy) return Status::Conflict;
+    if(!t.holding) return Status::NeedTrident;
+    if(!t.riptide) return Status::NeedRiptide;
+    if(!t.wet) return Status::NeedWater;
+    if(!f.useDown) return Status::WaitingBind;
+    if(!t.usingMain) return Status::Ready;
+    return t.ticks>=std::clamp(r.trident.chargeTicks,10,40)?Status::ReleaseTrident:Status::ChargingTrident;
+}
 inline int ContainerSlot(int inventorySlot) { return inventorySlot<9?inventorySlot+36:inventorySlot; }
 
 // Deterministische Entscheidung ohne JNI. Höchstens eine Inventar-/Spielaktion pro Tick.

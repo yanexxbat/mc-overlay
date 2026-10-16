@@ -1,5 +1,6 @@
 #include "rockstar_features.hpp"
 #include "friend_hat_renderer.hpp"
+#include "../common/block_scan_volume.hpp"
 #include <numbers>
 #include <cstdio>
 #include <cstring>
@@ -33,12 +34,13 @@ Config::Config() {
 }
 void Config::Clamp() {
     for(auto& c:modules) {
-        c.mode=std::clamp(c.mode,0,3); c.range=Safe(c.range,0,256,64); c.size=Safe(c.size,.1f,128);
+        c.mode=std::clamp(c.mode,0,3); c.range=Safe(c.range,0,&c==&(*this)[Feature::ChestEsp]?float(kMaxBlockScanRadius):256.f,64); c.size=Safe(c.size,.1f,128);
         c.lifetime=Safe(c.lifetime,.2f,10,1.2f); c.speed=Safe(c.speed,0,8); c.opacity=Safe(c.opacity,0,1,.8f);
         c.glow=Safe(c.glow,0,2,.75f);
         for(auto* color:{&c.start,&c.end}) *color={Safe(color->x,0,1),Safe(color->y,0,1),Safe(color->z,0,1),Safe(color->w,0,1)};
     }
-    for(const auto f:{Feature::ChestEsp,Feature::BeaconRadius}) (*this)[f].range=std::clamp((*this)[f].range,4.f,48.f);
+    (*this)[Feature::ChestEsp].range=std::clamp((*this)[Feature::ChestEsp].range,float(kMinBlockScanRadius),float(kMaxBlockScanRadius));
+    (*this)[Feature::BeaconRadius].range=std::clamp((*this)[Feature::BeaconRadius].range,4.f,48.f);
 }
 const char* Pack::DisplayName(const char* name,bool protect,bool player) { return protect&&player?"Player":name; }
 void Pack::ResetWorld() {

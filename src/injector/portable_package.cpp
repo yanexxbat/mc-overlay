@@ -61,16 +61,16 @@ std::filesystem::path PreparePackage(const std::filesystem::path& storage) {
     WinHandle mutex(CreateMutexW(nullptr,FALSE,name.c_str()));
     if(!mutex) throw std::runtime_error("Could not lock the package cache.");
     const auto waited=WaitForSingleObject(mutex.get(),10000);
-    if(waited!=WAIT_OBJECT_0&&waited!=WAIT_ABANDONED) throw std::runtime_error("Another mcov instance is preparing the package. Please try again.");
+    if(waited!=WAIT_OBJECT_0&&waited!=WAIT_ABANDONED) throw std::runtime_error("Another Keim instance is preparing the package. Please try again.");
     struct Unlock { HANDLE value; ~Unlock() { ReleaseMutex(value); } } unlock{mutex.get()};
     for(const auto& file:kPayloads) {
         const auto resource=FindResourceW(nullptr,MAKEINTRESOURCEW(file.id),RT_RCDATA);
         const auto loaded=resource?LoadResource(nullptr,resource):nullptr;
         const auto size=resource?SizeofResource(nullptr,resource):0;
         auto bytes=loaded?static_cast<const unsigned char*>(LockResource(loaded)):nullptr;
-        if(!bytes||!size) throw std::runtime_error("mcov.exe contains an incomplete package. Please rebuild it.");
+        if(!bytes||!size) throw std::runtime_error("Keim.exe contains an incomplete package. Please rebuild it.");
         Sha256 sha; sha.Add({bytes,size});
-        if(sha.Finish()!=file.sha) throw std::runtime_error("The embedded package is corrupted. Please replace mcov.exe.");
+        if(sha.Finish()!=file.sha) throw std::runtime_error("The embedded package is corrupted. Please replace Keim.exe.");
         const auto target=directory/file.name;
         if(FileHash(target)==file.sha) continue;
         const auto temporary=std::filesystem::path(target.wstring()+L".part-"+std::to_wstring(GetCurrentProcessId()));
@@ -78,10 +78,10 @@ std::filesystem::path PreparePackage(const std::filesystem::path& storage) {
         {
             std::ofstream out(temporary,std::ios::binary|std::ios::trunc);
             out.write(reinterpret_cast<const char*>(bytes),size); out.flush();
-            if(!out) throw std::runtime_error("mcov cannot write to the cache. Check free disk space and access permissions.");
+            if(!out) throw std::runtime_error("Keim cannot write to the cache. Check free disk space and access permissions.");
         }
         if(!MoveFileExW(temporary.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
-            throw std::runtime_error("A client file is locked. Close Minecraft and mcov, then restart them.");
+            throw std::runtime_error("A client file is locked. Close Minecraft and Keim, then restart them.");
     }
     return directory;
 #else

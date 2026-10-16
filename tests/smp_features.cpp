@@ -214,6 +214,34 @@ void GrowthProfiles() {
     auto partial=text; const auto field=partial.find("chunks.chunks "); partial.erase(field,partial.find('\n',field)-field+1);
     Require(!Decode(partial,restored),"Partly damaged chunk-highlight settings were accepted");
 }
+void LargeScanSettings() {
+    using namespace client_configs;
+    Snapshot original; original.blocks.radius=512; original.blocks.maxDraw=1024;
+    original.chunks.radius=512; original.chunks.maxDraw=1024;
+    original.smp.finder.radius=512; original.smp.finder.maxDraw=1024;
+    original.smp.Clamp();
+    std::string encoded; Snapshot restored;
+    Require(Encode(original,encoded)&&Decode(encoded,restored)&&restored.blocks.radius==512&&restored.blocks.maxDraw==1024&&
+        restored.chunks.radius==512&&restored.chunks.maxDraw==1024&&restored.smp.finder.radius==512&&restored.smp.finder.maxDraw==1024,
+        "Large scan/draw settings were rejected, clamped or lost in profiles");
+    auto invalid=encoded; const auto at=invalid.find("chunks.radius 512"); invalid.replace(at,17,"chunks.radius 513");
+    Require(!Decode(invalid,restored),"Oversized radius escaped profile validation");
+    smp::BaseFinder finder; auto s=Scene(); auto& c=original.smp.finder;
+    c.enabled=true; c.minAmethyst=1; s.blockScanRadius=512; s.blockScanMask=c.Mask();
+    Add(s,500,64,0,kBlockAmethystCluster); finder.Update(s,c);
+    Require(finder.Finds().size()==1&&finder.Finds()[0].chunkX==31,"Distant evidence was clipped to the old radius");
+    smp::StoragePulse pulse; smp::StorageSettings storageSettings;
+    s.storageScanId=1; s.storageCount=1; s.storageBlocks[0]={};
+    s.storageBlocks[0].x=500; s.storageBlocks[0].kind=kBlockChest;
+    pulse.Update(s,storageSettings,true,512,1,true,true);
+    Require(pulse.Markers().size()==1&&pulse.Markers()[0].block.x==500,"Dedicated storage results used the old radius or generic scan");
+    s.blockCount=kMaxBlocks; s.blockScanId=0;
+    for(auto& block:s.blocks) {block={};block.kind=kBlockBarrel;}
+    pulse.Update(s,storageSettings,true,512,1.1,true,true);
+    Require(pulse.Markers().size()==1&&pulse.Markers()[0].block.x==500,"Large generic scans blocked or contaminated storage results");
+    s.storageCount=0; pulse.Update(s,storageSettings,true,512,1.2,true,true);
+    Require(pulse.Markers().empty(),"Removed dedicated storage results were retained");
+}
 void UnifiedChunks() {
     smp::BaseFinderSettings c; c.enabled=true; c.deepslate=true; c.minDeepslate=2;
     auto s=Scene(); s.blockScanMask=c.Mask(); smp::BaseFinder finder;
@@ -330,7 +358,7 @@ void Rendering() {
 }
 int main() {
     try {
-        Detection(); Profiles(); StableStorage(); StorageAnimation(); GrowthDetection(); GrowthProfiles(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+        Detection(); Profiles(); StableStorage(); StorageAnimation(); GrowthDetection(); GrowthProfiles(); LargeScanSettings(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.DisplaySize={1280,720}; io.DeltaTime=1.f/60; io.Fonts->AddFontDefault(); io.Fonts->Build();
         ImGui::NewFrame(); StorageGeometry(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
         std::cout<<"PASS SMP: block classification, completed scans, filters, world isolation, limits, profiles and per-type rendering\n"; return 0;

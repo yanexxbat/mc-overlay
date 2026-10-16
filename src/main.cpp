@@ -38,7 +38,7 @@ bool ParseFlag(int argc, char** argv, const char* flag) {
 void PrintBanner() {
     std::printf(
         "\n"
-        "  mcov - external Minecraft overlay\n"
+        "  Keim - external Minecraft overlay\n"
         "  ---------------------------------\n"
         "  INSERT  toggle menu        END  quit\n"
         "\n");
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
     const bool skipAutoLoad = ParseFlag(argc, argv, "--no-agent");
 
     const std::wstring executableDirectory = mcov::ExecutableDirectory();
-    mcov::log::Init("overlay", (mcov::ClientDataDirectory()/L"mcov_overlay.log").wstring(), /*alsoConsole=*/true);
+    mcov::log::Init("overlay", (mcov::ClientDataDirectory()/L"Keim_overlay.log").wstring(), /*alsoConsole=*/true);
     std::uint32_t requiredPid=0; std::wstring readyEvent; std::uintptr_t authPipe=0;
     for(int i=1;i<argc;++i) {
         const std::string flag=argv[i];
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
     auto license=mcov::auth::ReadHandoff(reinterpret_cast<HANDLE>(authPipe));
     mcov::auth::Client licensing;
     if(!license.Valid(mcov::auth::UnixTime())||!licensing.Check(license).success) {
-        MessageBoxW(nullptr,L"A verified license is required. Open mcov.exe and verify your key before starting the overlay.",L"mcov license",MB_OK|MB_ICONERROR);
+        MessageBoxW(nullptr,L"A verified license is required. Open Keim.exe and verify your key before starting the overlay.",L"Keim license",MB_OK|MB_ICONERROR);
         mcov::log::Shutdown(); return 5;
     }
     PrintBanner();
@@ -158,7 +158,7 @@ int main(int argc, char** argv) {
 
     overlay.Shutdown();
     if(licenseCheck.valid()) licenseCheck.wait();
-    if(licenseLost) MessageBoxW(nullptr,L"Your license session could not be verified. Open mcov.exe and verify your key again.",L"mcov license",MB_OK|MB_ICONWARNING);
+    if(licenseLost) MessageBoxW(nullptr,L"Your license session could not be verified. Open Keim.exe and verify your key again.",L"Keim license",MB_OK|MB_ICONWARNING);
 
     MCOV_LOG_INFO("overlay exited cleanly");
     mcov::log::Shutdown();

@@ -87,7 +87,7 @@ on first use and recreated after resize. Neither current compact surface submits
 these panes. The material has no JNI dependency and does not alter shared-memory
 layout or world-depth masking. Embedded shaders and fonts add no loose runtime
 files. WGC uses the Windows SDK `windowsapp` library; the portable package still
-needs only `mcov.exe` and optional `START.txt`.
+needs only `Keim.exe` and optional `START.txt`.
 
 The retained material uses tint RGB 0.045/0.050/0.063, tint opacity 0.56,
 blur mix 0.78, saturation 0.9, brightness offset −0.02 and contrast 0.94.

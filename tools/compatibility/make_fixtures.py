@@ -109,6 +109,11 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             for field,load in [('testSwapId',b'\x1b'),('testSwapSlot',b'\x1c'),('testSwapButton',b'\x1d')]:
                 code+=load+b'\xb3'+u2(cp.ref(9,name,field,'I'))
             code+=b'\xb2'+u2(cp.ref(9,name,'testSwaps','I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,'testSwaps','I'))+b'\xb1'
+        elif special and special[0] == 'trident_release':
+            living=special[1]
+            field='testTridentReleases'
+            code=b'\xb2'+u2(cp.ref(9,name,field,'I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,field,'I'))
+            code+=b'\x2b\x03\xb5'+u2(cp.ref(9,living,'testTridentUsing','Z'))+b'\xb1'
         elif special and special[0] == 'increment':
             field=special[1]
             code=b'\xb2'+u2(cp.ref(9,name,field,'I'))+b'\x04\x60\xb3'+u2(cp.ref(9,name,field,'I'))+b'\xb1'
@@ -154,7 +159,7 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
             for getter,backing in [(yaw,'testMovementYaw'),(pitch,'testMovementPitch')]:
                 code+=b'\x2a\x2a\xb6'+u2(cp.ref(10,entity,getter,'()F'))+b'\xb5'+u2(cp.ref(9,entity,backing,'F'))
             if desc.startswith('(F'):
-                # Synthetischer Vanilla-Eingabevektor: X/Z rotieren, Y bleibt unabhängig.
+                # Synthetischer Vanilla-Eingabevektor: X/Z rotieren, Y bleibt unabhÃ¤ngig.
                 def component(field): return b'\x2c\xb4'+u2(cp.ref(9,vec,field,'D'))
                 angle=b'\x2a\xb6'+u2(cp.ref(10,entity,yaw,'()F'))+b'\x8d\x14'+u2(cp.number('D',3.141592653589793/180))+b'\x6b'
                 sin=angle+b'\xb8'+u2(cp.ref(10,'java/lang/Math','sin','(D)D'))
@@ -288,6 +293,8 @@ def read_profiles(path):
 def generate(profiles_path, output):
     output.mkdir(parents=True, exist_ok=True)
     profiles = read_profiles(profiles_path)
+    storage_profiles={p['id']:p for p in json.loads(Path(__file__).with_name('storage_profiles.json').read_text())}
+    trident_profiles={p['id']:p for p in json.loads(Path(__file__).with_name('trident_profiles.json').read_text())}
     for profile in profiles:
         classes = {}
         def cls(name):
@@ -377,7 +384,7 @@ def generate(profiles_path, output):
         cls(core['equipSlot'])['specials'][('<clinit>', '()V')] = ('statics', slots)
         member=profile['members']['methodEntityUuid']
         cls(core['entity'])['specials'][tuple(member)] = ('uuid',)
-        # Echte Zustandsänderungen für die native Client-Tick-Brücke.
+        # Echte ZustandsÃ¤nderungen fÃ¼r die native Client-Tick-BrÃ¼cke.
         hand=geometry['classes']['handClass']
         add(hand,'methods','<clinit>','()V',True)
         cls(hand)['specials'][('<clinit>','()V')]=('statics',[tuple(geometry['members']['mainHand'])])
@@ -425,7 +432,7 @@ def generate(profiles_path, output):
         add(owner,'fields','testVanillaTickDone','Z',True)
         cls(owner)['specials'][tuple(member)]=('tick_done',)
         # Kamera-Witnesses nutzen genau dieselben Getter-Aufrufstellen wie die auditierten
-        # Setup-/alignWithEntity-Methoden, inklusive eines F5-Abstands von vier Blöcken.
+        # Setup-/alignWithEntity-Methoden, inklusive eines F5-Abstands von vier BlÃ¶cken.
         for name,key,orbit in [('testCameraYaw','viewYaw',''),('testCameraPitch','viewPitch',''),
                                ('testOrbitX','viewYaw','sin'),('testOrbitZ','viewYaw','cos')]:
             desc='(L'+core['entity']+';F)'+('D' if orbit else 'F')
@@ -449,7 +456,7 @@ def generate(profiles_path, output):
         for key, value in [('methodRealFov', 82.5), ('methodGetYaw', 29.25), ('methodGetPitch', -11.5)]:
             member = profile['members'][key]
             cls(owner_spec[key])['specials'][tuple(member)] = ('number', member[1].split(')')[1], value)
-        # Zustandsabhängige Inventar- und Block-Fixtures für echte JNI-Aktionen.
+        # ZustandsabhÃ¤ngige Inventar- und Block-Fixtures fÃ¼r echte JNI-Aktionen.
         for key,backing,role,desc in [('methodStackGetItem','testItem','itemStack','L'+core['item']+';'),
                                     ('methodItemIsEmpty','testEmpty','itemStack','Z'),
                                     ('methodItemTransKey','testTranslation','item','Ljava/lang/String;')]:
@@ -495,7 +502,7 @@ def generate(profiles_path, output):
             cls(owner)['specials'][tuple(member)]=('instance_field','testAnchorWorks','Z')
         member=geometry['members']['useItem']; add(core['client'],'fields','testUses','I',True)
         cls(core['client'])['specials'][tuple(member)]=('increment','testUses')
-        # Place/Use kommt aus dem Spiel, feste HitResults und bestätigte Weltzustände.
+        # Place/Use kommt aus dem Spiel, feste HitResults und bestÃ¤tigte WeltzustÃ¤nde.
         for key,backing,desc,static,value in [('keyDown','testDown','Z',False,None),
             ('replaceable','testReplaceable','Z',False,None),('blockReach','testBlockReach','D',True,None),
             ('oldBlockReach','testBlockReach','F',True,None),('consumesAction','testConsumes','Z',True,None)]:
@@ -533,6 +540,30 @@ def generate(profiles_path, output):
         add(core['blockState'],'fields','testOwnBlock','L'+core['block']+';',False)
         member=profile['members']['methodStateGetBlock']
         cls(core['blockState'])['specials'][tuple(member)]=('optional_field','testOwnBlock','testBlock','L'+core['block']+';')
+        trident=trident_profiles[profile['id']]
+        for key,member in trident['members'].items():
+            owner=trident['owners'][key]; static=key=='spin'
+            add(owner,'methods',*member,static)
+            if key=='release':
+                add(owner,'fields','testTridentReleases','I',True)
+                cls(owner)['specials'][tuple(member)]=('trident_release',core['livingEntity'])
+            else:
+                desc=member[1].split(')')[1]
+                backing='testTrident'+{'usingItem':'Using'}.get(key,key.capitalize())
+                add(owner,'fields',backing,desc,static)
+                cls(owner)['specials'][tuple(member)]=('field' if static else 'instance_field',backing,desc)
+        storage=storage_profiles[profile['id']]
+        for name in storage['classes'].values(): cls(name)
+        for key,member in storage['members'].items():
+            owner=storage['owners'][key]; kind=storage['kinds'][key]
+            add(owner,kind,*member,False)
+            if key in ('source','entities'):
+                backing='testStorage'+key.capitalize(); desc=member[1].split(')')[1]
+                add(owner,'fields',backing,desc,False)
+                cls(owner)['specials'][tuple(member)]=('instance_field',backing,desc)
+            elif key in ('x','y','z'):
+                add(owner,'fields',member[0],'I',False)
+                cls(owner)['specials'][tuple(member)]=('instance_field',member[0],'I')
         if profile['gui_class']:
             add(profile['classes']['client'], 'fields', *profile['client_gui'])
         for suffix in ('', '-field-camera'):

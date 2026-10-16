@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 project(mcov LANGUAGES C CXX VERSION 0.1.0)
 enable_language(RC)
 configure_file(src/common/menu_fonts.rc.in "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" @ONLY)
+set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/keim-logo.rgba"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/keim.ico")
 
 # ---------------------------------------------------------------------------
 # Two targets, deliberately separated:
@@ -369,18 +372,18 @@ add_executable(mcov WIN32 "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
 target_include_directories(mcov PRIVATE src third_party/glass "${CMAKE_BINARY_DIR}")
 target_compile_definitions(mcov PRIVATE MCOV_BUNDLED=1 MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
 target_link_libraries(mcov PRIVATE mcov_auth mcov_liquid mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
-set_target_properties(mcov PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
-message(STATUS "mcov: open ${CMAKE_BINARY_DIR}/client/mcov.exe (single-file client)")
+set_target_properties(mcov PROPERTIES OUTPUT_NAME "Keim" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
+message(STATUS "Keim: open ${CMAKE_BINARY_DIR}/client/Keim.exe (single-file client)")
 
 # Fertiger Ordner mit zwei Dateien und eine ZIP fuer die Weitergabe.
-set(MCOV_CLIENT_ARCHIVE "${CMAKE_BINARY_DIR}/mcov-client.zip")
+set(MCOV_CLIENT_ARCHIVE "${CMAKE_BINARY_DIR}/Keim-client.zip")
 add_custom_command(OUTPUT "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/START.txt"
     COMMAND ${CMAKE_COMMAND} "-DCLIENT_EXE=$<TARGET_FILE:mcov>"
         "-DGUIDE=${CMAKE_CURRENT_SOURCE_DIR}/docs/client-start.txt"
         "-DARCHIVE=${MCOV_CLIENT_ARCHIVE}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/distribute_client.cmake"
     DEPENDS mcov "$<TARGET_FILE:mcov>" docs/client-start.txt tools/distribute_client.cmake
-    COMMENT "Packaging mcov.exe and the optional start guide" VERBATIM)
+    COMMENT "Packaging Keim.exe and the optional start guide" VERBATIM)
 add_custom_target(mcov_distribution ALL DEPENDS "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/START.txt")
 
 # Optional headless checks for UI ownership, clipping and input. No JVM needed.
@@ -424,6 +427,18 @@ if(MCOV_BUILD_UI_CHECKS)
     target_include_directories(mcov_client_controls_check PRIVATE src)
     target_link_libraries(mcov_client_controls_check PRIVATE mcov_settings imgui)
     add_test(NAME client_controls COMMAND mcov_client_controls_check)
+    add_executable(mcov_block_scan_check tests/block_scan.cpp)
+    target_include_directories(mcov_block_scan_check PRIVATE src)
+    target_link_libraries(mcov_block_scan_check PRIVATE mcov_settings)
+    add_test(NAME block_scan COMMAND mcov_block_scan_check)
+    add_executable(mcov_hole_check tests/hole_esp.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
+    target_include_directories(mcov_hole_check PRIVATE src)
+    target_link_libraries(mcov_hole_check PRIVATE mcov_settings imgui)
+    add_test(NAME hole_esp COMMAND mcov_hole_check)
+    add_executable(mcov_region_map_check tests/region_map.cpp)
+    target_include_directories(mcov_region_map_check PRIVATE src)
+    target_link_libraries(mcov_region_map_check PRIVATE mcov_settings imgui)
+    add_test(NAME region_map COMMAND mcov_region_map_check)
     add_executable(mcov_item_assist_check tests/item_assist.cpp)
     target_include_directories(mcov_item_assist_check PRIVATE src)
     target_link_libraries(mcov_item_assist_check PRIVATE mcov_settings)
@@ -526,6 +541,8 @@ if(MCOV_BUILD_COMPAT_CHECKS)
             "${CMAKE_CURRENT_SOURCE_DIR}/src/agent/generated_profiles.hpp" "${CMAKE_BINARY_DIR}/compat-fixtures"
         COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
         DEPENDS src/agent/generated_profiles.hpp tools/compatibility/make_fixtures.py
+            tools/compatibility/storage_profiles.json src/agent/storage_profiles.hpp
+            tools/compatibility/trident_profiles.json src/agent/trident_profiles.hpp
             tools/compatibility/generate_profiles.py
             tools/compatibility/geometry_schema.py
         VERBATIM)

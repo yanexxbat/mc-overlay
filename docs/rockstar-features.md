@@ -11,7 +11,7 @@ Die vollständige Zuordnung steht in [rockstar-catalog.md](rockstar-catalog.md).
 1. Minecraft vollständig beenden und neu starten, falls die bisherige DLL noch geladen ist.
    Die Scanner-Typen erfordern jetzt IPC-Version 18. Ein bereits geladener alter Agent
    lässt sich nicht durch das erneute Öffnen des Clients austauschen.
-2. `build/client/mcov.exe` öffnen, Minecraft auswählen, **Client starten**.
+2. `build/client/Keim.exe` öffnen, Minecraft auswählen, **Client starten**.
 3. Mit **INSERT** das Menü öffnen. Die neuen Funktionen sind zunächst ausgeschaltet
    und ihre Keybinds ungebunden. Im jeweiligen Tab **Enabled** aktivieren.
 4. **Settings → Keybinds** oder das Bind-Feld der Funktion benutzen. Toggle schaltet
@@ -106,7 +106,7 @@ Texturen oder Effekt-Pools pro Frame. Reduced motion unterbindet Ringrotation,
 Wachstum, Staubaufstieg und Flügelschlag; das Ausblenden bleibt erhalten.
 
 Der neue Tiefenkanal benötigt aktualisierte Agent-/Java-Helfer und IPC 18.
-Minecraft vollständig neu starten und die neue `build/client/mcov.exe` öffnen.
+Minecraft vollständig neu starten und die neue `build/client/Keim.exe` öffnen.
 Unter **Visuals → Jump circles**
 lassen sich Farben unabhängig von der Aura wählen, wenn **Aura colours** aus ist.
 

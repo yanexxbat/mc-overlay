@@ -1,6 +1,7 @@
 #pragma once
 #include "../common/shared_state.hpp"
 #include "jvm_interface.hpp"
+#include "trident_profiles.hpp"
 #include <mutex>
 #include <stdexcept>
 #include <cmath>
@@ -23,6 +24,10 @@ template<class B> class InventoryAssist final {
     jobject hand_=nullptr,up_=nullptr,charge_=nullptr,environmentAnchor_=nullptr;
     jweak world_=nullptr,player_=nullptr;
     items::Controller controller_;
+    bool tridentReady_=false,legacyRiptide_=false;
+    jclass enchantments_=nullptr;
+    jmethodID tridentUsing_=nullptr,tridentTicks_=nullptr,tridentHand_=nullptr,tridentStack_=nullptr,tridentWet_=nullptr,tridentRelease_=nullptr,tridentSpin_=nullptr;
+    std::uint64_t tridentActions_=0;
     // Referenzen gehören einem Haltevorgang, niemals einem Render-Frame.
     struct Site {
         items::Item kind=items::Item::Empty;
@@ -87,6 +92,15 @@ template<class B> class InventoryAssist final {
             coords_[0]&&coords_[1]&&coords_[2]&&steps_[0]&&steps_[1]&&steps_[2]&&up_&&b_.mEntities&&b_.mIterator&&
             b_.mHasNext&&b_.mNext&&b_.geometry.getBounds&&b_.fVecX&&b_.fVecY&&b_.fVecZ;
         anchorReady_=macroReady_&&charge_&&integer_&&stateValue_&&((dim_&&anchorWorks_)||(environment_&&environmentValue_&&environmentAnchor_&&boolean_));
+        if(const auto* p=TridentMapping(b_.set->id)) {
+            tridentUsing_=Method(env,b_.clsLiving,p->usingItem); tridentTicks_=Method(env,b_.clsLiving,p->ticks);
+            tridentHand_=Method(env,b_.clsLiving,p->hand); tridentStack_=Method(env,b_.clsLiving,p->stack);
+            tridentWet_=Method(env,b_.clsEntity,p->wet); tridentRelease_=Method(env,b_.clsInteractionMgr,p->release);
+            enchantments_=Class(env,p->helperClass);
+            tridentSpin_=enchantments_?jvm::TryMethod(env,enchantments_,p->spin.name,p->spin.signature,true):nullptr;
+            legacyRiptide_=std::string_view(p->spin.signature).ends_with(")I");
+            tridentReady_=totemReady_&&b_.slotConstants[kSlotMainHand]&&hand_&&useKey_&&keyDown_&&tridentUsing_&&tridentTicks_&&tridentHand_&&tridentStack_&&tridentWet_&&tridentRelease_&&tridentSpin_;
+        }
     }
     items::Item Item(JNIEnv* env,jobject stack) {
         if(!stack) return items::Item::Empty;
@@ -118,7 +132,7 @@ template<class B> class InventoryAssist final {
         return jvm::JStringToUtf8(env,name)=="BLOCK";
     }
     bool UseDown(JNIEnv* env,jobject client) {
-        if(!macroReady_) return false;
+        if(!useKey_||!keyDown_) return false;
         auto options=env->GetObjectField(client,b_.fOptions); Check(env);
         auto key=options?env->GetObjectField(options,useKey_):nullptr; Check(env);
         const bool down=key&&env->CallBooleanMethod(key,keyDown_)==JNI_TRUE; Check(env); return down;
@@ -149,6 +163,36 @@ template<class B> class InventoryAssist final {
     }
     static void Foreground(items::Request& request,bool check) {
         if(check) { DWORD pid=0; GetWindowThreadProcessId(GetForegroundWindow(),&pid); request.inputAllowed=request.inputAllowed&&pid==GetCurrentProcessId(); }
+    }
+    void Trident(JNIEnv* env,jobject client,jobject player,const items::Request& r,const items::Frame& f,bool busy,std::uint64_t now,items::Report& report) {
+        items::TridentFrame t; t.supported=tridentReady_; t.busy=busy;
+        // Read only the held/active stacks. Vanilla handles the next held-Use attempt,
+        // cooldown, durability and the actual Riptide movement.
+        if(r.trident.enabled&&f.world&&f.alive&&t.supported&&items::Lease(r,now)&&!f.paused&&!f.screen&&!r.combatActive&&f.ownMenu&&f.cursorEmpty&&!busy) {
+            auto stack=env->CallObjectMethod(player,b_.mGetEquipped,b_.slotConstants[kSlotMainHand]); Check(env);
+            if(stack) {
+                auto item=env->CallObjectMethod(stack,b_.mStackGetItem); Check(env);
+                auto key=item?static_cast<jstring>(env->CallObjectMethod(item,b_.mItemTransKey)):nullptr; Check(env);
+                t.holding=jvm::JStringToUtf8(env,key)=="item.minecraft.trident";
+                if(t.holding) {
+                    const double spin=legacyRiptide_?env->CallStaticIntMethod(enchantments_,tridentSpin_,stack):env->CallStaticFloatMethod(enchantments_,tridentSpin_,stack,player); Check(env);
+                    t.riptide=std::isfinite(spin)&&spin>0;
+                    t.wet=env->CallBooleanMethod(player,tridentWet_)==JNI_TRUE; Check(env);
+                    const bool usingItem=env->CallBooleanMethod(player,tridentUsing_)==JNI_TRUE; Check(env);
+                    auto hand=env->CallObjectMethod(player,tridentHand_); Check(env);
+                    auto active=env->CallObjectMethod(player,tridentStack_); Check(env);
+                    t.usingMain=usingItem&&hand&&env->IsSameObject(hand,hand_)&&active&&env->IsSameObject(active,stack);
+                    t.ticks=env->CallIntMethod(player,tridentTicks_); Check(env);
+                }
+            }
+        }
+        report.trident=items::TridentDecision(r,f,t,now);
+        if(report.trident==items::Status::ReleaseTrident) {
+            auto manager=env->GetObjectField(client,b_.fInteractionMgr); Check(env);
+            if(!manager) report.trident=items::Status::Unsupported;
+            else { env->CallVoidMethod(manager,tridentRelease_,player); Check(env); ++tridentActions_; }
+        }
+        report.tridentActions=tridentActions_;
     }
     bool AnchorWorks(JNIEnv* env,jobject level,jobject pos) {
         if(!anchorReady_) return true;
@@ -339,12 +383,13 @@ public:
         const auto now=GetTickCount64(); Foreground(request,checkForeground);
         try {
             jvm::LocalFrame frame(env,192); if(!frame.ok()) throw std::runtime_error("local frame");
-            if(now>=retry_&&(!totemReady_||!macroReady_||!anchorReady_)) { Bind(env); retry_=now+1000; }
+            if(now>=retry_&&(!totemReady_||!macroReady_||!anchorReady_||!tridentReady_)) { Bind(env); retry_=now+1000; }
             const bool armed=(request.crystal.enabled||request.anchor.enabled)&&items::Lease(request,now)&&!request.combatActive&&macroReady_;
             env->SetStaticBooleanField(signal_,macroEnabled_,armed?JNI_TRUE:JNI_FALSE); Check(env);
-            if(!request.totem.enabled&&!request.crystal.enabled&&!request.anchor.enabled&&!controller_.HasRestore()) {
+            if(!request.totem.enabled&&!request.crystal.enabled&&!request.anchor.enabled&&!request.trident.enabled&&!controller_.HasRestore()) {
                 controller_.Reset(); ClearSite(env);
                 auto report=controller_.GetReport(); report.sampledAtMs=now; report.totem=report.crystal=report.anchor=items::Status::Off;
+                report.trident=items::Status::Off; report.tridentActions=tridentActions_;
                 channel_->itemReport.Publish(report); return;
             }
             items::Frame f; jobject level=nullptr,player=nullptr,inventory=nullptr,manager=nullptr,target=nullptr;
@@ -410,12 +455,15 @@ public:
                 controller_.Complete(action,success);
             }
             if(!controller_.Active()&&action.operation!=items::Operation::SwapTotem) ClearSite(env);
-            channel_->itemReport.Publish(controller_.GetReport());
+            auto report=controller_.GetReport();
+            Trident(env,client,player,request,f,action.operation!=items::Operation::None||controller_.Active()||controller_.HasRestore(),now,report);
+            channel_->itemReport.Publish(report);
         } catch(const std::exception& error) {
             if(env->ExceptionCheck()) env->ExceptionClear(); ClearSite(env); controller_.Reset();
             if(now-lastError_>1000) { MCOV_LOG_WARN("inventory client-tick action failed: %s",error.what()); lastError_=now; }
             auto report=controller_.GetReport(); report.sampledAtMs=now;
             if(request.totem.enabled) report.totem=items::Status::Error; if(request.crystal.enabled) report.crystal=items::Status::Error; if(request.anchor.enabled) report.anchor=items::Status::Error;
+            report.trident=request.trident.enabled?items::Status::Error:items::Status::Off; report.tridentActions=tridentActions_;
             channel_->itemReport.Publish(report);
         }
     }

@@ -2,15 +2,35 @@
 
 #include <algorithm>
 #include <windows.h>
+#include <cstring>
 
 #include "data/fonts.h"  // Existing embedded Inter assets; no glass runtime.
 #include "log.hpp"
 
 namespace mcov::style {
 namespace {
-constexpr ImU32 kAccentHover  = IM_COL32(104, 117, 250, 255);
-constexpr ImU32 kAccentActive = IM_COL32(71, 82, 196, 255);
+constexpr ImU32 kAccentHover  = compact::AccentActive;
+constexpr ImU32 kAccentActive = compact::AccentPressed;
 constexpr float kShadowMargin = 16.0f;
+constexpr ImWchar kBrandGlyph=0xe000;
+constexpr int kBrandSize=128;
+
+void InstallBrandLogo(ImFontAtlas& atlas,ImFont& font) {
+    const auto module=GetModuleHandleW(nullptr);
+    const auto resource=FindResourceW(module,MAKEINTRESOURCEW(106),RT_RCDATA);
+    if(!resource||SizeofResource(module,resource)!=kBrandSize*kBrandSize*4) return;
+    const auto* rgba=static_cast<const unsigned char*>(LockResource(LoadResource(module,resource)));
+    if(!rgba) return;
+    const int index=atlas.AddCustomRectFontGlyph(&font,kBrandGlyph,kBrandSize,kBrandSize,float(kBrandSize));
+    unsigned char* pixels=nullptr; int width=0,height=0;
+    atlas.GetTexDataAsRGBA32(&pixels,&width,&height);
+    const auto* rect=atlas.GetCustomRectByIndex(index);
+    if(!pixels||!rect||!rect->IsPacked()||rect->X+kBrandSize>width||rect->Y+kBrandSize>height) return;
+    for(int y=0;y<kBrandSize;++y)
+        std::memcpy(pixels+((rect->Y+y)*width+rect->X)*4,rgba+y*kBrandSize*4,kBrandSize*4);
+    atlas.TexPixelsUseColors=true;
+    if(auto* glyph=const_cast<ImFontGlyph*>(font.FindGlyphNoFallback(kBrandGlyph))) glyph->Colored=true;
+}
 
 const char* VisibleLabelEnd(const char* label) {
     const char* end = label;
@@ -61,10 +81,10 @@ void ApplyFlatTheme(ImGuiStyle& style) {
     c[ImGuiCol_FrameBgActive]  = color(kHover);
     c[ImGuiCol_Button]         = color(kPanel);
     c[ImGuiCol_ButtonHovered]  = color(kHover);
-    c[ImGuiCol_ButtonActive]   = color(kAccent);
+    c[ImGuiCol_ButtonActive]   = color(compact::Pressed);
     c[ImGuiCol_Header]         = color(kPanel);
     c[ImGuiCol_HeaderHovered]  = color(kHover);
-    c[ImGuiCol_HeaderActive]   = color(kAccent);
+    c[ImGuiCol_HeaderActive]   = color(compact::Pressed);
     c[ImGuiCol_CheckMark]      = color(kAccent);
     c[ImGuiCol_SliderGrab]     = color(kAccent);
     c[ImGuiCol_SliderGrabActive] = color(kAccentHover);
@@ -101,7 +121,7 @@ void ApplyFlatTheme(ImGuiStyle& style) {
     c[ImGuiCol_TableRowBg]        = color(kPanel);
     c[ImGuiCol_TableRowBgAlt]     = color(kHover);
     c[ImGuiCol_TextLink]          = color(kAccentHover);
-    c[ImGuiCol_TextSelectedBg]    = color(kAccentActive);
+    c[ImGuiCol_TextSelectedBg]    = Color(compact::AccentRGB,.28f);
     c[ImGuiCol_DragDropTarget]    = color(kAccent);
     c[ImGuiCol_NavCursor]         = color(kAccent);
     c[ImGuiCol_NavWindowingHighlight] = color(kAccent);
@@ -187,6 +207,7 @@ bool AccentButton(const char* label, ImVec2 size) {
     scope.Color(ImGuiCol_Button, kAccent);
     scope.Color(ImGuiCol_ButtonHovered, kAccentHover);
     scope.Color(ImGuiCol_ButtonActive, kAccentActive);
+    scope.Color(ImGuiCol_Text, compact::AccentInk);
     return ImGui::Button(label, size);
 }
 
@@ -254,7 +275,19 @@ bool LoadFonts(float uiSize) {
     }
     ImFontConfig classic; classic.PixelSnapH=true; classic.SizePixels=13;
     io.Fonts->AddFontDefault(&classic);
+    InstallBrandLogo(*io.Fonts,*medium);
     return true;
+}
+
+bool BrandLogoReady() {
+    const auto* atlas=ImGui::GetIO().Fonts;
+    return atlas&&!atlas->Fonts.empty()&&atlas->Fonts[0]->FindGlyphNoFallback(kBrandGlyph);
+}
+void DrawBrandLogo(ImDrawList& draw,ImVec2 min,float size,ImU32 tint) {
+    if(size<=0||!BrandLogoReady()) return;
+    const auto* atlas=ImGui::GetIO().Fonts;
+    const auto* glyph=atlas->Fonts[0]->FindGlyphNoFallback(kBrandGlyph);
+    draw.AddImage(atlas->TexID,min,{min.x+size,min.y+size},{glyph->U0,glyph->V0},{glyph->U1,glyph->V1},tint);
 }
 
 ImFont* MenuFont(bool bold) {

@@ -1,4 +1,4 @@
-# mcov
+# Keim
 
 ## Platform
 
@@ -8,7 +8,7 @@ Native Windows x64 desktop overlay attached to the Minecraft Java client window.
 
 C++20, Dear ImGui 1.91.9b, Win32 and Direct3D 11. A separate JNI/JVMTI agent
 publishes coherent world snapshots and executes existing client-tick actions
-through IPC v28. The game's OpenGL renderer and the overlay's D3D11 renderer are
+through IPC v31. The game's OpenGL renderer and the overlay's D3D11 renderer are
 separate. UI rendering stays outside the JVM; textured Base ESP uses a dedicated
 JNI callback on the game's render thread.
 
@@ -21,15 +21,22 @@ camera/entity projection stability.
 
 ## Confirmed constraints
 
+- The product is **Keim**, with the lowercase **keim** wordmark and the user's
+  green germ mascot in the launcher, client menu, HUD watermark and Windows icon.
+  The portable deliverables are `Keim.exe` and `Keim-client.zip`. Preserve the
+  approved compact anthracite/lime-green controls; the shared #8EDB1A accent matches the mascot. Bright primary actions
+  use dark green-black text; errors stay red and warnings amber.
+  Legacy IPC/JNI identifiers, settings headers and the configured KeyAuth backend
+  application `mcov` remain compatible with existing installations and licenses.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 83 real sections remain reachable. Left-click or Space operates the real
+  All 84 real sections remain reachable. Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
-  muted coral, embedded Inter and rounded fills remain the visual identity.
+  lime-green, embedded Inter and rounded fills remain the visual identity.
   This replaces the module tabs, inline settings and Quick toggles.
-- The injector uses the same approved compact coral design as the client:
+- The injector uses the same approved compact lime-green design as the client:
   scoped `CompactStyle`, embedded Inter at 14 pixels, an 88%-opaque anthracite
   root and a narrow Start/Logs sidebar. It performs Minecraft selection,
   connection and overlay startup. The fixed primary action and close footer
@@ -39,14 +46,17 @@ camera/entity projection stability.
   the keyboard layout. Minecraft titles, player names and user content retain
   their original text. The portable quick-start guide uses the same English labels.
 - The 19 snapshot HUD elements and optional Combat debug HUD use the same
-  compact anthracite/coral design and embedded Inter at 14 pixels. Rounded fills,
+  compact anthracite/lime-green design and embedded Inter at 14 pixels. Rounded fills,
   quiet headings and semantic green/amber/red feedback preserve readability.
   The F6 editor retains movable/scalable elements, visibility, reset and persistence.
 - Keep the simplified Kill Aura workflow and independent mouse-controlled camera.
 - External UI/HUD renderers consume snapshots; their presentation adds no
   render-thread JNI. Base texture extraction has its own game-render callback.
 - Keep one canonical `build` directory and existing version/Forge compatibility.
-- Ship one portable `mcov.exe` containing the client payload. The optional
+- Hole ESP sits under Blocks, using independent bounded short-range block scans
+  for 1x1 bedrock/obsidian/mixed holes with three air blocks of clearance. Preserve
+  native settings, type colours, profile/preferences, unbound defaults and Panic.
+- Ship one portable `Keim.exe` containing the client payload. The optional
   `START.txt` guide is the only other file in the share ZIP.
 - Require license-only KeyAuth 1.3 sign-in for mcov / Uhn5Z5WPCa / 1.0 before
   startup. Preserve the compact English launcher, masked input and background
@@ -55,10 +65,13 @@ camera/entity projection stability.
   the overlay; periodic online checks close the overlay on invalidation.
   Session handoff uses a restricted inherited pipe; direct unauthenticated
   overlay startup is refused. Minecraft remains running on license failure.
+- Keep the current KeyAuth HWID visible in the launcher's fixed footer, before
+  login and on both tabs. Provide a read-only field and **Copy HWID** for support,
+  using the existing Windows account SID without logging or persisting it.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Named profiles and automatic preferences live directly beside the portable
-  client. **Settings → Configs** saves, explicitly overwrites and loads profiles;
+  client. **Settings Ã¢â€ â€™ Configs** saves, explicitly overwrites and loads profiles;
   loading restores saved module states only after full validation. No named
   profile is selected or loaded automatically at startup.
 - Support keyboard/mouse bindings, modifier chords, Toggle/Hold operation and
@@ -70,9 +83,13 @@ camera/entity projection stability.
   13 storage block types with independent RGBA colours, labels and tracers.
   Clipped world-space cube edges replace flat Storage ESP rectangles. Known
   matches persist during rescans; discoveries and removals fade progressively.
-  Scan pause (200–3000 ms) and sequential pulse cycle (500–6000 ms) persist;
+  Scan pause (200Ã¢â‚¬â€œ3000 ms) and sequential pulse cycle (500Ã¢â‚¬â€œ6000 ms) persist;
   Reduced motion shows steady frames. Both scan and presentation are bounded
-  to 1024 matches and preserve the scanner's 2 ms step budget.
+  to 1024 matches. Storage ESP uses its own 4Ã¢â‚¬â€œ512 radius and a 1 ms loaded-chunk
+  block-entity traversal; ordinary Block ESP/Chunkfinder sweeps cannot delay it.
+  Preserve known results and pulse presentation. Audit existing JNI signatures
+  across all runtime profiles, retain a bounded compatibility fallback and save
+  the extended radius in both automatic preferences and named configs.
   Stash Finder records container clusters by chunk; Spawner ESP has its own
   colour, labels and tracers. Right-click opens the same independent settings
   window. These controls preserve the incumbent compact visual system.
@@ -85,6 +102,12 @@ camera/entity projection stability.
   extent plus an adjustable margin; it does not trace entire building bounds.
 - Chunkfinder contains the former Base Finder: raw horizontal deepslate, tall
   kelp and large amethyst buds/clusters have independent per-chunk thresholds.
+  Block ESP and Chunkfinder allow scan radii of 4Ã¢â‚¬â€œ512 blocks and draw distances
+  up to 1024 m; increasing a radius raises draw distance as needed. Keep existing
+  default radii and the shared 2 ms sampler slices / 1024-result cap. Traverse
+  nearby columns and the player's height first, clipping invalid world heights
+  before traversal and keeping cursor/progress arithmetic wide. Chunk evidence
+  still requires completed successful scans. Only locally loaded blocks exist.
   One master toggle and scan/appearance controls serve all three clue types.
   Both full 16x16 chunk-column frames and individual evidence-block boxes are
   on by default and independently configurable. Markers remain visible through
@@ -107,10 +130,12 @@ camera/entity projection stability.
 ## Persistence and runtime boundaries
 
 Automatic preferences remain partial and save in `client-settings.ini` beside
-`mcov.exe`, including HUD positions, per-element scale/visibility, keybinds,
+`Keim.exe`, including HUD positions, per-element scale/visibility, keybinds,
 Rockstar parameters and world/server-scoped waypoints. Existing AppData preferences
 are imported once when local preferences are absent, without replacing local files.
-Runtime helpers and logs remain in `%LOCALAPPDATA%\mcov`.
+Runtime helpers and logs use `%LOCALAPPDATA%\Keim`. The old mcov JDK selection
+and AppData preferences are imported when the corresponding new/local file is
+absent; existing portable settings and named profiles remain in place.
 
 All SMP settings and their module bindings also persist in automatic preferences
 and named profiles. Stash discoveries are session data, scoped to the current
@@ -125,20 +150,20 @@ layout, binds, friend UUID relations and waypoints. Profiles are self-contained,
 fully validated before application and saved atomically within the local folder.
 Copy `configs` and `client-settings.ini` with the client to retain the setup.
 
-Block scans cover a cube with a 4–48 block radius and only blocks available in
+Block scans cover a cube with a 4Ã¢â‚¬â€œ48 block radius and only blocks available in
 the client world. Each result set is bounded to 1024 matching blocks. Stash Finder
 evaluates successful completed scans, defaults to eight chest, trapped-chest,
 shulker-box or barrel blocks per chunk, and counts a double chest as two blocks.
 It keeps at most 128 discoveries and the highest observed count for each chunk.
 Truncated scans report lower-bound counts. The scan does not reveal inventory
 contents, spawner mob types or activation state. See [SMP features](docs/smp-features.md).
-IPC v28 changes the shared layout: restart already running Minecraft before
+IPC v31 changes the shared layout: restart already running Minecraft before
 reattaching with the updated client and agent.
 
 The client menu composites an 88%-opaque dark ImGui fill directly over the
 transparent overlay. It requires no desktop capture, blur or refraction; the
 client glass renderer receives visibility false. The configured overlay capture
-preference applies while the menu is open. Settings → Overlay reports
+preference applies while the menu is open. Settings Ã¢â€ â€™ Overlay reports
 `Translucent dark / 88% opacity` and `Not required`.
 
 The injector also uses direct ImGui alpha compositing. Its native shell clears
@@ -176,7 +201,7 @@ cached official classes for Mojmap, vanilla and Fabric intermediary.
 Native UI checks cover the existing Base settings and texture loading/error
 states. The five final `-verified.png` captures under
 `.impeccable/review/base-textures/` use synthetic ImGui/D3D11 WARP fixtures at
-1280 × 800 and 480 × 360. The independent finish review returned **ship for the
+1280 Ãƒâ€” 800 and 480 Ãƒâ€” 360. The independent finish review returned **ship for the
 UI scope**. The EXE and ZIP were rebuilt. Earlier coloured-marker checks and
 captures under `.impeccable/review/base-esp/` remain historical Area marker
 evidence, not texture-rendering evidence. No live Minecraft texture, appearance
@@ -205,16 +230,16 @@ fixed footer and title controls. Hidden native HWND/swapchain checks cover alpha
 control ink, hidden initialization, resize and rounded clipping.
 
 Current client images under `.impeccable/review/module-widgets/` use native
-ImGui/D3D11 WARP with synthetic fixtures at 1280 × 800, 1920 × 1080 and 480 × 360.
+ImGui/D3D11 WARP with synthetic fixtures at 1280 Ãƒâ€” 800, 1920 Ãƒâ€” 1080 and 480 Ãƒâ€” 360.
 The independent finish review opened all 11 images and returned **ship** with no
 material findings. Native checks cover real right-clicks for all 77 sections,
 actual toggle stores, Space / Shift+F10, independent drag/close, compact close
 returning to the grid, search recovery, settings controls, key capture,
 persistence and style/font ownership. Production build, native check and
-`portable_client` passed; `mcov.exe` and the share ZIP were updated.
+`portable_client` passed; `Keim.exe` and the share ZIP were updated.
 Earlier `.impeccable/review/compact-client/` tab images are historical.
 Five Configs captures under `.impeccable/review/configs/` cover empty, loaded,
-error and small scrolling states at 1280 × 800 and 480 × 360. The finish review
+error and small scrolling states at 1280 Ãƒâ€” 800 and 480 Ãƒâ€” 360. The finish review
 returned **ship** after confirming the explicit-overwrite fix. Native profile
 round-trips, invalid-file preservation, local storage and portable exact-payload
 checks passed; HUD and Rockstar regression checks remained green.
@@ -236,9 +261,9 @@ these checks. Existing compatibility details remain in
 
 ## Freecam
 
-**Misc → Freecam** extends the existing module grid and independent settings
-window. Its unbound Toggle/Hold action, flight speed (1–40 m/s, default 8) and
-Ctrl boost (1–10×, default 3) use existing controls. WASD follows camera yaw/pitch;
+**Misc Ã¢â€ â€™ Freecam** extends the existing module grid and independent settings
+window. Its unbound Toggle/Hold action, flight speed (1Ã¢â‚¬â€œ40 m/s, default 8) and
+Ctrl boost (1Ã¢â‚¬â€œ10Ãƒâ€”, default 3) use existing controls. WASD follows camera yaw/pitch;
 Space rises and Shift descends. Native client ticks own flight state and pause
 combat/item assists. Java camera hooks apply the interpolated position and
 rotation before culling; local player movement and game interactions are gated
@@ -246,3 +271,9 @@ while active. Menus, focus loss, missing world, unload and stale lease release
 the camera. Automatic preferences keep parameters/binding, with Freecam off at
 startup; named profiles preserve its enabled state. See docs/freecam.md for
 verification and live-game limits. IPC v24 requires restarting Minecraft.
+
+Auto Trident appears after Spinbot in Combat. Hold Minecraft's Place / Use with
+a main-hand Riptide trident in water/rain to repeat normal charged releases.
+Charge time is 10–40 game ticks, default 10; no new scan, render hook or timer.
+Native action gating uses the existing client-tick lease. Automatic preferences
+retain charge time/binding and start disabled; named profiles retain all settings.

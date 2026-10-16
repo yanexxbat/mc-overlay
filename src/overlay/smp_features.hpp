@@ -89,7 +89,7 @@ class StoragePulse {
 public:
     StoragePulse() { markers_.reserve(kMaxBlocks); positions_.reserve(kMaxBlocks); }
     void Reset();
-    void Update(const WorldSnapshot& snapshot,const StorageSettings& settings,bool enabled,float range,double now,bool reducedMotion=false);
+    void Update(const WorldSnapshot& snapshot,const StorageSettings& settings,bool enabled,float range,double now,bool reducedMotion=false,bool dedicated=false);
     std::span<const StorageMarker> Markers() const { return markers_; }
     StorageHighlight Highlight(std::size_t index,const StorageSettings& settings,double now,bool reducedMotion=false) const;
 };

@@ -12,6 +12,7 @@ struct View {
     bool busy=false,error=false,needsJdk=false;
     bool licensed=false,authBusy=false,authError=false,showLicense=false;
     std::array<char,257> licenseKey{};
+    std::string hardwareId;
     std::string authMessage="Enter your license key to unlock the client.";
     std::string status="Start Minecraft and select an instance.",phase,diagnostic,log;
 };

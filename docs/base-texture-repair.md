@@ -20,8 +20,8 @@ bridge exceptions retain their nested causes in the native log.
 The repair client and ZIP also passed the standalone portable-package check,
 including equality with the newly built DLL and helper JARs.
 
-The open old launcher locked `build/client/mcov.exe`. The repair was linked using
-the generated client link command into `build/fixed-client/mcov.exe`, packaged as
+The open old launcher locked `build/client/Keim.exe`. The repair was linked using
+the generated client link command into `build/fixed-client/Keim.exe`, packaged as
 `build/mcov-client-fixed.zip`, and verified there. Existing preferences and configs
 were copied into the repair folder. Default builds still use `build/client` once
 the old launcher is closed.
@@ -46,6 +46,6 @@ existing restart diagnostic instead of launching new UI over obsolete code.
 same-sized differences beyond a read-buffer boundary, each helper separately,
 and missing packages. It passed along with `base_texture_models`,
 `base_texture_gl`, `depth_hook` and the rebuilt portable package check. The normal
-`build/client/mcov.exe` and `build/mcov-client.zip` were rebuilt successfully.
+`build/client/Keim.exe` and `build/Keim-client.zip` were rebuilt successfully.
 This confirms version rejection and packaging; successful in-game texture
 appearance remains unverified until Minecraft starts with the repaired runtime.

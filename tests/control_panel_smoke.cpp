@@ -7,6 +7,7 @@
 #include "overlay/visual_preferences.hpp"
 #include "overlay/client_config.hpp"
 #include "common/client_paths.hpp"
+#include "common/dimension_name.hpp"
 #include "injector/launcher_ui.hpp"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
@@ -73,6 +74,8 @@ struct OverlayUiCheck {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
+    static BlockEspSettings& Blocks(Overlay& o) { return o.blocks_; }
+    static holes::Settings& Holes(Overlay& o) { return o.holeSettings_; }
     static smp::BaseFinderSettings ChunkSettings(const Overlay& o) { return o.ChunkDetection(); }
     static smp::Config& Smp(Overlay& o) { return o.smpConfig_; }
     static void BaseStatus(Overlay& o,base::Status status) {
@@ -83,6 +86,7 @@ struct OverlayUiCheck {
     static smp::BaseFinder& Growth(Overlay& o) { return o.baseFinder_; }
     static items::MacroConfig& Crystal(Overlay& o) { return o.crystalMacro_; }
     static items::MacroConfig& Anchor(Overlay& o) { return o.anchorMacro_; }
+    static items::TridentConfig& Trident(Overlay& o) { return o.autoTrident_; }
     static items::Request ItemRequest(const Overlay& o,bool allowed) { return o.BuildItemRequest(1000,allowed,false); }
     static void ChunkTab(Overlay& o) { o.blocksSection_=3; }
     static void ItemStatus(Overlay& o) { o.itemReport_.totem=items::Status::HoldingTotem; o.itemReport_.crystal=items::Status::WaitingBind; o.itemReport_.anchor=items::Status::WaitingBind; }
@@ -247,12 +251,12 @@ void Draw(mcov::Overlay& overlay,Page page,int theme,ImVec2 size,bool preserveSt
     Require(ctx.ErrorCountCurrentFrame==0,"Menu emitted an ImGui stack/layout error");
     Require(after.WindowPadding.x==before.WindowPadding.x && after.FrameRounding==before.FrameRounding,
             "Menu theme changed global sizing");
-    auto* window=ImGui::FindWindowByName("mcov control panel");
+    auto* window=ImGui::FindWindowByName("Keim control panel");
     Require(window,"Menu window is missing");
     if(window->Active) Require(window->Pos.x>=0 && window->Pos.y>=0 &&
             window->Pos.x+window->Size.x<=size.x && window->Pos.y+window->Size.y<=size.y,"Menu escaped the viewport");
     if(mcov::OverlayUiCheck::Menu(overlay).settingsOpen) {
-        auto* pane=ImGui::FindWindowByName("mcov module settings");
+        auto* pane=ImGui::FindWindowByName("Keim module settings");
         Require(pane&&pane->Pos.x>=0&&pane->Pos.y>=0&&pane->Pos.x+pane->Size.x<=size.x&&pane->Pos.y+pane->Size.y<=size.y,
             "Settings window escaped the viewport");
     }
@@ -303,7 +307,7 @@ void OpenModuleSettings(mcov::Overlay& overlay,Page page,const char* id,int inde
     Require(menu.settingsOpen&&menu.settingsPage==page&&menu.settingsSection==index,"Right-click did not open the module's real settings");
     mcov::OverlayUiCheck::Modules(overlay,page,modules);
     Require(modules[index].enabled==original,"Right-click changed the module's enabled state");
-    auto* pane=ImGui::FindWindowByName("mcov module settings");
+    auto* pane=ImGui::FindWindowByName("Keim module settings");
     Require(pane&&pane->Active&&pane->ParentWindow==nullptr,"Module settings are not an independent window");
     ImGui::GetIO().AddMousePosEvent(-100,-100); Draw(overlay,page,0,viewport);
 }
@@ -339,6 +343,120 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
     ClickModule(overlay,Page::Settings,0,5,0);
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen,"Settings-only widget did not open on left-click");
 }
+void HoleUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned; mcov::OverlayUiCheck::Seed(overlay);
+    auto& c=mcov::OverlayUiCheck::Holes(overlay);
+    ClickModule(overlay,Page::Blocks,10,11,0); Require(c.enabled,"Hole ESP module did not enable");
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",10,11,size);
+        auto frame=[&]{ Draw(overlay,Page::Blocks,0,size); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"hole-settings-desktop.png":"hole-settings-small.png"));
+        ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"hole-colours-desktop.png":"hole-colours-small.png"));
+        Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Hole settings footer is unreachable");
+    }
+    c.radius=16; c.mixed=false; c.bedrockColour.w=.6f;
+    mcov::OverlayUiCheck::PrefPath(overlay,output/"hole-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
+    Require(c.enabled&&c.radius==16&&!c.mixed&&c.bedrockColour.w==.6f,"Hole ESP automatic preferences were lost");
+    mcov::OverlayUiCheck::Panic(overlay); Require(!c.enabled,"Panic left Hole ESP enabled");
+    c={}; c.enabled=c.labels=true;
+    auto scene=std::make_unique<mcov::WorldSnapshot>(); scene->camY=66; scene->camZ=-4; scene->posY=64;
+    scene->pitchDeg=15; scene->fovDeg=70; scene->nearPlane=.05f; scene->farPlane=128; scene->holeCount=3;
+    for(unsigned i=0;i<3;++i) { auto& h=scene->holes[i]; h.x=float(i*2)-2; h.y=64; h.z=4; h.kind=std::uint8_t(i+1); }
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto& draw=*ImGui::GetBackgroundDrawList(); draw.AddRectFilled({0,0},size,IM_COL32(24,26,30,255));
+        const mcov::CameraProjection projection(*scene,size.x,size.y);
+        mcov::holes::Draw(draw,*scene,projection,c,size); ImGui::Render();
+        SaveFrame(device,context,output/(size.x>500?"hole-world-desktop.png":"hole-world-small.png"));
+    }
+}
+void TridentUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using Check=mcov::OverlayUiCheck;
+    auto owned=std::make_unique<mcov::Overlay>(); auto& o=*owned; Check::Seed(o);
+    auto& c=Check::Trident(o);
+    ClickModule(o,Page::Combat,9,10,0); Require(c.enabled,"Auto Trident module did not enable");
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        Check::Center(o); OpenModuleSettings(o,Page::Combat,"combat_sections",9,10,size);
+        auto frame=[&]{ Draw(o,Page::Combat,0,size); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"trident-desktop.png":"trident-small.png"));
+        ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
+        Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Auto Trident help is unreachable");
+    }
+    c.chargeTicks=17;
+    Check::PrefPath(o,output/"trident-preferences.ini"); Check::Save(o); c={}; Check::Load(o);
+    Require(!c.enabled&&c.chargeTicks==17,"Auto Trident charge preference was lost or auto-enabled at startup"); c.enabled=true;
+    auto snapshot=Check::ConfigSnapshot(o); std::string encoded;
+    Require(mcov::client_configs::Encode(snapshot,encoded),"Auto Trident config encode failed");
+    mcov::client_configs::Snapshot decoded;
+    Require(mcov::client_configs::Decode(encoded,decoded)&&decoded.trident.enabled&&decoded.trident.chargeTicks==17,"Auto Trident named config round trip failed");
+    const auto bind="bind."+std::to_string(mcov::keys::Index(mcov::keys::Action::AutoTrident))+".";
+    std::istringstream rows(encoded); std::string line,legacy;
+    while(std::getline(rows,line)) if(!line.starts_with("trident.")&&!line.starts_with(bind)) legacy+=line+'\n';
+    Require(mcov::client_configs::Decode(legacy,decoded)&&!decoded.trident.enabled&&decoded.trident.chargeTicks==10,"Legacy settings did not default Auto Trident off");
+    auto partial=encoded; const auto missing=partial.find("trident.chargeTicks ");
+    partial.erase(missing,partial.find('\n',missing)-missing+1);
+    Require(!mcov::client_configs::Decode(partial,decoded),"Partly damaged Auto Trident settings were accepted");
+    Check::Panic(o); Require(!c.enabled,"Panic left Auto Trident enabled");
+}
+void StorageRangeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto owned=std::make_unique<mcov::Overlay>(); auto& o=*owned; mcov::OverlayUiCheck::Seed(o);
+    auto& range=mcov::OverlayUiCheck::Rockstar(o)[mcov::rockstar::Feature::ChestEsp].range;
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
+        range=24; mcov::OverlayUiCheck::Center(o); OpenModuleSettings(o,Page::Blocks,"block_sections",4,11,size);
+        auto frame=[&]{ Draw(o,Page::Blocks,0,size); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+        auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("storage_settings"));
+        Require(table!=nullptr,"Storage scan controls are missing");
+        const float height=mcov::style::MenuFont()->FontSize+6;
+        auto& io=ImGui::GetIO();
+        io.AddMousePosEvent(table->Columns[1].WorkMaxX-3,table->OuterRect.Min.y+3*table->RowCellPaddingY+height*1.5f); frame();
+        io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+        Require(range==512,"Storage radius still has a 48/256 block clamp");
+        io.AddMousePosEvent(-100,-100); frame(); frame();
+        SaveFrame(device,context,output/(size.x>500?"storage-radius-512-desktop.png":"storage-radius-512-small.png"));
+    }
+    mcov::OverlayUiCheck::PrefPath(o,output/"storage-range-preferences.ini"); mcov::OverlayUiCheck::Save(o); range=24; mcov::OverlayUiCheck::Load(o);
+    Require(range==512,"Storage radius was lost in automatic preferences");
+    auto snapshot=mcov::OverlayUiCheck::ConfigSnapshot(o); std::string encoded; mcov::client_configs::Snapshot restored;
+    Require(mcov::client_configs::Encode(snapshot,encoded)&&mcov::client_configs::Decode(encoded,restored)&&
+        restored.extra[mcov::rockstar::Feature::ChestEsp].range==512,"Storage radius was lost in named configs");
+}
+void LargeScanUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned; mcov::OverlayUiCheck::Seed(overlay);
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) for(int section:{0,3}) {
+        auto& blocks=mcov::OverlayUiCheck::Blocks(overlay); auto& chunks=mcov::OverlayUiCheck::Chunk(overlay);
+        int& radius=section==0?blocks.radius:chunks.radius;
+        float& distance=section==0?blocks.maxDraw:chunks.maxDraw;
+        radius=4; distance=8;
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",section,11,size);
+        auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
+        auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
+        auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID(section==0?"block_scanning":"chunkfinder_controls"));
+        Require(table!=nullptr,"Large-radius scan controls are missing");
+        const float height=mcov::style::MenuFont()->FontSize+6;
+        const ImVec2 point{table->Columns[1].WorkMaxX-3,
+            table->OuterRect.Min.y+table->RowCellPaddingY+height+2*table->RowCellPaddingY+height*.5f};
+        auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame();
+        io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
+        if(radius!=512||distance<std::ceil(512*std::sqrt(3.f))) {
+            SaveFrame(device,context,output/"large-scan-input-debug.png");
+            throw std::runtime_error("Scan slider input: section="+std::to_string(section)+" width="+std::to_string(size.x)+
+                " radius="+std::to_string(radius)+" distance="+std::to_string(distance)+" point="+std::to_string(point.x)+","+std::to_string(point.y)+
+                " hovered="+(ImGui::GetCurrentContext()->HoveredWindow?ImGui::GetCurrentContext()->HoveredWindow->Name:"none"));
+        }
+        io.AddMousePosEvent(-100,-100); frame(); frame();
+        const std::string name=section==0?"block-radius-512-":"chunk-radius-512-";
+        SaveFrame(device,context,output/(name+(size.x>500?"desktop.png":"small.png")));
+    }
+    mcov::OverlayUiCheck::PrefPath(overlay,output/"large-scan-preferences.ini");
+    mcov::OverlayUiCheck::Save(overlay);
+    auto& chunks=mcov::OverlayUiCheck::Chunk(overlay); chunks.radius=4; chunks.maxDraw=8;
+    mcov::OverlayUiCheck::Load(overlay);
+    Require(chunks.radius==512&&chunks.maxDraw>=887,"Automatic preferences lost the extended Chunkfinder range");
+}
 void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned; mcov::OverlayUiCheck::Seed(overlay);
     auto& c=mcov::OverlayUiCheck::Smp(overlay);
@@ -348,7 +466,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(int i=0;i<12;++i) { auto& b=scene->blocks[scene->blockCount++]; b.x=float(i%4); b.y=64; b.z=float(i/4); b.kind=mcov::kBlockChest; }
     scene->blockScanY=64; Require(mcov::OverlayUiCheck::Stashes(overlay).Update(*scene,c.stash)==1,"SMP UI discovery fixture failed");
     scene->fovDeg=70; scene->health=scene->maxHealth=20; mcov::OverlayUiCheck::Snapshot(overlay,*scene);
-    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,10);
+    OpenModuleSettings(overlay,Page::Blocks,"block_sections",4,11);
     auto storageFrame=[&] { Draw(overlay,Page::Blocks,0,{1280,800}); };
     auto* storageContent=Child("/content_"); ImGui::SetScrollY(storageContent,storageContent->ScrollMax.y); storageFrame(); storageFrame();
     auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(storageContent->GetID("storage_colours"));
@@ -368,7 +486,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
         for(int index:{4,7,8,9,3}) {
-            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,10,size);
+            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,11,size);
             auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
             auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
             const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":index==9?"base-esp-settings-":"chunkfinder-empty-";
@@ -380,7 +498,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             }
             if(index==9&&size.x<500) {
                 ImGui::SetScrollY(content,0); frame(); frame();
-                auto* pane=ImGui::FindWindowByName("mcov module settings");
+                auto* pane=ImGui::FindWindowByName("Keim module settings");
                 Require(pane->Scroll.y==0&&content->Pos.y>=pane->Pos.y+42&&content->InnerClipRect.Min.y>=pane->Pos.y+42,
                     "Base content overlaps its fixed header");
                 SaveFrame(device,context,output/"base-esp-settings-small-top.png");
@@ -395,7 +513,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::OverlayUiCheck::Snapshot(overlay,*scene);
     mcov::OverlayUiCheck::Chunk(overlay).chunks=false; mcov::OverlayUiCheck::Chunk(overlay).deepslate=false;
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-settings-desktop.png":"chunkfinder-settings-small.png"));
@@ -403,7 +521,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-filters-desktop.png":"chunkfinder-filters-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-discoveries-desktop.png":"chunkfinder-discoveries-small.png"));
-        auto* pane=ImGui::FindWindowByName("mcov module settings");
+        auto* pane=ImGui::FindWindowByName("Keim module settings");
         Require(pane->Scroll.y==0&&content->InnerClipRect.Min.y>=pane->Pos.y+42,"Base Finder content overlaps its fixed header");
         Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Base Finder discoveries/footer unreachable");
     }
@@ -411,7 +529,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::CopyField(scene->gameVersion,"1.21.11"); mcov::OverlayUiCheck::Snapshot(overlay,*scene);
     for(auto state:{mcov::base::Status::Building,mcov::base::Status::Failed}) {
         mcov::OverlayUiCheck::BaseStatus(overlay,state);
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,10,{480,360});
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,11,{480,360});
         auto frame=[&]{ Draw(overlay,Page::Blocks,0,{480,360}); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(state==mcov::base::Status::Building?"base-textures-loading-small.png":"base-textures-error-small.png"));
@@ -498,8 +616,8 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     Require(content->Scroll.y>0,"Reopening the same module lost its scroll");
     OpenModuleSettings(overlay,Page::Visuals,"",0,26);
     Require(Child("/content_")->Scroll.y==0,"Changing module did not reset settings scroll");
-    auto* root=ImGui::FindWindowByName("mcov control panel");
-    auto* pane=ImGui::FindWindowByName("mcov module settings");
+    auto* root=ImGui::FindWindowByName("Keim control panel");
+    auto* pane=ImGui::FindWindowByName("Keim module settings");
     const auto rootOriginal=root->Pos,paneOriginal=pane->Pos;
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
     const float dragX=paneOriginal.x>30?-25.f:25.f;
@@ -526,24 +644,24 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
     mcov::OverlayUiCheck::CloseDetails(overlay); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
     SaveFrame(device,context,output/"module-grid-small.png");
-    OpenModuleSettings(overlay,Page::Combat,"",1,9,{480,360});
-    Require(!ImGui::FindWindowByName("mcov control panel")->Active,"Compact settings still have text from the grid behind them");
+    OpenModuleSettings(overlay,Page::Combat,"",1,10,{480,360});
+    Require(!ImGui::FindWindowByName("Keim control panel")->Active,"Compact settings still have text from the grid behind them");
     SaveFrame(device,context,output/"module-settings-small.png");
-    auto* smallPane=ImGui::FindWindowByName("mcov module settings");
+    auto* smallPane=ImGui::FindWindowByName("Keim module settings");
     io.AddMousePosEvent(smallPane->Pos.x+smallPane->Size.x-27,smallPane->Pos.y+22); Draw(overlay,Page::Combat,0,{480,360});
     io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Combat,0,{480,360});
     io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Combat,0,{480,360}); Draw(overlay,Page::Combat,0,{480,360});
-    Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&ImGui::FindWindowByName("mcov control panel")->Active,
+    Require(!mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&ImGui::FindWindowByName("Keim control panel")->Active,
         "Compact settings close did not restore the module grid");
     mcov::OverlayUiCheck::Center(overlay);
-    OpenModuleSettings(overlay,Page::Combat,"",1,9,{1920,1080});
+    OpenModuleSettings(overlay,Page::Combat,"",1,10,{1920,1080});
     SaveFrame(device,context,output/"module-settings-large.png");
     mcov::OverlayUiCheck::Center(overlay);
 }
 void SearchChecks(mcov::Overlay& overlay) {
     mcov::OverlayUiCheck::CloseDetails(overlay);
     auto frame=[&] { Draw(overlay,Page::Combat,0,{1280,800}); }; frame(); frame();
-    auto& io=ImGui::GetIO(); auto* root=ImGui::FindWindowByName("mcov control panel");
+    auto& io=ImGui::GetIO(); auto* root=ImGui::FindWindowByName("Keim control panel");
     const ImVec2 p{root->Pos.x+45,root->Pos.y+58};
     io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
     io.AddInputCharactersUTF8("AURA"); frame(); frame(); frame();
@@ -612,7 +730,7 @@ void GlassScenePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
         Draw(overlay,Page::Combat,0,size); ImGui::SetScrollY(Child("/module_grid_"),0); Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
         const char* suffix=w<500?"small":"desktop";
         SaveFrame(device,context,output/(std::string("glass-scene-grid-")+suffix+".png"));
-        OpenModuleSettings(overlay,Page::Combat,"combat_sections",1,9,size);
+        OpenModuleSettings(overlay,Page::Combat,"combat_sections",1,10,size);
         Draw(overlay,Page::Combat,0,size); SaveFrame(device,context,output/(std::string("glass-scene-settings-")+suffix+".png"));
         previewSceneImage.Reset(); previewScene.Reset();
     }
@@ -696,7 +814,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     Require(!config.enabled,"Enable marker checkbox did not update renderer config");
     click({top.x+32,top.y+8});
     Require(config.enabled,"Enable marker checkbox did not re-enable renderer config");
-    // Die erste Größenzeile nutzt denselben echten Slider wie Target Aura.
+    // Die erste GrÃ¶ÃŸenzeile nutzt denselben echten Slider wie Target Aura.
     const float frameHeight=mcov::style::MenuFont()->FontSize+6;
     const float row=frameHeight+2*controls()->RowCellPaddingY;
     const auto& column=controls()->Columns[1];
@@ -807,7 +925,7 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     const auto& binds=mcov::OverlayUiCheck::Binds(overlay);
     for(int index=mcov::keys::Index(mcov::keys::Action::Trails);index<mcov::keys::kCount;++index)
         Require(!binds[index].key,"New visual binds collided with existing Minecraft keys");
-    // Neue Keybind-Aktionen schalten die tatsächlichen Module, inklusive des eigenen Huts.
+    // Neue Keybind-Aktionen schalten die tatsÃ¤chlichen Module, inklusive des eigenen Huts.
     mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input);
     const mcov::keys::Action actions[]={mcov::keys::Action::HitBubbles,mcov::keys::Action::KillEffect,
         mcov::keys::Action::BreadCrumbs,mcov::keys::Action::ChinaHat};
@@ -920,7 +1038,7 @@ void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* 
     entity.health=8;
     Require(frame({1280,800})>0,"Partially depleted entity lost its ESP");
     SaveFrame(device,context,output/"esp-health.png");
-    // Namen ohne Nullterminator, fehlende Messwerte und Randpositionen sind echte IPC-Grenzfälle.
+    // Namen ohne Nullterminator, fehlende Messwerte und Randpositionen sind echte IPC-GrenzfÃ¤lle.
     std::memset(entity.name,'W',sizeof(entity.name));
     scene.ping=-1; entity.details.ping=-1; entity.x=2.2; entity.health=0;
     Require(frame({480,360})>0,"Clipped ESP with a long name was rejected");
@@ -1010,6 +1128,20 @@ void TargetCubePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
 }
 void LicenseChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     mcov::launcher::View view; view.instances={{1234,"Minecraft fixture","Java 21",false,false}}; view.selected=0;
+    const std::string hardwareId="S-1-5-21-1234567890-1234567890-1234567890-1001";
+    view.hardwareId=hardwareId;
+    // Keep support-copy tests entirely inside the fixture, away from the OS clipboard.
+    auto& platform=ImGui::GetPlatformIO();
+    struct RestoreClipboard {
+        decltype(ImGuiPlatformIO::Platform_GetClipboardTextFn) get;
+        decltype(ImGuiPlatformIO::Platform_SetClipboardTextFn) set;
+        void* data;
+        ~RestoreClipboard() { auto& p=ImGui::GetPlatformIO(); p.Platform_GetClipboardTextFn=get; p.Platform_SetClipboardTextFn=set; p.Platform_ClipboardUserData=data; }
+    } restoreClipboard{platform.Platform_GetClipboardTextFn,platform.Platform_SetClipboardTextFn,platform.Platform_ClipboardUserData};
+    std::string clipboard;
+    platform.Platform_ClipboardUserData=&clipboard;
+    platform.Platform_GetClipboardTextFn=[](ImGuiContext*) { return static_cast<std::string*>(ImGui::GetPlatformIO().Platform_ClipboardUserData)->c_str(); };
+    platform.Platform_SetClipboardTextFn=[](ImGuiContext*,const char* text) { *static_cast<std::string*>(ImGui::GetPlatformIO().Platform_ClipboardUserData)=text; };
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
@@ -1028,23 +1160,36 @@ void LicenseChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::
         const std::string suffix=size.x>500?"desktop.png":"small.png";
         view.licenseKey={}; view.authBusy=view.authError=false; view.showLicense=false; view.authMessage="Enter your license key to unlock the client.";
         frame(size); frame(size); SaveFrame(device,context,output/("keyauth-empty-"+suffix));
+        const ImVec2 copy{size.x-68,size.y-53};
+        clipboard.clear(); click(copy,size);
+        Require(clipboard==hardwareId,"HWID copy is unreachable before login or copied a truncated value");
         auto* content=Child("/launcher_content"); const ImVec2 action{size.x*.6f,content->Pos.y+content->Size.y+25};
         Require(!click(action,size).verifyLicense,"Empty key enabled license verification");
         std::snprintf(view.licenseKey.data(),view.licenseKey.size(),"TEST-KEY-NOT-LIVE"); frame(size); frame(size);
         SaveFrame(device,context,output/("keyauth-entry-"+suffix));
         Require(click(action,size).verifyLicense,"License verification action is unreachable");
         view.authBusy=true; frame(size); frame(size); SaveFrame(device,context,output/("keyauth-busy-"+suffix));
+        clipboard.clear(); click(copy,size);
+        Require(clipboard==hardwareId,"HWID copy is blocked during verification");
         Require(!click(action,size).verifyLicense,"Busy state allowed duplicate verification");
         view.authBusy=false; view.authError=true; view.authMessage="License key rejected. Check your key and try again.";
         frame(size); frame(size); SaveFrame(device,context,output/("keyauth-rejected-"+suffix));
         Require(click(action,size).verifyLicense,"Rejected key cannot be retried");
         Require(click({size.x-68,size.y-25},size).close,"License footer Close is unreachable");
+        view.tab=1; frame(size); frame(size); SaveFrame(device,context,output/("hwid-logs-"+suffix));
+        clipboard.clear(); click(copy,size);
+        Require(clipboard==hardwareId,"HWID copy is unreachable in Logs");
+        view.hardwareId.clear(); frame(size); frame(size); SaveFrame(device,context,output/("hwid-unavailable-"+suffix));
+        clipboard="unchanged"; click(copy,size);
+        Require(clipboard=="unchanged","Unavailable HWID changed the clipboard");
+        view.hardwareId=hardwareId; view.tab=0;
     }
     ImGui::GetIO().AddMousePosEvent(-100,-100);
 }
 void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     mcov::launcher::View view;
     view.licensed=true;
+    view.hardwareId="S-1-5-21-1234567890-1234567890-1234567890-1001";
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
@@ -1289,6 +1434,7 @@ int main(int argc,char** argv) {
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.ConfigFlags|=ImGuiConfigFlags_NavEnableKeyboard;
         Require(mcov::style::LoadFonts(),"Embedded fonts failed");
+        Require(mcov::style::BrandLogoReady(),"Embedded Keim mascot failed to load");
         Require(mcov::control_panel::motion::EaseOut(0)==0 && mcov::control_panel::motion::EaseOut(1)==1 &&
                 mcov::control_panel::motion::EaseOut(.2f)>.5f,"Feedback curve does not respond promptly");
         mcov::style::ApplyFlatTheme(ImGui::GetStyle());
@@ -1296,22 +1442,72 @@ int main(int argc,char** argv) {
         mcov::LiquidGlass glass;
         Require(glass.Initialize(device.Get(),context.Get()),"Liquid glass shaders failed to initialize");
         previewGlass=&glass;
-        // Die erweiterte Fixture plus mehrere große Snapshots passen nicht auf den 1-MB-Teststack.
+        // Die erweiterte Fixture plus mehrere groÃŸe Snapshots passen nicht auf den 1-MB-Teststack.
         auto overlayStorage=std::make_unique<mcov::Overlay>(); auto& overlay=*overlayStorage; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
         auto frame=[&](Page page,bool preserve=false) { Draw(overlay,page,0,{1280,800},preserve); };
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={9,26,10,20,3,5,10};
+        constexpr int sectionCounts[]={10,26,11,21,3,5,10};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
         SearchChecks(overlay);
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
+        HoleUiChecks(device.Get(),context.Get(),output);
+        TridentUiChecks(device.Get(),context.Get(),output);
+        StorageRangeUiChecks(device.Get(),context.Get(),output);
+        LargeScanUiChecks(device.Get(),context.Get(),output);
         SmpUiChecks(device.Get(),context.Get(),output);
         AntiVanishUiChecks(device.Get(),context.Get(),output);
+        {
+            using namespace mcov;
+            auto original=OverlayUiCheck::ConfigSnapshot(overlay);
+            auto mapConfig=original;
+            mapConfig.hud.regionMap={true,false,false,false};
+            mapConfig.hud.layout[int(HudModule::RegionMap)]={{.2f,.3f},1.2f,true};
+            std::string encoded;
+            Require(client_configs::Encode(mapConfig,encoded),"Region map config encode");
+            client_configs::Snapshot restored;
+            Require(client_configs::Decode(encoded,restored)&&restored.hud.regionMap.enabled&&!restored.hud.regionMap.labels&&!restored.hud.regionMap.grid&&!restored.hud.regionMap.coordinates&&restored.hud.layout[int(HudModule::RegionMap)].scale==1.2f,"Region map config round trip");
+            const auto bindPrefix="bind."+std::to_string(keys::Index(keys::Action::RegionMap))+".";
+            const auto placePrefix="hud.layout."+std::to_string(int(HudModule::RegionMap))+".";
+            std::istringstream rows(encoded); std::string line,legacy;
+            while(std::getline(rows,line)) if(!line.starts_with("hud.regionMap.")&&!line.starts_with(bindPrefix)&&!line.starts_with(placePrefix)) legacy+=line+'\n';
+            Require(client_configs::Decode(legacy,restored)&&!restored.hud.regionMap.enabled&&restored.hud.regionMap.labels,"Legacy config missing region map defaults");
+            auto partial=encoded; const auto missing=partial.find("hud.regionMap.labels ");
+            partial.erase(missing,partial.find('\n',missing)-missing+1);
+            Require(!client_configs::Decode(partial,restored),"Partial region map config accepted");
+            auto preferenceOverlay=std::make_unique<Overlay>();
+            OverlayUiCheck::ConfigSnapshot(*preferenceOverlay,mapConfig);
+            const auto preferenceFile=output/"region-map-preferences.ini";
+            OverlayUiCheck::PrefPath(*preferenceOverlay,preferenceFile); OverlayUiCheck::Save(*preferenceOverlay);
+            auto loadedPreferences=std::make_unique<Overlay>();
+            OverlayUiCheck::PrefPath(*loadedPreferences,preferenceFile); OverlayUiCheck::Load(*loadedPreferences);
+            const auto& loadedMap=OverlayUiCheck::Hud(*loadedPreferences);
+            Require(loadedMap.regionMap.enabled&&!loadedMap.regionMap.labels&&!loadedMap.regionMap.grid&&!loadedMap.regionMap.coordinates&&loadedMap.layout[int(HudModule::RegionMap)].scale==1.2f,"Region map automatic preferences round trip");
+            OverlayUiCheck::SetModule(overlay,keys::Action::RegionMap,true);
+            Require(OverlayUiCheck::Module(overlay,keys::Action::RegionMap),"Region map module toggle");
+            OpenModuleSettings(overlay,Page::Hud,"hud_sections",int(HudModule::RegionMap)+1,kHudModules+1);
+            SaveFrame(device.Get(),context.Get(),output/"region-map-settings.png");
+            OpenModuleSettings(overlay,Page::Hud,"hud_sections",int(HudModule::RegionMap)+1,kHudModules+1,{480,360});
+            SaveFrame(device.Get(),context.Get(),output/"region-map-settings-compact.png");
+            for(int i=0;i<kHudModules;++i) OverlayUiCheck::HudElement(overlay,i,i==int(HudModule::RegionMap));
+            auto mapScene=std::make_unique<WorldSnapshot>();
+            CopyField(mapScene->serverAddress,"play.donutsmp.net");
+            CopyDimensionName(mapScene->dimension,"ResourceKey[minecraft:dimension / minecraft:overworld]");
+            mapScene->posX=-42000; mapScene->posZ=58000;
+            OverlayUiCheck::Snapshot(overlay,*mapScene);
+            auto& mapHud=OverlayUiCheck::Hud(overlay); mapHud.visible=true;
+            mapHud.layout[int(HudModule::RegionMap)]={{.5f,.5f},1,true};
+            io.DisplaySize={640,480}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+            OverlayUiCheck::DrawHud(overlay,*mapScene,false); ImGui::Render();
+            SaveFrame(device.Get(),context.Get(),output/"region-map.png");
+            OverlayUiCheck::ConfigSnapshot(overlay,original);
+            OverlayUiCheck::Seed(overlay);
+        }
         FreecamUiChecks(device.Get(),context.Get(),output);
         for(int p=0;p<IM_ARRAYSIZE(pages);++p) {
             for(int section=0;section<sectionCounts[p];++section)
@@ -1344,7 +1540,7 @@ int main(int argc,char** argv) {
         Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Left navigation did not select Combat");
         nav=Child("/navigation_"); click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+5*(tabHeight+6)+tabHeight*.5f},Page::Combat);
         Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Settings,"Left navigation did not select Settings");
-        auto* panel=ImGui::FindWindowByName("mcov control panel"); const auto original=panel->Pos;
+        auto* panel=ImGui::FindWindowByName("Keim control panel"); const auto original=panel->Pos;
         const ImVec2 grip{original.x+panel->Size.x*.5f,original.y+12};
         io.AddMousePosEvent(grip.x,grip.y); frame(Page::Settings); io.AddMouseButtonEvent(0,true); frame(Page::Settings);
         Require(mcov::OverlayUiCheck::Menu(overlay).dragging,"Classic title bar did not start drag");
@@ -1505,7 +1701,7 @@ int main(int argc,char** argv) {
         // All nineteen real widgets, isolated into a synthetic catalog for visual coverage.
         const auto galleryHud=hud; const auto galleryExtra=extra;
         const bool galleryWatermark=mcov::OverlayUiCheck::Settings(overlay).showWatermark;
-        io.DisplaySize={1440,1100}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        io.DisplaySize={1440,1320}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
         auto& galleryDraw=*ImGui::GetBackgroundDrawList();
         ImGui::PushFont(mcov::style::MenuFont());
         galleryDraw.AddText({24,16},mcov::style::compact::Muted,"HUD catalog / synthetic snapshot data");
@@ -1551,7 +1747,7 @@ int main(int argc,char** argv) {
             ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
             mcov::OverlayUiCheck::DrawAura(overlay,device.Get()); ImGui::Render();
         };
-        // Das Overlay überträgt Bereitschaft/Fokus; Place/Use liest Minecraft selbst.
+        // Das Overlay Ã¼bertrÃ¤gt Bereitschaft/Fokus; Place/Use liest Minecraft selbst.
         mcov::OverlayUiCheck::Crystal(overlay).enabled=true;
         auto& macroBinds=mcov::OverlayUiCheck::Binds(overlay);
         macroBinds[mcov::keys::Index(mcov::keys::Action::CrystalMacro)]={0x43,0,mcov::keys::Mode::Toggle};
@@ -1569,14 +1765,14 @@ int main(int argc,char** argv) {
         for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
             const auto suffix=size.x<500?"-small.png":".png";
             for(int section:{3,5,6}) {
-                OpenModuleSettings(overlay,Page::Combat,"combat_sections",section,9,size);
+                OpenModuleSettings(overlay,Page::Combat,"combat_sections",section,10,size);
                 mcov::OverlayUiCheck::Center(overlay);
                 for(int i=0;i<20;++i) Draw(overlay,Page::Combat,0,size);
                 SaveFrame(device.Get(),context.Get(),output/(std::string("item-settings-")+std::to_string(section)+suffix));
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,10,size); mcov::OverlayUiCheck::Center(overlay);
+            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
@@ -1649,7 +1845,7 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 83 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 85 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

@@ -62,6 +62,14 @@ Viewport-Breite ist bei geöffneten Settings nur dieses Fenster sichtbar;
   Storage ESP, Beacon radius, Chunk borders, Stash Finder, Spawner ESP und Base ESP.
 - **HUD:** Editor und ein Widget pro HUD-Element mit Sichtbarkeit, Position, Skalierung
   und Reset nur dieses Elements. Durability warning liegt unter Equipment.
+  **Region map** zeigt die vollständige DonutSMP-Serverkarte von −225.000 bis
+  +225.000 auf X und Z. Die sechs farbigen Bereiche sind EU Central, EU West,
+  NA East, NA West, Asia und Oceania. Rechtsklick öffnet Beschriftungen,
+  Rasterlinien, Spielerkoordinaten und eine optionale Toggle/Hold-Taste.
+  F6 erlaubt Verschieben und Skalieren. Die weiße Positionsmarkierung erscheint
+  bei einer aktuellen Verbindung in der DonutSMP-Overworld; die Karte bleibt
+  auch ohne Positionsdaten als Übersicht sichtbar. Kartengrundlage:
+  [Donut.Auction](https://donut.auction/regions), Stand 15.10.2026.
 - **Stats:** Local player, Client, Entities.
 - **Settings:** Overlay, Focus, Keybinds, Agent, Configs.
 - **Misc:** Middle click friend, Death coordinates, Detect players, Waypoints,
@@ -106,7 +114,7 @@ Wegpunkte. Es wird vollständig geprüft, bevor es angewendet wird; eine ungült
 oder nicht unterstützte Datei lässt die aktuellen Einstellungen unverändert.
 Statusmeldungen zeigen erfolgreiche Aktionen und Fehler mit einem nächsten Schritt.
 
-Profile liegen in `configs/<Name>.ini` neben `mcov.exe`. Namen dürfen 1–48
+Profile liegen in `configs/<Name>.ini` neben `Keim.exe`. Namen dürfen 1–48
 ASCII-Buchstaben, Ziffern, Leerzeichen, `-` oder `_` enthalten; führende und
 abschließende Leerzeichen sowie reservierte Windows-Namen sind ausgeschlossen.
 Dateien mit `.ini` oder `.INI` erscheinen nach **Refresh** in der Liste.
@@ -198,7 +206,7 @@ Triggerbot senden dann keine Eingaben.
 
 ## Speicherung und Technik
 
-`client-settings.ini` neben der portablen `mcov.exe` enthält die bisherigen
+`client-settings.ini` neben der portablen `Keim.exe` enthält die bisherigen
 automatischen Teil-Einstellungen, darunter Binds, HUD-Konfiguration,
 Rockstar-Modulparameter, alle SMP-Einstellungen und server-/dimensionsgebundene Wegpunkte. Diese Datei
 ist kein vollständiges benanntes Profil; dafür **Settings → Configs** verwenden.
@@ -211,7 +219,7 @@ drei System-Tasten und ungebundene Module wieder her. Ohne lokale Datei importie
 der portable Launcher bestehende automatische Einstellungen einmalig aus AppData;
 lokale Einstellungen werden dabei nicht ersetzt. Benannte Configs werden mit einer
 temporären Datei im selben `configs`-Ordner atomar gespeichert. Laufzeit-Helfer
-und Logs bleiben unter `%LOCALAPPDATA%\mcov`.
+und Logs bleiben unter `%LOCALAPPDATA%\Keim`.
 
 `keybinds.hpp` trennt Eingabe-Zustand von Win32 und Moduländerungen.
 `hud_layout.hpp` kapselt Platzierung und Grenzen. `overlay_input.cpp` bindet echte
@@ -263,7 +271,7 @@ Leertaste und Shift+F10, unabhängiges Ziehen/Schließen beider Fenster,
 Schließen der kleinen Settings-Ansicht mit Rückkehr zum Raster, Suche samt
 Wiederherstellung, Keybinds, Slider, Combos, Farben, Marker, Persistenz und
 Style-/Font-/Window-Stack ohne ImGui-Fehler. Produktionsbuild, nativer Check
-und `portable_client` bestanden; `mcov.exe` und Share-ZIP sind aktualisiert.
+und `portable_client` bestanden; `Keim.exe` und Share-ZIP sind aktualisiert.
 Bestehende HUD-, Renderer- und Launcher-Belege bleiben gültig.
 Configs-Prüfungen decken vollständige Profil-Roundtrips, lokale Speicherpfade,
 Save/Overwrite/Load/Refresh und unveränderte Einstellungen nach ungültigen Dateien ab.
@@ -274,7 +282,7 @@ synthetischen Fixtures; die Abschlussprüfung bestätigte **ship** nach dem
 Overwrite-Fix. Die portable EXE und ZIP wurden gegen die aktuellen Payloads geprüft.
 Die aktualisierten nativen HUD-Pruefungen fuer Eingabe/Layout, Style-/Font-Stacks
 und Text-Clipping sowie `combat_hud`, `rockstar_features` und `portable_client`
-bestanden. Die portable `mcov.exe` und das Share-ZIP wurden neu gebaut.
+bestanden. Die portable `Keim.exe` und das Share-ZIP wurden neu gebaut.
 
 Aktuelle native WARP-Vorschauen liegen unter `.impeccable/review/module-widgets/`:
 `combat-grid.png`, `visuals-grid.png`, `box-settings.png`, `aim-settings-scene.png`,

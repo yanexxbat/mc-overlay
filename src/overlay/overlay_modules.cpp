@@ -14,7 +14,7 @@ constexpr Definition Option(const char* name,Flag flag) { return {name,Mode::Tog
 constexpr Definition combat[]={Module("Kill Aura",Action::KillAura),Module("Aim Assist",Action::AimAssist),
     Module("Triggerbot",Action::Triggerbot),Module("Auto Totem",Action::AutoTotem),{"Friends"},
     Module("Crystal Macro",Action::CrystalMacro),Module("Anchor Macro",Action::AnchorMacro),Module("Hit sounds",Action::HitSounds),
-    Module("Spinbot",Action::Spinbot)};
+    Module("Spinbot",Action::Spinbot),Module("Auto Trident",Action::AutoTrident)};
 constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleton",Action::Skeleton),Module("Name tags",Action::NameTags),
     Option("Health bars",Flag::Health),Option("Distance labels",Flag::Distance),Option("Tracers",Flag::Tracers),Option("Target info",Flag::TargetInfo),
     Module("Target aura",Action::TargetAura),Module("Target marker",Action::TargetMarker),Module("Trails",Action::Trails),
@@ -25,7 +25,7 @@ constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleto
     Module("Crosshair",Action::Crosshair),Module("Offscreen arrows",Action::Arrows)};
 constexpr Definition blocks[]={Module("Block ESP",Action::BlockEsp),{"Block types"},Option("Tracers",Flag::BlockTracers),
     Module("Chunkfinder",Action::ChunkFinder),Module("Storage ESP",Action::ChestEsp),Module("Beacon radius",Action::BeaconRadius),Module("Chunk borders",Action::ChunkBorders),
-    Module("Stash Finder",Action::StashFinder),Module("Spawner ESP",Action::SpawnerEsp),Module("Base ESP",Action::BaseEsp)};
+    Module("Stash Finder",Action::StashFinder),Module("Spawner ESP",Action::SpawnerEsp),Module("Base ESP",Action::BaseEsp),Module("Hole ESP",Action::HoleEsp)};
 constexpr Definition stats[]={{"Local player"},{"Client"},{"Entities"}};
 constexpr Definition settings[]={{"Overlay"},{"Focus"},{"Keybinds"},{"Agent"},{"Configs"}};
 constexpr Definition misc[]={Module("Middle click friend",Action::MiddleFriend),Module("Death coordinates",Action::DeathCoordinates),
@@ -48,6 +48,7 @@ int Overlay::ReadModules(Page page,std::span<control_panel::ModuleView> output) 
             view.name=i?kHudNames[i-1]:"Editor"; view.mode=i?Mode::Toggle:Mode::Action;
             view.enabled=i&&HudEnabled(i-1);
             if(!i) std::snprintf(view.binding,sizeof(view.binding),"%s",BindName(bindings_[keys::Index(Action::HudEditor)]).c_str());
+            if(i==int(HudModule::RegionMap)+1) std::snprintf(view.binding,sizeof(view.binding),"Key: %s",BindName(bindings_[keys::Index(Action::RegionMap)]).c_str());
             continue;
         }
         const auto& d=definitions[i]; view.name=d.name; view.mode=d.mode;

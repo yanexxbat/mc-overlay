@@ -1,17 +1,18 @@
 #pragma once
 #include "imgui.h"
 #include "../common/compact_theme.hpp"
+#include "region_map.hpp"
 #include <array>
 #include <algorithm>
 #include <cmath>
 
 namespace mcov {
 enum class HudModule { Equipment, Effects, Coordinates, Performance, Compass, Reach, Watermark, Modules, Keybinds,
-    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Notifications, Nearby, Count };
+    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Notifications, Nearby, RegionMap, Count };
 inline constexpr int kHudModules=static_cast<int>(HudModule::Count);
 inline constexpr std::array<const char*,kHudModules> kHudNames={"Equipment","Status effects","Coordinates","Performance",
     "Compass","Reach indicator","Watermark","Active modules","Keybinds","Radar","Keystrokes","Speedometer",
-    "Session statistics","Armor strip","Combat indicators","Clock","Click rate","Notifications","Nearby players"};
+    "Session statistics","Armor strip","Combat indicators","Clock","Click rate","Notifications","Nearby players","Region map"};
 struct HudPlacement {
     ImVec2 position{}; // Normalisiert im verfügbaren Weg, damit Auflösungswechsel die Anker erhalten.
     float scale=1;
@@ -37,6 +38,7 @@ struct HudSettings {
     bool visible=true,equipment=true,effects=true,coordinates=true,compass=true,performance=false,reachMarker=true;
     bool modules=true,keybinds=true;
     std::array<bool,10> extras{};
+    regionmap::Config regionMap{};
     float durabilityWarn=.2f;
     std::array<HudPlacement,kHudModules> layout{};
 };

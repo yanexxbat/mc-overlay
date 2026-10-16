@@ -26,6 +26,8 @@
 
 #include "../common/ipc.hpp"
 #include "../common/shared_state.hpp"
+#include "../common/block_scan_volume.hpp"
+#include "hole_esp.hpp"
 #include "process.hpp"
 #include "esp_geometry.hpp"
 #include "esp_renderer.hpp"
@@ -65,7 +67,7 @@ std::string BindName(keys::Bind bind);
 struct BlockEspSettings {
     bool          enabled  = false;
     std::uint32_t mask     = 0;      // bit per BlockKind
-    int           radius   = 12;     // (2r+1)^3 lookups per scan - grows cubically
+    int           radius   = 12;     // Shared scan limits; larger volumes take longer.
     int           interval = 900;    // ms between scans
     bool          tracers  = false;
     float         maxDraw  = 64.0f;  // do not draw boxes further than this
@@ -198,6 +200,7 @@ private:
     void  DrawBlocksTab();
     void DrawSmpSettings(int section);
     void DrawScanStatus();
+    void DrawHoleSettings();
     void DrawRockstarSettings(rockstar::Feature feature);
     void DrawMiscTab();
     void DrawAntiVanishSettings();
@@ -291,12 +294,15 @@ private:
     antivanish::Config antiVanishConfig_{};
     antivanish::Report antiVanishReport_{},antiVanishPrevious_{};
     smp::Config smpConfig_{};
+    holes::Settings holeSettings_{};
     base::Report baseReport_{};
     smp::StashFinder stashFinder_{};
     smp::BaseFinder baseFinder_{};
     smp::StoragePulse storagePulse_{};
     items::MacroConfig crystalMacro_{},anchorMacro_{};
     items::Report itemReport_{};
+    items::TridentConfig autoTrident_{};
+    void DrawTridentSettings();
 
     // Triggerbot pacing. Stored as a raw tick count so no clock type leaks into
     // this header.

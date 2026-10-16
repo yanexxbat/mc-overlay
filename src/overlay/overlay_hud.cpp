@@ -8,6 +8,7 @@ bool Overlay::HudEnabled(int i) const {
     if(i>=int(HudModule::Radar)&&i<=int(HudModule::Cps)) return hud_.extras[i-int(HudModule::Radar)];
     if(i==int(HudModule::Notifications)) return rockstarConfig_.Enabled(rockstar::Feature::Notifications);
     if(i==int(HudModule::Nearby)) return rockstarConfig_.Enabled(rockstar::Feature::DetectPlayer);
+    if(i==int(HudModule::RegionMap)) return hud_.regionMap.enabled;
     switch(static_cast<HudModule>(i)) {
         case HudModule::Equipment:return hud_.equipment;
         case HudModule::Effects:return hud_.effects;
@@ -25,6 +26,7 @@ void Overlay::SetHudEnabled(int i,bool value) {
     if(i>=int(HudModule::Radar)&&i<=int(HudModule::Cps)) hud_.extras[i-int(HudModule::Radar)]=value;
     if(i==int(HudModule::Notifications)) rockstarConfig_[rockstar::Feature::Notifications].enabled=value;
     if(i==int(HudModule::Nearby)) rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=value;
+    if(i==int(HudModule::RegionMap)) hud_.regionMap.enabled=value;
     switch(static_cast<HudModule>(i)) {
         case HudModule::Equipment:hud_.equipment=value;break;
         case HudModule::Effects:hud_.effects=value;break;
@@ -88,6 +90,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Indicators:size.y=84;break;
             case HudModule::Notifications:size.y=145;break;
             case HudModule::Nearby:size.y=176;break;
+            case HudModule::RegionMap:size=regionmap::kSize;break;
             default:break;
         }
         ImVec2 start{16,stackY};
@@ -130,9 +133,9 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Reach:DrawReachMarker(s);break;
             case HudModule::Watermark: {
                 DrawHudPanel(draw,{0,0},size); char text[100];
-                std::snprintf(text,sizeof(text),"mcov | %d FPS | %s",s.fps,s.gameVersion[0]?s.gameVersion:"waiting");
-                draw.AddCircleFilled({12,14},2.5f,style::compact::Accent,12);
-                draw.AddText({22,7},style::compact::Text,text); break;
+                std::snprintf(text,sizeof(text),"keim | %d FPS | %s",s.fps,s.gameVersion[0]?s.gameVersion:"waiting");
+                style::DrawBrandLogo(draw,{4,2},24);
+                draw.AddText({35,7},style::compact::Text,text); break;
             }
             case HudModule::Modules:case HudModule::Keybinds: {
                 DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
@@ -152,6 +155,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                     y+=lineHeight+4;
                 } break;
             }
+            case HudModule::RegionMap:regionmap::Draw(draw,s,hud_.regionMap,agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(GetTickCount64()));break;
             default:rockstarPack_.DrawHud(draw,kind,s,rockstarConfig_,combatMenu_.Relations().Read(),size,double(GetTickCount64())/1000); break;
         }
         const int commandEnd=draw.CmdBuffer.Size;

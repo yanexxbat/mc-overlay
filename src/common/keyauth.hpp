@@ -32,6 +32,8 @@ struct HttpResponse {
 };
 using Transport=std::function<HttpResponse(std::string_view,std::stop_token)>;
 std::int64_t UnixTime();
+// The Windows account SID sent as KeyAuth's HWID. Throws if it cannot be read.
+std::string HardwareId();
 std::string EncodeForm(std::string_view value);
 bool VerifyResponse(const HttpResponse& response,const PublicKey& key,std::int64_t now);
 HttpResponse Request(std::string_view form,std::stop_token stop={});

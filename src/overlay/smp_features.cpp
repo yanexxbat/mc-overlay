@@ -1,4 +1,5 @@
 #include "smp_features.hpp"
+#include "../common/block_scan_volume.hpp"
 #include "../common/chunk_hints.hpp"
 #include <cstdio>
 #include <cstring>
@@ -34,29 +35,30 @@ void Config::Clamp() {
     base.maxDraw=Finite(base.maxDraw,8,512,192); base.padding=Finite(base.padding,0,16,4);
     base.textureOpacity=Finite(base.textureOpacity,0,1,1);
     base.fillOpacity=Finite(base.fillOpacity,0,.5f,.12f); base.lineWidth=Finite(base.lineWidth,.5f,4,1.8f); ClampColour(base.colour);
-    finder.radius=std::clamp(finder.radius,4,48); finder.interval=std::clamp(finder.interval,200,3000);
+    finder.radius=std::clamp(finder.radius,kMinBlockScanRadius,kMaxBlockScanRadius); finder.interval=std::clamp(finder.interval,200,3000);
     finder.minKelpHeight=std::clamp(finder.minKelpHeight,6,64); finder.minKelpColumns=std::clamp(finder.minKelpColumns,1,64);
-    finder.minAmethyst=std::clamp(finder.minAmethyst,1,64); finder.maxDraw=Finite(finder.maxDraw,8,512,192); ClampColour(finder.colour);
+    finder.minAmethyst=std::clamp(finder.minAmethyst,1,64); finder.maxDraw=Finite(finder.maxDraw,8,kMaxBlockDrawDistance,192); ClampColour(finder.colour);
 }
 void StoragePulse::Reset() {
     markers_.clear(); positions_.clear(); dimension_={}; server_={}; scan_=mask_=0;
     previous_=epoch_=nextReveal_=0;
 }
-void StoragePulse::Update(const WorldSnapshot& s,const StorageSettings& c,bool enabled,float range,double now,bool reducedMotion) {
+void StoragePulse::Update(const WorldSnapshot& s,const StorageSettings& c,bool enabled,float range,double now,bool reducedMotion,bool dedicated) {
     if(!enabled||!s.dimension[0]||!c.mask||!std::isfinite(now)||!std::isfinite(range)) { Reset(); return; }
+    const auto scan=dedicated?s.storageScanId:s.blockScanId;
     if(std::strncmp(dimension_.data(),s.dimension,kNameLen)||std::strncmp(server_.data(),s.serverAddress,kAddrLen)||
-       mask_!=c.mask||(s.blockScanId&&s.blockScanId<scan_)||now<previous_) {
+       mask_!=c.mask||(scan&&scan<scan_)||now<previous_) {
         Reset(); std::memcpy(dimension_.data(),s.dimension,kNameLen); std::memcpy(server_.data(),s.serverAddress,kAddrLen);
         mask_=c.mask; epoch_=previous_=nextReveal_=now;
     }
-    scan_=s.blockScanId;
+    scan_=scan;
     const float dt=float(std::clamp(now-previous_,0.,.1)); previous_=now;
     for(auto& marker:markers_) marker.present=false;
-    const auto count=std::min(s.blockCount,kMaxBlocks);
+    const auto count=std::min(dedicated?s.storageCount:s.blockCount,kMaxBlocks);
     const double duration=std::clamp(c.pulseDuration,500,6000)/1000.;
     const double spacing=std::min(.06,duration/std::max(1u,count));
     nextReveal_=std::clamp(nextReveal_,now,now+duration);
-    for(const auto& b:std::span(s.blocks,count)) {
+    for(const auto& b:std::span(dedicated?s.storageBlocks:s.blocks,count)) {
         if(!StorageKind(b.kind)||!(c.mask&(1u<<b.kind))||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)||
            std::abs(b.x)>3e7||std::abs(b.z)>3e7||std::abs(b.y)>4096||Distance({b.x+.5,b.y+.5,b.z+.5},s)>range) continue;
         const auto key=BlockPosition::Of(b); auto it=positions_.find(key);

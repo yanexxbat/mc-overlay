@@ -121,13 +121,15 @@ bool Overlay::CreateOverlayWindow(std::string* error) {
     wc.lpfnWndProc   = &OverlayWndProc;
     wc.hInstance     = ::GetModuleHandleW(nullptr);
     wc.hCursor       = ::LoadCursor(nullptr, IDC_ARROW);
+    wc.hIcon         = ::LoadIconW(wc.hInstance,MAKEINTRESOURCEW(107));
+    wc.hIconSm       = wc.hIcon;
     wc.lpszClassName = kWindowClass;
     ::RegisterClassExW(&wc);   // duplicate registration is harmless
 
     // WS_EX_LAYERED is what lets DWM composite our per-pixel alpha;
     // WS_EX_TOOLWINDOW keeps us out of alt-tab and the taskbar.
     hwnd_ = ::CreateWindowExW(WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-                              kWindowClass, L"mcov overlay",
+                              kWindowClass, L"Keim Overlay",
                               WS_POPUP,
                               windowX_, windowY_, windowW_, windowH_,
                               nullptr, nullptr, wc.hInstance, nullptr);
@@ -671,7 +673,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
-    if (!entitiesEnabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !smpConfig_.finder.enabled && !auraConfig_.enabled &&
+    if (!entitiesEnabled && !holeSettings_.enabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !smpConfig_.finder.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !extraEffects && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
@@ -705,10 +707,13 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
             {width,height},ImGui::GetMainViewport()->Pos);
     DrawBlockEsp(snapshot, projection, width, height);
     DrawChunkFinder(snapshot,projection);
+    const auto holeNow=GetTickCount64();
+    if(snapshot.holeSampledAtMs&&holeNow>=snapshot.holeSampledAtMs&&holeNow-snapshot.holeSampledAtMs<2000)
+        holes::Draw(*ImGui::GetBackgroundDrawList(),snapshot,projection,holeSettings_,{width,height});
     const auto& storage=rockstarConfig_[rockstar::Feature::ChestEsp];
     const double storageNow=double(GetTickCount64())/1000.;
     const bool storageActive=storage.enabled&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64());
-    storagePulse_.Update(snapshot,smpConfig_.storage,storageActive,storage.range,storageNow,menu_.reduceMotion);
+    storagePulse_.Update(snapshot,smpConfig_.storage,storageActive,storage.range,storageNow,menu_.reduceMotion,true);
     smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storageActive,storage.range,storage.opacity,storage.glow,
         {width,height},auraBlend_.GlowTexture(),&storagePulse_,storageNow,menu_.reduceMotion);
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
@@ -1003,7 +1008,7 @@ void Overlay::DrawReachMarker(const WorldSnapshot& snapshot) {
     // Minecraft sets targetedEntity only for entities inside the interaction
     // range, so its presence alone means "you can hit this right now".
     const float pulse  = 0.6f + 0.4f * std::sin(static_cast<float>(ImGui::GetTime()) * 7.0f);
-    const ImU32 colour = IM_COL32(239,139,112,static_cast<int>(210*pulse));
+    const ImU32 colour = style::compact::Rgba(style::compact::AccentRGB,static_cast<unsigned>(210*pulse));
 
     // Four corner brackets around the crosshair.
     const float radius = 13.0f;
@@ -1089,15 +1094,22 @@ void Overlay::PushScanRequest() {
     const auto stash=smpConfig_.Detection(); const auto& spawner=smpConfig_.spawner;
     const auto finder=ChunkDetection();
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
-        (storage?smpConfig_.storage.mask:0)|(beacon?1u<<kBlockBeacon:0)|
+        (beacon?1u<<kBlockBeacon:0)|
         (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0)|(finder.enabled?finder.Mask():0);
     const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
-        storage?int(rockstarConfig_[rockstar::Feature::ChestEsp].range):4,beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
+        beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
         stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4,finder.enabled?finder.radius:4});
     const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,
-        storage?smpConfig_.storage.interval:3000,beacon?1000:3000,
+        beacon?1000:3000,
         stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000,finder.enabled?finder.interval:3000});
     block->scanMask.store(mask, std::memory_order_release);
+    storage::Request storageRequest;
+    storageRequest.sentAtMs=GetTickCount64(); storageRequest.enabled=storage&&!panicActive_&&smpConfig_.storage.mask;
+    storageRequest.mask=smpConfig_.storage.mask;
+    storageRequest.radius=unsigned(std::clamp(int(std::lround(rockstarConfig_[rockstar::Feature::ChestEsp].range)),kMinBlockScanRadius,kMaxBlockScanRadius));
+    storageRequest.intervalMs=unsigned(smpConfig_.storage.interval);
+    block->storageRequest.Publish(storageRequest);
+    block->holeScanRadius.store(holeSettings_.enabled&&!panicActive_?unsigned(holeSettings_.radius):0u,std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);
     const auto baseNow=GetTickCount64();
@@ -1140,7 +1152,7 @@ void Overlay::PushCombatRequest() {
     items::Report items;
     if(block->itemReport.Read(items)) itemReport_=items;
     if(!itemReport_.sampledAtMs||request.sentAtMs<itemReport_.sampledAtMs||request.sentAtMs-itemReport_.sampledAtMs>1000)
-        itemReport_.totem=itemReport_.crystal=itemReport_.anchor=items::Status::Unsupported;
+        itemReport_.totem=itemReport_.crystal=itemReport_.anchor=itemReport_.trident=items::Status::Unsupported;
     CombatReport report;
     if(block->combatReport.Read(report)) {
         combatReport_=report;
@@ -1314,7 +1326,7 @@ void Overlay::DrawMenu() {
 void Overlay::ResetMenuPage(panel::Page page) {
     const rockstar::Config defaults;
     switch (page) {
-        case panel::Page::Combat: { const auto camera=combat_.freecam; combat_=CombatSettings{}; combat_.freecam=camera; crystalMacro_={}; anchorMacro_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0;
+        case panel::Page::Combat: { const auto camera=combat_.freecam; combat_=CombatSettings{}; combat_.freecam=camera; crystalMacro_={}; anchorMacro_={}; autoTrident_={}; combatMenu_.Reset(); nextClickTick_=0; clickCount_=0;
             rockstarConfig_[rockstar::Feature::HitSounds]=defaults[rockstar::Feature::HitSounds]; break; }
         case panel::Page::Visuals:
             visuals_=VisualSettings{}; auraConfig_=AuraConfig{}; targetCubeConfig_=TargetCubeConfig{};
@@ -1322,7 +1334,7 @@ void Overlay::ResetMenuPage(panel::Page page) {
             localHatConfig_=LocalHatConfig{};
             auraRenderer_.Reset(); targetCube_.Reset();
             for(int i=0;i<=rockstar::Index(rockstar::Feature::Arrows);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
-        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset();
+        case panel::Page::Blocks: blocks_=BlockEspSettings{}; chunkFinder_={}; smpConfig_={}; holeSettings_={}; stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset();
             for(int i=rockstar::Index(rockstar::Feature::ChestEsp);i<=rockstar::Index(rockstar::Feature::ChunkBorders);++i) rockstarConfig_.modules[i]=defaults.modules[i]; break;
         case panel::Page::Hud: hud_=HudSettings{};
             rockstarConfig_[rockstar::Feature::Notifications].enabled=rockstarConfig_[rockstar::Feature::DetectPlayer].enabled=false; break;
@@ -1560,6 +1572,7 @@ void Overlay::DrawCombatTab() {
         if(section!=CombatMenu::Section::Friends) { ImGui::TextUnformatted("Kill Aura key"); ImGui::SameLine(); DrawBind(keys::Action::KillAura); }
         combatMenu_.DrawSettings(); return;
     }
+    if(section==CombatMenu::Section::AutoTrident) { DrawTridentSettings(); return; }
     if(section==CombatMenu::Section::AutoTotem) { DrawItemAssistSettings(0); return; }
     if(section==CombatMenu::Section::CrystalMacro) { DrawItemAssistSettings(1); return; }
     if(section==CombatMenu::Section::AnchorMacro) { DrawItemAssistSettings(2); return; }
@@ -1635,8 +1648,9 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP","Hole ESP"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
+    if(blocksSection_==10) { DrawHoleSettings(); return; }
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     if(blocksSection_==4||blocksSection_>=7) { DrawSmpSettings(blocksSection_==4?0:blocksSection_-6); return; }
     if(blocksSection_>=4) { DrawRockstarSettings(static_cast<rockstar::Feature>(rockstar::Index(rockstar::Feature::ChestEsp)+blocksSection_-4)); return; }
@@ -1644,12 +1658,16 @@ void Overlay::DrawBlocksTab() {
     if(blocksSection_==0) {
         if(panel::BeginRows("block_scanning")) {
             dirty|=panel::CheckRow("Enable Block ESP",&blocks_.enabled); DrawBind(keys::Action::BlockEsp,true);
-            dirty|=panel::SliderIntRow("Scan radius",&blocks_.radius,4,48,"%d blocks");
+            if(panel::SliderIntRow("Scan radius",&blocks_.radius,kMinBlockScanRadius,kMaxBlockScanRadius,"%d blocks")) {
+                blocks_.maxDraw=std::max(blocks_.maxDraw,std::ceil(blocks_.radius*std::sqrt(3.f)));
+                dirty=true;
+            }
             dirty|=panel::SliderIntRow("Scan interval",&blocks_.interval,200,3000,"%d ms");
-            panel::SliderRow("Draw distance",&blocks_.maxDraw,8,128,"%.0f m");
+            dirty|=panel::SliderRow("Draw distance",&blocks_.maxDraw,8,kMaxBlockDrawDistance,"%.0f m");
             ImGui::EndTable();
         }
-        ImGui::TextWrapped("Choose blocks under Block types. A larger radius takes longer to scan; results remain visible between scans.");
+        ImGui::TextWrapped("Choose blocks under Block types. Scans start nearby and cover loaded blocks only. Large radii take longer; known results stay visible.");
+        DrawScanStatus();
         if(haveSnapshot_) ImGui::TextDisabled("Found: %u blocks",lastSnapshot_.blockCount);
         if(haveSnapshot_&&lastSnapshot_.blockCount>=kMaxBlocks)
             ImGui::TextWrapped("Result limit reached. Reduce the scan radius to focus on nearby blocks.");
@@ -1664,7 +1682,7 @@ void Overlay::DrawBlocksTab() {
         }
     } else if(panel::BeginRows("block_tracers")) {
         panel::CheckRow("Tracers to blocks",&blocks_.tracers);
-        panel::SliderRow("Draw distance (shared)",&blocks_.maxDraw,8,128,"%.0f m");
+        panel::SliderRow("Draw distance (shared)",&blocks_.maxDraw,8,kMaxBlockDrawDistance,"%.0f m");
         ImGui::EndTable();
         ImGui::TextWrapped("Tracers use the Block ESP scan results. Enable Block ESP and choose at least one block type.");
     }
@@ -1693,6 +1711,12 @@ void Overlay::DrawHudTab() {
         if(panel::BeginRows("hud_element")) {
             if(panel::CheckRow("Show element",&on)) { SetHudEnabled(module,on); changed=true; }
             if(module>=int(HudModule::Radar)&&module<=int(HudModule::Cps)) DrawBind(static_cast<keys::Action>(keys::Index(keys::Action::Radar)+module-int(HudModule::Radar)),true);
+            if(module==int(HudModule::RegionMap)) {
+                DrawBind(keys::Action::RegionMap,true);
+                changed|=panel::CheckRow("Region labels",&hud_.regionMap.labels);
+                changed|=panel::CheckRow("Grid lines",&hud_.regionMap.grid);
+                changed|=panel::CheckRow("Player coordinates",&hud_.regionMap.coordinates);
+            }
             auto& placement=hud_.layout[module];
             changed|=panel::SliderRow("Scale",&placement.scale,.65f,1.6f,"%.2f x");
             bool moved=panel::SliderRow("Horizontal position",&placement.position.x,0,1,"%.2f");
@@ -1705,6 +1729,10 @@ void Overlay::DrawHudTab() {
             ImGui::EndTable();
         }
         if(ImGui::Button("Reset element layout")) { hud_.layout[module]={}; changed=true; }
+        if(module==int(HudModule::RegionMap)) {
+            ImGui::TextWrapped("Full DonutSMP server map: -225,000 to +225,000 on both axes, with six server regions. Your position is marked in the DonutSMP Overworld.");
+            ImGui::TextWrapped("Map reference: Donut.Auction, 15 Oct 2026. Boundaries may change; the displayed region is inferred from coordinates.");
+        }
         if(!hud_.visible) ImGui::TextWrapped("The entire HUD is hidden. Right-click the Editor tile and enable Show HUD to display this element.");
     }
     if(changed) { preferencesDirty_=true; preferenceSaveAt_=::GetTickCount64()+500; }

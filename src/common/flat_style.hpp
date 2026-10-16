@@ -1,6 +1,7 @@
 #pragma once
 
 #include "imgui.h"
+#include "compact_theme.hpp"
 
 namespace mcov::style {
 inline ImVec4 Color(unsigned rgb,float alpha=1.f) {
@@ -10,7 +11,7 @@ inline ImVec4 Color(unsigned rgb,float alpha=1.f) {
 inline constexpr ImU32 kBackground = IM_COL32(18, 18, 20, 255);  // #121214
 inline constexpr ImU32 kPanel      = IM_COL32(30, 30, 36, 255);  // #1E1E24
 inline constexpr ImU32 kHover      = IM_COL32(42, 42, 50, 255);  // #2A2A32
-inline constexpr ImU32 kAccent     = IM_COL32(88, 101, 242, 255); // #5865F2
+inline constexpr ImU32 kAccent     = compact::Accent;
 inline constexpr ImU32 kText       = IM_COL32(236, 236, 238, 255); // #ECECEE
 inline constexpr ImU32 kMuted      = IM_COL32(150, 150, 163, 255);
 inline constexpr ImU32 kBorder     = IM_COL32(53, 53, 63, 255);
@@ -23,6 +24,9 @@ ImFont* MenuFont(bool bold = false);
 ImFont* MenuHeadingFont();
 ImFont* MenuIconFont();
 ImFont* ClassicMenuFont();
+// The colour mascot shares the existing font texture; no per-frame uploads.
+bool BrandLogoReady();
+void DrawBrandLogo(ImDrawList& draw,ImVec2 min,float size,ImU32 tint=IM_COL32_WHITE);
 
 // Screen-space drawing; renderer independent, no capture, textures or JNI.
 // Draw on the parent draw list before child contents to preserve clipping and

@@ -36,7 +36,8 @@ client_configs::Snapshot Overlay::CaptureConfig() const {
     c.aura=auraConfig_; c.marker=targetCubeConfig_; c.world=worldVisualsConfig_;
     c.friendHat=friendHatConfig_; c.hat=localHatConfig_; c.blocks=blocks_; c.chunks=chunkFinder_;
     c.antiVanish=antiVanishConfig_;
-    c.smp=smpConfig_; c.crystal=crystalMacro_; c.anchor=anchorMacro_; c.hud=hud_; c.binds=bindings_;
+    c.holes=holeSettings_;
+    c.smp=smpConfig_; c.crystal=crystalMacro_; c.anchor=anchorMacro_; c.trident=autoTrident_; c.hud=hud_; c.binds=bindings_;
     c.extra=rockstarConfig_; c.waypoints=rockstarPack_.Markers(); c.reducedMotion=menu_.reduceMotion;
     return c;
 }
@@ -50,7 +51,8 @@ void Overlay::ApplyConfig(const client_configs::Snapshot& c) {
     auraConfig_=c.aura; targetCubeConfig_=c.marker; worldVisualsConfig_=c.world;
     friendHatConfig_=c.friendHat; localHatConfig_=c.hat; blocks_=c.blocks; chunkFinder_=c.chunks;
     antiVanishConfig_=c.antiVanish;antiVanishPrevious_={};
-    smpConfig_=c.smp; crystalMacro_=c.crystal; anchorMacro_=c.anchor; hud_=c.hud; bindings_=c.binds;
+    holeSettings_=c.holes;
+    smpConfig_=c.smp; crystalMacro_=c.crystal; anchorMacro_=c.anchor; autoTrident_=c.trident; hud_=c.hud; bindings_=c.binds;
     NormalizeChunkFinder();
     rockstarConfig_=c.extra; rockstarPack_.Markers()=c.waypoints; menu_.reduceMotion=c.reducedMotion;
     // Discard old Hold-key leases and visual history on explicit profile changes.
@@ -171,7 +173,7 @@ void Overlay::DrawConfigSettings() {
         ImGui::TextWrapped("%s",configStatus_.c_str()); ImGui::PopStyleColor();
     }
     ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-    ImGui::TextWrapped("Stored in configs beside mcov.exe. Copy this folder with the client to keep your profiles.");
+    ImGui::TextWrapped("Stored in configs beside Keim.exe. Copy this folder with the client to keep your profiles.");
     ImGui::TextUnformatted("Folder");
     std::string path=PathText(ConfigDirectory(preferencesPath_)); ImGui::SetNextItemWidth(-1);
     ImGui::InputText("##config_folder",path.data(),path.size()+1,ImGuiInputTextFlags_ReadOnly);

@@ -48,18 +48,20 @@ struct FlatAppRenderingCheck {
         app.context_->CopyResource(readback.Get(),back.Get());
         D3D11_MAPPED_SUBRESOURCE mapped{};
         Require(SUCCEEDED(app.context_->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)),"Readback failed");
-        int translucent=0,transparent=0,ink=0;
+        int translucent=0,transparent=0,ink=0,mascot=0;
         for(int y=0;y<app.height_;++y) for(int x=0;x<app.width_;++x) {
             const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.RowPitch+x*4;
             if(pixel[3]>=220&&pixel[3]<=244) ++translucent;
             if(pixel[3]==0) ++transparent;
             if(pixel[0]>150&&pixel[1]>150&&pixel[2]>150) ++ink;
+            if(x>=20&&x<48&&y>=21&&y<49&&pixel[1]>pixel[0]*1.2f&&pixel[1]>pixel[2]*1.4f&&pixel[3]>128) ++mascot;
         }
         Save(png,app.width_,app.height_,mapped);
         app.context_->Unmap(readback.Get(),0);
         Require(translucent>app.width_*app.height_*.75,"Native launcher lost its translucent panel");
         Require(transparent>app.width_*20,"Native launcher lost its transparent margins");
         Require(ink>500,"Native launcher controls are invisible");
+        Require(mascot>40,"Keim mascot lost its colour or is missing from the launcher");
         Require(SUCCEEDED(app.swapChain_->Present(0,0)),"Native launcher presentation failed");
         Require(!IsWindowVisible(static_cast<HWND>(app.hwnd_)),"Fixture became visible");
         auto region=CreateRectRgn(0,0,0,0);
@@ -78,10 +80,12 @@ int main(int argc,char** argv) {
         const auto output=argc==2?std::filesystem::path(argv[1]):std::filesystem::path{};
         if(!output.empty()) std::filesystem::create_directories(output);
         mcov::FlatApp app; std::string failure;
-        if(!app.Initialize(L"mcov hidden launcher check",640,640,&failure)) throw std::runtime_error(failure);
+        if(!app.Initialize(L"Keim hidden launcher check",640,640,&failure)) throw std::runtime_error(failure);
+        Require(GetClassLongPtrW(static_cast<HWND>(app.hwnd()),GCLP_HICON)!=0,"Keim Windows icon is missing");
         Require(!IsWindowVisible(static_cast<HWND>(app.hwnd())),"Launcher shown before first frame");
         mcov::launcher::View view;
         view.licensed=true;
+        view.hardwareId="S-1-5-21-1234567890-1234567890-1234567890-1001";
         mcov::FlatAppRenderingCheck::Frame(app,view,output.empty()?output:output/"launcher-native-start.png");
         view.instances.push_back({123,"Minecraft fixture","Java 21",false,false}); view.selected=0;
         mcov::FlatAppRenderingCheck::Frame(app,view);

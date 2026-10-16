@@ -52,8 +52,8 @@ inline void Stroke(ImDrawList& d,ImVec2 a,ImVec2 b,float width,ImVec4 color,floa
             {.48f,0},{.52f,0},{.52f,1},{.48f,1},Ink(tint,alpha));
         if(aDepth>0&&bDepth>0) for(int i=0;i<4;++i) depth::Vertex(d,first+i,1.f/((i==1||i==2)?bDepth:aDepth));
     };
-    if(glow>0) layer(width*3.5f+3,color,.18f*glow);
-    layer(std::max(.65f,width*1.1f),Mix(color,{1,1,1,color.w},.32f),.64f);
+    if(glow>0) layer(width*4.f+3,color,.14f*glow);
+    layer(std::max(.65f,width*1.1f),Mix(color,{1,1,1,color.w},.22f),.58f);
 }
 inline void Outline(ImDrawList& d,ImVec2 lo,ImVec2 hi,float rounding,float width,ImVec4 a,ImVec4 b,float glow,ImTextureID texture) {
     const float r=std::min({rounding,(hi.x-lo.x)*.5f,(hi.y-lo.y)*.5f});

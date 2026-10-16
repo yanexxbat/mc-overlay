@@ -144,6 +144,24 @@ int main() try {
     Check(mcov::RotatedDeepslate("block.minecraft.deepslate","x")&&mcov::RotatedDeepslate("block.minecraft.deepslate","z"),"horizontal raw deepslate must be a hint");
     Check(!mcov::RotatedDeepslate("block.minecraft.deepslate","y")&&!mcov::RotatedDeepslate("block.minecraft.deepslate_diamond_ore","x")&&!mcov::RotatedDeepslate("block.minecraft.infested_deepslate","z"),"vertical deepslate and ores must not be hints");
     Check(mcov::ChunkCoordinate(-.1)==-1&&mcov::ChunkCoordinate(-16)==-1&&mcov::ChunkCoordinate(-17)==-2&&mcov::ChunkCoordinate(16)==1,"negative chunk coordinates must floor correctly");
+    {
+        Request cfg; cfg.sentAtMs=20000; cfg.inputAllowed=cfg.trident.enabled=true;
+        Frame sample; sample.world=sample.alive=sample.ownMenu=sample.useDown=true;
+        TridentFrame held; held.supported=held.holding=held.riptide=held.wet=held.usingMain=true;
+        held.ticks=9; Check(TridentDecision(cfg,sample,held,20000)==Status::ChargingTrident,"Riptide released before minimum charge");
+        held.ticks=10; Check(TridentDecision(cfg,sample,held,20000)==Status::ReleaseTrident,"Charged Riptide did not release");
+        cfg.trident.chargeTicks=20; Check(TridentDecision(cfg,sample,held,20000)==Status::ChargingTrident,"Custom Riptide charge ignored");
+        cfg.trident.chargeTicks=-1; Check(TridentDecision(cfg,sample,held,20000)==Status::ReleaseTrident,"Charge minimum clamp failed");
+        sample.useDown=false; Check(TridentDecision(cfg,sample,held,20000)==Status::WaitingBind,"Released Use still fired"); sample.useDown=true;
+        held.riptide=false; Check(TridentDecision(cfg,sample,held,20000)==Status::NeedRiptide,"Normal trident auto-thrown"); held.riptide=true;
+        held.wet=false; Check(TridentDecision(cfg,sample,held,20000)==Status::NeedWater,"Dry Riptide released"); held.wet=true;
+        held.usingMain=false; Check(TridentDecision(cfg,sample,held,20000)==Status::Ready,"Offhand or changed active item released"); held.usingMain=true;
+        held.busy=true; Check(TridentDecision(cfg,sample,held,20000)==Status::Conflict,"Simultaneous inventory action allowed"); held.busy=false;
+        sample.screen=true; Check(TridentDecision(cfg,sample,held,20000)==Status::Paused,"Menu permitted Riptide release"); sample.screen=false;
+        Check(TridentDecision(cfg,sample,held,20251)==Status::Paused,"Stale lease permitted Riptide release");
+        Check(TridentDecision(cfg,sample,held,19999)==Status::Paused,"Future lease permitted Riptide release");
+        cfg.trident.enabled=false; Check(TridentDecision(cfg,sample,held,20000)==Status::Off,"Disabled Auto Trident fired");
+    }
     const auto binds=mcov::keys::Defaults();
     Check(!binds[21].key&&!binds[22].key&&binds[21].mode==mcov::keys::Mode::Toggle&&binds[22].mode==mcov::keys::Mode::Toggle,"macros must default to unbound toggle");
     std::cout<<"Item assist safety, timing, inventory decisions and chunk hints passed\n"; return 0;

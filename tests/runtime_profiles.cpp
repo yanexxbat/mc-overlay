@@ -91,7 +91,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     mcov::CombatRequest request; request.revision=1; request.inputAllowed=true;
     request.config.enabled=request.config.attack.enabled=true;
     request.config.target.range=6; request.config.target.coneDegrees=1;
-    request.config.target.mode=mcov::combat::TargetMode::Crosshair; // Live-Policy muss alte widersprüchliche Werte korrigieren.
+    request.config.target.mode=mcov::combat::TargetMode::Crosshair; // Live-Policy muss alte widersprÃ¼chliche Werte korrigieren.
     request.config.rotation.overshootFraction={0,0}; request.config.rotation.jitterDegrees={0,0};
     request.config.rotation.smoothing=4;
     request.config.rotation.yawDuration=request.config.rotation.pitchDuration={2,2};
@@ -111,7 +111,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
             if(count>1) Sleep(25);
         }
     };
-    // Ohne Preset/Option: schon die erste Aktivierung muss den Blick unverändert lassen.
+    // Ohne Preset/Option: schon die erste Aktivierung muss den Blick unverÃ¤ndert lassen.
     auto camera=NewObject(env,b.clsCamera);
     const std::string viewDesc="(L"+std::string(set.classes.entity)+";F)F";
     const std::string orbitDesc="(L"+std::string(set.classes.entity)+";F)D";
@@ -125,8 +125,8 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.attacks==1 && report.debug.target && report.debug.target->id==42 &&
             report.debug.error<.001 && report.debug.packets.buffered==0,
             "old slow settings delayed first-tick live rotation/attack");
-    // Ein bewegtes Ziel muss schon im nächsten Tick ohne neu startende Kurve
-    // nachgeführt werden, auch wenn der alte Blick die Hitbox verfehlt.
+    // Ein bewegtes Ziel muss schon im nÃ¤chsten Tick ohne neu startende Kurve
+    // nachgefÃ¼hrt werden, auch wenn der alte Blick die Hitbox verfehlt.
     for(int i=0;i<4;++i) {
         const double x=i%2 ? 1.0 : -1.0;
         real(entity,b.clsEntity,"testX",x);
@@ -194,7 +194,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
         Require(report.attacks==attacks,"game reach was exceeded");
         env->SetStaticDoubleField(b.clsPlayer,field(b.clsPlayer,"testReach","D",true),3); Healthy(env);
     }
-    // Hot-Reload ändert das feste Silent-Verhalten nicht.
+    // Hot-Reload Ã¤ndert das feste Silent-Verhalten nicht.
     floating(player,b.clsEntity,"testYaw",0); floating(player,b.clsEntity,"testPitch",0);
     floating(player,b.clsPlayer,"testCooldown",1);
     ++request.revision; step(18);
@@ -210,7 +210,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
             "mouse look changed combat rotation or failed to move independent camera");
     step(3);
     Require(std::abs(view(cameraYaw,0)-6)<.001f && std::abs(view(cameraYaw,1)-6)<.001f,"partial ticks caused silent-camera jitter");
-    // Anderes Ziel auf der gegenüberliegenden Seite: View und F5-Orbit bleiben bei der Maus.
+    // Anderes Ziel auf der gegenÃ¼berliegenden Seite: View und F5-Orbit bleiben bei der Maus.
     auto nextEntity=NewObject(env,b.clsPlayer);
     env->SetBooleanField(nextEntity,alive,JNI_TRUE); Healthy(env);
     env->SetIntField(nextEntity,field(b.clsEntity,"testId","I"),43); Healthy(env);
@@ -230,7 +230,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(std::abs(view(cameraYaw)-6)<.001f && std::abs(view(cameraPitch)-3)<.001f &&
             std::abs(orbit(orbitX)-4*std::sin(6/combat::kDegrees))<.001,
             "target switch moved the independent F5 camera");
-    // Die globale Java-Bridge darf keine Kamera/Mouse-Deltas fremder Entities verändern.
+    // Die globale Java-Bridge darf keine Kamera/Mouse-Deltas fremder Entities verÃ¤ndern.
     env->CallVoidMethod(nextEntity,turn,20.0,10.0); Healthy(env);
     const auto foreignYaw=env->CallFloatMethod(camera,cameraYaw,nextEntity,.5f); Healthy(env);
     Require(std::abs(foreignYaw-3)<.001f && std::abs(view(cameraYaw)-6)<.001f,"silent camera affected another entity");
@@ -250,7 +250,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     const auto restoredBody=env->GetFloatField(player,b.geometry.bodyYaw); Healthy(env);
     Require(std::abs(mcov::combat::Wrap(restoredHead-restoredYaw))<.001 &&
             std::abs(mcov::combat::Wrap(restoredBody-restoredYaw))<.001,"stopping combat left stale model rotations");
-    // Die normale Entity.turn-Methode arbeitet nach Abschalten wieder unverändert.
+    // Die normale Entity.turn-Methode arbeitet nach Abschalten wieder unverÃ¤ndert.
     env->CallVoidMethod(player,turn,20.0,0.0); Healthy(env);
     Require(std::abs(view(cameraYaw)-9)<.001f,"normal mouse look was not restored");
     // Spin nutzt dieselbe Kamera-Trennung, ohne Zielsuche oder Angriffe.
@@ -261,8 +261,8 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.spinStatus==mcov::combat::SpinStatus::Active&&report.attacks==beforeSpinAttacks&&
         std::abs(mcov::combat::Wrap(spinningYaw-9))>1&&std::abs(view(cameraYaw)-9)<.001f,
         "Spinbot failed to rotate independently without attacking");
-    // Tatsächliche instrumentierte Physik-Getter: Vorwärts/seitwärts/diagonal
-    // bleiben kamera-relativ, unabhängig von Spin-Yaw und dem Down-Pitch.
+    // TatsÃ¤chliche instrumentierte Physik-Getter: VorwÃ¤rts/seitwÃ¤rts/diagonal
+    // bleiben kamera-relativ, unabhÃ¤ngig von Spin-Yaw und dem Down-Pitch.
     auto movementSignal=env->FindClass("mcov/FrameSignal"); Healthy(env);
     const auto movementGate=field(movementSignal,"movementEnabled","Z",true);
     const auto viewYawField=field(movementSignal,"viewYaw","F",true);
@@ -354,7 +354,7 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(!bridge.Send({}),"JNI transport retained a borrowed tick context");
     bridge.Close(env); testCombat=nullptr;
     env->CallVoidMethod(client,tick); Healthy(env);
-    // Fehlende Camera-Hooks müssen Silent sperren, statt heimlich sichtbar zu drehen.
+    // Fehlende Camera-Hooks mÃ¼ssen Silent sperren, statt heimlich sichtbar zu drehen.
     auto signal=env->FindClass("mcov/FrameSignal"); Healthy(env);
     const auto cameraBits=field(signal,"cameraProfiles","J",true);
     const auto savedBits=env->GetStaticLongField(signal,cameraBits); Healthy(env);
@@ -520,7 +520,7 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     env->CallObjectMethod(list,replace,2,stack("item.minecraft.end_crystal")); Healthy(env);
     env->SetIntField(inventory,selected,2); down(false);
     report=tick(); Require(report.crystal==Status::WaitingBind&&report.crystalActions==0,"armed macro ran without Minecraft Use");
-    // Dieselben Schutz-Gates müssen im echten JNI-Hook alle Profile schützen.
+    // Dieselben Schutz-Gates mÃ¼ssen im echten JNI-Hook alle Profile schÃ¼tzen.
     request.crystal.requireTotem=true;
     down(true); use(); report=tick();
     Require(report.crystal==Status::NeedTotem&&report.crystalActions==0&&env->GetStaticIntField(b.client.minecraftClass,usesId)==0,"totem guard leaked macro/Vanilla use"); Healthy(env);
@@ -561,12 +561,12 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     Require(combatCallbackThread==GetCurrentThreadId()&&combatAfterVanillaTick,"macro actions not after vanilla client tick");
     request.crystal.requireCrosshairHit=false;
 
-    // Ablehnung durch das Spiel ist keine bestätigte Platzierung.
+    // Ablehnung durch das Spiel ist keine bestÃ¤tigte Platzierung.
     down(true); env->SetStaticBooleanField(resultClass,field(resultClass,"testConsumes","Z",true),JNI_FALSE); Healthy(env);
     use(); report=tick(); Require(report.crystal==Status::Error&&report.crystalActions==3,"rejected use counted as placement");
     env->SetStaticBooleanField(resultClass,field(resultClass,"testConsumes","Z",true),JNI_TRUE); Healthy(env);
     Sleep(110); report=tick(); Require(report.crystalActions==4,"rejected placement could not retry");
-    // Manuelle Slotwahl muss bleiben; ein fremdes Item wird Vanilla überlassen.
+    // Manuelle Slotwahl muss bleiben; ein fremdes Item wird Vanilla Ã¼berlassen.
     env->SetIntField(inventory,selected,4); Healthy(env); report=tick();
     Require(env->GetIntField(inventory,selected)==4,"manual slot change was overwritten"); Healthy(env);
     const int vanillaBefore=env->GetStaticIntField(b.client.minecraftClass,usesId); Healthy(env);
@@ -626,6 +626,50 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     down(true); const int normal=env->GetStaticIntField(b.client.minecraftClass,usesId); Healthy(env);
     use(); Require(env->GetStaticIntField(b.client.minecraftClass,usesId)==normal+1,"respawn anchor ordinary Use was intercepted"); Healthy(env);
     SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",nullptr);
+    // Auto Trident uses the actual mapped game release API on this owned JVM.
+    request.crystal.enabled=request.anchor.enabled=false; request.trident.enabled=true;
+    const auto* tridentProfile=mcov::agent::TridentMapping(set.id);
+    Require(tridentProfile!=nullptr,"Auto Trident version profile missing");
+    auto helper=LoadClass(env,loader,tridentProfile->helperClass);
+    const bool legacySpin=std::string_view(tridentProfile->spin.signature).ends_with(")I");
+    auto spin=[&](bool yes) {
+        if(legacySpin) env->SetStaticIntField(helper,field(helper,"testTridentSpin","I",true),yes?3:0);
+        else env->SetStaticFloatField(helper,field(helper,"testTridentSpin","F",true),yes?3.f:0.f);
+        Healthy(env);
+    };
+    auto trident=stack("item.minecraft.trident");
+    SetStatic(env,b.clsLiving,"testEquipment",equipmentDesc,trident);
+    auto usingId=field(b.clsLiving,"testTridentUsing","Z"),ticksId=field(b.clsLiving,"testTridentTicks","I");
+    auto activeId=field(b.clsLiving,"testTridentStack",equipmentDesc);
+    auto wetId=field(b.clsEntity,"testTridentWet","Z");
+    const auto handDesc=tridentProfile->hand.signature+2;
+    auto handId=field(b.clsLiving,"testTridentHand",handDesc);
+    auto handClass=LoadClass(env,loader,g.handClass);
+    auto mainHand=env->GetStaticObjectField(handClass,field(handClass,g.mainHand.name,g.mainHand.signature,true)); Healthy(env);
+    env->SetObjectField(player,handId,mainHand); env->SetObjectField(player,activeId,trident);
+    env->SetBooleanField(player,wetId,JNI_TRUE); env->SetBooleanField(player,usingId,JNI_TRUE); spin(true); down(true);
+    env->SetIntField(player,ticksId,9); report=tick();
+    Require(report.trident==Status::ChargingTrident&&report.tridentActions==0,"Native Riptide released before 10 game ticks");
+    env->SetIntField(player,ticksId,10); report=tick();
+    Require(report.trident==Status::ReleaseTrident&&report.tridentActions==1,"Native charged Riptide did not release");
+    Require(env->GetStaticIntField(b.clsInteractionMgr,field(b.clsInteractionMgr,"testTridentReleases","I",true))==1&&env->GetBooleanField(player,usingId)==JNI_FALSE,"Auto Trident did not call game releaseUsingItem"); Healthy(env);
+    report=tick(); Require(report.tridentActions==1,"Idle trident released repeatedly without a new vanilla use");
+    // Simulate Vanilla starting its next held-Use cycle; no key injection is used.
+    env->SetBooleanField(player,usingId,JNI_TRUE); env->SetIntField(player,ticksId,0);
+    report=tick(); Require(report.tridentActions==1,"Second Riptide cycle skipped charging");
+    env->SetIntField(player,ticksId,10); report=tick(); Require(report.tridentActions==2,"Held Use did not repeat after a new charge");
+    env->SetBooleanField(player,usingId,JNI_TRUE); request.trident.chargeTicks=20;
+    report=tick(); Require(report.trident==Status::ChargingTrident&&report.tridentActions==2,"Native charge setting ignored"); request.trident.chargeTicks=10;
+    spin(false); report=tick(); Require(report.trident==Status::NeedRiptide&&report.tridentActions==2,"Native unenchanted trident auto-thrown"); spin(true);
+    env->SetBooleanField(player,wetId,JNI_FALSE); report=tick(); Require(report.trident==Status::NeedWater&&report.tridentActions==2,"Dry Riptide released"); env->SetBooleanField(player,wetId,JNI_TRUE);
+    env->SetObjectField(player,handId,nullptr); report=tick(); Require(report.tridentActions==2,"Offhand Riptide released"); env->SetObjectField(player,handId,mainHand);
+    env->SetObjectField(player,activeId,stack("item.minecraft.trident")); report=tick(); Require(report.tridentActions==2,"Changed active stack released"); env->SetObjectField(player,activeId,trident);
+    down(false); report=tick(); Require(report.trident==Status::WaitingBind&&report.tridentActions==2,"Released Use triggered Riptide"); down(true);
+    request.inputAllowed=false; report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Focus lease did not gate native Riptide"); request.inputAllowed=true;
+    env->SetObjectField(screenOwner,b.fCurrentScreen,otherMenu); report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Menu permitted native Riptide"); env->SetObjectField(screenOwner,b.fCurrentScreen,nullptr);
+    request.combatActive=true; report=tick(); Require(report.trident==Status::Paused&&report.tridentActions==2,"Combat conflict permitted native Riptide"); request.combatActive=false;
+    request.trident.enabled=false; report=tick(); Require(report.trident==Status::Off&&report.tridentActions==2,"Disabled Auto Trident released");
+    SetStatic(env,b.clsLiving,"testEquipment",equipmentDesc,empty);
     bridge.Close(env); testInventory=nullptr;
     Require(EnsureChunkBindings(env,b),"deepslate axis property did not bind");
     SetStatic(env,b.clsBlockState,"testStateValue","Ljava/lang/Comparable;",env->NewStringUTF("x"));
@@ -657,6 +701,14 @@ void TestInventoryAssist(JNIEnv* env,Bindings& b,jobject loader,jobject client) 
     }
     Require(plants==81,"kelp columns were counted more than once");
     SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",nullptr);
+    scanner.Begin(mcov::kMaxBlockScanRadius,1u<<mcov::kBlockRotatedDeepslate,center);
+    scanner.Step(env,b,client,cache,1);
+    Require(scanner.radius==512&&scanner.volume.Cells()==403440000ull&&scanner.nextCell>0&&
+        scanner.nextCell<scanner.volume.Cells()&&scanner.accum.size()<=mcov::kMaxBlocks,
+        "Large JNI scan was clamped, failed to resume or exceeded the result cap");
+    for(const auto& found:scanner.accum)
+        Require(std::abs(found.x-center.posX)<=1&&std::abs(found.z-center.posZ)<=1,
+            "Large JNI scan did not begin with nearby columns");
     cache.Release(env); Healthy(env);
     std::cout<<"PASS inventory assist "<<set.id<<" (client tick, late binding, SWAP, cursor/container guard, game Use, fixed crystal/anchor cycles, world confirmation/dimension, deepslate axis)"<<std::endl;
 }
@@ -872,6 +924,56 @@ void TestFrameSynchronization(JNIEnv* env,const Bindings& b,jobject loader,jobje
     Require(next.sequence>first.sequence&&!g_frameSync.StillCurrent(env,first),"stale camera epoch was accepted");
     g_frameSync.Close(env);
 }
+void TestStorageScanner(JNIEnv* env,const Bindings& b,jobject loader,jobject client) {
+    const auto* p=mcov::agent::StorageMapping(b.set->id); Require(p!=nullptr,"Missing loaded-container profile");
+    jvm::LocalFrame frame(env,128); Require(frame.ok(),"Storage fixture local frame failed");
+    auto field=[&](jobject object,const char* name,const char* desc) {
+        auto cls=env->GetObjectClass(object); auto id=env->GetFieldID(cls,name,desc); Healthy(env); env->DeleteLocalRef(cls); return id;
+    };
+    auto returnClass=[&](const char* desc) { std::string name=std::strchr(desc,')')+1; return LoadClass(env,loader,name.substr(1,name.size()-2).c_str()); };
+    auto level=env->GetObjectField(client,b.fLevel); Healthy(env); Require(level!=nullptr,"Storage fixture has no world");
+    auto source=NewObject(env,returnClass(p->source.signature));
+    const std::string storageClass(p->storage.signature);
+    auto cache=NewObject(env,LoadClass(env,loader,storageClass.substr(1,storageClass.size()-2).c_str()));
+    env->SetObjectField(level,field(level,"testStorageSource",p->source.signature+2),source); Healthy(env);
+    env->SetObjectField(source,field(source,p->storage.name,p->storage.signature),cache); Healthy(env);
+    auto arrayClass=env->FindClass("java/util/concurrent/atomic/AtomicReferenceArray");
+    auto array=env->NewObject(arrayClass,env->GetMethodID(arrayClass,"<init>","(I)V"),4225); Healthy(env);
+    env->SetObjectField(cache,field(cache,p->chunks.name,p->chunks.signature),array); Healthy(env);
+    auto set=env->GetMethodID(arrayClass,"set","(ILjava/lang/Object;)V");
+    auto mapClass=env->FindClass("java/util/HashMap"); auto put=env->GetMethodID(mapClass,"put","(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+    auto posClass=LoadClass(env,loader,p->posClass);
+    auto ctor=env->GetMethodID(posClass,b.profile->geometry->blockPosCtor.name,b.profile->geometry->blockPosCtor.signature); Healthy(env);
+    auto chunk=NewObject(env,LoadClass(env,loader,p->chunkClass));
+    auto map=NewObject(env,mapClass);
+    env->SetObjectField(chunk,field(chunk,"testStorageEntities","Ljava/util/Map;"),map); Healthy(env);
+    for(int x:{-1,500,600}) {
+        auto position=env->NewObject(posClass,ctor,x,64,0); Healthy(env);
+        auto old=env->CallObjectMethod(map,put,position,chunk); Healthy(env); if(old) env->DeleteLocalRef(old);
+    }
+    env->CallVoidMethod(array,set,2112,chunk); Healthy(env);
+    auto state=NewObject(env,b.clsBlockState),block=NewObject(env,b.clsBlock);
+    env->SetObjectField(block,field(block,"testBlockKey","Ljava/lang/String;"),env->NewStringUTF("block.minecraft.chest")); Healthy(env);
+    SetStatic(env,b.clsBlockState,"testBlock",b.set->methodStateGetBlock.signature+2,block);
+    SetStatic(env,b.clsLevel,"testBlockState",b.set->methodGetBlockState.signature+std::string(b.set->methodGetBlockState.signature).find(')')+1,state);
+    SetStatic(env,b.clsLevel,"testStates","Ljava/util/Map;",nullptr);
+    mcov::WorldSnapshot centre{}; centre.posY=64;
+    mcov::agent::StorageScanner scanner; BlockScanner reader; BlockKindCache kinds;
+    auto cursor=env->NewObject(b.clsPosMut,b.mMutableCtor); Healthy(env);
+    for(int radius:{24,512}) {
+        Require(scanner.Begin(env,b.set->id,level,centre,radius,1u<<mcov::kBlockChest),"Loaded-container traversal did not bind");
+        int steps=0;
+        while(scanner.running&&steps++<10000) scanner.Step(env,[&](int x,int y,int z) { return reader.Material(env,b,level,cursor,kinds,x,y,z); });
+        const auto expected=radius==24?1u:2u;
+        Require(!scanner.running&&scanner.successful&&scanner.accum.size()==expected&&scanner.positionsRead==expected,
+            "Container scan missed distant positions, scanned empty blocks or failed to resume");
+    }
+    Require(scanner.Begin(env,b.set->id,level,centre,512,1u<<mcov::kBlockBarrel),"Container filter fixture did not bind");
+    while(scanner.running) scanner.Step(env,[&](int x,int y,int z) { return reader.Material(env,b,level,cursor,kinds,x,y,z); });
+    Require(scanner.accum.empty(),"Container scan ignored selected types");
+    scanner.Reset(env); kinds.Release(env); Healthy(env);
+    std::cout<<"PASS loaded containers "<<b.set->id<<" (4225 chunk slots, two block-state reads at radius 512, independent filters)"<<std::endl;
+}
 void TestProfile(JNIEnv* env, const mcov::mappings::RuntimeProfile& profile,
                  const std::filesystem::path& fixtureDir, bool fieldOnlyCamera = false) {
     jvm::LocalFrame frame(env, 128);
@@ -927,6 +1029,7 @@ void TestProfile(JNIEnv* env, const mcov::mappings::RuntimeProfile& profile,
     TestFrameSynchronization(env,bindings,loader,client,camera);
     TestLiveCombat(env,bindings,loader,client);
     TestInventoryAssist(env,bindings,loader,client);
+    TestStorageScanner(env,bindings,loader,client);
     bindings.mCamPos = nullptr;
     snapshot = {};
     SampleCamera(env, bindings, client, snapshot); Healthy(env);

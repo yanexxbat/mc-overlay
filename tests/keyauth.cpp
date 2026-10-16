@@ -49,12 +49,14 @@ void Signatures() {
 void Protocol() {
     Server server; int calls=0;
     const std::string license="TEST&KEY=+ ?";
+    const auto hardwareId=auth::HardwareId();
+    Require(hardwareId.starts_with("S-1-")&&hardwareId==auth::HardwareId(),"Launcher HWID is unavailable or unstable");
     auth::Client client([&](std::string_view form,std::stop_token) {
         ++calls;
         Require(form.find("&name=mcov&ownerid=Uhn5Z5WPCa")!=form.npos,"Wrong application identity");
         if(form.starts_with("type=init")) { Require(form.find("&ver=1.0&hash=")!=form.npos,"Version/hash missing"); return server.Reply(server.Init()); }
         if(form.starts_with("type=license")) {
-            Require(form.find("&key=TEST%26KEY%3D%2B%20%3F")!=form.npos&&form.find("&hwid=S-1-")!=form.npos,"License/SID were not safely encoded");
+            Require(form.find("&key=TEST%26KEY%3D%2B%20%3F")!=form.npos&&form.ends_with("&hwid="+auth::EncodeForm(hardwareId)),"License encoding or displayed/authenticated HWID mismatch");
             return server.Reply(server.License());
         }
         Require(form.starts_with("type=check")&&form.find("&sessionid=fixture-session")!=form.npos,"Check omitted session");

@@ -27,6 +27,7 @@
 #include "../common/ipc.hpp"
 #include "../common/log.hpp"
 #include "../common/shared_state.hpp"
+#include "../common/dimension_name.hpp"
 #include "jvm_interface.hpp"
 #include "generated_profiles.hpp"
 #include "geometry_bindings.hpp"
@@ -37,6 +38,8 @@
 #include "../common/equipment_icons.hpp"
 #include "../common/chunk_hints.hpp"
 #include "../common/block_scan_results.hpp"
+#include "../common/block_scan_volume.hpp"
+#include "storage_scanner.hpp"
 #include "combat_live.hpp"
 #include "item_assist_live.hpp"
 #include "depth_capture.hpp"
@@ -255,6 +258,7 @@ struct BlockKindCache {
                 const std::string text = jvm::JStringToUtf8(env, key);
                 env->DeleteLocalRef(key);
                 kind=ClassifyBlock(text);
+                if(kind<0) kind=holes::Material(text);
             }
         }
         entries.push_back({env->NewGlobalRef(block), kind});
@@ -1141,7 +1145,7 @@ void SampleHeap(JNIEnv* env, const Bindings& b, WorldSnapshot& snap) {
     }
 }
 
-// Sweeps a cube around the player for the requested block kinds.
+// Sweeps a height-clipped cube around the player, nearby columns first.
 //
 // This is by far the most expensive thing the agent does - a radius of 16 is
 // 35937 getBlockState calls - so it is throttled by scanIntervalMs and only
@@ -1155,14 +1159,31 @@ struct BlockScanner {
     int           radius  = 0;
     int           baseX   = 0, baseY = 0, baseZ = 0;
     int           nextDy  = 0;      // Legacy-Feld für bestehende Diagnosen.
-    int           nextCell = 0;
+    std::uint64_t nextCell = 0;
+    BlockScanVolume volume;
+    std::size_t limit=kMaxBlocks;
+    bool scanHoles=false;
     std::uint32_t mask    = 0;
     bool          running = false;
     bool          successful = false;
     std::uint64_t id = 0;
 
     std::vector<BlockSnapshot> accum;
-    BlockScanner() { accum.reserve(kMaxBlocks); }
+    explicit BlockScanner(std::size_t cap=kMaxBlocks,bool holes=false):limit(std::clamp(cap,std::size_t(1),std::size_t(kMaxBlocks))),scanHoles(holes) { accum.reserve(limit); }
+
+    std::int8_t Material(JNIEnv* env,const Bindings& b,jobject level,jobject cursor,BlockKindCache& cache,int x,int y,int z) {
+        if(y<-64||y>=320) return -1;
+        auto moved=env->CallObjectMethod(cursor,b.mMutableSet,x,y,z);
+        if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; return -1; }
+        if(moved) env->DeleteLocalRef(moved);
+        auto state=env->CallObjectMethod(level,b.mGetBlockState,cursor);
+        if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; return -1; }
+        if(!state) return -1;
+        auto block=env->CallObjectMethod(state,b.mGetBlock); env->DeleteLocalRef(state);
+        if(env->ExceptionCheck()) { env->ExceptionClear(); successful=false; return -1; }
+        if(!block) return -1;
+        const auto material=cache.Lookup(env,b,block); env->DeleteLocalRef(block); return material;
+    }
 
     // Only kelp tops enter the result buffer. Measuring their stems separately
     // keeps dense kelp forests from consuming one result per stem block.
@@ -1187,11 +1208,12 @@ struct BlockScanner {
     }
 
     void Begin(int r, std::uint32_t m, const WorldSnapshot& snap) {
-        radius  = r;
+        radius  = std::clamp(r,kMinBlockScanRadius,kMaxBlockScanRadius);
         mask    = m;
         baseX   = static_cast<int>(std::floor(snap.posX));
         baseY   = static_cast<int>(std::floor(snap.posY));
         baseZ   = static_cast<int>(std::floor(snap.posZ));
+        volume.Reset(baseX,baseY,baseZ,radius);
         nextDy  = 0; nextCell=0;
         running = true;
         successful = true;
@@ -1218,18 +1240,13 @@ struct BlockScanner {
         if (env->ExceptionCheck()) { env->ExceptionClear(); running = false; successful=false; return true; }
         if (!cursor) { running = false; successful=false; return true; }
 
-        const int span = 2 * radius + 1;
-
         const auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(std::max(1,sliceBudget));
-        const int cells=span*span*span;
-        while(nextCell<cells&&accum.size()<kMaxBlocks) {
-                    const int cell=nextCell++;
-                    const int x=baseX-radius+cell%span;
-                    const int z=baseZ-radius+(cell/span)%span;
-                    const int y=baseY-radius+cell/(span*span);
-                    nextDy=cell/(span*span);
-                    if((cell&31)==0&&std::chrono::steady_clock::now()>=deadline) { --nextCell; break; }
-                    if(y < -64 || y >= 320) continue;
+        const auto cells=volume.Cells();
+        while(nextCell<cells&&accum.size()<limit) {
+                    if((nextCell&31)==0&&std::chrono::steady_clock::now()>=deadline) break;
+                    const auto position=volume.At(nextCell++);
+                    const auto [x,y,z]=position;
+                    nextDy=y-baseY+radius;
                     auto moved=env->CallObjectMethod(cursor, b.mMutableSet, x, y, z);
                     if (env->ExceptionCheck()) { env->ExceptionClear(); successful=false; continue; }
                     if(moved) env->DeleteLocalRef(moved);
@@ -1248,6 +1265,13 @@ struct BlockScanner {
                     if (!block) { env->DeleteLocalRef(state); continue; }
                     const std::int8_t kind=cache.Lookup(env,b,block);
                     env->DeleteLocalRef(block);
+                    if(scanHoles) {
+                        env->DeleteLocalRef(state);
+                        if(kind!=holes::kAir) continue;
+                        const auto type=holes::Detect([&](int dx,int dy,int dz) { return Material(env,b,level,cursor,cache,x+dx,y+dy,z+dz); });
+                        if(type!=holes::Type::None) { BlockSnapshot hole{}; hole.x=float(x); hole.y=float(y); hole.z=float(z); hole.kind=std::uint8_t(type); accum.push_back(hole); }
+                        continue;
+                    }
                     bool selected=kind>=0&&kind!=kBlockKelpPlant&&(mask&(1u<<static_cast<std::uint32_t>(kind)));
                     if(selected&&kind==kBlockRotatedDeepslate) selected=IsRotatedDeepslate(env,b,state);
                     env->DeleteLocalRef(state);
@@ -1264,7 +1288,7 @@ struct BlockScanner {
 
         env->DeleteLocalRef(cursor);
 
-        if (nextCell >= cells || accum.size() >= kMaxBlocks) {
+        if (nextCell >= cells || accum.size() >= limit) {
             running = false;
             return true;
         }
@@ -1367,7 +1391,7 @@ void SampleWorldMeta(JNIEnv* env, const Bindings& b, jobject client, WorldSnapsh
             else if (key) {
                 auto text = static_cast<jstring>(env->CallObjectMethod(key, b.mObjToString));
                 if (env->ExceptionCheck()) env->ExceptionClear();
-                else if (text) CopyField(snap.dimension, jvm::JStringToUtf8(env, text).c_str());
+                else if (text) CopyDimensionName(snap.dimension, jvm::JStringToUtf8(env, text));
             }
         }
     }
@@ -1412,6 +1436,16 @@ void SamplerThread() {
     Bindings       bindings;
     BlockKindCache blockCache;
     BlockScanner   scanner;
+    BlockScanner   holeScanner{holes::kMaxResults,true};
+    BlockScanResults holeResults;
+    std::uint64_t nextHoleTick=0;
+    agent::StorageScanner storageScanner;
+    BlockScanner storageFallback;
+    BlockScanResults storageResults;
+    storage::Request storageRequest{};
+    std::uint64_t nextStorageTick=0,storageSweepId=0;
+    int storageRadius=0; std::uint32_t storageMask=0;
+    bool storageRunning=false,storageFast=false;
     WorldSnapshot  snapshot{};
     std::uint64_t  frame           = 0;
     int            resolveAttempts = 0;
@@ -1584,7 +1618,7 @@ void SamplerThread() {
                 // completion removes old matches. World/filter changes reset it.
                 if(auto* block=g_channel.block()) {
                     const auto mask=block->scanMask.load(std::memory_order_acquire);
-                    const int radius=static_cast<int>(std::clamp(block->scanRadius.load(std::memory_order_acquire),4u,48u));
+                    const int radius=static_cast<int>(std::clamp(block->scanRadius.load(std::memory_order_acquire),unsigned(kMinBlockScanRadius),unsigned(kMaxBlockScanRadius)));
                     const auto interval=std::clamp(block->scanIntervalMs.load(std::memory_order_acquire),200u,3000u);
                     const auto now=::GetTickCount64();
                     auto level=env->GetObjectField(client,bindings.fLevel);
@@ -1615,9 +1649,8 @@ void SamplerThread() {
                         }
                     }
                     block->scanState.store(static_cast<std::uint32_t>(state),std::memory_order_release);
-                    const int span=radius*2+1;
                     block->scanProgress.store(state==ScanState::Ready?100u:state==ScanState::Scanning?
-                        static_cast<unsigned>(100ull*scanner.nextCell/(span*span*span)):0u,std::memory_order_release);
+                        scanner.volume.Progress(scanner.nextCell):0u,std::memory_order_release);
                     const auto results=blockResults.Results();
                     snapshot.blockCount=static_cast<std::uint32_t>(results.size());
                     snapshot.blockScanId=scanner.id;
@@ -1627,12 +1660,76 @@ void SamplerThread() {
                     snapshot.blockScanComplete=state==ScanState::Ready&&scanner.successful;
                     snapshot.blockScanTruncated=scanner.accum.size()>=kMaxBlocks;
                     std::copy(results.begin(),results.end(),snapshot.blocks);
+                    block->storageRequest.Read(storageRequest);
+                    const auto storageNow=::GetTickCount64(); // Read after the mailbox; another scan may have consumed this frame's budget.
+                    const int requestedStorageRadius=int(std::clamp(storageRequest.radius,unsigned(kMinBlockScanRadius),unsigned(kMaxBlockScanRadius)));
+                    const bool storageEnabled=storageRequest.enabled&&storageRequest.mask&&storageRequest.sentAtMs&&
+                        storageNow>=storageRequest.sentAtMs&&storageNow-storageRequest.sentAtMs<3000;
+                    if(newWorld||!storageEnabled||requestedStorageRadius!=storageRadius||storageRequest.mask!=storageMask) {
+                        storageScanner.Reset(env); storageFallback.running=false; storageResults.Reset(); nextStorageTick=0; storageRunning=false;
+                        storageRadius=requestedStorageRadius; storageMask=storageRequest.mask;
+                        snapshot.storageCount=0; snapshot.storageSampledAtMs=0; snapshot.storageState=storage::State::Idle;
+                    }
+                    if(storageEnabled&&level) {
+                        if(!storageRunning&&now>=nextStorageTick) {
+                            const bool canReadStorage=bindings.clsPosMut&&bindings.mMutableCtor&&bindings.mGetBlockState&&bindings.mGetBlock&&bindings.mMutableSet&&bindings.mBlockTransKey;
+                            storageFast=canReadStorage&&storageScanner.Begin(env,bindings.set->id,level,snapshot,storageRadius,storageMask);
+                            if(!storageFast) storageFallback.Begin(storageRadius,storageMask,snapshot);
+                            storageResults.Begin(); storageRunning=true; ++storageSweepId;
+                        }
+                        if(storageRunning) {
+                            jvm::LocalFrame storageFrame(env,8);
+                            jobject storageCursor=nullptr;
+                            if(storageFast&&storageFrame.ok()) {
+                                storageFallback.successful=true;
+                                storageCursor=env->NewObject(bindings.clsPosMut,bindings.mMutableCtor);
+                                if(env->ExceptionCheck()) { env->ExceptionClear(); storageCursor=nullptr; }
+                            }
+                            const bool done=storageFast?storageScanner.Step(env,[&](int x,int y,int z) {
+                                if(!storageCursor) { storageFallback.successful=false; return std::int8_t(-1); }
+                                return storageFallback.Material(env,bindings,level,storageCursor,blockCache,x,y,z);
+                            }):storageFallback.Step(env,bindings,client,blockCache,1);
+                            if(storageFast&&!storageFallback.successful) storageScanner.successful=false;
+                            const bool success=storageFast?storageScanner.successful:storageFallback.successful;
+                            const auto& accumulated=storageFast?storageScanner.accum:storageFallback.accum;
+                            storageResults.Merge(accumulated,done&&success);
+                            snapshot.storageScanId=storageSweepId; snapshot.storageSampledAtMs=now;
+                            snapshot.storageFast=storageFast; snapshot.storageLimited=storageFast?storageScanner.limited:accumulated.size()>=kMaxBlocks;
+                            snapshot.storageProgress=done?100u:storageFast?storageScanner.Progress():storageFallback.volume.Progress(storageFallback.nextCell);
+                            snapshot.storageState=done?(success?storage::State::Ready:storage::State::Unavailable):storage::State::Scanning;
+                            const auto matches=storageResults.Results(); snapshot.storageCount=std::uint32_t(matches.size());
+                            std::copy(matches.begin(),matches.end(),snapshot.storageBlocks);
+                            if(done) { storageRunning=false; nextStorageTick=now+std::clamp(storageRequest.intervalMs,200u,3000u); }
+                        }
+                    }
+                    // Independent bounded scan: large Block ESP sweeps cannot
+                    // delay short-range holes. One extra millisecond per slice.
+                    const auto holeRequest=block->holeScanRadius.load(std::memory_order_acquire);
+                    const int holeRadius=int(std::clamp(holeRequest,unsigned(holes::kMinRadius),unsigned(holes::kMaxRadius)));
+                    if(newWorld||!holeRequest||holeRadius!=holeScanner.radius) {
+                        holeScanner.running=false; holeScanner.radius=holeRadius; holeResults.Reset(); nextHoleTick=0;
+                        snapshot.holeCount=0; snapshot.holeSampledAtMs=0;
+                    }
+                    if(holeRequest&&level) {
+                        if(!holeScanner.running&&now>=nextHoleTick) { holeScanner.Begin(holeRadius,0,snapshot); holeResults.Begin(); }
+                        if(holeScanner.running) {
+                            const bool done=holeScanner.Step(env,bindings,client,blockCache,1);
+                            if(holeScanner.successful) holeResults.Merge(holeScanner.accum,done);
+                            else holeResults.Reset();
+                            if(done) nextHoleTick=now+250;
+                            const auto found=holeResults.Results().first(std::min(holeResults.Results().size(),std::size_t(holes::kMaxResults)));
+                            snapshot.holeCount=std::uint32_t(found.size()); snapshot.holeSampledAtMs=now;
+                            std::copy(found.begin(),found.end(),snapshot.holes);
+                        }
+                    }
                 }
 
                 SetStatus(AgentStatus::Running);
             } else {
                 // In a menu / not in a world yet.
                 scanner.running=false; scanner.accum.clear(); blockResults.Reset(); nextScanTick=0;
+                holeScanner.running=false; holeScanner.accum.clear(); holeResults.Reset(); nextHoleTick=0;
+                storageScanner.Reset(env); storageFallback.running=false; storageResults.Reset(); nextStorageTick=0; storageRunning=false;
                 if(scanWorld) { env->DeleteWeakGlobalRef(scanWorld); scanWorld=nullptr; }
                 if(auto* block=g_channel.block()) { block->scanState.store(0); block->scanProgress.store(0); }
                 lastCaptureTick = 0;
@@ -1672,6 +1769,7 @@ void SamplerThread() {
     for (jobject& slot : bindings.slotConstants) {
         if (slot) { env->DeleteGlobalRef(slot); slot = nullptr; }
     }
+    storageScanner.Reset(env);
     blockCache.Release(env);
     entityDetails.Clear(env);
     if (bindings.axisProperty) { env->DeleteGlobalRef(bindings.axisProperty); bindings.axisProperty=nullptr; }

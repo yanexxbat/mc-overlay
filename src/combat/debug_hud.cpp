@@ -58,7 +58,7 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
             }
             draw.AddPolyline(wantedYaw.data(),static_cast<int>(count),kTarget,0,1);
             draw.AddPolyline(actualYaw.data(),static_cast<int>(count),kText,0,1.5f);
-            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),IM_COL32(255,163,136,100),0,1);
+            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),style::compact::Rgba(style::compact::AccentActiveRGB,100),0,1);
             draw.AddPolyline(actualPitch.data(),static_cast<int>(count),IM_COL32(236,236,239,100),0,1);
         }
     }

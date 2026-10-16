@@ -9,8 +9,8 @@ struct TargetCubeConfig {
     bool showDepth=true;
     float sizeFraction=.68f;                 // Würfelkante relativ zur Hitboxhöhe.
     float cornerFraction=.28f;
-    float roundFraction=.045f;
-    float strokeFraction=.05f;
+    float roundFraction=.085f;
+    float strokeFraction=.025f;
     float swingDegrees=105.f;
     float directionCycleSeconds=7.f;         // Sanfter Richtungswechsel alle 3,5 Sekunden.
     float opacity=1.f;

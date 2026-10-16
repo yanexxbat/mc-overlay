@@ -9,6 +9,8 @@
 #include "combat_bridge_state.hpp"
 #include "item_assist.hpp"
 #include "base_render_state.hpp"
+#include "hole_detection.hpp"
+#include "storage_scan_state.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -19,7 +21,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 28;
+inline constexpr std::uint32_t kSharedVersion = 31;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -351,6 +353,14 @@ struct WorldSnapshot {
     std::uint8_t _padScan[2];
     EntitySnapshot entities[kMaxEntities];
     BlockSnapshot  blocks[kMaxBlocks];
+    std::uint32_t holeCount;
+    std::uint64_t holeSampledAtMs;
+    BlockSnapshot holes[mcov::holes::kMaxResults]; // kind is holes::Type, independent of BlockKind.
+    std::uint64_t storageScanId,storageSampledAtMs;
+    std::uint32_t storageCount,storageProgress;
+    storage::State storageState;
+    std::uint8_t storageFast,storageLimited;
+    BlockSnapshot storageBlocks[kMaxBlocks];
 };
 
 static_assert(std::is_trivially_copyable_v<WorldSnapshot>);
@@ -381,6 +391,7 @@ struct SharedBlock {
     std::atomic<std::uint32_t> scanIntervalMs;
     std::atomic<std::uint32_t> scanState;
     std::atomic<std::uint32_t> scanProgress; // 0..100, Agent -> Overlay.
+    std::atomic<std::uint32_t> holeScanRadius; // 0 disables the independent short-range scan.
 
     SharedMailbox<CombatRequest> combatRequest; // Overlay -> Client-Tick, eigener Writer.
     SharedMailbox<CombatReport> combatReport;   // Client-Tick -> Overlay, eigener Writer.
@@ -390,6 +401,7 @@ struct SharedBlock {
     SharedMailbox<base::Report> baseReport;
     SharedMailbox<antivanish::Request> antiVanishRequest;
     SharedMailbox<antivanish::Report> antiVanishReport;
+    SharedMailbox<storage::Request> storageRequest;
     WorldSnapshot snapshot;
 };
 

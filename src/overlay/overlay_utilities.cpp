@@ -1,6 +1,7 @@
 #include "overlay.hpp"
 #include "../common/chunk_hints.hpp"
 #include <cstdio>
+#include <cmath>
 
 namespace mcov {
 namespace panel=control_panel;
@@ -8,9 +9,27 @@ namespace panel=control_panel;
 items::Request Overlay::BuildItemRequest(std::uint64_t now,bool inputAllowed,bool combatActive) const {
     items::Request r;
     r.sentAtMs=now; r.inputAllowed=inputAllowed; r.combatActive=combatActive;
-    r.totem=combat_.autoTotem; r.crystal=crystalMacro_; r.anchor=anchorMacro_;
+    r.totem=combat_.autoTotem; r.crystal=crystalMacro_; r.anchor=anchorMacro_; r.trident=autoTrident_;
     // Minecraft liest seine eigene, eventuell umbelegte Place/Use-Taste im Client-Tick.
     return r;
+}
+
+void Overlay::DrawTridentSettings() {
+    bool changed=false;
+    if(panel::BeginRows("trident_controls")) {
+        changed|=panel::CheckRow("Enable Auto Trident",&autoTrident_.enabled);
+        DrawBind(keys::Action::AutoTrident,true);
+        changed|=panel::SliderIntRow("Charge time",&autoTrident_.chargeTicks,10,40,"%d ticks");
+        char count[32]; std::snprintf(count,sizeof(count),"%llu",static_cast<unsigned long long>(itemReport_.tridentActions));
+        panel::ValueRow("Releases sent",count);
+        ImGui::EndTable();
+    }
+    if(changed) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
+    panel::Section("Live status");
+    ImGui::TextWrapped("%s",items::Text(agentConnected_?itemReport_.trident:items::Status::Unsupported));
+    panel::Section("How to use");
+    ImGui::TextWrapped("Hold a Riptide trident in your main hand, then hold Minecraft's Place / Use key (right mouse by default). It repeatedly charges and releases while you stay in water or rain.");
+    ImGui::TextWrapped("Release Use to stop. Menus, focus loss and Kill Aura pause automatic releases. Charge time uses game ticks: 10 ticks is the normal minimum (0.5 seconds at 20 TPS). Minecraft controls reuse and durability.");
 }
 
 void Overlay::DrawItemAssistSettings(int section) {
@@ -78,7 +97,7 @@ void Overlay::NormalizeChunkFinder() {
     auto& old=smpConfig_.finder;
     if(old.enabled&&!chunkFinder_.enabled) {
         chunkFinder_.radius=old.radius; chunkFinder_.interval=old.interval;
-        chunkFinder_.maxDraw=std::clamp(old.maxDraw,8.f,128.f);
+        chunkFinder_.maxDraw=std::clamp(old.maxDraw,8.f,float(kMaxBlockDrawDistance));
         chunkFinder_.color=old.colour; chunkFinder_.labels=old.labels;
     }
     chunkFinder_.enabled=old.enabled=chunkFinder_.enabled||old.enabled;
@@ -97,9 +116,12 @@ void Overlay::DrawChunkFinderSettings() {
         bool enabled=ModuleEnabled(keys::Action::ChunkFinder);
         if(panel::CheckRow("Enable Chunkfinder",&enabled)) { SetModuleEnabled(keys::Action::ChunkFinder,enabled); dirty=true; }
         DrawBind(keys::Action::ChunkFinder,true);
-        dirty|=panel::SliderIntRow("Scan radius",&chunkFinder_.radius,4,48,"%d blocks");
+        if(panel::SliderIntRow("Scan radius",&chunkFinder_.radius,kMinBlockScanRadius,kMaxBlockScanRadius,"%d blocks")) {
+            chunkFinder_.maxDraw=std::max(chunkFinder_.maxDraw,std::ceil(chunkFinder_.radius*std::sqrt(3.f)));
+            dirty=true;
+        }
         dirty|=panel::SliderIntRow("Scan interval",&chunkFinder_.interval,200,3000,"%d ms");
-        dirty|=panel::SliderRow("Draw distance",&chunkFinder_.maxDraw,8,128,"%.0f m");
+        dirty|=panel::SliderRow("Draw distance",&chunkFinder_.maxDraw,8,kMaxBlockDrawDistance,"%.0f m");
         dirty|=panel::CheckRow("Highlight whole chunks",&chunkFinder_.chunks);
         dirty|=panel::CheckRow("Highlight individual blocks",&chunkFinder_.blocks);
         dirty|=panel::CheckRow("Chunk labels",&chunkFinder_.labels);
@@ -107,6 +129,7 @@ void Overlay::DrawChunkFinderSettings() {
         dirty|=panel::ColorRow("Hint colour",&chunkFinder_.color.x);
         ImGui::EndTable();
     }
+    ImGui::TextWrapped("Scans start nearby and cover loaded blocks only. Large radii take longer; possible bases update after a completed scan.");
     panel::Section("Suspicious blocks");
     if(panel::BeginRows("chunkfinder_deepslate")) {
         dirty|=panel::CheckRow("Horizontal deepslate",&chunkFinder_.deepslate);

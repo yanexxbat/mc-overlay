@@ -3,7 +3,7 @@
 Für **Minecraft 1.21.11 / Fabric / normales OpenGL** besitzt der Client jetzt
 einen separaten Tiefenkanal. Unter **Settings → Overlay → Occlude world effects**
 ist die Verdeckung standardmäßig eingeschaltet. Minecraft nach diesem Update
-vollständig neu starten und anschließend `build/client/mcov.exe` öffnen:
+vollständig neu starten und anschließend `build/client/Keim.exe` öffnen:
 Agent, Java-Helfer und Overlay verwenden jetzt IPC **18**.
 
 - **Active:** ein frischer Tiefenframe wird verwendet.

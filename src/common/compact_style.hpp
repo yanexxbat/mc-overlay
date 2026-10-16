@@ -23,22 +23,22 @@ inline void ApplyCustomStyle(ImGuiStyle& s) {
     c[ImGuiCol_FrameBg]=Color(0xFFFFFF,.045f); c[ImGuiCol_FrameBgHovered]=Color(0xFFFFFF,.085f);
     c[ImGuiCol_FrameBgActive]=Color(0xFFFFFF,.12f);
     c[ImGuiCol_Button]=Color(0xFFFFFF,.045f); c[ImGuiCol_ButtonHovered]=Color(0xFFFFFF,.09f);
-    c[ImGuiCol_ButtonActive]=Color(0xEF8B70,.18f);
-    c[ImGuiCol_CheckMark]=Color(0xEF8B70); c[ImGuiCol_SliderGrab]=Color(0xEF8B70);
-    c[ImGuiCol_SliderGrabActive]=Color(0xFFA388);
-    c[ImGuiCol_Header]=Color(0xEF8B70,.12f); c[ImGuiCol_HeaderHovered]=Color(0xFFFFFF,.06f);
-    c[ImGuiCol_HeaderActive]=Color(0xEF8B70,.18f);
+    c[ImGuiCol_ButtonActive]=Color(compact::AccentRGB,.18f);
+    c[ImGuiCol_CheckMark]=Color(compact::AccentRGB); c[ImGuiCol_SliderGrab]=Color(compact::AccentRGB);
+    c[ImGuiCol_SliderGrabActive]=Color(compact::AccentActiveRGB);
+    c[ImGuiCol_Header]=Color(compact::AccentRGB,.12f); c[ImGuiCol_HeaderHovered]=Color(0xFFFFFF,.06f);
+    c[ImGuiCol_HeaderActive]=Color(compact::AccentRGB,.18f);
     c[ImGuiCol_Tab]=Color(0xFFFFFF,.035f); c[ImGuiCol_TabHovered]=Color(0xFFFFFF,.09f);
-    c[ImGuiCol_TabSelected]=Color(0xEF8B70,.16f); c[ImGuiCol_TabSelectedOverline]={0,0,0,0};
+    c[ImGuiCol_TabSelected]=Color(compact::AccentRGB,.16f); c[ImGuiCol_TabSelectedOverline]={0,0,0,0};
     c[ImGuiCol_TabDimmed]=c[ImGuiCol_Tab]; c[ImGuiCol_TabDimmedSelected]=c[ImGuiCol_TabSelected];
     c[ImGuiCol_Separator]=Color(0xFFFFFF,.065f);
-    c[ImGuiCol_SeparatorHovered]=c[ImGuiCol_SeparatorActive]=Color(0xEF8B70);
+    c[ImGuiCol_SeparatorHovered]=c[ImGuiCol_SeparatorActive]=Color(compact::AccentRGB);
     c[ImGuiCol_ScrollbarBg]={0,0,0,0}; c[ImGuiCol_ScrollbarGrab]=Color(0xFFFFFF,.15f);
-    c[ImGuiCol_ScrollbarGrabHovered]=Color(0xFFFFFF,.27f); c[ImGuiCol_ScrollbarGrabActive]=Color(0xEF8B70,.65f);
+    c[ImGuiCol_ScrollbarGrabHovered]=Color(0xFFFFFF,.27f); c[ImGuiCol_ScrollbarGrabActive]=Color(compact::AccentRGB,.65f);
     c[ImGuiCol_TableBorderStrong]=c[ImGuiCol_TableBorderLight]=c[ImGuiCol_Separator];
     c[ImGuiCol_TableRowBg]=c[ImGuiCol_TableRowBgAlt]={0,0,0,0};
-    c[ImGuiCol_NavCursor]=Color(0xFFA388); c[ImGuiCol_TextSelectedBg]=Color(0xEF8B70,.28f);
-    c[ImGuiCol_TextLink]=Color(0xFFA388);
+    c[ImGuiCol_NavCursor]=Color(compact::AccentActiveRGB); c[ImGuiCol_TextSelectedBg]=Color(compact::AccentRGB,.28f);
+    c[ImGuiCol_TextLink]=Color(compact::AccentActiveRGB);
 }
 inline void ApplyCustomStyle() { ApplyCustomStyle(ImGui::GetStyle()); }
 

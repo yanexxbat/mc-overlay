@@ -45,16 +45,6 @@ std::string Header(HINTERNET request,const wchar_t* name) {
     for(const wchar_t* p=buffer;*p;++p) { if(*p>127) return {}; text+=char(*p); }
     return text;
 }
-std::string HardwareId() {
-    WinHandle token; HANDLE raw=nullptr;
-    Need(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&raw)!=FALSE,"Could not read the Windows account for license verification.");
-    token=WinHandle(raw); DWORD bytes=0; GetTokenInformation(token.get(),TokenUser,nullptr,0,&bytes);
-    std::vector<std::uint8_t> data(bytes);
-    Need(bytes&&GetTokenInformation(token.get(),TokenUser,data.data(),bytes,&bytes),"Could not read the Windows account for license verification.");
-    LPSTR text=nullptr;
-    Need(ConvertSidToStringSidA(reinterpret_cast<TOKEN_USER*>(data.data())->User.Sid,&text)!=FALSE,"Could not read the Windows account for license verification.");
-    std::string result(text); LocalFree(text); return result;
-}
 std::string BinaryHash() {
     // KeyAuth's hash field uses an MD5 build identifier; response authentication
     // is independently provided by TLS and Ed25519, never by this identifier.
@@ -109,6 +99,16 @@ std::int64_t Expiry(const Json& data) {
     return expires;
 }
 }
+std::string HardwareId() {
+    WinHandle token; HANDLE raw=nullptr;
+    Need(OpenProcessToken(GetCurrentProcess(),TOKEN_QUERY,&raw)!=FALSE,"Could not read the Windows account for license verification.");
+    token=WinHandle(raw); DWORD bytes=0; GetTokenInformation(token.get(),TokenUser,nullptr,0,&bytes);
+    std::vector<std::uint8_t> data(bytes);
+    Need(bytes&&GetTokenInformation(token.get(),TokenUser,data.data(),bytes,&bytes),"Could not read the Windows account for license verification.");
+    LPSTR text=nullptr;
+    Need(ConvertSidToStringSidA(reinterpret_cast<TOKEN_USER*>(data.data())->User.Sid,&text)!=FALSE,"Could not read the Windows account for license verification.");
+    std::string result(text); LocalFree(text); return result;
+}
 void Wipe(std::string& value) noexcept { if(!value.empty()) SecureZeroMemory(value.data(),value.size()); value.clear(); }
 Session::Session(Session&& other) noexcept { id=std::move(other.id); expires=std::exchange(other.expires,0); Wipe(other.id); }
 Session& Session::operator=(Session&& other) noexcept {
@@ -138,7 +138,7 @@ bool VerifyResponse(const HttpResponse& r,const PublicKey& key,std::int64_t now)
 HttpResponse Request(std::string_view form,std::stop_token stop) {
     Cancel(stop); Need(form.size()<8192,"License request is too large.");
     constexpr auto networkError="Could not reach KeyAuth. Check your internet connection and try again.";
-    Internet session(WinHttpOpen(L"mcov/1.0",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
+    Internet session(WinHttpOpen(L"Keim/1.0",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,WINHTTP_NO_PROXY_NAME,WINHTTP_NO_PROXY_BYPASS,0));
     Need(session.value!=nullptr,networkError);
     Need(WinHttpSetTimeouts(session.value,3000,3000,5000,5000)!=FALSE,networkError);
     Internet connection(WinHttpConnect(session.value,L"keyauth.win",INTERNET_DEFAULT_HTTPS_PORT,0)); Need(connection.value!=nullptr,networkError);

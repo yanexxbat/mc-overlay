@@ -41,13 +41,34 @@ void Overlay::DrawScanStatus() {
     }
     if(lastSnapshot_.blockScanTruncated) ImGui::TextWrapped("Result limit reached (1024 blocks). Counts are lower bounds; reduce the radius or select fewer types.");
 }
+void Overlay::DrawHoleSettings() {
+    bool dirty=false; auto& c=holeSettings_;
+    if(panel::BeginRows("hole_settings")) {
+        dirty|=panel::CheckRow("Enable Hole ESP",&c.enabled); DrawBind(keys::Action::HoleEsp,true);
+        dirty|=panel::SliderIntRow("Scan radius",&c.radius,holes::kMinRadius,holes::kMaxRadius,"%d blocks");
+        dirty|=panel::SliderRow("Draw distance",&c.distance,4,64,"%.0f m");
+        dirty|=panel::SliderRow("Marker height",&c.height,.05f,1,"%.2f m");
+        dirty|=panel::SliderRow("Floor opacity",&c.fill,0,.5f,"%.2f");
+        dirty|=panel::CheckRow("Bedrock holes",&c.bedrock);
+        dirty|=panel::ColorRow("Bedrock colour",&c.bedrockColour.x);
+        dirty|=panel::CheckRow("Obsidian holes",&c.obsidian);
+        dirty|=panel::ColorRow("Obsidian colour",&c.obsidianColour.x);
+        dirty|=panel::CheckRow("Mixed holes",&c.mixed);
+        dirty|=panel::ColorRow("Mixed colour",&c.mixedColour.x);
+        dirty|=panel::CheckRow("Hole labels",&c.labels);
+        ImGui::EndTable();
+    }
+    ImGui::TextWrapped("Marks 1x1 holes with three air blocks above a bedrock/obsidian floor and four matching walls. Uses a separate short-range scan; large Block ESP scans do not delay it. Loaded blocks only.");
+    if(c.enabled) ImGui::TextDisabled("Found: %u holes",lastSnapshot_.holeCount);
+    if(dirty) { panicActive_=false; preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; PushScanRequest(); }
+}
 void Overlay::DrawSmpSettings(int section) {
     bool dirty=false;
     if(section==0) {
         auto& appearance=rockstarConfig_[rockstar::Feature::ChestEsp]; auto& c=smpConfig_.storage;
         if(panel::BeginRows("storage_settings")) {
             dirty|=panel::CheckRow("Enable Storage ESP",&appearance.enabled); DrawBind(keys::Action::ChestEsp,true);
-            dirty|=panel::SliderRow("Scan radius",&appearance.range,4,48,"%.0f blocks");
+            dirty|=panel::SliderRow("Scan radius",&appearance.range,kMinBlockScanRadius,kMaxBlockScanRadius,"%.0f blocks");
             dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
             dirty|=panel::CheckRow("Scan pulse",&c.pulse);
             if(c.pulse) dirty|=panel::SliderIntRow("Pulse cycle",&c.pulseDuration,500,6000,"%d ms");
@@ -59,7 +80,7 @@ void Overlay::DrawSmpSettings(int section) {
         if(ImGui::Button("Reset storage colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
         if(!c.mask) ImGui::TextWrapped("Select at least one block type to show Storage ESP.");
         ImGui::TextWrapped("3D frames stay visible during each scan. New containers appear in sequence; the pulse passes from one container to the next.");
-        ImGui::TextWrapped("Scan interval sets the pause after a sweep. Other active block scanners can request faster sweeps. Pulse cycle controls the visual speed; Reduce motion shows steady frames.");
+        ImGui::TextWrapped("Searches loaded containers directly, independently of Block ESP and Chunkfinder. Scan interval is the pause after a sweep. Pulse cycle controls the visual effect; Reduce motion shows steady frames.");
         ImGui::TextWrapped("Each type uses its own colour. Only blocks available in the client world can be found.");
     } else if(section==1) {
         auto& c=smpConfig_.stash;
@@ -203,7 +224,15 @@ void Overlay::DrawSmpSettings(int section) {
         if(!detection.mask) ImGui::TextWrapped("Choose container types under Stash Finder to detect bases.");
         ImGui::TextWrapped("Base ESP works on its own. Detection uses container clusters plus your chosen expansion; it does not trace an entire building. Radius, minimum and container filters are shared with Stash Finder.");
     }
-    DrawScanStatus();
+    if(section==0) {
+        if(!agentConnected_||!haveSnapshot_) ImGui::TextWrapped("Connect to Minecraft and join a world to scan containers.");
+        else if(lastSnapshot_.storageState==storage::State::Scanning) ImGui::TextDisabled("%s: %u%% | %u matching containers",
+            lastSnapshot_.storageFast?"Scanning loaded containers":"Compatibility block scan",lastSnapshot_.storageProgress,lastSnapshot_.storageCount);
+        else if(lastSnapshot_.storageState==storage::State::Unavailable) ImGui::TextWrapped("Container scan could not finish. Retrying; check Settings > Agent if this persists.");
+        else if(lastSnapshot_.storageState==storage::State::Ready) ImGui::TextDisabled("%s | %u matching containers",lastSnapshot_.storageFast?"Loaded-container scan finished":"Compatibility scan finished",lastSnapshot_.storageCount);
+        else ImGui::TextDisabled("Waiting for container scan");
+        if(lastSnapshot_.storageLimited) ImGui::TextWrapped("Container result limit reached. Reduce the radius or select fewer types.");
+    } else DrawScanStatus();
     if(dirty) { smpConfig_.Clamp(); rockstarConfig_.Clamp(); panicActive_=false; preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; PushScanRequest(); }
 }
 } // namespace mcov

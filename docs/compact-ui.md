@@ -68,7 +68,7 @@ Felder, Buttons und Statusfarben bleiben erhalten; der kleine Viewport scrollt.
 Listen- und Pfadtexte werden nativ begrenzt, der vollstaendige Text erscheint im
 Tooltip. Die Liste wird beim ersten Oeffnen und mit Refresh gelesen, nicht pro Frame.
 Benannte Profile liegen in `configs/<Name>.ini`, automatische Teil-Einstellungen
-in `client-settings.ini`, jeweils neben `mcov.exe`. Load selected uebernimmt ein
+in `client-settings.ini`, jeweils neben `Keim.exe`. Load selected uebernimmt ein
 vollstaendig geprueftes Profil einschliesslich Modulzustaenden; beim Start wird
 kein benanntes Profil automatisch ausgewaehlt oder geladen. Bedienung und
 Dateigrenzen: [client-ui.md](client-ui.md#configs).
@@ -134,7 +134,7 @@ Toggle-Aktionen gegen echte Stores, Space/Shift+F10, unabhaengiges Drag/Close,
 kleine Settings schliessen mit Rueckkehr zum Raster, Such-Wiederherstellung,
 Keybinds, Slider, Combos, Farben, Marker, Persistenz und Style-/Font-/Window-Stack
 ohne ImGui-Fehler. Produktionsbuild, nativer Check und `portable_client` bestanden;
-`mcov.exe` und Share-ZIP wurden aktualisiert.
+`Keim.exe` und Share-ZIP wurden aktualisiert.
 Offscreen-Vorschauen mit synthetischem Hintergrund beweisen die ImGui-Darstellung
 und Alpha-Komposition; sie sind keine Live-Aufnahme aus Minecraft.
 Die elf aktuellen Ansichten unter `.impeccable/review/module-widgets/` sind
@@ -171,6 +171,6 @@ Fixtures und sind keine Live-Minecraft-Captures. `hud-catalog.png` ist die
 Test-Galerie aller 19 Elemente, kein Produktionslayout. Alle sieben sind gueltig;
 die unabhaengige Impeccable-Abschlusspruefung meldet den Material-Fix als behoben
 und keine Fixregression. Native HUD-Eingabe-/Layout-/Style-/Font-/Clip-Checks,
-`combat_hud`, `rockstar_features` und `portable_client` bestanden; `mcov.exe`
+`combat_hud`, `rockstar_features` und `portable_client` bestanden; `Keim.exe`
 und ZIP wurden neu gebaut. Injector-/HUD-Bilder bleiben aktuell; alte Client-Tab-
 Bilder bleiben als historische Belege erhalten.

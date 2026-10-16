@@ -41,7 +41,7 @@ std::filesystem::path Storage() {
 #ifdef MCOV_BUNDLED
     PWSTR path=nullptr;
     if(FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&path))) throw std::runtime_error("The local data folder is unavailable.");
-    const auto root=std::filesystem::path(path)/L"mcov"; CoTaskMemFree(path); return root;
+    const auto root=std::filesystem::path(path)/L"Keim"; CoTaskMemFree(path); return root;
 #else
     return ExecutableDirectory();
 #endif
@@ -112,7 +112,7 @@ Result Connect(std::uint32_t pid,const std::filesystem::path& root,std::atomic<P
         // Check before the already-running shortcut: even a healthy IPC v22
         // agent may still contain the previous Java mesh consumer.
         if(!loaded.empty()&&!launcher::MatchingAgentRuntime(runtime,loaded)) {
-            result.detail="The loaded mcov version does not match this client.\n";
+            result.detail="The loaded Keim version does not match this client.\n";
             MCOV_LOG_WARN("loaded agent/runtime differs: loaded=%s expected=%s",Utf8(loaded.wstring()).c_str(),Utf8(runtime.wstring()).c_str());
             throw std::runtime_error("An outdated or stopped agent is loaded. Fully close Minecraft and restart it.");
         }
@@ -223,25 +223,36 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
     WinHandle singleton(CreateMutexW(nullptr,FALSE,L"Local\\mcov_launcher"));
     if(!singleton) return 1;
     if(GetLastError()==ERROR_ALREADY_EXISTS) {
-        if(auto existing=FindWindowW(L"mcov_flat_app",L"mcov - Client")) { ShowWindow(existing,SW_RESTORE); SetForegroundWindow(existing); }
+        auto existing=FindWindowW(L"mcov_flat_app",L"Keim - Client");
+        if(!existing) existing=FindWindowW(L"mcov_flat_app",L"mcov - Client"); // Previous launcher may still own the singleton.
+        if(existing) { ShowWindow(existing,SW_RESTORE); SetForegroundWindow(existing); }
         return 0;
     }
     CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
     int exit=0;
     try {
         const auto root=Storage(); std::filesystem::create_directories(root);
+#ifdef MCOV_BUNDLED
+        // Import the old JDK choice once without replacing a newer selection.
+        const auto legacyRoot=root.parent_path()/L"mcov";
+        std::error_code migrationError;
+        if(!std::filesystem::exists(root/L"launcher-jdk.txt",migrationError)&&
+            std::filesystem::is_regular_file(legacyRoot/L"launcher-jdk.txt",migrationError))
+            std::filesystem::copy_file(legacyRoot/L"launcher-jdk.txt",root/L"launcher-jdk.txt",std::filesystem::copy_options::none,migrationError);
+#endif
         SetEnvironmentVariableW(L"MCOV_DATA_DIR",root.c_str());
         const auto executableDir=std::filesystem::path(ExecutableDirectory());
         SetEnvironmentVariableW(L"MCOV_CLIENT_DIR",executableDir.c_str());
         const auto jdkFile=root/L"launcher-jdk.txt";
         if(auto saved=LogTail(jdkFile); !saved.empty()) SetEnvironmentVariableW(L"MCOV_JDK_HOME",Wide(saved).c_str());
-        log::Init("client",(root/L"mcov_client.log").wstring(),false);
+        log::Init("client",(root/L"Keim_client.log").wstring(),false);
 #ifdef MCOV_BUNDLED
         // Import existing preferences once; all future config writes stay portable.
         const auto savedSettings=executableDir/L"client-settings.ini";
         std::error_code settingsError;
         if(!std::filesystem::exists(savedSettings,settingsError)) {
             auto legacy=root/L"client-settings.ini";
+            if(!std::filesystem::exists(legacy,settingsError)) legacy=legacyRoot/L"client-settings.ini";
             if(!std::filesystem::exists(legacy,settingsError)&&executableDir.filename()==L"client")
                 legacy=executableDir.parent_path()/L"bin"/L"client-settings.ini";
             if(std::filesystem::is_regular_file(legacy,settingsError)) {
@@ -251,8 +262,10 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
         }
 #endif
         {
-            AppState state; state.Refresh(); FlatApp app; std::string failure;
-            if(!app.Initialize(L"mcov - Client",640,640,&failure)) throw std::runtime_error(failure);
+            AppState state;
+            try { state.view.hardwareId=auth::HardwareId(); } catch(...) {} // Display failure must not prevent startup.
+            state.Refresh(); FlatApp app; std::string failure;
+            if(!app.Initialize(L"Keim - Client",640,640,&failure)) throw std::runtime_error(failure);
             app.Run([&] {
                 const auto now=GetTickCount64();
                 if(state.view.authBusy&&state.authJob.valid()&&state.authJob.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
@@ -276,7 +289,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                 }
                 if(!state.view.busy&&now>=state.refreshAt) state.Refresh();
                 if(state.view.tab==1&&now>=state.logsAt) {
-                    state.view.log=LogTail(root/L"mcov_client.log")+"\n"+LogTail(root/L"mcov_overlay.log")+"\n"+LogTail(state.agentLog); state.logsAt=now+1000;
+                    state.view.log=LogTail(root/L"Keim_client.log")+"\n"+LogTail(root/L"Keim_overlay.log")+"\n"+LogTail(state.agentLog); state.logsAt=now+1000;
                 }
                 state.view.phase=PhaseText(state.phase.load());
                 const auto a=launcher::Render(state.view,{float(app.width()),float(app.height())});
@@ -317,7 +330,7 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
         } // Worker wird vor Log-Shutdown beendet; Overlay/JVM bleiben unabhaengig.
         log::Shutdown();
     } catch(const std::exception& e) {
-        MessageBoxW(nullptr,Wide(e.what()).c_str(),L"mcov could not start",MB_OK|MB_ICONERROR); log::Shutdown(); exit=1;
+        MessageBoxW(nullptr,Wide(e.what()).c_str(),L"Keim could not start",MB_OK|MB_ICONERROR); log::Shutdown(); exit=1;
     }
     CoUninitialize(); return exit;
 }

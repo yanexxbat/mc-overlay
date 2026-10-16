@@ -39,6 +39,8 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::Spinbot:return combat_.spin.enabled;
         case keys::Action::Freecam:return combat_.freecam.enabled;
         case keys::Action::AntiVanish:return antiVanishConfig_.enabled;
+        case keys::Action::RegionMap:return hud_.regionMap.enabled;
+        case keys::Action::HoleEsp:return holeSettings_.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
@@ -57,6 +59,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::ChinaHat:return localHatConfig_.enabled;
         case keys::Action::CrystalMacro:return crystalMacro_.enabled;
         case keys::Action::AnchorMacro:return anchorMacro_.enabled;
+        case keys::Action::AutoTrident:return autoTrident_.enabled;
         case keys::Action::ChunkFinder:return chunkFinder_.enabled||smpConfig_.finder.enabled;
         case keys::Action::StashFinder:return smpConfig_.stash.enabled;
         case keys::Action::SpawnerEsp:return smpConfig_.spawner.enabled;
@@ -78,6 +81,8 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::Spinbot:combat_.spin.enabled=value;break;
         case keys::Action::Freecam:combat_.freecam.enabled=value;break;
         case keys::Action::AntiVanish:antiVanishConfig_.enabled=value;preferencesDirty_=true;break;
+        case keys::Action::HoleEsp:holeSettings_.enabled=value;preferencesDirty_=true;break;
+        case keys::Action::RegionMap:hud_.regionMap.enabled=value;preferencesDirty_=true;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
@@ -96,6 +101,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::ChinaHat:localHatConfig_.enabled=value;break;
         case keys::Action::CrystalMacro:crystalMacro_.enabled=value;break;
         case keys::Action::AnchorMacro:anchorMacro_.enabled=value;break;
+        case keys::Action::AutoTrident:autoTrident_.enabled=value;break;
         case keys::Action::ChunkFinder:
         case keys::Action::BaseFinder:chunkFinder_.enabled=smpConfig_.finder.enabled=value;preferencesDirty_=true;break;
         case keys::Action::StashFinder:smpConfig_.stash.enabled=value;preferencesDirty_=true;break;
@@ -221,9 +227,11 @@ void Overlay::SavePreferences() {
       out<<"mcov-client 1\n"<<std::setprecision(9);
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
       out<<"freecam "<<combat_.freecam.speed<<' '<<combat_.freecam.boost<<'\n';
+      out<<"trident-charge "<<std::clamp(autoTrident_.chargeTicks,10,40)<<'\n';
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
       client_configs::Chunks(smpArchive,chunkFinder_);
+      client_configs::Holes(smpArchive,holeSettings_);
       client_configs::AntiVanish(smpArchive,antiVanishConfig_);
       // Einstellungen bleiben erhalten; Module starten weiterhin deaktiviert.
       for(int i=0;i<2;++i) {
@@ -235,6 +243,7 @@ void Overlay::SavePreferences() {
       for(int i=0;i<keys::kCount;++i) if(!keys::Reserved(static_cast<keys::Action>(i)))out<<"bind "<<i<<' '<<bindings_[i].key<<' '<<bindings_[i].modifiers<<' '<<int(bindings_[i].mode)<<'\n';
       unsigned flags=hud_.visible?1:0; for(int i=0;i<kHudModules;++i) if(HudEnabled(i)) flags|=1u<<(i+1);
       out<<"hud "<<flags<<' '<<hud_.durabilityWarn<<'\n';
+      out<<"regionmap "<<hud_.regionMap.labels<<' '<<hud_.regionMap.grid<<' '<<hud_.regionMap.coordinates<<'\n';
       for(int i=0;i<kHudModules;++i) { const auto& p=hud_.layout[i]; out<<"place "<<i<<' '<<p.position.x<<' '<<p.position.y<<' '<<p.scale<<' '<<p.placed<<'\n'; }
       for(int i=0;i<rockstar::kCount;++i) { const auto& c=rockstarConfig_.modules[i];
           out<<"rockstar "<<i<<' '<<c.enabled<<' '<<c.auraColours<<' '<<c.mode<<' '<<c.range<<' '<<c.size<<' '<<c.lifetime<<' '<<c.speed<<' '<<c.opacity<<' '<<c.glow;
@@ -260,9 +269,11 @@ void Overlay::LoadPreferences() {
                 (i>1||k>0)) bindings_[i]={k,mods,keys::System(static_cast<keys::Action>(i))?keys::Mode::Toggle:static_cast<keys::Mode>(mode)};
         } else if(tag.starts_with("antivanish.")) {
             const auto split=line.find(' ');if(split==std::string::npos||!antiVanishValues.emplace(tag,line.substr(split+1)).second)antiVanishUnique=false;
-        } else if(tag.starts_with("smp.")||tag.starts_with("chunks.")) {
+        } else if(tag.starts_with("smp.")||tag.starts_with("chunks.")||tag.starts_with("holes.")) {
             const auto split=line.find(' ');
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
+        } else if(tag=="trident-charge") {
+            int ticks; if(row>>ticks&&ticks>=10&&ticks<=40) autoTrident_.chargeTicks=ticks;
         } else if(tag=="freecam") {
             freecam::Config c;
             if(row>>c.speed>>c.boost&&freecam::Valid(c)) { combat_.freecam.speed=c.speed; combat_.freecam.boost=c.boost; }
@@ -278,6 +289,11 @@ void Overlay::LoadPreferences() {
         } else if(tag=="world-depth") { int value; if(row>>value&&(value==0||value==1)) settings_.occludeWorldEffects=value==1;
         } else if(tag=="hud") { unsigned flags; float warn;
             if(row>>flags>>warn&&std::isfinite(warn)) { hud_.visible=(flags&1)!=0; for(int i=0;i<kHudModules;++i) SetHudEnabled(i,(flags&(1u<<(i+1)))!=0); hud_.durabilityWarn=std::clamp(warn,.05f,.5f); }
+        } else if(tag=="regionmap") {
+            int labels,grid,coords;
+            if(row>>labels>>grid>>coords&&labels>=0&&labels<=1&&grid>=0&&grid<=1&&coords>=0&&coords<=1) {
+                hud_.regionMap.labels=labels!=0; hud_.regionMap.grid=grid!=0; hud_.regionMap.coordinates=coords!=0;
+            }
         } else if(tag=="place") { int i,placed; float x,y,scale;
             if(row>>i>>x>>y>>scale>>placed&&i>=0&&i<kHudModules&&std::isfinite(x)&&std::isfinite(y)&&std::isfinite(scale))
                 hud_.layout[i]={{std::clamp(x,0.f,1.f),std::clamp(y,0.f,1.f)},std::clamp(scale,.65f,1.6f),placed==1};
@@ -306,9 +322,11 @@ void Overlay::LoadPreferences() {
         const bool hasChunks=std::any_of(smpValues.begin(),smpValues.end(),[](const auto& entry){return entry.first.starts_with("chunks.");});
         if(hasChunks) client_configs::AddChunkHighlightDefaults(smpValues);
         smp::Config candidate; ChunkFinderSettings chunks;
+        holes::Settings holes; client_configs::AddHoleDefaults(smpValues);
         client_configs::Archive archive(smpValues); client_configs::Smp(archive,candidate);
         if(hasChunks) client_configs::Chunks(archive,chunks);
-        if(smpUnique&&archive.valid&&smpValues.empty()) { smpConfig_=candidate; chunkFinder_=chunks; NormalizeChunkFinder(); }
+        client_configs::Holes(archive,holes);
+        if(smpUnique&&archive.valid&&smpValues.empty()) { smpConfig_=candidate; chunkFinder_=chunks; holeSettings_=holes; NormalizeChunkFinder(); }
         else preferenceStatus_="Invalid SMP preferences; SMP defaults retained.";
     }
     rockstarConfig_.Clamp();

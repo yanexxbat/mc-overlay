@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Configures and builds mcov (overlay + agent).
+    Configures and builds Keim (overlay + agent).
 
 .DESCRIPTION
     Wraps the CMake invocation so the JDK path and build type do not have to be
@@ -31,7 +31,7 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot  = Split-Path -Parent $PSScriptRoot
 $BuildDir  = Join-Path $RepoRoot 'build'
 
-Write-Host "mcov build" -ForegroundColor Cyan
+Write-Host "Keim build" -ForegroundColor Cyan
 Write-Host "  root  : $RepoRoot"
 Write-Host "  config: $Config"
 
@@ -263,5 +263,5 @@ foreach ($helperName in @('AgentLoader.class', 'frame-sync-agent.jar', 'frame-si
     }
 }
 
-Write-Host "`nOpen:  $BuildDir\client\mcov.exe  (portable client - only this file is needed)" -ForegroundColor Cyan
-Write-Host "Share: $BuildDir\mcov-client.zip  (mcov.exe + optional START.txt)" -ForegroundColor Cyan
+Write-Host "`nOpen:  $BuildDir\client\Keim.exe  (portable client - only this file is needed)" -ForegroundColor Cyan
+Write-Host "Share: $BuildDir\Keim-client.zip  (Keim.exe + optional START.txt)" -ForegroundColor Cyan

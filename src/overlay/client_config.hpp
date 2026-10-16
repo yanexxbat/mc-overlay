@@ -24,7 +24,9 @@ struct Snapshot {
     ChunkFinderSettings chunks{};
     smp::Config smp{};
     antivanish::Config antiVanish{};
+    holes::Settings holes{};
     items::MacroConfig crystal{},anchor{};
+    items::TridentConfig trident{};
     HudSettings hud{};
     keys::Bindings binds=keys::Defaults();
     rockstar::Config extra{};
@@ -114,9 +116,9 @@ inline void AddBaseTextureDefaults(std::map<std::string,std::string>& values) {
 inline void Finder(Archive& a,smp::BaseFinderSettings& c) {
     a.Value("smp.finder.enabled",c.enabled); a.Value("smp.finder.kelp",c.kelp); a.Value("smp.finder.amethyst",c.amethyst);
     a.Value("smp.finder.labels",c.labels); a.Value("smp.finder.tracers",c.tracers);
-    a.Value("smp.finder.radius",c.radius,4,48); a.Value("smp.finder.interval",c.interval,200,3000);
+    a.Value("smp.finder.radius",c.radius,kMinBlockScanRadius,kMaxBlockScanRadius); a.Value("smp.finder.interval",c.interval,200,3000);
     a.Value("smp.finder.height",c.minKelpHeight,6,64); a.Value("smp.finder.columns",c.minKelpColumns,1,64);
-    a.Value("smp.finder.crystals",c.minAmethyst,1,64); a.Value("smp.finder.distance",c.maxDraw,8,512); a.Color("smp.finder.colour",c.colour);
+    a.Value("smp.finder.crystals",c.minAmethyst,1,64); a.Value("smp.finder.distance",c.maxDraw,8,kMaxBlockDrawDistance); a.Color("smp.finder.colour",c.colour);
 }
 inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
     if(std::any_of(values.begin(),values.end(),[](const auto& entry){return entry.first.starts_with("smp.finder.");})) return;
@@ -127,12 +129,24 @@ inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
 inline void Chunks(Archive& a,ChunkFinderSettings& c) {
     a.Value("chunks.enabled",c.enabled); a.Value("chunks.blocks",c.blocks); a.Value("chunks.labels",c.labels);
     a.Value("chunks.chunks",c.chunks); a.Value("chunks.deepslate",c.deepslate);
-    a.Value("chunks.radius",c.radius,4,48); a.Value("chunks.interval",c.interval,200,3000);
-    a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,128); a.Color("chunks.color",c.color);
+    a.Value("chunks.radius",c.radius,kMinBlockScanRadius,kMaxBlockScanRadius); a.Value("chunks.interval",c.interval,200,3000);
+    a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,kMaxBlockDrawDistance); a.Color("chunks.color",c.color);
 }
 inline void AntiVanish(Archive& a,antivanish::Config& c) {
     a.Value("antivanish.enabled",c.enabled);a.Value("antivanish.notifications",c.notifications);
     a.Value("antivanish.invisible",c.invisible);a.Value("antivanish.range",c.range,8,128);
+}
+inline void Holes(Archive& a,holes::Settings& c) {
+    a.Value("holes.enabled",c.enabled); a.Value("holes.radius",c.radius,holes::kMinRadius,holes::kMaxRadius);
+    a.Value("holes.distance",c.distance,4,64); a.Value("holes.height",c.height,.05,1); a.Value("holes.fill",c.fill,0,.5);
+    a.Value("holes.bedrock",c.bedrock); a.Value("holes.obsidian",c.obsidian); a.Value("holes.mixed",c.mixed); a.Value("holes.labels",c.labels);
+    a.Color("holes.bedrockColour",c.bedrockColour); a.Color("holes.obsidianColour",c.obsidianColour); a.Color("holes.mixedColour",c.mixedColour);
+}
+inline void AddHoleDefaults(std::map<std::string,std::string>& values) {
+    if(std::any_of(values.begin(),values.end(),[](const auto& v){return v.first.starts_with("holes.");})) return;
+    holes::Settings c; std::ostringstream out; Archive archive(out); Holes(archive,c);
+    std::istringstream in(out.str()); std::string line;
+    while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
@@ -241,10 +255,12 @@ inline void Visit(Archive& a,Snapshot& s) {
     Palette(a,"world.kills.colours",s.world.kills.colours); Palette(a,"world.crumbs.colours",s.world.crumbs.colours);
     Hat(a,"friendHat",s.friendHat); Hat(a,"hat.shape",s.hat.shape);
     FIELD(hat,enabled); FIELD(hat,firstPerson); FIELD(hat,auraColours); COLOR(hat,start); COLOR(hat,end);
-    FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKindCount)-1); FIELD(blocks,radius,4,48);
-    FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,128);
+    FIELD(blocks,enabled); FIELD(blocks,mask,0,(1u<<kBlockKindCount)-1); FIELD(blocks,radius,kMinBlockScanRadius,kMaxBlockScanRadius);
+    FIELD(blocks,interval,200,3000); FIELD(blocks,tracers); FIELD(blocks,maxDraw,8,kMaxBlockDrawDistance);
     Chunks(a,s.chunks);
     AntiVanish(a,s.antiVanish);
+    Holes(a,s.holes);
+    FIELD(trident,enabled); FIELD(trident,chargeTicks,10,40);
     Smp(a,s.smp);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
@@ -257,6 +273,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     }
     FIELD(hud,visible); FIELD(hud,equipment); FIELD(hud,effects); FIELD(hud,coordinates); FIELD(hud,compass);
     FIELD(hud,performance); FIELD(hud,reachMarker); FIELD(hud,modules); FIELD(hud,keybinds); FIELD(hud,durabilityWarn,.05,.5);
+    FIELD(hud,regionMap.enabled); FIELD(hud,regionMap.labels); FIELD(hud,regionMap.grid); FIELD(hud,regionMap.coordinates);
     for(int i=0;i<int(s.hud.extras.size());++i) a.Value("hud.extra."+std::to_string(i),s.hud.extras[i]);
     for(int i=0;i<kHudModules;++i) {
         auto& p=s.hud.layout[i]; const auto n="hud.layout."+std::to_string(i);
@@ -273,7 +290,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     for(int i=0;i<rockstar::kCount;++i) {
         auto& c=s.extra.modules[i]; const auto n="module."+std::to_string(i);
         a.Value(n+".enabled",c.enabled); a.Value(n+".aura",c.auraColours); a.Value(n+".mode",c.mode,0,3);
-        a.Value(n+".range",c.range,0,256); a.Value(n+".size",c.size,.1,128);
+        a.Value(n+".range",c.range,0,i==rockstar::Index(rockstar::Feature::ChestEsp)?kMaxBlockScanRadius:256); a.Value(n+".size",c.size,.1,128);
         a.Value(n+".lifetime",c.lifetime,.2,10); a.Value(n+".speed",c.speed,0,8);
         a.Value(n+".opacity",c.opacity,0,1); a.Value(n+".glow",c.glow,0,2);
         a.Color(n+".start",c.start); a.Color(n+".end",c.end);
@@ -384,6 +401,29 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace("antivanish.enabled","0");values.emplace("antivanish.notifications","1");values.emplace("antivanish.invisible","0");values.emplace("antivanish.range","64");
         const auto bind="bind."+std::to_string(keys::Index(keys::Action::AntiVanish))+".";
         values.emplace(bind+"key","0");values.emplace(bind+"modifiers","0");values.emplace(bind+"mode","0");
+    }
+    const auto regionBind="bind."+std::to_string(keys::Index(keys::Action::RegionMap))+".";
+    const auto regionLayout="hud.layout."+std::to_string(int(HudModule::RegionMap))+".";
+    const bool hasRegionMap=std::any_of(values.begin(),values.end(),[&](const auto& e) {
+        return e.first.starts_with("hud.regionMap.")||e.first.starts_with(regionBind)||e.first.starts_with(regionLayout);
+    });
+    if(!hasRegionMap) {
+        std::string defaults; if(!Encode(Snapshot{},defaults)) return false;
+        std::istringstream defaultsIn(defaults);
+        while(std::getline(defaultsIn,line)) {
+            const auto split=line.find(' '); if(split==std::string::npos) continue;
+            const auto key=line.substr(0,split);
+            if(key.starts_with("hud.regionMap.")||key.starts_with(regionBind)||key.starts_with(regionLayout)) values.emplace(key,line.substr(split+1));
+        }
+    }
+    const auto holeBind="bind."+std::to_string(keys::Index(keys::Action::HoleEsp))+".";
+    const bool hasHoles=std::any_of(values.begin(),values.end(),[&](const auto& e) {return e.first.starts_with("holes.")||e.first.starts_with(holeBind);});
+    if(!hasHoles) { AddHoleDefaults(values); values.emplace(holeBind+"key","0"); values.emplace(holeBind+"modifiers","0"); values.emplace(holeBind+"mode","0"); }
+    const auto tridentBind="bind."+std::to_string(keys::Index(keys::Action::AutoTrident))+".";
+    const bool hasTrident=std::any_of(values.begin(),values.end(),[&](const auto& e) {return e.first.starts_with("trident.")||e.first.starts_with(tridentBind);});
+    if(!hasTrident) {
+        values.emplace("trident.enabled","0"); values.emplace("trident.chargeTicks","10");
+        values.emplace(tridentBind+"key","0"); values.emplace(tridentBind+"modifiers","0"); values.emplace(tridentBind+"mode","0");
     }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);

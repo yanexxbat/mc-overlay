@@ -92,6 +92,8 @@ bool FlatApp::CreateAppWindow(const wchar_t* title, std::string* error) {
     wc.lpfnWndProc   = &FlatAppWndProc;
     wc.hInstance     = ::GetModuleHandleW(nullptr);
     wc.hCursor       = ::LoadCursor(nullptr, IDC_ARROW);
+    wc.hIcon         = ::LoadIconW(wc.hInstance,MAKEINTRESOURCEW(107));
+    wc.hIconSm       = wc.hIcon;
     wc.lpszClassName = kClassName;
     ::RegisterClassExW(&wc);
 

@@ -1,17 +1,25 @@
 # Portable client and launcher
 
-Open `build/client/mcov.exe`. Enter your license key and choose **Verify license**.
+Open `build/client/Keim.exe`. Enter your license key and choose **Verify license**.
 Then select an already running Minecraft window and click **Start client**.
 The launcher automatically connects and starts the
 overlay for that exact instance. Starting again switches back to Minecraft.
 Only this EXE needs to be copied; all native and Java helpers are embedded.
-The ready-to-share `build/mcov-client.zip` contains exactly `mcov.exe` and the
+The ready-to-share `build/Keim-client.zip` contains exactly `Keim.exe` and the
 optional English `START.txt` guide, with no build directories or separate dependencies.
 Both files are also available in `build/client/`. Extract the ZIP before starting.
 
 All app-owned launcher and overlay text is English, including connection states,
 errors, the debug HUD and named keys. Printable key legends follow your keyboard
 layout. Minecraft window titles, player names and user-entered text are preserved.
+
+The fixed footer shows **HWID** on Start and Logs, including before sign-in.
+**Copy HWID** copies the complete ID for support; the read-only field supports
+selection and horizontal scrolling, and hovering reveals the complete value.
+This is the same Windows account SID used for KeyAuth verification. It is read
+locally once at startup, never added to logs, and needs no internet connection
+to display. If it cannot be read, the field shows **Unavailable** and copying
+is disabled; restart Keim to retry.
 
 ## Runtime requirements
 
@@ -62,20 +70,22 @@ use have not been tested.
 
 ## Data and lifetime
 
-- `%LOCALAPPDATA%\mcov\runtime\<package hash>`: embedded overlay, agent and helpers.
+- `%LOCALAPPDATA%\Keim\runtime\<package hash>`: embedded overlay, agent and helpers.
   Extraction verifies SHA-256, skips valid files, repairs corrupt files and
   serializes concurrent preparation. The hash changes when packaged files change.
-- `client-settings.ini` beside `mcov.exe`: automatic preferences, including
+- `client-settings.ini` beside `Keim.exe`: automatic preferences, including
   keybinds, HUD layout, Rockstar parameters and server/dimension-scoped waypoints.
-- `configs/<name>.ini` beside `mcov.exe`: named profiles saved under
+- `configs/<name>.ini` beside `Keim.exe`: named profiles saved under
   **Settings → Configs**, including module states and settings, bindings,
   HUD layout, friend relations and waypoints.
-- `%LOCALAPPDATA%\mcov\launcher-jdk.txt`: selected JDK path.
-- `%LOCALAPPDATA%\mcov\mcov_client.log` and `mcov_overlay.log`: launcher/overlay logs.
+- `%LOCALAPPDATA%\Keim\launcher-jdk.txt`: selected JDK path.
+- `%LOCALAPPDATA%\Keim\Keim_client.log` and `Keim_overlay.log`: launcher/overlay logs.
 - `mcov_agent.log` beside the loaded DLL: agent log, also included under Logs.
 
 On the first portable start without local `client-settings.ini`, existing
-automatic preferences from `%LOCALAPPDATA%\mcov\client-settings.ini` are imported.
+automatic preferences from `%LOCALAPPDATA%\Keim\client-settings.ini` are imported.
+If absent there, the old `%LOCALAPPDATA%\mcov` location is checked as well. The
+previous JDK selection is copied once when Keim has no saved selection.
 The build's sibling `bin` folder is a fallback when starting from `build/client`.
 This import never replaces local settings. Runtime helpers and logs continue
 to use AppData independently of the client-folder configs.
@@ -146,7 +156,7 @@ are unchanged by this presentation redesign.
 the current executable, then copies its EXE into an otherwise empty folder. It verifies
 the GUI subsystem and exact embedded payloads, tests paths with spaces/Unicode,
 idempotent extraction, concurrent corruption repair, and early rejection of
-invalid overlay PIDs. It passed against the current `mcov.exe` and exact payloads.
+invalid overlay PIDs. It passed against the current `Keim.exe` and exact payloads.
 The `mcov` and `mcov_injector` builds, native/UI checks and share ZIP passed.
 
 `control_panel` renders the actual compact launcher offscreen at 640 × 640,
@@ -155,6 +165,11 @@ states. `LauncherChecks` checks style/font/window-stack restoration, selection,
 start, running-instance action, duplicate-start prevention, both sidebar tabs,
 fixed close footers and title minimize/close. These checks simulate input and do
 not start processes or attach to Minecraft.
+
+The HWID fixture verifies complete copying before sign-in, while verification
+is busy and in Logs at both sizes, using synthetic IDs and an isolated in-memory
+clipboard. Unavailable IDs leave that clipboard unchanged. The signed KeyAuth
+fixture checks that the login request uses exactly the ID exposed to the launcher.
 
 `launcher_window` adds a real hidden HWND and swapchain check at 640 × 640 and
 480 × 380: translucent panel alpha, transparent margins, foreground control ink,
