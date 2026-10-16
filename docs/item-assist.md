@@ -147,6 +147,10 @@ werden, indem nur das Overlay neu gestartet wird. Der einzige Build liegt unter
 Combat → Auto Trident repeats Riptide while Minecraft's Place / Use key is held
 (right mouse by default). Hold a Riptide trident in the main hand in water or rain.
 Charge time defaults to the normal 10 game ticks and can be raised to 40 ticks.
+Randomize charge is enabled by default and adds 0–3 ticks, for a 10–13 tick range.
+The extra range is adjustable from 0–10 ticks and the total never exceeds 40.
+A duration is sampled once per charge; disabling randomization uses the fixed
+charge time. Preferences and named configs retain both randomization settings.
 Vanilla starts each following use and enforces its normal reuse and durability rules.
 Unenchanted tridents and offhand use are never automatically released.
 
@@ -158,4 +162,4 @@ the enabled state; old profiles default to disabled/unbound.
 The implementation checks only the held/active stacks on the existing client-tick
 callback and calls the mapped MultiPlayerGameMode.releaseUsingItem action.
 Eleven checksum-audited namespace/version profiles cover 1.20.1, 1.21.1, 1.21.11
-and 26.2. IPC v31 requires a full Minecraft restart after updating an older agent.
+and 26.2. IPC v32 requires a full Minecraft restart after updating an older agent.

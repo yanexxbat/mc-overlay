@@ -162,6 +162,40 @@ int main() try {
         Check(TridentDecision(cfg,sample,held,19999)==Status::Paused,"Future lease permitted Riptide release");
         cfg.trident.enabled=false; Check(TridentDecision(cfg,sample,held,20000)==Status::Off,"Disabled Auto Trident fired");
     }
+    {
+        Request cfg; cfg.sentAtMs=30000; cfg.inputAllowed=cfg.trident.enabled=true;
+        Frame sample; sample.world=sample.alive=sample.ownMenu=sample.useDown=true;
+        TridentFrame held; held.supported=held.holding=held.riptide=held.wet=held.usingMain=true;
+        TridentController timing(42);
+        unsigned seen=0;
+        for(int cycle=0;cycle<128;++cycle) {
+            held.usingMain=false; timing.Tick(cfg,sample,held,30000); held.usingMain=true;
+            int release=0;
+            for(int tick=0;tick<=13;++tick) {
+                held.ticks=tick;
+                const auto status=timing.Tick(cfg,sample,held,30000);
+                if(status==Status::ReleaseTrident) { release=tick; break; }
+                Check(status==Status::ChargingTrident,"Random charge stopped unexpectedly");
+            }
+            Check(release>=10&&release<=13,"Random charge outside default 10-13 ticks");
+            seen|=1u<<(release-10);
+            Check(timing.Tick(cfg,sample,held,30000)==Status::Ready,"Duplicate release in same use");
+        }
+        Check(seen==15,"Random charge did not cover all four durations");
+        timing.Reset(); held.ticks=0; timing.Tick(cfg,sample,held,30000);
+        const int target=timing.TargetTicks();
+        for(int repeat=0;repeat<20;++repeat) timing.Tick(cfg,sample,held,30000);
+        Check(timing.TargetTicks()==target,"Target rerolled during a charge");
+        sample.screen=true; Check(timing.Tick(cfg,sample,held,30000)==Status::Paused&&timing.TargetTicks()==0,"Pause did not clear charge"); sample.screen=false;
+        cfg.trident.randomizeCharge=false; cfg.trident.chargeTicks=12;
+        held.ticks=11; Check(timing.Tick(cfg,sample,held,30000)==Status::ChargingTrident,"Fixed charge fired early");
+        held.ticks=12; Check(timing.Tick(cfg,sample,held,30000)==Status::ReleaseTrident,"Disabling randomization did not restore exact ticks");
+        timing.Reset(); cfg.trident.randomizeCharge=true; cfg.trident.chargeTicks=39; cfg.trident.extraChargeTicks=100;
+        held.ticks=39; timing.Tick(cfg,sample,held,30000);
+        Check(timing.TargetTicks()>=39&&timing.TargetTicks()<=40,"Random charge exceeded total cap");
+        timing.Reset(); cfg.trident.chargeTicks=-100; cfg.trident.extraChargeTicks=-5; held.ticks=10;
+        Check(timing.Tick(cfg,sample,held,30000)==Status::ReleaseTrident&&timing.TargetTicks()==10,"Invalid charge range was not clamped");
+    }
     const auto binds=mcov::keys::Defaults();
     Check(!binds[21].key&&!binds[22].key&&binds[21].mode==mcov::keys::Mode::Toggle&&binds[22].mode==mcov::keys::Mode::Toggle,"macros must default to unbound toggle");
     std::cout<<"Item assist safety, timing, inventory decisions and chunk hints passed\n"; return 0;

@@ -385,13 +385,18 @@ void TridentUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
         ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"Auto Trident help is unreachable");
     }
-    c.chargeTicks=17;
+    c.chargeTicks=17; c.randomizeCharge=false; c.extraChargeTicks=7;
     Check::PrefPath(o,output/"trident-preferences.ini"); Check::Save(o); c={}; Check::Load(o);
     Require(!c.enabled&&c.chargeTicks==17,"Auto Trident charge preference was lost or auto-enabled at startup"); c.enabled=true;
+    Require(!c.randomizeCharge&&c.extraChargeTicks==7,"Auto Trident randomization preferences were lost");
     auto snapshot=Check::ConfigSnapshot(o); std::string encoded;
     Require(mcov::client_configs::Encode(snapshot,encoded),"Auto Trident config encode failed");
     mcov::client_configs::Snapshot decoded;
     Require(mcov::client_configs::Decode(encoded,decoded)&&decoded.trident.enabled&&decoded.trident.chargeTicks==17,"Auto Trident named config round trip failed");
+    Require(!decoded.trident.randomizeCharge&&decoded.trident.extraChargeTicks==7,"Named config lost trident randomization");
+    std::istringstream oldRows(encoded); std::string oldLine,oldTrident;
+    while(std::getline(oldRows,oldLine)) if(!oldLine.starts_with("trident.randomizeCharge ")&&!oldLine.starts_with("trident.extraChargeTicks ")) oldTrident+=oldLine+'\n';
+    Require(mcov::client_configs::Decode(oldTrident,decoded)&&decoded.trident.chargeTicks==17&&decoded.trident.randomizeCharge&&decoded.trident.extraChargeTicks==3,"Older trident configs did not receive randomization defaults");
     const auto bind="bind."+std::to_string(mcov::keys::Index(mcov::keys::Action::AutoTrident))+".";
     std::istringstream rows(encoded); std::string line,legacy;
     while(std::getline(rows,line)) if(!line.starts_with("trident.")&&!line.starts_with(bind)) legacy+=line+'\n';
