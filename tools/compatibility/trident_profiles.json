@@ -28,6 +28,10 @@
         "isInWaterOrRain",
         "()Z"
       ],
+      "autoSpin": [
+        "isAutoSpinAttack",
+        "()Z"
+      ],
       "release": [
         "releaseUsingItem",
         "(Lnet/minecraft/world/entity/player/Player;)V"
@@ -43,6 +47,7 @@
       "hand": "net/minecraft/world/entity/LivingEntity",
       "stack": "net/minecraft/world/entity/LivingEntity",
       "wet": "net/minecraft/world/entity/Entity",
+      "autoSpin": "net/minecraft/world/entity/LivingEntity",
       "release": "net/minecraft/client/multiplayer/MultiPlayerGameMode",
       "spin": "net/minecraft/world/item/enchantment/EnchantmentHelper"
     },
@@ -52,6 +57,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -85,6 +91,10 @@
         "isInWaterOrRain",
         "()Z"
       ],
+      "autoSpin": [
+        "isAutoSpinAttack",
+        "()Z"
+      ],
       "release": [
         "releaseUsingItem",
         "(Lnet/minecraft/world/entity/player/Player;)V"
@@ -100,6 +110,7 @@
       "hand": "net/minecraft/world/entity/LivingEntity",
       "stack": "net/minecraft/world/entity/LivingEntity",
       "wet": "net/minecraft/world/entity/Entity",
+      "autoSpin": "net/minecraft/world/entity/LivingEntity",
       "release": "net/minecraft/client/multiplayer/MultiPlayerGameMode",
       "spin": "net/minecraft/world/item/enchantment/EnchantmentHelper"
     },
@@ -109,6 +120,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -142,6 +154,10 @@
         "bA",
         "()Z"
       ],
+      "autoSpin": [
+        "fW",
+        "()Z"
+      ],
       "release": [
         "b",
         "(Lddm;)V"
@@ -157,6 +173,7 @@
       "hand": "chl",
       "stack": "chl",
       "wet": "cgk",
+      "autoSpin": "chl",
       "release": "hio",
       "spin": "dsq"
     },
@@ -166,6 +183,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -199,6 +217,10 @@
         "method_5721",
         "()Z"
       ],
+      "autoSpin": [
+        "method_6123",
+        "()Z"
+      ],
       "release": [
         "method_2897",
         "(Lnet/minecraft/class_1657;)V"
@@ -214,6 +236,7 @@
       "hand": "net/minecraft/class_1309",
       "stack": "net/minecraft/class_1309",
       "wet": "net/minecraft/class_1297",
+      "autoSpin": "net/minecraft/class_1309",
       "release": "net/minecraft/class_636",
       "spin": "net/minecraft/class_1890"
     },
@@ -223,6 +246,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -256,6 +280,10 @@
         "isInWaterOrRain",
         "()Z"
       ],
+      "autoSpin": [
+        "isAutoSpinAttack",
+        "()Z"
+      ],
       "release": [
         "releaseUsingItem",
         "(Lnet/minecraft/world/entity/player/Player;)V"
@@ -271,6 +299,7 @@
       "hand": "net/minecraft/world/entity/LivingEntity",
       "stack": "net/minecraft/world/entity/LivingEntity",
       "wet": "net/minecraft/world/entity/Entity",
+      "autoSpin": "net/minecraft/world/entity/LivingEntity",
       "release": "net/minecraft/client/multiplayer/MultiPlayerGameMode",
       "spin": "net/minecraft/world/item/enchantment/EnchantmentHelper"
     },
@@ -280,6 +309,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -313,6 +343,10 @@
         "bg",
         "()Z"
       ],
+      "autoSpin": [
+        "fn",
+        "()Z"
+      ],
       "release": [
         "b",
         "(Lcmx;)V"
@@ -328,6 +362,7 @@
       "hand": "btn",
       "stack": "btn",
       "wet": "bsr",
+      "autoSpin": "btn",
       "release": "fzo",
       "spin": "dae"
     },
@@ -337,6 +372,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -370,6 +406,10 @@
         "method_5721",
         "()Z"
       ],
+      "autoSpin": [
+        "method_6123",
+        "()Z"
+      ],
       "release": [
         "method_2897",
         "(Lnet/minecraft/class_1657;)V"
@@ -385,6 +425,7 @@
       "hand": "net/minecraft/class_1309",
       "stack": "net/minecraft/class_1309",
       "wet": "net/minecraft/class_1297",
+      "autoSpin": "net/minecraft/class_1309",
       "release": "net/minecraft/class_636",
       "spin": "net/minecraft/class_1890"
     },
@@ -394,6 +435,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -427,6 +469,10 @@
         "isInWaterOrRain",
         "()Z"
       ],
+      "autoSpin": [
+        "isAutoSpinAttack",
+        "()Z"
+      ],
       "release": [
         "releaseUsingItem",
         "(Lnet/minecraft/world/entity/player/Player;)V"
@@ -442,6 +488,7 @@
       "hand": "net/minecraft/world/entity/LivingEntity",
       "stack": "net/minecraft/world/entity/LivingEntity",
       "wet": "net/minecraft/world/entity/Entity",
+      "autoSpin": "net/minecraft/world/entity/LivingEntity",
       "release": "net/minecraft/client/multiplayer/MultiPlayerGameMode",
       "spin": "net/minecraft/world/item/enchantment/EnchantmentHelper"
     },
@@ -451,6 +498,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -484,6 +532,10 @@
         "aW",
         "()Z"
       ],
+      "autoSpin": [
+        "fe",
+        "()Z"
+      ],
       "release": [
         "b",
         "(Lbyo;)V"
@@ -499,6 +551,7 @@
       "hand": "bfz",
       "stack": "bfz",
       "wet": "bfj",
+      "autoSpin": "bfz",
       "release": "ffa",
       "spin": "cki"
     },
@@ -508,6 +561,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -541,6 +595,10 @@
         "method_5721",
         "()Z"
       ],
+      "autoSpin": [
+        "method_6123",
+        "()Z"
+      ],
       "release": [
         "method_2897",
         "(Lnet/minecraft/class_1657;)V"
@@ -556,6 +614,7 @@
       "hand": "net/minecraft/class_1309",
       "stack": "net/minecraft/class_1309",
       "wet": "net/minecraft/class_1297",
+      "autoSpin": "net/minecraft/class_1309",
       "release": "net/minecraft/class_636",
       "spin": "net/minecraft/class_1890"
     },
@@ -565,6 +624,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }
@@ -598,6 +658,10 @@
         "m_20070_",
         "()Z"
       ],
+      "autoSpin": [
+        "m_21209_",
+        "()Z"
+      ],
       "release": [
         "m_105277_",
         "(Lnet/minecraft/world/entity/player/Player;)V"
@@ -613,6 +677,7 @@
       "hand": "net/minecraft/world/entity/LivingEntity",
       "stack": "net/minecraft/world/entity/LivingEntity",
       "wet": "net/minecraft/world/entity/Entity",
+      "autoSpin": "net/minecraft/world/entity/LivingEntity",
       "release": "net/minecraft/client/multiplayer/MultiPlayerGameMode",
       "spin": "net/minecraft/world/item/enchantment/EnchantmentHelper"
     },
@@ -622,6 +687,7 @@
       "hand": "methods",
       "stack": "methods",
       "wet": "methods",
+      "autoSpin": "methods",
       "release": "methods",
       "spin": "methods"
     }

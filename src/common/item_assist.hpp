@@ -12,7 +12,7 @@ enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crysta
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
     MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel,
     LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout, CrosshairMismatch,
-    NeedTrident, NeedRiptide, NeedWater, ChargingTrident, ReleaseTrident };
+    NeedTrident, NeedRiptide, NeedWater, ChargingTrident, ReleaseTrident, WaitingTridentRecovery };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
@@ -41,6 +41,7 @@ inline const char* Text(Status s) {
         case Status::NeedWater:return "Riptide needs water or rain";
         case Status::ChargingTrident:return "Charging trident";
         case Status::ReleaseTrident:return "Riptide release sent";
+        case Status::WaitingTridentRecovery:return "Waiting for the previous Riptide boost to finish";
     }
     return "Unavailable";
 }
@@ -104,7 +105,7 @@ enum class Operation { None, SwapTotem, PlaceCrystal, AttackCrystal, PlaceAnchor
 struct Action { Operation operation=Operation::None; int slot=-1; bool anchor=false; };
 inline bool Lease(const Request& r,std::uint64_t now) { return r.sentAtMs&&r.sentAtMs<=now&&now-r.sentAtMs<=250&&r.inputAllowed; }
 struct TridentFrame {
-    bool supported=false,holding=false,riptide=false,wet=false,usingMain=false,busy=false;
+    bool supported=false,holding=false,riptide=false,wet=false,usingMain=false,busy=false,spinning=false;
     int ticks=0;
 };
 inline Status TridentDecision(const Request& r,const Frame& f,const TridentFrame& t,std::uint64_t now) {
@@ -119,6 +120,7 @@ inline Status TridentDecision(const Request& r,const Frame& f,const TridentFrame
     if(!t.wet) return Status::NeedWater;
     if(!f.useDown) return Status::WaitingBind;
     if(!t.usingMain) return Status::Ready;
+    if(t.spinning) return Status::WaitingTridentRecovery;
     return t.ticks>=std::clamp(r.trident.chargeTicks,10,40)?Status::ReleaseTrident:Status::ChargingTrident;
 }
 inline int ContainerSlot(int inventorySlot) { return inventorySlot<9?inventorySlot+36:inventorySlot; }
@@ -134,7 +136,7 @@ public:
     int TargetTicks() const { return targetTicks_; }
     Status Tick(const Request& r,const Frame& f,const TridentFrame& t,std::uint64_t now) {
         const auto status=TridentDecision(r,f,t,now);
-        if(status!=Status::ChargingTrident&&status!=Status::ReleaseTrident) { Reset(); return status; }
+        if(status!=Status::ChargingTrident&&status!=Status::ReleaseTrident&&status!=Status::WaitingTridentRecovery) { Reset(); return status; }
         if(t.ticks<lastTicks_) Reset();
         if(!targetTicks_) {
             const int base=std::clamp(r.trident.chargeTicks,10,40);
@@ -144,6 +146,7 @@ public:
         lastTicks_=t.ticks;
         if(released_) return Status::Ready;
         if(t.ticks<targetTicks_) return Status::ChargingTrident;
+        if(t.spinning) return Status::WaitingTridentRecovery;
         released_=true;
         return Status::ReleaseTrident;
     }

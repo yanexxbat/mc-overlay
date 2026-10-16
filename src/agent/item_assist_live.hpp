@@ -27,7 +27,7 @@ template<class B> class InventoryAssist final {
     items::TridentController tridentController_{static_cast<std::uint32_t>(GetTickCount64())^GetCurrentProcessId()};
     bool tridentReady_=false,legacyRiptide_=false;
     jclass enchantments_=nullptr;
-    jmethodID tridentUsing_=nullptr,tridentTicks_=nullptr,tridentHand_=nullptr,tridentStack_=nullptr,tridentWet_=nullptr,tridentRelease_=nullptr,tridentSpin_=nullptr;
+    jmethodID tridentUsing_=nullptr,tridentTicks_=nullptr,tridentHand_=nullptr,tridentStack_=nullptr,tridentWet_=nullptr,tridentAutoSpin_=nullptr,tridentRelease_=nullptr,tridentSpin_=nullptr;
     std::uint64_t tridentActions_=0;
     // Referenzen gehören einem Haltevorgang, niemals einem Render-Frame.
     struct Site {
@@ -97,10 +97,11 @@ template<class B> class InventoryAssist final {
             tridentUsing_=Method(env,b_.clsLiving,p->usingItem); tridentTicks_=Method(env,b_.clsLiving,p->ticks);
             tridentHand_=Method(env,b_.clsLiving,p->hand); tridentStack_=Method(env,b_.clsLiving,p->stack);
             tridentWet_=Method(env,b_.clsEntity,p->wet); tridentRelease_=Method(env,b_.clsInteractionMgr,p->release);
+            tridentAutoSpin_=Method(env,b_.clsLiving,p->autoSpin);
             enchantments_=Class(env,p->helperClass);
             tridentSpin_=enchantments_?jvm::TryMethod(env,enchantments_,p->spin.name,p->spin.signature,true):nullptr;
             legacyRiptide_=std::string_view(p->spin.signature).ends_with(")I");
-            tridentReady_=totemReady_&&b_.slotConstants[kSlotMainHand]&&hand_&&useKey_&&keyDown_&&tridentUsing_&&tridentTicks_&&tridentHand_&&tridentStack_&&tridentWet_&&tridentRelease_&&tridentSpin_;
+            tridentReady_=totemReady_&&b_.slotConstants[kSlotMainHand]&&hand_&&useKey_&&keyDown_&&tridentUsing_&&tridentTicks_&&tridentHand_&&tridentStack_&&tridentWet_&&tridentAutoSpin_&&tridentRelease_&&tridentSpin_;
         }
     }
     items::Item Item(JNIEnv* env,jobject stack) {
@@ -179,6 +180,7 @@ template<class B> class InventoryAssist final {
                     const double spin=legacyRiptide_?env->CallStaticIntMethod(enchantments_,tridentSpin_,stack):env->CallStaticFloatMethod(enchantments_,tridentSpin_,stack,player); Check(env);
                     t.riptide=std::isfinite(spin)&&spin>0;
                     t.wet=env->CallBooleanMethod(player,tridentWet_)==JNI_TRUE; Check(env);
+                    t.spinning=env->CallBooleanMethod(player,tridentAutoSpin_)==JNI_TRUE; Check(env);
                     const bool usingItem=env->CallBooleanMethod(player,tridentUsing_)==JNI_TRUE; Check(env);
                     auto hand=env->CallObjectMethod(player,tridentHand_); Check(env);
                     auto active=env->CallObjectMethod(player,tridentStack_); Check(env);

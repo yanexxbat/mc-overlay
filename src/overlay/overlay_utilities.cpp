@@ -38,6 +38,7 @@ void Overlay::DrawTridentSettings() {
     ImGui::TextWrapped("Hold a Riptide trident in your main hand, then hold Minecraft's Place / Use key (right mouse by default). It repeatedly charges and releases while you stay in water or rain.");
     ImGui::TextWrapped("Release Use to stop. Menus, focus loss and Kill Aura pause automatic releases. Charge time uses game ticks: 10 ticks is the normal minimum (0.5 seconds at 20 TPS). Minecraft controls reuse and durability.");
     ImGui::TextWrapped("Randomize charge chooses one duration per charge within the displayed range (default 10-13 ticks). Repeated values are possible; the duration stays fixed during that charge.");
+    ImGui::TextWrapped("Automatic releases wait until the previous Riptide boost has ended, even when the next charge is already ready.");
 }
 
 void Overlay::DrawItemAssistSettings(int section) {

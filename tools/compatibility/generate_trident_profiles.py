@@ -12,6 +12,7 @@ S=[('usingItem','living','isUsingItem','()Z','methods'),
    ('hand','living','getUsedItemHand','()Lnet/minecraft/world/InteractionHand;','methods'),
    ('stack','living','getUseItem','()'+STACK,'methods'),
    ('wet','entity','isInWaterOrRain','()Z','methods'),
+   ('autoSpin','living','isAutoSpinAttack','()Z','methods'),
    ('release','manager','releaseUsingItem','(Lnet/minecraft/world/entity/player/Player;)V','methods'),
    ('spin','helper','getTridentSpinAttackStrength','('+STACK+'L'+C['living']+';)F','methods')]
 
@@ -46,7 +47,7 @@ def generate(cache):
                 row['members'][key]=[name,desc(m['descriptor'])];row['owners'][key]=cls(C[role]);row['kinds'][key]=kind
             rows.append(row)
     header=['// Generated from checksum-verified cached game classes.','#pragma once','#include "mappings.hpp"','#include <string_view>',
-      'namespace mcov::agent {','struct TridentProfile { const char* id; const char* helperClass; mcov::mappings::Member usingItem,ticks,hand,stack,wet,release,spin; };',
+      'namespace mcov::agent {','struct TridentProfile { const char* id; const char* helperClass; mcov::mappings::Member usingItem,ticks,hand,stack,wet,autoSpin,release,spin; };',
       'inline constexpr TridentProfile kTridentProfiles[]={']
     for row in rows:
         header.append('    {'+','.join(map(json.dumps,[row['id'],row['classes']['helper']]))+','+','.join('{'+','.join(map(json.dumps,row['members'][key]))+'}' for key,_,_,_,_ in S)+'},')
