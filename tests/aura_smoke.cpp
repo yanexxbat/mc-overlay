@@ -345,7 +345,7 @@ void TargetCubeChecks(ID3D11Device* device,ID3D11DeviceContext* context,AuraBlen
             Close(large.corners[0][0].x,normal.corners[0][0].x*2)&&Close(large.corners[0][0].y,normal.corners[0][0].y*2),
             "target cube did not scale with viewport");
     // Größen-/Linienregler verändern die wirkliche Geometrie, nicht nur die UI.
-    auto custom=config; custom.sizeFraction=1.2f; custom.strokeFraction=.02f;
+    auto custom=config; custom.sizeFraction=1.2f; custom.strokeFraction=config.strokeFraction*.25f;
     TargetCubeWorld resized;
     Require(renderer.BuildWorld(e,camera,custom,resized)&&resized.worldStroke<world.worldStroke&&
             std::abs(resized.corners[0][5].z-resized.center.z)>std::abs(world.corners[0][5].z-world.center.z),
