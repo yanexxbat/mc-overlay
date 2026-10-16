@@ -20,6 +20,13 @@ void Overlay::DrawTridentSettings() {
         changed|=panel::CheckRow("Enable Auto Trident",&autoTrident_.enabled);
         DrawBind(keys::Action::AutoTrident,true);
         changed|=panel::SliderIntRow("Charge time",&autoTrident_.chargeTicks,10,40,"%d ticks");
+        changed|=panel::CheckRow("Randomize charge",&autoTrident_.randomizeCharge);
+        if(autoTrident_.randomizeCharge) {
+            changed|=panel::SliderIntRow("Extra charge up to",&autoTrident_.extraChargeTicks,0,10,"%d ticks");
+            char range[32]; std::snprintf(range,sizeof(range),"%d - %d ticks",std::clamp(autoTrident_.chargeTicks,10,40),
+                std::min(40,std::clamp(autoTrident_.chargeTicks,10,40)+std::clamp(autoTrident_.extraChargeTicks,0,10)));
+            panel::ValueRow("Charge range",range);
+        }
         char count[32]; std::snprintf(count,sizeof(count),"%llu",static_cast<unsigned long long>(itemReport_.tridentActions));
         panel::ValueRow("Releases sent",count);
         ImGui::EndTable();
@@ -30,6 +37,7 @@ void Overlay::DrawTridentSettings() {
     panel::Section("How to use");
     ImGui::TextWrapped("Hold a Riptide trident in your main hand, then hold Minecraft's Place / Use key (right mouse by default). It repeatedly charges and releases while you stay in water or rain.");
     ImGui::TextWrapped("Release Use to stop. Menus, focus loss and Kill Aura pause automatic releases. Charge time uses game ticks: 10 ticks is the normal minimum (0.5 seconds at 20 TPS). Minecraft controls reuse and durability.");
+    ImGui::TextWrapped("Randomize charge chooses one duration per charge within the displayed range (default 10-13 ticks). Repeated values are possible; the duration stays fixed during that charge.");
 }
 
 void Overlay::DrawItemAssistSettings(int section) {

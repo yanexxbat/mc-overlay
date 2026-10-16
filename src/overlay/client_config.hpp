@@ -261,6 +261,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     AntiVanish(a,s.antiVanish);
     Holes(a,s.holes);
     FIELD(trident,enabled); FIELD(trident,chargeTicks,10,40);
+    FIELD(trident,randomizeCharge); FIELD(trident,extraChargeTicks,0,10);
     Smp(a,s.smp);
     for(auto* macro:{&s.crystal,&s.anchor}) {
         const std::string n=macro==&s.crystal?"crystal.":"anchor.";
@@ -425,6 +426,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace("trident.enabled","0"); values.emplace("trident.chargeTicks","10");
         values.emplace(tridentBind+"key","0"); values.emplace(tridentBind+"modifiers","0"); values.emplace(tridentBind+"mode","0");
     }
+    values.emplace("trident.randomizeCharge","1"); values.emplace("trident.extraChargeTicks","3");
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

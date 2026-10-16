@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <cmath>
+#include <random>
 
 namespace mcov::items {
 enum class Item : std::uint8_t { Empty, Other, Totem, Crystal, Anchor, Glowstone };
@@ -44,7 +45,12 @@ inline const char* Text(Status s) {
     return "Unavailable";
 }
 struct TotemConfig { bool enabled=false; std::uint32_t retryMs=100; };
-struct TridentConfig { bool enabled=false; int chargeTicks=10; };
+struct TridentConfig {
+    bool enabled=false;
+    int chargeTicks=10;
+    bool randomizeCharge=true;
+    int extraChargeTicks=3;
+};
 struct MacroConfig {
     bool enabled=false,restoreSlot=true;
     std::uint32_t intervalMs=150,confirmationMs=750;
@@ -116,6 +122,32 @@ inline Status TridentDecision(const Request& r,const Frame& f,const TridentFrame
     return t.ticks>=std::clamp(r.trident.chargeTicks,10,40)?Status::ReleaseTrident:Status::ChargingTrident;
 }
 inline int ContainerSlot(int inventorySlot) { return inventorySlot<9?inventorySlot+36:inventorySlot; }
+
+// Pick once per use, retaining the target through every charging tick.
+class TridentController final {
+    std::mt19937 random_;
+    int targetTicks_=0,lastTicks_=0;
+    bool released_=false;
+public:
+    explicit TridentController(std::uint32_t seed=5489u):random_(seed) {}
+    void Reset() { targetTicks_=lastTicks_=0; released_=false; }
+    int TargetTicks() const { return targetTicks_; }
+    Status Tick(const Request& r,const Frame& f,const TridentFrame& t,std::uint64_t now) {
+        const auto status=TridentDecision(r,f,t,now);
+        if(status!=Status::ChargingTrident&&status!=Status::ReleaseTrident) { Reset(); return status; }
+        if(t.ticks<lastTicks_) Reset();
+        if(!targetTicks_) {
+            const int base=std::clamp(r.trident.chargeTicks,10,40);
+            const int extra=r.trident.randomizeCharge?std::clamp(r.trident.extraChargeTicks,0,10):0;
+            targetTicks_=std::uniform_int_distribution<int>(base,std::min(40,base+extra))(random_);
+        }
+        lastTicks_=t.ticks;
+        if(released_) return Status::Ready;
+        if(t.ticks<targetTicks_) return Status::ChargingTrident;
+        released_=true;
+        return Status::ReleaseTrident;
+    }
+};
 
 // Deterministische Entscheidung ohne JNI. Höchstens eine Inventar-/Spielaktion pro Tick.
 class Controller final {

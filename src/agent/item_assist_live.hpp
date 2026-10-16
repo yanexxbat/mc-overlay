@@ -24,6 +24,7 @@ template<class B> class InventoryAssist final {
     jobject hand_=nullptr,up_=nullptr,charge_=nullptr,environmentAnchor_=nullptr;
     jweak world_=nullptr,player_=nullptr;
     items::Controller controller_;
+    items::TridentController tridentController_{static_cast<std::uint32_t>(GetTickCount64())^GetCurrentProcessId()};
     bool tridentReady_=false,legacyRiptide_=false;
     jclass enchantments_=nullptr;
     jmethodID tridentUsing_=nullptr,tridentTicks_=nullptr,tridentHand_=nullptr,tridentStack_=nullptr,tridentWet_=nullptr,tridentRelease_=nullptr,tridentSpin_=nullptr;
@@ -142,7 +143,7 @@ template<class B> class InventoryAssist final {
         f.world=level&&player;
         if(!f.world) return;
         if(!world_||!player_||!env->IsSameObject(world_,level)||!env->IsSameObject(player_,player)) {
-            controller_.Reset(); ClearSite(env);
+            controller_.Reset(); tridentController_.Reset(); ClearSite(env);
             if(world_) env->DeleteWeakGlobalRef(world_); if(player_) env->DeleteWeakGlobalRef(player_);
             world_=env->NewWeakGlobalRef(level); player_=env->NewWeakGlobalRef(player); Check(env);
         }
@@ -186,10 +187,10 @@ template<class B> class InventoryAssist final {
                 }
             }
         }
-        report.trident=items::TridentDecision(r,f,t,now);
+        report.trident=tridentController_.Tick(r,f,t,now);
         if(report.trident==items::Status::ReleaseTrident) {
             auto manager=env->GetObjectField(client,b_.fInteractionMgr); Check(env);
-            if(!manager) report.trident=items::Status::Unsupported;
+            if(!manager) { report.trident=items::Status::Unsupported; tridentController_.Reset(); }
             else { env->CallVoidMethod(manager,tridentRelease_,player); Check(env); ++tridentActions_; }
         }
         report.tridentActions=tridentActions_;
@@ -374,7 +375,7 @@ public:
         for(auto* ref:{&hand_,&up_,&charge_,&environmentAnchor_,&b_.swapAction}) if(*ref) { env->DeleteGlobalRef(*ref); *ref=nullptr; }
         for(auto& ref:b_.slotConstants) if(ref) { env->DeleteGlobalRef(ref); ref=nullptr; }
         if(world_) env->DeleteWeakGlobalRef(world_); if(player_) env->DeleteWeakGlobalRef(player_); world_=player_=nullptr;
-        if(signal_) env->DeleteGlobalRef(signal_); signal_=nullptr; channel_=nullptr; controller_.Reset();
+        if(signal_) env->DeleteGlobalRef(signal_); signal_=nullptr; channel_=nullptr; controller_.Reset(); tridentController_.Reset();
     }
     void Tick(JNIEnv* env,jobject client,bool checkForeground=true) noexcept {
         const std::scoped_lock lock(mutex_); if(!ready_||!channel_) return;
@@ -387,7 +388,7 @@ public:
             const bool armed=(request.crystal.enabled||request.anchor.enabled)&&items::Lease(request,now)&&!request.combatActive&&macroReady_;
             env->SetStaticBooleanField(signal_,macroEnabled_,armed?JNI_TRUE:JNI_FALSE); Check(env);
             if(!request.totem.enabled&&!request.crystal.enabled&&!request.anchor.enabled&&!request.trident.enabled&&!controller_.HasRestore()) {
-                controller_.Reset(); ClearSite(env);
+                controller_.Reset(); tridentController_.Reset(); ClearSite(env);
                 auto report=controller_.GetReport(); report.sampledAtMs=now; report.totem=report.crystal=report.anchor=items::Status::Off;
                 report.trident=items::Status::Off; report.tridentActions=tridentActions_;
                 channel_->itemReport.Publish(report); return;
@@ -459,7 +460,7 @@ public:
             Trident(env,client,player,request,f,action.operation!=items::Operation::None||controller_.Active()||controller_.HasRestore(),now,report);
             channel_->itemReport.Publish(report);
         } catch(const std::exception& error) {
-            if(env->ExceptionCheck()) env->ExceptionClear(); ClearSite(env); controller_.Reset();
+            if(env->ExceptionCheck()) env->ExceptionClear(); ClearSite(env); controller_.Reset(); tridentController_.Reset();
             if(now-lastError_>1000) { MCOV_LOG_WARN("inventory client-tick action failed: %s",error.what()); lastError_=now; }
             auto report=controller_.GetReport(); report.sampledAtMs=now;
             if(request.totem.enabled) report.totem=items::Status::Error; if(request.crystal.enabled) report.crystal=items::Status::Error; if(request.anchor.enabled) report.anchor=items::Status::Error;

@@ -274,6 +274,10 @@ verification and live-game limits. IPC v24 requires restarting Minecraft.
 
 Auto Trident appears after Spinbot in Combat. Hold Minecraft's Place / Use with
 a main-hand Riptide trident in water/rain to repeat normal charged releases.
-Charge time is 10–40 game ticks, default 10; no new scan, render hook or timer.
+Charge time is 10–40 game ticks, default 10. Randomize charge defaults to an
+additional 0–3 ticks, chosen once per charge (10–13 ticks with defaults).
+The extra range is configurable from 0–10 ticks, capped at 40 total; disabling
+randomization restores the fixed charge time. No new scan, render hook or timer.
 Native action gating uses the existing client-tick lease. Automatic preferences
-retain charge time/binding and start disabled; named profiles retain all settings.
+retain charge time/randomization/binding and start disabled; named profiles retain
+all settings. IPC v32 requires restarting Minecraft after updating the client.

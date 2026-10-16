@@ -228,6 +228,7 @@ void Overlay::SavePreferences() {
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
       out<<"freecam "<<combat_.freecam.speed<<' '<<combat_.freecam.boost<<'\n';
       out<<"trident-charge "<<std::clamp(autoTrident_.chargeTicks,10,40)<<'\n';
+      out<<"trident-random "<<autoTrident_.randomizeCharge<<' '<<std::clamp(autoTrident_.extraChargeTicks,0,10)<<'\n';
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
       client_configs::Chunks(smpArchive,chunkFinder_);
@@ -274,6 +275,11 @@ void Overlay::LoadPreferences() {
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
         } else if(tag=="trident-charge") {
             int ticks; if(row>>ticks&&ticks>=10&&ticks<=40) autoTrident_.chargeTicks=ticks;
+        } else if(tag=="trident-random") {
+            int enabled,extra;
+            if(row>>enabled>>extra&&(enabled==0||enabled==1)&&extra>=0&&extra<=10) {
+                autoTrident_.randomizeCharge=enabled==1; autoTrident_.extraChargeTicks=extra;
+            }
         } else if(tag=="freecam") {
             freecam::Config c;
             if(row>>c.speed>>c.boost&&freecam::Valid(c)) { combat_.freecam.speed=c.speed; combat_.freecam.boost=c.boost; }
