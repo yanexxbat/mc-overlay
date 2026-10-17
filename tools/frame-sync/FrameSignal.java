@@ -2,6 +2,8 @@ package mcov;
 
 /** Bootstrap-visible frame signals and the explicitly armed client-tick bridge. */
 public final class FrameSignal {
+    public static volatile boolean texturedStorageEnabled;
+    private static native void nativeTexturedStorage(Object renderer,long epoch);
     public static volatile boolean texturedBaseEnabled;
     private static native void nativeTexturedBase(Object renderer,long epoch);
     public static volatile boolean depthEnabled;
@@ -14,6 +16,10 @@ public final class FrameSignal {
         if(texturedBaseEnabled) {
             try { nativeTexturedBase(renderer,epoch); }
             catch(Throwable error) { texturedBaseEnabled=false; System.err.println("[mcov] textured base disabled: "+error); }
+        }
+        if(texturedStorageEnabled) {
+            try { nativeTexturedStorage(renderer,epoch); }
+            catch(Throwable error) { texturedStorageEnabled=false; System.err.println("[mcov] textured storage disabled: "+error); }
         }
     }
     public static volatile boolean macroEnabled;

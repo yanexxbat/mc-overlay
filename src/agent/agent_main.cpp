@@ -61,7 +61,9 @@ FrameSync        g_frameSync;
 mcov::agent::AntiVanishBridge g_antiVanish;
 mcov::agent::DepthCapture g_depthCapture;
 void JNICALL OnDepthReady(JNIEnv* env,jclass,jobject renderer,jlong epoch) { g_depthCapture.Capture(env,renderer,static_cast<std::uint64_t>(epoch)); }
-mcov::agent::BaseTextureCapture g_baseTextures;
+mcov::agent::BaseTextureCapture<> g_baseTextures;
+mcov::agent::BaseTextureCapture<true> g_storageTextures;
+void JNICALL OnTexturedStorage(JNIEnv* env,jclass,jobject renderer,jlong) { g_storageTextures.Capture(env,renderer); }
 void JNICALL OnTexturedBase(JNIEnv* env,jclass,jobject renderer,jlong) { g_baseTextures.Capture(env,renderer); }
 mcov::agent::MinecraftCombat g_combat;
 void JNICALL OnCombatTick(JNIEnv* env,jclass,jobject client);
@@ -1483,7 +1485,7 @@ void SamplerThread() {
         // Keep liveness separate while loading, paused or awaiting the camera.
         const auto loopNow = ::GetTickCount64();
         g_depthCapture.RefreshRequest(env);
-        g_baseTextures.RefreshRequest(env);
+        g_baseTextures.RefreshRequest(env); g_storageTextures.RefreshRequest(env);
         g_antiVanish.Refresh(env);
         if (loopNow >= nextHeartbeatTick) {
             if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
@@ -1531,6 +1533,9 @@ void SamplerThread() {
                 if(g_baseTextures.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnTexturedBase)))
                     MCOV_LOG_INFO("textured Base ESP bridge active: %s",bindings.set->id);
                 else MCOV_LOG_INFO("textured Base ESP unavailable for this renderer/profile");
+                if(g_storageTextures.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnTexturedStorage)))
+                    MCOV_LOG_INFO("textured Storage ESP bridge active: %s",bindings.set->id);
+                else MCOV_LOG_INFO("textured Storage ESP unavailable for this renderer/profile");
                 if(g_antiVanish.Install(env,bindings,g_channel.block())) MCOV_LOG_INFO("Anti Vanish roster bridge active: %s",bindings.set->id);
                 else MCOV_LOG_INFO("Anti Vanish unavailable for this renderer/profile");
                 if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
@@ -1745,7 +1750,7 @@ void SamplerThread() {
             }
 
             if (auto* block = g_channel.block()) PublishSnapshot(block, snapshot);
-            g_baseTextures.Observe(snapshot);
+            g_baseTextures.Observe(snapshot); g_storageTextures.Observe(snapshot);
         }
 
         env->DeleteLocalRef(client);
@@ -1758,7 +1763,7 @@ void SamplerThread() {
     SetStatus(AgentStatus::Detaching);
     if(scanWorld) env->DeleteWeakGlobalRef(scanWorld);
     g_depthCapture.Close(env);
-    g_baseTextures.Close(env);
+    g_baseTextures.Close(env); g_storageTextures.Close(env);
     g_antiVanish.Close(env);
     g_combat.Close(env);
     g_inventory.Close(env);

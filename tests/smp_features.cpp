@@ -265,6 +265,33 @@ void UnifiedChunks() {
     const auto nether=smp::PossibleChunkBounds(finder.Finds()[0],s);
     Require(nether.min.y==0&&nether.max.y==256,"Nether chunk column used Overworld height");
 }
+void StorageTextures() {
+    auto s=Scene(); smp::StorageSettings c; c.mask=(1u<<kBlockChest)|(1u<<kBlockBarrel);
+    Add(s,2,0,6); Add(s,-2,0,6,kBlockBarrel); Add(s,0,0,8,kBlockEnderChest); Add(s,0,0,200); Add(s,1,0,1,kBlockDiamond);
+    s.storageCount=s.blockCount; std::copy_n(s.blocks,s.blockCount,s.storageBlocks);
+    base::StorageRequest result;
+    auto request=[&](const WorldSnapshot& scene,const smp::StorageSettings& settings,bool enabled,float range,float opacity,bool fresh,std::uint64_t now)->const base::StorageRequest& {
+        smp::BuildStorageRequest(result,scene,settings,enabled,range,opacity,fresh,now); return result;
+    };
+    auto r=request(s,c,true,32,.75f,true,1000);
+    Require(r.enabled&&r.count==2&&r.opacity==.75f&&r.sentAtMs==1000,"Storage texture selection ignored mask or distance");
+    Require(r.regions[0].minX==-2&&r.regions[0].maxX==-1&&r.regions[0].maxY==1,"Storage request did not isolate each container");
+    std::swap(s.storageBlocks[0],s.storageBlocks[1]); s.posX+=.1f;
+    Require(request(s,c,true,32,.4f,true,1100).revision==r.revision,"Order, movement or opacity restarted storage extraction");
+    Require(!request(s,c,true,32,1,false,1100).enabled,"Stale snapshot kept storage textures active");
+    Require(!request(s,c,false,32,1,true,1100).enabled,"Disabled storage kept textures active");
+    Require(!request(s,c,true,32,0,true,1100).enabled,"Invisible storage kept renderer active");
+    s.storageBlocks[s.storageCount++]=s.storageBlocks[0];
+    Require(request(s,c,true,32,1,true,1100).count==2,"Duplicate containers rebuilt duplicate geometry");
+    s.storageBlocks[0].x=std::numeric_limits<float>::quiet_NaN();
+    Require(request(s,c,true,32,1,true,1100).count==2,"Invalid coordinate reached texture pass");
+    CopyField(s.serverAddress,"other");
+    Require(request(s,c,true,32,1,true,1100).revision!=r.revision,"Storage geometry crossed servers");
+    s.storageCount=0;
+    Require(!request(s,c,true,32,1,true,1100).enabled,"Empty storage reused generic block results");
+    for(unsigned i=0;i<kMaxBlocks;++i) { auto& b=s.storageBlocks[s.storageCount++]; b={}; b.x=float(i%32); b.z=float(i/32); b.kind=kBlockChest; }
+    Require(request(s,c,true,128,1,true,1100).count==kMaxBlocks,"Storage textures inherited the eight-area Base ESP limit");
+}
 void StorageGeometry() {
     auto s=Scene(); Add(s,2,0,6); smp::Config c; c.storage.mask=1u<<kBlockChest;
     auto& draw=*ImGui::GetBackgroundDrawList(); const auto flags=draw.Flags;
@@ -273,27 +300,15 @@ void StorageGeometry() {
     std::vector<float> tags(first,.35f);
     { depth::Scope scope(tags); smp::DrawBlocks(draw,s,p,c,true,32,1,0,{1280,720});
       Require(depth::tags==&tags,"Storage renderer did not restore depth tagging"); }
-    Require(draw.VtxBuffer.Size-first==12*4,"Storage did not draw the twelve edges of a 3D cube");
-    const auto corner=[](int i)->WorldPoint { return {i&1?3.:2.,i&2?1.:0.,i&4?7.:6.}; };
-    int vertex=first;
-    for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit)) {
-        ScreenPoint a,b; Require(p.Segment(corner(i),corner(i|bit),a,b),"Storage geometry fixture was offscreen");
-        const auto& v=draw.VtxBuffer;
-        // AddLine aligns its endpoints to pixel centres (+0.5 px).
-        Require(std::hypot((v[vertex].pos.x+v[vertex+3].pos.x)*.5f-a.x-.5f,(v[vertex].pos.y+v[vertex+3].pos.y)*.5f-a.y-.5f)<.01f&&
-            std::hypot((v[vertex+1].pos.x+v[vertex+2].pos.x)*.5f-b.x-.5f,(v[vertex+1].pos.y+v[vertex+2].pos.y)*.5f-b.y-.5f)<.01f,
-            "Storage edge did not follow its projected world corners");
-        vertex+=4;
-    }
-    for(int i=first;i<draw.VtxBuffer.Size;++i) Require(tags[i]==0,"Storage frame became occluded by world depth");
-    s.camZ=6.5; s.camX=2.5; s.camY=.5; s.yawDeg=25;
-    smp::DrawBlocks(draw,s,CameraProjection(s,1280,720),c,true,32,1,1,{1280,720});
-    for(int i=first;i<draw.VtxBuffer.Size;++i) Require(std::isfinite(draw.VtxBuffer[i].pos.x)&&
-        std::isfinite(draw.VtxBuffer[i].pos.y),"Near-plane storage clipping emitted invalid geometry");
+    Require(draw.VtxBuffer.Size==first,"Storage texture mode still draws box edges");
+    c.storage.tracers=true;
+    { depth::Scope scope(tags); smp::DrawBlocks(draw,s,p,c,true,32,1,0,{1280,720}); }
+    Require(draw.VtxBuffer.Size>first,"Optional storage tracer disappeared");
+    for(int i=first;i<draw.VtxBuffer.Size;++i) Require(tags[i]==0,"Storage annotation became occluded by world depth");
     draw.Flags=flags;
 }
 void Rendering() {
-    auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
+    auto s=Scene(); smp::Config c; c.storage.tracers=true; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
     c.storage.mask=(1u<<kBlockChest)|(1u<<kBlockEnderChest); Add(s,-2,0,6); Add(s,2,0,6,kBlockEnderChest); Add(s,0,0,8,kBlockSpawner);
     auto& draw=*ImGui::GetBackgroundDrawList(); CameraProjection projection(s,1280,720); const int before=draw.VtxBuffer.Size;
     smp::DrawBlocks(draw,s,projection,c,false,32,1,0,{1280,720}); Require(draw.VtxBuffer.Size==before,"Disabled block modules drew geometry");
@@ -358,7 +373,7 @@ void Rendering() {
 }
 int main() {
     try {
-        Detection(); Profiles(); StableStorage(); StorageAnimation(); GrowthDetection(); GrowthProfiles(); LargeScanSettings(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
+        Detection(); Profiles(); StableStorage(); StorageAnimation(); StorageTextures(); GrowthDetection(); GrowthProfiles(); LargeScanSettings(); UnifiedChunks(); ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.IniFilename=nullptr;
         io.DisplaySize={1280,720}; io.DeltaTime=1.f/60; io.Fonts->AddFontDefault(); io.Fonts->Build();
         ImGui::NewFrame(); StorageGeometry(); Rendering(); ImGui::Render(); ImGui::DestroyContext();
         std::cout<<"PASS SMP: block classification, completed scans, filters, world isolation, limits, profiles and per-type rendering\n"; return 0;

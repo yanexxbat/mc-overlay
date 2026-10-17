@@ -21,7 +21,7 @@
 namespace mcov {
 
 inline constexpr std::uint32_t kSharedMagic   = 0x564F434Du; // 'MCOV' little-endian
-inline constexpr std::uint32_t kSharedVersion = 33;
+inline constexpr std::uint32_t kSharedVersion = 35;
 
 inline constexpr std::uint32_t kMaxEntities = 256;
 inline constexpr std::uint32_t kMaxBlocks   = 1024;
@@ -402,6 +402,8 @@ struct SharedBlock {
     SharedMailbox<antivanish::Request> antiVanishRequest;
     SharedMailbox<antivanish::Report> antiVanishReport;
     SharedMailbox<storage::Request> storageRequest;
+    SharedMailbox<base::StorageRequest> storageTextureRequest;
+    SharedMailbox<base::Report> storageTextureReport;
     WorldSnapshot snapshot;
 };
 

@@ -54,6 +54,7 @@ void Overlay::SetHudEditing(bool editing) {
 void Overlay::DrawHud(const WorldSnapshot& s) {
     if(!hud_.visible&&!hudEditing_) return;
     ImGui::PushFont(style::MenuFont());
+    DrawAntiVanishHud();
     auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
     int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
     const int effects=std::min<int>(s.effectCount,kMaxEffects);

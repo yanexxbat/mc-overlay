@@ -150,6 +150,8 @@ void DrawPossibleBases(ImDrawList& draw,const WorldSnapshot& snapshot,const Came
                        const BaseFinderSettings& settings,std::span<const PossibleBase> finds,ImVec2 viewport,
                        bool chunks=true,bool blocks=true);
 WorldBounds PossibleChunkBounds(const PossibleBase& find,const WorldSnapshot& snapshot);
+void BuildStorageRequest(base::StorageRequest& request,const WorldSnapshot& snapshot,const StorageSettings& settings,bool enabled,
+                                        float range,float opacity,bool fresh,std::uint64_t now);
 base::Request BuildBaseRequest(const WorldSnapshot& snapshot,const BaseSettings& settings,
                               std::span<const Stash> finds,bool fresh,std::uint64_t now);
 } // namespace mcov::smp

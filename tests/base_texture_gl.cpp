@@ -33,6 +33,12 @@ void Requests() {
     Require(agent::ValidBaseRequest(r,1500,"overworld","private"),"Fresh scoped request rejected");
     Require(!agent::ValidBaseRequest(r,1800,"overworld","private")&&!agent::ValidBaseRequest(r,999,"overworld","private"),"Lease or clock reversal ignored");
     Require(!agent::ValidBaseRequest(r,1500,"nether","private")&&!agent::ValidBaseRequest(r,1500,"overworld","other"),"World isolation ignored");
+    base::StorageRequest storage; storage.enabled=true; storage.count=1024; storage.revision=2; storage.sentAtMs=1000;
+    strcpy_s(storage.dimension,"overworld"); strcpy_s(storage.server,"private");
+    for(unsigned i=0;i<storage.count;++i) storage.regions[i]={double(i),0,0,double(i+1),1,1};
+    Require(agent::ValidBaseRequest(storage,1500,"overworld","private"),"Storage texture capacity truncated to eight regions");
+    Require(!agent::ValidBaseRequest(storage,1800,"overworld","private")&&!agent::ValidBaseRequest(storage,1500,"nether","private"),"Storage lease or world isolation ignored");
+    storage.count=1025; Require(!agent::ValidBaseRequest(storage,1500,"overworld","private"),"Out-of-bounds storage request accepted");
     r.regions[0].maxX=1e8; Require(!agent::ValidBaseRequest(r,1500,"overworld","private"),"Unbounded region accepted");
 }
 int main() {

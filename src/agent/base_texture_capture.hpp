@@ -7,8 +7,10 @@
 #include <cstring>
 
 namespace mcov::agent {
-class BaseTextureCapture {
+template<bool Storage=false> class BaseTextureCapture {
+    using Request=std::conditional_t<Storage,base::StorageRequest,base::Request>;
     std::mutex mutex_;
+    Request request_{}; // Large storage selections stay off the JVM render-thread stack.
     SharedBlock* world_{};
     jclass signal_{},bridge_{},meshClass_{};
     jfieldID enabled_{},textures_{},vertices_{},x_{},y_{},z_{},serial_{};
@@ -18,15 +20,23 @@ class BaseTextureCapture {
     char dimension_[kNameLen]{},server_[kAddrLen]{};
     BaseTextureGl gl_;
     BaseMesh mesh_;
-    void Report(base::Status status,const base::Request& request) {
+    auto& Requests() {
+        if constexpr(Storage) return world_->storageTextureRequest;
+        else return world_->baseRequest;
+    }
+    auto& Reports() {
+        if constexpr(Storage) return world_->storageTextureReport;
+        else return world_->baseReport;
+    }
+    void Report(base::Status status,const Request& request) {
         if(!world_) return;
         base::Report report; report.sampledAtMs=GetTickCount64(); report.revision=request.revision; report.status=status;
-        world_->baseReport.Publish(report);
+        Reports().Publish(report);
     }
     bool Exception(JNIEnv* env) {
         if(!env->ExceptionCheck()) return false;
         jobject error=env->ExceptionOccurred(); env->ExceptionClear(); failed_=true;
-        MCOV_LOG_WARN("textured Base ESP: game model bridge raised an exception");
+        MCOV_LOG_WARN("textured ESP: game model bridge raised an exception");
         // Preserve the underlying game exception instead of losing the cause
         // behind reflection's InvocationTargetException.
         auto type=env->FindClass("java/lang/Throwable");
@@ -62,18 +72,18 @@ public:
         bridge_=static_cast<jclass>(env->NewGlobalRef(local));
         local=env->FindClass("mcov/BaseTextureBridge$Mesh"); if(Exception(env)||!local) return false;
         meshClass_=static_cast<jclass>(env->NewGlobalRef(local));
-        auto configure=env->GetStaticMethodID(bridge_,"configure","(Ljava/lang/Class;Ljava/lang/String;)Z");
-        step_=env->GetStaticMethodID(bridge_,"step","(Ljava/lang/Object;J[D)Lmcov/BaseTextureBridge$Mesh;");
-        camera_=env->GetStaticMethodID(bridge_,"camera","(Ljava/lang/Object;)[D");
-        clear_=env->GetStaticMethodID(bridge_,"clear","()V"); stats_=env->GetStaticMethodID(bridge_,"stats","()[I");
-        enabled_=env->GetStaticFieldID(signal_,"texturedBaseEnabled","Z");
+        auto configure=env->GetStaticMethodID(bridge_,Storage?"storageConfigure":"configure","(Ljava/lang/Class;Ljava/lang/String;)Z");
+        step_=env->GetStaticMethodID(bridge_,Storage?"storageStep":"step","(Ljava/lang/Object;J[D)Lmcov/BaseTextureBridge$Mesh;");
+        camera_=env->GetStaticMethodID(bridge_,Storage?"storageCamera":"camera","(Ljava/lang/Object;)[D");
+        clear_=env->GetStaticMethodID(bridge_,Storage?"storageClear":"clear","()V"); stats_=env->GetStaticMethodID(bridge_,Storage?"storageStats":"stats","()[I");
+        enabled_=env->GetStaticFieldID(signal_,Storage?"texturedStorageEnabled":"texturedBaseEnabled","Z");
         textures_=env->GetFieldID(meshClass_,"textures","[I"); vertices_=env->GetFieldID(meshClass_,"vertices","[[F");
         x_=env->GetFieldID(meshClass_,"x","D"); y_=env->GetFieldID(meshClass_,"y","D"); z_=env->GetFieldID(meshClass_,"z","D"); serial_=env->GetFieldID(meshClass_,"serial","J");
         if(Exception(env)||!configure||!step_||!camera_||!clear_||!stats_||!enabled_||!textures_||!vertices_||!serial_) return false;
         const auto profile=env->NewStringUTF(b.set->id);
         const bool configured=env->CallStaticBooleanMethod(bridge_,configure,b.client.minecraftClass,profile);
         if(Exception(env)||!configured) return false;
-        JNINativeMethod native{const_cast<char*>("nativeTexturedBase"),const_cast<char*>("(Ljava/lang/Object;J)V"),callback};
+        JNINativeMethod native{const_cast<char*>(Storage?"nativeTexturedStorage":"nativeTexturedBase"),const_cast<char*>("(Ljava/lang/Object;J)V"),callback};
         if(env->RegisterNatives(signal_,&native,1)!=JNI_OK||Exception(env)) return false;
         supported_=true; failed_=false; Report(base::Status::Disabled,{}); return true;
     }
@@ -84,14 +94,14 @@ public:
     }
     void RefreshRequest(JNIEnv* env) {
         const std::scoped_lock lock(mutex_); if(!world_||!supported_) return;
-        base::Request request; if(!world_->baseRequest.Read(request)) return;
+        auto& request=request_; if(!Requests().Read(request)) return;
         if(request.enabled&&!armed_) {
             env->SetStaticBooleanField(signal_,enabled_,JNI_TRUE); armed_=!Exception(env);
         }
     }
     void Capture(JNIEnv* env,jobject renderer) {
         std::unique_lock lock(mutex_,std::try_to_lock); if(!lock||!world_||!supported_) return;
-        base::Request request; if(!world_->baseRequest.Read(request)) return;
+        auto& request=request_; if(!Requests().Read(request)) return;
         const auto now=GetTickCount64();
         if(!ValidBaseRequest(request,now,dimension_,server_)||now-observedAt_>1500||
            (world_->controlFlags.load(std::memory_order_acquire)&(kCtrlPauseSampling|kCtrlRequestUnload))) {
@@ -102,9 +112,9 @@ public:
         jvm::LocalFrame frame(env,32);
         auto bounds=env->NewDoubleArray(request.count*6);
         if(Exception(env)||!bounds) { Report(base::Status::Failed,request); return; }
-        double values[base::kMaxRegions*6]{};
-        for(unsigned i=0;i<request.count;++i) { const auto& r=request.regions[i]; const double v[6]={r.minX,r.minY,r.minZ,r.maxX,r.maxY,r.maxZ}; std::memcpy(values+i*6,v,sizeof(v)); }
-        env->SetDoubleArrayRegion(bounds,0,request.count*6,values);
+        std::vector<double> values(request.count*6);
+        for(unsigned i=0;i<request.count;++i) { const auto& r=request.regions[i]; const double v[6]={r.minX,r.minY,r.minZ,r.maxX,r.maxY,r.maxZ}; std::memcpy(values.data()+i*6,v,sizeof(v)); }
+        env->SetDoubleArrayRegion(bounds,0,request.count*6,values.data());
         auto object=env->CallStaticObjectMethod(bridge_,step_,renderer,jlong(request.revision),bounds);
         if(Exception(env)) { Report(base::Status::Failed,request); return; }
         if(!object) { mesh_={}; gl_.Clear(); }
@@ -145,11 +155,11 @@ public:
                     camera[6]>0&&camera[6]<=2147483647.&&camera[7]>0&&camera[7]<=2147483647.&&
                     camera[8]>0&&camera[8]<=8192&&camera[9]>0&&camera[9]<=8192;
                 if(!valid||!gl_.Draw(mesh_,{camera[0],camera[1],camera[2],camera[3],camera[4],camera[5],GLuint(camera[6]),GLuint(camera[7]),int(camera[8]),int(camera[9])},request.opacity)) {
-                    report.status=base::Status::Failed; failed_=true; MCOV_LOG_WARN("textured Base ESP: OpenGL pass unavailable");
+                    report.status=base::Status::Failed; failed_=true; MCOV_LOG_WARN("textured ESP: OpenGL pass unavailable");
                 }
             }
         }
-        world_->baseReport.Publish(report);
+        Reports().Publish(report);
     }
     void Close(JNIEnv* env) {
         const std::scoped_lock lock(mutex_); world_=nullptr; supported_=false;

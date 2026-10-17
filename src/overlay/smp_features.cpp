@@ -257,31 +257,13 @@ void DrawBlocks(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& 
         if(!std::isfinite(distance)||distance>(storage?range:c.spawner.maxDraw)) return;
         const WorldBounds bounds{{block.x,block.y,block.z},{block.x+1.,block.y+1.,block.z+1.}};
         ImVec4 colour=storage?c.storage.Colour(block.kind):c.spawner.colour;
-        if(storage) colour.w*=opacity*alpha*(.72f+.28f*highlight.strength);
+        if(storage) colour.w*=opacity*alpha;
         if(colour.w<=.001f) return;
         const ImU32 ink=ImGui::ColorConvertFloat4ToU32(colour);
         ScreenRect rect; const bool haveRect=p.Bounds(bounds,rect);
-        if(storage) {
-            const auto segment=[&](WorldPoint a,WorldPoint b,ImVec4 tint,float width) {
-                ScreenPoint from,to; if(!p.Segment(a,b,from,to)) return;
-                const ImVec2 start{from.x+origin.x,from.y+origin.y},end{to.x+origin.x,to.y+origin.y};
-                if(glow>0) {
-                    if(glowTexture) soft::Stroke(draw,start,end,width,tint,glow,glowTexture);
-                    else { auto halo=tint; halo.w*=.12f*glow; draw.AddLine(start,end,ImGui::ColorConvertFloat4ToU32(halo),width+4); }
-                }
-                draw.AddLine(start,end,ImGui::ColorConvertFloat4ToU32(tint),width);
-            };
-            const auto corner=[&](int i)->WorldPoint { return {i&1?bounds.max.x:bounds.min.x,
-                i&2?bounds.max.y:bounds.min.y,i&4?bounds.max.z:bounds.min.z}; };
-            for(int i=0;i<8;++i) for(int bit:{1,2,4}) if(!(i&bit))
-                segment(corner(i),corner(i|bit),colour,1.2f+.5f*highlight.strength);
-            if(highlight.strength>.005f) {
-                auto band=soft::Mix(colour,{1,1,1,colour.w},.45f); band.w*=highlight.strength;
-                const double y=block.y+highlight.height;
-                const WorldPoint a{block.x,y,block.z},b{block.x+1.,y,block.z},d{block.x,y,block.z+1.},e{block.x+1.,y,block.z+1.};
-                segment(a,b,band,1.5f); segment(b,e,band,1.5f); segment(e,d,band,1.5f); segment(d,a,band,1.5f);
-            }
-        } else if(haveRect) soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,c.spawner.glow,glowTexture);
+        // Container models are composited by Minecraft's texture pass. The
+        // external overlay only adds optional labels and tracers.
+        if(spawner&&haveRect) soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,c.spawner.glow,glowTexture);
         if(!haveRect) return;
         if(storage?c.storage.tracers:c.spawner.tracers)
             draw.AddLine({viewport.x*.5f,viewport.y},{(rect.left+rect.right)*.5f,rect.bottom},ink,1);
@@ -347,6 +329,34 @@ void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p
         savedTags->resize(draw.VtxBuffer.Size,0.f);
         std::fill(savedTags->begin()+firstVertex,savedTags->end(),0.f);
     }
+}
+void BuildStorageRequest(base::StorageRequest& r,const WorldSnapshot& s,const StorageSettings& c,bool enabled,
+                                                float range,float opacity,bool fresh,std::uint64_t now) {
+    r={}; r.sentAtMs=now; r.opacity=opacity;
+    if(!enabled||!fresh||!s.dimension[0]||!std::isfinite(opacity)||opacity<=0||opacity>1||!std::isfinite(range)||range<=0) return;
+    std::snprintf(r.dimension,sizeof(r.dimension),"%s",s.dimension);
+    std::snprintf(r.server,sizeof(r.server),"%s",s.serverAddress);
+    for(const auto& b:std::span(s.storageBlocks,std::min(s.storageCount,kMaxBlocks))) {
+        if(!StorageKind(b.kind)||!(c.mask&(1u<<b.kind))||!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.z)) continue;
+        const double distance=Distance({b.x+.5,b.y+.5,b.z+.5},s);
+        if(!std::isfinite(distance)||distance>range) continue;
+        const double x=std::floor(b.x),y=std::floor(b.y),z=std::floor(b.z);
+        if(x < -3e7||x+1 > 3e7||z < -3e7||z+1 > 3e7||y < -4096||y+1 > 4096) continue;
+        r.regions[r.count++]={x,y,z,x+1,y+1,z+1};
+    }
+    // Scanner iteration order and camera movement must not restart extraction.
+    const auto less=[](const base::Region& a,const base::Region& b) {
+        if(a.minX!=b.minX) return a.minX<b.minX;
+        if(a.minY!=b.minY) return a.minY<b.minY;
+        return a.minZ<b.minZ;
+    };
+    std::sort(r.regions.begin(),r.regions.begin()+r.count,less);
+    const auto end=std::unique(r.regions.begin(),r.regions.begin()+r.count,[&](const auto& a,const auto& b){return !less(a,b)&&!less(b,a);});
+    r.count=std::uint32_t(end-r.regions.begin()); r.enabled=r.count>0;
+    std::uint64_t hash=14695981039346656037ULL;
+    auto feed=[&](const void* data,std::size_t size){auto* bytes=static_cast<const unsigned char*>(data); for(std::size_t i=0;i<size;++i) { hash^=bytes[i]; hash*=1099511628211ULL; }};
+    feed(r.dimension,sizeof(r.dimension)); feed(r.server,sizeof(r.server)); feed(&r.count,sizeof(r.count));
+    feed(r.regions.data(),r.count*sizeof(base::Region)); r.revision=hash?hash:1; return;
 }
 base::Request BuildBaseRequest(const WorldSnapshot& s,const BaseSettings& c,std::span<const Stash> finds,bool fresh,std::uint64_t now) {
     base::Request r; r.sentAtMs=now; r.opacity=c.textureOpacity;

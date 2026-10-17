@@ -70,18 +70,31 @@ void Overlay::DrawSmpSettings(int section) {
             dirty|=panel::CheckRow("Enable Storage ESP",&appearance.enabled); DrawBind(keys::Action::ChestEsp,true);
             dirty|=panel::SliderRow("Scan radius",&appearance.range,kMinBlockScanRadius,kMaxBlockScanRadius,"%.0f blocks");
             dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
-            dirty|=panel::CheckRow("Scan pulse",&c.pulse);
-            if(c.pulse) dirty|=panel::SliderIntRow("Pulse cycle",&c.pulseDuration,500,6000,"%d ms");
             dirty|=panel::CheckRow("Block names and distance",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
-            dirty|=panel::SliderRow("Opacity",&appearance.opacity,0,1,"%.2f"); dirty|=panel::SliderRow("Glow",&appearance.glow,0,2,"%.2f");
+            dirty|=panel::SliderRow("Texture opacity",&appearance.opacity,0,1,"%.2f");
+            panel::ValueRow("Visibility","Textures through walls");
             ImGui::EndTable();
         }
-        panel::Section("Block types and colours"); dirty|=Types(c.mask,&c.colours);
-        if(ImGui::Button("Reset storage colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
+        panel::Section("Block types and label colours"); dirty|=Types(c.mask,&c.colours);
+        if(ImGui::Button("Reset label colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
         if(!c.mask) ImGui::TextWrapped("Select at least one block type to show Storage ESP.");
-        ImGui::TextWrapped("3D frames stay visible during each scan. New containers appear in sequence; the pulse passes from one container to the next.");
-        ImGui::TextWrapped("Searches loaded containers directly, independently of Block ESP and Chunkfinder. Scan interval is the pause after a sweep. Pulse cycle controls the visual effect; Reduce motion shows steady frames.");
-        ImGui::TextWrapped("Each type uses its own colour. Only blocks available in the client world can be found.");
+        ImGui::TextWrapped("Shows container models through walls with Minecraft's current resource-pack textures (1.21.11). Colours apply to optional labels and tracers.");
+        ImGui::TextWrapped("Searches loaded containers independently of Block ESP and Chunkfinder. Scan interval is the pause after a sweep.");
+        if(appearance.enabled&&agentConnected_&&haveSnapshot_) {
+            const auto now=GetTickCount64();
+            const bool fresh=storageTextureReport_.sampledAtMs&&now>=storageTextureReport_.sampledAtMs&&now-storageTextureReport_.sampledAtMs<1500;
+            if(std::strcmp(lastSnapshot_.gameVersion,"1.21.11")) ImGui::TextWrapped("Container textures require Minecraft 1.21.11.");
+            else if(!fresh) ImGui::TextDisabled("Waiting for the texture renderer...");
+            else switch(storageTextureReport_.status) {
+                case base::Status::Unsupported: ImGui::TextWrapped("Texture renderer unavailable. Restart Minecraft with the updated client."); break;
+                case base::Status::Failed: ImGui::TextWrapped("Could not render container textures. Turn Storage ESP off and on to retry."); break;
+                case base::Status::Building: ImGui::TextDisabled("Loading textures: %u containers checked",storageTextureReport_.scanned); break;
+                case base::Status::Ready: ImGui::TextDisabled("Rendering %u loaded containers",storageTextureReport_.blocks); break;
+                case base::Status::Empty: ImGui::TextDisabled("No drawable loaded containers"); break;
+                default: ImGui::TextDisabled("Waiting for loaded containers"); break;
+            }
+            if(fresh&&storageTextureReport_.limited) ImGui::TextWrapped("Texture limit reached. Reduce the radius or select fewer types.");
+        }
     } else if(section==1) {
         auto& c=smpConfig_.stash;
         if(panel::BeginRows("stash_settings")) {

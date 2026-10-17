@@ -713,7 +713,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const auto& storage=rockstarConfig_[rockstar::Feature::ChestEsp];
     const double storageNow=double(GetTickCount64())/1000.;
     const bool storageActive=storage.enabled&&agentConnected_&&heartbeatClock_.Alive(GetTickCount64());
-    storagePulse_.Update(snapshot,smpConfig_.storage,storageActive,storage.range,storageNow,menu_.reduceMotion,true);
+    storagePulse_.Update(snapshot,smpConfig_.storage,storageActive,storage.range,storageNow,true,true);
     smp::DrawBlocks(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_,storageActive,storage.range,storage.opacity,storage.glow,
         {width,height},auraBlend_.GlowTexture(),&storagePulse_,storageNow,menu_.reduceMotion);
     if(stashFinder_.Matches(snapshot)) smp::DrawStashes(*ImGui::GetBackgroundDrawList(),snapshot,projection,smpConfig_.stash,stashFinder_.Finds(),{width,height});
@@ -1109,6 +1109,13 @@ void Overlay::PushScanRequest() {
     storageRequest.radius=unsigned(std::clamp(int(std::lround(rockstarConfig_[rockstar::Feature::ChestEsp].range)),kMinBlockScanRadius,kMaxBlockScanRadius));
     storageRequest.intervalMs=unsigned(smpConfig_.storage.interval);
     block->storageRequest.Publish(storageRequest);
+    const bool storageFresh=haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(storageRequest.sentAtMs)&&snapshotReceivedAt_&&
+        storageRequest.sentAtMs>=snapshotReceivedAt_&&storageRequest.sentAtMs-snapshotReceivedAt_<1500;
+    const auto& storageAppearance=rockstarConfig_[rockstar::Feature::ChestEsp];
+    smp::BuildStorageRequest(*storageTextureRequest_,lastSnapshot_,smpConfig_.storage,storageRequest.enabled,
+        storageAppearance.range,storageAppearance.opacity,storageFresh,storageRequest.sentAtMs);
+    block->storageTextureRequest.Publish(*storageTextureRequest_);
+    block->storageTextureReport.Read(storageTextureReport_);
     block->holeScanRadius.store(holeSettings_.enabled&&!panicActive_?unsigned(holeSettings_.radius):0u,std::memory_order_release);
     block->scanRadius.store(static_cast<std::uint32_t>(radius), std::memory_order_release);
     block->scanIntervalMs.store(static_cast<std::uint32_t>(interval), std::memory_order_release);

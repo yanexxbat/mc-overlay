@@ -65,6 +65,20 @@ public class BaseTextureCheck {
         check(model.animated&&mesh.textures[0]==7&&data.length==84,"Block-entity model not invoked");
         check(data[3]==.25f&&data[4]==.125f&&data[14+3]==.75f,"Block-entity sprite UV wrapping lost");
         check(BaseTextureProfiles.get("other")==null&&BaseTextureProfiles.get("vanilla-1.21.11").length>100,"Version gate lost");
+        // The two features share implementation, never mutable render state.
+        Field baseField=BaseTextureBridge.class.getDeclaredField("base"),storageField=BaseTextureBridge.class.getDeclaredField("storage");
+        baseField.setAccessible(true); storageField.setAccessible(true);
+        Object base=baseField.get(null),storage=storageField.get(null);
+        Field completed=base.getClass().getDeclaredField("completed"); completed.setAccessible(true);
+        completed.set(base,mesh); completed.set(storage,new BaseTextureBridge.Mesh());
+        BaseTextureBridge.storageClear();
+        check(completed.get(base)==mesh&&completed.get(storage)==null,"Clearing storage also cleared Base ESP");
+        completed.set(storage,mesh); BaseTextureBridge.clear();
+        check(completed.get(base)==null&&completed.get(storage)==mesh,"Clearing Base ESP also cleared storage");
+        BaseTextureBridge.storageClear();
+        b=new BaseTextureBridge.Builder(s,new Manager()); b.select(7,0,0,0);
+        ((Consumer)b.consumer).vertex(0,0,0); b.finish();
+        check(b.skipped==1&&BaseTextureBridge.stats()[3]==0&&BaseTextureBridge.storageStats()[3]==0,"Capture statistics leaked between renderers");
         System.out.println("PASS model capture: defaults, quads, tint, lightmap, offsets, animation and atlas sprites");
     }
 }

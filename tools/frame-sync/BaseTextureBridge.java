@@ -10,17 +10,6 @@ import java.util.*;
  */
 public final class BaseTextureBridge {
     static final int STRIDE=14, MAX_BLOCKS=16384, MAX_VERTICES=786432;
-    private static Symbols symbols;
-    private static Object level,manager,pose,random,cameraState;
-    private static Object modelShape;
-    private static Builder builder;
-    private static long requested=Long.MIN_VALUE,serial,nextRefresh,levelReady;
-    private static double[] bounds;
-    private static int region,x,y,z,scanned,blocks,skipped,atlasId;
-    private static double originX,originY,originZ;
-    private static boolean limited;
-    private static Mesh completed;
-    private static final Set<Cell> visited=new HashSet<>();
     private record Cell(int x,int y,int z) {}
     public static final class Mesh {
         public int[] textures;
@@ -28,111 +17,140 @@ public final class BaseTextureBridge {
         public double x,y,z;
         public long serial;
     }
-    public static boolean configure(Class<?> client,String profile) throws ReflectiveOperationException {
-        String[][] table=BaseTextureProfiles.get(profile);
-        if(table==null) return false;
-        symbols=new Symbols(client.getClassLoader(),table);
-        clear(); return true;
-    }
-    public static void clear() {
-        level=manager=pose=random=cameraState=null; builder=null; completed=null;
-        requested=Long.MIN_VALUE; bounds=null; nextRefresh=0; visited.clear();
-    }
-    public static double[] camera(Object renderer) throws ReflectiveOperationException {
-        Object client=symbols.call("instance",null),cam=symbols.call("camera",renderer);
-        Object position=symbols.call("cameraPos",cam),delta=symbols.call("delta",client);
-        float partial=((Number)symbols.call("partial",delta,true)).floatValue();
-        Object lightView=symbols.call("lightView",symbols.call("light",renderer));
-        Object target=symbols.call("target",client);
-        return new double[]{symbols.number("vecx",position),symbols.number("vecy",position),symbols.number("vecz",position),
-            ((Number)symbols.call("yaw",cam)).doubleValue(),((Number)symbols.call("pitch",cam)).doubleValue(),
-            ((Number)symbols.call("fov",renderer,cam,partial,true)).doubleValue(),
-            ((Number)symbols.call("glId",symbols.call("viewTexture",lightView))).doubleValue(),
-            ((Number)symbols.call("glId",symbols.call("targetColour",target))).doubleValue(),
-            symbols.number("targetWidth",target),symbols.number("targetHeight",target),partial};
-    }
-    public static int[] stats() { return new int[]{builder==null?0:1,scanned,blocks,skipped,limited?1:0}; }
-    public static Mesh step(Object renderer,long revision,double[] requestedBounds) throws ReflectiveOperationException {
-        if(symbols==null||requestedBounds==null||requestedBounds.length==0) { clear(); return null; }
-        Object client=symbols.call("instance",null),currentLevel=symbols.get("level",client);
-        if(currentLevel==null) { clear(); return null; }
-        long now=System.nanoTime();
-        Object textures=symbols.call("textures",client);
-        if(level!=currentLevel) { clear(); level=currentLevel; levelReady=now+150_000_000L; }
-        if(now<levelReady) return null;
-        Object dispatcher=symbols.call("blocks",client);
-        int atlas=texture(symbols,textures,symbols.get("blocksAtlas",null));
-        boolean changed=requested!=revision||bounds==null||!Arrays.equals(bounds,requestedBounds)||manager!=textures||atlasId!=atlas;
-        if(changed||builder==null&&now>=nextRefresh) {
-            if(changed) completed=null;
-            requested=revision; bounds=requestedBounds.clone(); manager=textures; atlasId=atlas;
-            originX=Math.floor(bounds[0]); originY=Math.floor(bounds[1]); originZ=Math.floor(bounds[2]);
-            builder=new Builder(symbols,manager); visited.clear(); region=0; scanned=blocks=skipped=0; limited=false;
-            pose=symbols.type("Pose").getConstructor().newInstance(); random=symbols.call("random",null,0L);
-            cameraState=symbols.type("CameraState").getConstructor().newInstance(); modelShape=symbols.get("modelShape",null);
-            startRegion();
+    // Separate caches let Base ESP and Storage ESP run and reset independently.
+    private static final Context base=new Context(false),storage=new Context(true);
+    public static boolean configure(Class<?> client,String profile) throws ReflectiveOperationException { return base.configure(client,profile); }
+    public static boolean storageConfigure(Class<?> client,String profile) throws ReflectiveOperationException { return storage.configure(client,profile); }
+    public static void clear() { base.clear(); }
+    public static void storageClear() { storage.clear(); }
+    public static int[] stats() { return base.stats(); }
+    public static int[] storageStats() { return storage.stats(); }
+    public static double[] camera(Object renderer) throws ReflectiveOperationException { return base.camera(renderer); }
+    public static double[] storageCamera(Object renderer) throws ReflectiveOperationException { return storage.camera(renderer); }
+    public static Mesh step(Object renderer,long revision,double[] bounds) throws ReflectiveOperationException { return base.step(renderer,revision,bounds); }
+    public static Mesh storageStep(Object renderer,long revision,double[] bounds) throws ReflectiveOperationException { return storage.step(renderer,revision,bounds); }
+    static final class Context {
+        final boolean storageOnly;
+        Context(boolean storageOnly) { this.storageOnly=storageOnly; }
+        private Symbols symbols;
+        private Object level,manager,pose,random,cameraState;
+        private Object modelShape;
+        private Builder builder;
+        private long requested=Long.MIN_VALUE,serial,nextRefresh,levelReady;
+        private double[] bounds;
+        private int region,x,y,z,scanned,blocks,skipped,atlasId;
+        private double originX,originY,originZ;
+        private boolean limited;
+        private Mesh completed;
+        private final Set<Cell> visited=new HashSet<>();
+        public boolean configure(Class<?> client,String profile) throws ReflectiveOperationException {
+            String[][] table=BaseTextureProfiles.get(profile);
+            if(table==null) return false;
+            symbols=new Symbols(client.getClassLoader(),table);
+            clear(); return true;
         }
-        if(builder!=null) {
-            long deadline=now+2_000_000L; int slice=0;
-            Object cam=symbols.call("camera",renderer),camPos=symbols.call("cameraPos",cam);
-            float partial=((Number)symbols.call("partial",symbols.call("delta",client),true)).floatValue();
-            symbols.set("cameraStatePos",cameraState,camPos); symbols.set("cameraStateEntity",cameraState,camPos);
-            symbols.set("cameraStateBlock",cameraState,symbols.call("cameraBlock",cam));
-            symbols.set("cameraStateOrientation",cameraState,symbols.call("cameraRotation",cam)); symbols.set("cameraStateReady",cameraState,true);
-            Object pos=symbols.type("MutablePos").getConstructor().newInstance();
-            while(region<bounds.length/6&&scanned<MAX_BLOCKS&&!builder.full()) {
-                if(slice++>=1&&System.nanoTime()>=deadline) break;
-                int bx=x,by=y,bz=z; advance(); ++scanned;
-                if(!visited.add(new Cell(bx,by,bz))) continue;
-                symbols.call("posSet",pos,bx,by,bz);
-                if(!(Boolean)symbols.call("loaded",level,pos)) continue;
-                Object state=symbols.call("state",level,pos);
-                if((Boolean)symbols.call("air",state)) continue;
-                symbols.call("identity",pose); symbols.call("translate",pose,bx-originX,by-originY,bz-originZ);
-                builder.select(atlas,0,0,0);
-                if(symbols.call("shape",state)==modelShape) {
-                    Object model=symbols.call("model",dispatcher,state);
-                    symbols.call("setSeed",random,((Number)symbols.call("seed",state,pos)).longValue());
-                    List<Object> parts=new ArrayList<>(); symbols.call("parts",model,random,parts);
-                    symbols.call("tessellate",dispatcher,state,pos,level,pose,builder.consumer,false,parts);
-                    builder.finish();
-                }
-                Object fluid=symbols.call("fluidState",state);
-                if(!(Boolean)symbols.call("fluidEmpty",fluid)) {
-                    builder.select(atlas,(bx&~15)-originX,(by&~15)-originY,(bz&~15)-originZ);
-                    symbols.call("liquid",dispatcher,pos,level,builder.consumer,state,fluid); builder.finish();
-                }
-                Object entity=symbols.call("blockEntity",level,pos);
-                if(entity!=null) {
-                    Object entityRenderer=symbols.call("entityRenderer",symbols.call("entities",client),entity);
-                    if(entityRenderer!=null) {
-                        int checkpoint=builder.count();
-                        try {
-                            Object stateData=symbols.call("newEntityState",entityRenderer);
-                            symbols.call("extractEntity",entityRenderer,entity,stateData,partial,camPos,null);
-                            symbols.call("identity",pose); symbols.call("translate",pose,bx-originX,by-originY,bz-originZ);
-                            symbols.call("submitEntity",entityRenderer,stateData,pose,builder.collector,cameraState); builder.finish();
-                        } catch(InvocationTargetException error) { builder.discardPending(); }
-                        if(builder.count()==checkpoint) ++skipped;
+        public void clear() {
+            level=manager=pose=random=cameraState=null; builder=null; completed=null;
+            requested=Long.MIN_VALUE; bounds=null; nextRefresh=0; visited.clear();
+            scanned=blocks=skipped=0; limited=false;
+        }
+        public double[] camera(Object renderer) throws ReflectiveOperationException {
+            Object client=symbols.call("instance",null),cam=symbols.call("camera",renderer);
+            Object position=symbols.call("cameraPos",cam),delta=symbols.call("delta",client);
+            float partial=((Number)symbols.call("partial",delta,true)).floatValue();
+            Object lightView=symbols.call("lightView",symbols.call("light",renderer));
+            Object target=symbols.call("target",client);
+            return new double[]{symbols.number("vecx",position),symbols.number("vecy",position),symbols.number("vecz",position),
+                ((Number)symbols.call("yaw",cam)).doubleValue(),((Number)symbols.call("pitch",cam)).doubleValue(),
+                ((Number)symbols.call("fov",renderer,cam,partial,true)).doubleValue(),
+                ((Number)symbols.call("glId",symbols.call("viewTexture",lightView))).doubleValue(),
+                ((Number)symbols.call("glId",symbols.call("targetColour",target))).doubleValue(),
+                symbols.number("targetWidth",target),symbols.number("targetHeight",target),partial};
+        }
+        public int[] stats() { return new int[]{builder==null?0:1,scanned,blocks,skipped+(builder==null?0:builder.skipped),limited?1:0}; }
+        public Mesh step(Object renderer,long revision,double[] requestedBounds) throws ReflectiveOperationException {
+            if(symbols==null||requestedBounds==null||requestedBounds.length==0) { clear(); return null; }
+            Object client=symbols.call("instance",null),currentLevel=symbols.get("level",client);
+            if(currentLevel==null) { clear(); return null; }
+            long now=System.nanoTime();
+            Object textures=symbols.call("textures",client);
+            if(level!=currentLevel) { clear(); level=currentLevel; levelReady=now+150_000_000L; }
+            if(now<levelReady) return null;
+            Object dispatcher=symbols.call("blocks",client);
+            int atlas=texture(symbols,textures,symbols.get("blocksAtlas",null));
+            boolean changed=requested!=revision||bounds==null||!Arrays.equals(bounds,requestedBounds)||manager!=textures||atlasId!=atlas;
+            if(changed||builder==null&&now>=nextRefresh) {
+                if(changed) completed=null;
+                requested=revision; bounds=requestedBounds.clone(); manager=textures; atlasId=atlas;
+                originX=Math.floor(bounds[0]); originY=Math.floor(bounds[1]); originZ=Math.floor(bounds[2]);
+                builder=new Builder(symbols,manager); visited.clear(); region=0; scanned=blocks=skipped=0; limited=false;
+                pose=symbols.type("Pose").getConstructor().newInstance(); random=symbols.call("random",null,0L);
+                cameraState=symbols.type("CameraState").getConstructor().newInstance(); modelShape=symbols.get("modelShape",null);
+                startRegion();
+            }
+            if(builder!=null) {
+                long deadline=now+2_000_000L; int slice=0;
+                Object cam=symbols.call("camera",renderer),camPos=symbols.call("cameraPos",cam);
+                float partial=((Number)symbols.call("partial",symbols.call("delta",client),true)).floatValue();
+                symbols.set("cameraStatePos",cameraState,camPos); symbols.set("cameraStateEntity",cameraState,camPos);
+                symbols.set("cameraStateBlock",cameraState,symbols.call("cameraBlock",cam));
+                symbols.set("cameraStateOrientation",cameraState,symbols.call("cameraRotation",cam)); symbols.set("cameraStateReady",cameraState,true);
+                Object pos=symbols.type("MutablePos").getConstructor().newInstance();
+                while(region<bounds.length/6&&scanned<MAX_BLOCKS&&!builder.full()) {
+                    if(slice++>=1&&System.nanoTime()>=deadline) break;
+                    int bx=x,by=y,bz=z; advance(); ++scanned;
+                    if(!visited.add(new Cell(bx,by,bz))) continue;
+                    symbols.call("posSet",pos,bx,by,bz);
+                    if(!(Boolean)symbols.call("loaded",level,pos)) continue;
+                    Object state=symbols.call("state",level,pos);
+                    Object entity=symbols.call("blockEntity",level,pos);
+                    if(storageOnly&&entity==null) continue;
+                    if((Boolean)symbols.call("air",state)) continue;
+                    symbols.call("identity",pose); symbols.call("translate",pose,bx-originX,by-originY,bz-originZ);
+                    builder.select(atlas,0,0,0);
+                    if(symbols.call("shape",state)==modelShape) {
+                        Object model=symbols.call("model",dispatcher,state);
+                        symbols.call("setSeed",random,((Number)symbols.call("seed",state,pos)).longValue());
+                        List<Object> parts=new ArrayList<>(); symbols.call("parts",model,random,parts);
+                        symbols.call("tessellate",dispatcher,state,pos,level,pose,builder.consumer,false,parts);
+                        builder.finish();
                     }
+                    Object fluid=symbols.call("fluidState",state);
+                    if(!storageOnly&&!(Boolean)symbols.call("fluidEmpty",fluid)) {
+                        builder.select(atlas,(bx&~15)-originX,(by&~15)-originY,(bz&~15)-originZ);
+                        symbols.call("liquid",dispatcher,pos,level,builder.consumer,state,fluid); builder.finish();
+                    }
+                    if(entity!=null) {
+                        Object entityRenderer=symbols.call("entityRenderer",symbols.call("entities",client),entity);
+                        if(entityRenderer!=null) {
+                            int checkpoint=builder.count();
+                            try {
+                                Object stateData=symbols.call("newEntityState",entityRenderer);
+                                symbols.call("extractEntity",entityRenderer,entity,stateData,partial,camPos,null);
+                                symbols.call("identity",pose); symbols.call("translate",pose,bx-originX,by-originY,bz-originZ);
+                                symbols.call("submitEntity",entityRenderer,stateData,pose,builder.collector,cameraState); builder.finish();
+                            } catch(InvocationTargetException error) { builder.discardPending(); }
+                            if(builder.count()==checkpoint) ++skipped;
+                        }
+                    }
+                    ++blocks;
                 }
-                ++blocks;
+                if(region>=bounds.length/6||scanned>=MAX_BLOCKS||builder.full()) {
+                    limited=region<bounds.length/6; completed=builder.mesh(); completed.x=originX; completed.y=originY; completed.z=originZ;
+                    completed.serial=++serial; skipped+=builder.skipped; builder=null; nextRefresh=System.nanoTime()+1_000_000_000L;
+                }
             }
-            if(region>=bounds.length/6||scanned>=MAX_BLOCKS||builder.full()) {
-                limited=region<bounds.length/6; completed=builder.mesh(); completed.x=originX; completed.y=originY; completed.z=originZ;
-                completed.serial=++serial; builder=null; nextRefresh=System.nanoTime()+1_000_000_000L;
-            }
+            return completed;
         }
-        return completed;
-    }
-    private static void startRegion() {
-        int at=region*6; x=(int)Math.floor(bounds[at]); y=(int)Math.floor(bounds[at+1]); z=(int)Math.floor(bounds[at+2]);
-    }
-    private static void advance() {
-        int at=region*6;
-        if(++x>=Math.ceil(bounds[at+3])) { x=(int)Math.floor(bounds[at]);
-            if(++z>=Math.ceil(bounds[at+5])) { z=(int)Math.floor(bounds[at+2]);
-                if(++y>=Math.ceil(bounds[at+4])) { if(++region<bounds.length/6) startRegion(); }
+        private void startRegion() {
+            int at=region*6; x=(int)Math.floor(bounds[at]); y=(int)Math.floor(bounds[at+1]); z=(int)Math.floor(bounds[at+2]);
+        }
+        private void advance() {
+            int at=region*6;
+            if(++x>=Math.ceil(bounds[at+3])) { x=(int)Math.floor(bounds[at]);
+                if(++z>=Math.ceil(bounds[at+5])) { z=(int)Math.floor(bounds[at+2]);
+                    if(++y>=Math.ceil(bounds[at+4])) { if(++region<bounds.length/6) startRegion(); }
+                }
             }
         }
     }
@@ -174,7 +192,7 @@ public final class BaseTextureBridge {
         final Map<Integer,Group> groups=new LinkedHashMap<>();
         static final int[] TRIANGLES={0,1,2,0,2,3};
         final float[] vertex=new float[STRIDE],quad=new float[STRIDE*4];
-        Group group; int corners,vertices; boolean pending; double dx,dy,dz;
+        Group group; int corners,vertices,skipped; boolean pending; double dx,dy,dz;
         Builder(Symbols s,Object manager) {
             this.s=s; textureManager=manager;
             consumer=Proxy.newProxyInstance(s.type("Consumer").getClassLoader(),new Class<?>[]{s.type("Consumer")},this);
@@ -183,7 +201,7 @@ public final class BaseTextureBridge {
         int count() { return vertices; } boolean full() { return vertices+6>MAX_VERTICES; }
         void select(int texture,double x,double y,double z) { finish(); group=groups.computeIfAbsent(texture,key->new Group()); dx=x; dy=y; dz=z; }
         void discardPending() { pending=false; corners=0; }
-        void finish() { flushVertex(); if(corners!=0) { corners=0; ++BaseTextureBridge.skipped; } }
+        void finish() { flushVertex(); if(corners!=0) { corners=0; ++skipped; } }
         void flushVertex() {
             if(!pending) return; pending=false;
             System.arraycopy(vertex,0,quad,corners++*STRIDE,STRIDE);
@@ -223,14 +241,14 @@ public final class BaseTextureBridge {
             if(model||part) {
                 int spriteAt=model?7:5;
                 Object sprite=a[spriteAt];
-                if(sprite==null) { ++BaseTextureBridge.skipped; return null; }
+                if(sprite==null) { ++skipped; return null; }
                 select(texture(s,textureManager,s.call("spriteAtlas",sprite)),0,0,0);
                 Object wrapped=s.call("wrap",sprite,consumer);
                 if(model) { s.call("modelAnim",a[0],a[1]); s.call("modelDraw",a[0],a[2],wrapped,a[4],a[5],a[6]); }
                 else s.call("partDraw",a[0],a[1],wrapped,a[3],a[4],a.length>8?a[8]:-1);
                 finish(); return null;
             }
-            ++BaseTextureBridge.skipped; return null;
+            ++skipped; return null;
         }
         private static Object objectMethod(Object proxy,Method method,Object[] args) {
             return switch(method.getName()) { case "hashCode"->System.identityHashCode(proxy); case "equals"->proxy==args[0]; default->"mcov mesh consumer"; };

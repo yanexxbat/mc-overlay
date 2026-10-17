@@ -204,6 +204,7 @@ private:
     void DrawRockstarSettings(rockstar::Feature feature);
     void DrawMiscTab();
     void DrawAntiVanishSettings();
+    void DrawAntiVanishHud();
     void UpdateAntiVanish();
     void UpdateRockstar();
     void Panic();
@@ -295,7 +296,8 @@ private:
     antivanish::Report antiVanishReport_{},antiVanishPrevious_{};
     smp::Config smpConfig_{};
     holes::Settings holeSettings_{};
-    base::Report baseReport_{};
+    base::Report baseReport_{},storageTextureReport_{};
+    std::unique_ptr<base::StorageRequest> storageTextureRequest_=std::make_unique<base::StorageRequest>();
     smp::StashFinder stashFinder_{};
     smp::BaseFinder baseFinder_{};
     smp::StoragePulse storagePulse_{};

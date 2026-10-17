@@ -29,12 +29,16 @@ public final class FrameSynchronizer {
         // it, otherwise loading that table recursively re-enters transform().
         FrameProfiles.isTarget("");
         DepthProfiles.isTarget("");
+        AntiVanishTransformer.isTarget("");
+        Class.forName("mcov.AntiVanishPackets",true,null);
+        AntiVanishTransformer packets=new AntiVanishTransformer(inst,signal.getModule());
+        inst.addTransformer(packets,true);
         FrameTransformer transformer = new FrameTransformer(inst, signal);
         inst.addTransformer(transformer, true);
         try {
             ArrayList<Class<?>> loaded = new ArrayList<>();
             for (Class<?> type : inst.getAllLoadedClasses()) {
-                if (FrameProfiles.isTarget(type.getName().replace('.', '/')) || DepthProfiles.isTarget(type.getName().replace('.', '/'))) {
+                if (FrameProfiles.isTarget(type.getName().replace('.', '/')) || DepthProfiles.isTarget(type.getName().replace('.', '/')) || AntiVanishTransformer.isTarget(type.getName().replace('.', '/'))) {
                     if (!inst.isModifiableClass(type)) throw new IllegalStateException("Cannot mark " + type.getName());
                     loaded.add(type);
                 }
@@ -46,7 +50,7 @@ public final class FrameSynchronizer {
             System.out.println("[mcov] camera frame markers installed");
         } catch (Throwable failure) {
             signal.getField("enabled").setBoolean(null, false);
-            inst.removeTransformer(transformer);
+            inst.removeTransformer(transformer); inst.removeTransformer(packets);
             throw failure;
         }
     }

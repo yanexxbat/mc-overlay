@@ -105,6 +105,7 @@ struct OverlayUiCheck {
     static void Load(Overlay& o) { o.LoadPreferences(); }
     static antivanish::Config& AntiVanish(Overlay& o){return o.antiVanishConfig_;}
     static antivanish::Report& AntiVanishReport(Overlay& o){return o.antiVanishReport_;}
+    static int DrawAntiVanishHud(Overlay& o){auto* draw=ImGui::GetBackgroundDrawList();int before=draw->VtxBuffer.Size;o.DrawAntiVanishHud();return draw->VtxBuffer.Size-before;}
     static freecam::Config& Freecam(Overlay& o) { return o.combat_.freecam; }
     static void FocusInput(Overlay& o,const keys::Input& input,bool focused) { o.ProcessKeyInput(input,focused); }
     static void FreecamStatus(Overlay& o,freecam::Status status) { o.combatReport_.freecamStatus=status; o.combatReport_.sampledAtMs=GetTickCount64(); }
@@ -499,7 +500,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
             Require(content->DC.CursorPosPrevLine.y<=content->InnerRect.Max.y+2,"SMP settings footer could not be reached");
             if(index==4) {
                 ImGui::SetScrollY(content,0); frame(); frame();
-                SaveFrame(device,context,output/(std::string("storage-3d-settings-")+suffix));
+                SaveFrame(device,context,output/(std::string("storage-texture-settings-")+suffix));
             }
             if(index==9&&size.x<500) {
                 ImGui::SetScrollY(content,0); frame(); frame();
@@ -565,12 +566,16 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
         auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},size,IM_COL32(24,26,30,255));
-        draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: 3D Storage ESP with scan pulse");
+        draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: optional Storage ESP annotations (models render in Minecraft)");
         const mcov::CameraProjection projection(*storageScene,size.x,size.y);
         const int vertices=draw->VtxBuffer.Size;
+        storageConfig.storage.labels=storageConfig.storage.tracers=false;
         mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,1,size,0,&storagePulse,.75);
-        Require(draw->VtxBuffer.Size>vertices,"Storage world fixture drew no 3D frames");
-        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"storage-3d-world-desktop.png":"storage-3d-world-small.png"));
+        Require(draw->VtxBuffer.Size==vertices,"Storage texture mode still drew overlay boxes");
+        storageConfig.storage.labels=storageConfig.storage.tracers=true;
+        mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,1,size,0,&storagePulse,.75);
+        Require(draw->VtxBuffer.Size>vertices,"Storage annotations disappeared");
+        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"storage-annotations-desktop.png":"storage-annotations-small.png"));
     }
     // Saved preferences use the same typed SMP schema as named profiles.
     c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
@@ -1385,13 +1390,24 @@ void ConfigChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
 }
 void AntiVanishUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     using Check=mcov::OverlayUiCheck;auto storage=std::make_unique<mcov::Overlay>();auto& o=*storage;Check::Seed(o);
-    auto& c=Check::AntiVanish(o);c={true,true,false,64};auto& report=Check::AntiVanishReport(o);report.sampledAtMs=GetTickCount64();report.status=mcov::antivanish::Status::Active;report.count=1;report.rows[0].id={1,2};std::snprintf(report.rows[0].name,32,"ExamplePlayer");report.rows[0].evidence=3;
+    auto& c=Check::AntiVanish(o);c={true,true,false,64};auto& report=Check::AntiVanishReport(o);report.sampledAtMs=GetTickCount64();report.status=mcov::antivanish::Status::Active;report.packetHooks=true;report.count=1;report.rows[0].id={1,2};std::snprintf(report.rows[0].name,32,"FluffyMaster07");report.rows[0].evidence=3;std::snprintf(report.rows[0].reason,96,"Off TAB, entity still nearby");
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}){
         Check::Center(o);OpenModuleSettings(o,Page::Misc,"misc_sections",9,10,size);
         auto frame=[&]{report.sampledAtMs=GetTickCount64();Draw(o,Page::Misc,0,size);};auto* content=Child("/content_");ImGui::SetScrollY(content,0);frame();frame();
         Require(ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("antivanish_controls"))!=nullptr,"Anti Vanish controls missing");
         SaveFrame(device,context,output/(size.x>500?"antivanish-desktop.png":"antivanish-small.png"));
         ImGui::SetScrollY(content,content->ScrollMax.y);frame();frame();SaveFrame(device,context,output/(size.x>500?"antivanish-results-desktop.png":"antivanish-results-small.png"));
+    }
+    report.count=5;report.rows[1]=report.rows[0];report.rows[0].evidence=mcov::antivanish::Critical;std::snprintf(report.rows[0].reason,96,"Possible hidden observer nearby");
+    report.rows[2].evidence=mcov::antivanish::Sound;std::snprintf(report.rows[2].name,32,"24m NE");std::snprintf(report.rows[2].reason,96,"Suspicious sound: block.chest.open");
+    report.rows[3].evidence=mcov::antivanish::Spectator;std::snprintf(report.rows[3].name,32,"archivePedro");std::snprintf(report.rows[3].reason,96,"Switched to spectator");
+    report.rows[4].evidence=mcov::antivanish::Visible;std::snprintf(report.rows[4].name,32,"Munkerlich");std::snprintf(report.rows[4].reason,96,"Visible again");
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}){
+        ImGui::GetIO().DisplaySize=size;ImGui_ImplDX11_NewFrame();ImGui::NewFrame();report.sampledAtMs=GetTickCount64();
+        Require(Check::DrawAntiVanishHud(o)>0,"Active Anti Vanish hints missing from HUD");
+        c.enabled=false;Require(Check::DrawAntiVanishHud(o)==0,"Disabled Anti Vanish still drew HUD");c.enabled=true;
+        report.sampledAtMs=0;Require(Check::DrawAntiVanishHud(o)==0,"Stale Anti Vanish results still drew HUD");
+        ImGui::Render();SaveFrame(device,context,output/(size.x>500?"antivanish-hud-desktop.png":"antivanish-hud-small.png"));
     }
     Check::PrefPath(o,output/"antivanish-preferences.ini");Check::Save(o);c={};Check::Load(o);Require(c.enabled&&c.notifications&&!c.invisible&&c.range==64,"Anti Vanish preferences lost settings");Check::Panic(o);Require(!c.enabled,"Panic left Anti Vanish enabled");
 }

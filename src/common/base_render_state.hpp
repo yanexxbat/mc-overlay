@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -8,15 +9,17 @@ inline constexpr int kMaxRegions=8,kMaxBlocks=16384,kMaxVertices=786432;
 inline constexpr std::uint64_t kLeaseMs=750;
 enum class Status : std::uint32_t { Unsupported, Disabled, Waiting, Building, Ready, Empty, Failed };
 struct Region { double minX{},minY{},minZ{},maxX{},maxY{},maxZ{}; };
-struct Request {
+template<std::size_t Capacity> struct TextureRequest {
     std::uint64_t sentAtMs{},revision{};
     bool enabled{};
     std::uint8_t pad[3]{};
     std::uint32_t count{};
     float opacity=1;
     char dimension[40]{},server[64]{};
-    std::array<Region,kMaxRegions> regions{};
+    std::array<Region,Capacity> regions{};
 };
+using Request=TextureRequest<kMaxRegions>;
+using StorageRequest=TextureRequest<1024>;
 struct Report {
     std::uint64_t sampledAtMs{},revision{};
     Status status=Status::Unsupported;
