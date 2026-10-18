@@ -1,5 +1,5 @@
 #include "launcher_ui.hpp"
-#include "../common/compact_style.hpp"
+#include "../common/workspace_style.hpp"
 #include "../overlay/control_panel.hpp"
 #include <algorithm>
 
@@ -17,31 +17,44 @@ void NavigationIcon(ImDrawList& draw,ImVec2 p,int tab,ImU32 ink) {
 }
 void InstanceList(View& v,float height) {
     style::StyleScope listStyle;
-    listStyle.Color(ImGuiCol_ChildBg,style::Color(0xFFFFFF,.025f));
-    listStyle.Var(ImGuiStyleVar_WindowPadding,ImVec2(8,8));
+    listStyle.Color(ImGuiCol_ChildBg,ImVec4(0,0,0,0));
+    listStyle.Var(ImGuiStyleVar_WindowPadding,ImVec2(1,1));
     ImGui::BeginChild("instances",{0,height},ImGuiChildFlags_AlwaysUseWindowPadding);
     if(v.instances.empty()) {
-        ImGui::TextWrapped("No Minecraft window found. Open the game to the main menu, then click Refresh.");
+        ImGui::Dummy({0,12});
+        ImGui::PushFont(style::MenuFont(true)); ImGui::TextUnformatted("No Minecraft window found"); ImGui::PopFont();
+        ImGui::Spacing();
+        ImGui::TextWrapped("Open Minecraft to the main menu, then select Refresh. Your game will appear here.");
     }
     ImGui::BeginDisabled(v.busy);
     for(int i=0;i<static_cast<int>(v.instances.size());++i) {
         const auto& p=v.instances[i]; ImGui::PushID(static_cast<int>(p.pid));
         const auto row=ImGui::GetCursorScreenPos();
         const float width=ImGui::GetContentRegionAvail().x;
-        if(ImGui::Selectable("##instance",v.selected==i,ImGuiSelectableFlags_None,{0,43})) v.selected=i;
         auto& draw=*ImGui::GetWindowDrawList();
+        const bool selected=v.selected==i;
+        draw.AddRectFilled(row,{row.x+width,row.y+56},ImGui::GetColorU32(selected?
+            style::Color(style::workspace::AccentRGB,.065f):style::Color(0xFFFFFF,.025f)),7);
+        {
+            style::StyleScope button;
+            button.Color(ImGuiCol_Button,ImVec4(0,0,0,0));
+            button.Var(ImGuiStyleVar_FrameRounding,7);
+            if(ImGui::Button("##instance",{width,56})) v.selected=i;
+        }
+        draw.AddRect(row,{row.x+width,row.y+56},ImGui::GetColorU32(selected?
+            style::Color(style::workspace::AccentRGB,.25f):style::Color(0xFFFFFF,.055f)),7);
         const auto ink=ImGui::GetColorU32(ImGuiCol_Text);
         const auto muted=ImGui::GetColorU32(ImGuiCol_TextDisabled);
         const auto accent=ImGui::GetColorU32(ImGuiCol_CheckMark);
-        draw.PushClipRect(row,{row.x+width,row.y+43},true);
-        draw.AddCircle({row.x+11,row.y+14},4.5f,v.selected==i?accent:muted,16,1.25f);
-        if(v.selected==i) draw.AddCircleFilled({row.x+11,row.y+14},2,accent,12);
-        draw.AddText({row.x+25,row.y+5},ink,p.title.c_str());
+        draw.PushClipRect({row.x+1,row.y},{row.x+width-12,row.y+56},true);
+        draw.AddCircle({row.x+16,row.y+19},4.5f,v.selected==i?accent:muted,16,1.25f);
+        if(v.selected==i) draw.AddCircleFilled({row.x+16,row.y+19},2,accent,12);
+        draw.AddText(style::MenuFont(true),14,{row.x+32,row.y+12},ink,p.title.c_str());
         const std::string detail="PID "+std::to_string(p.pid)+" | "+p.java+
             (p.running?" | Client running":p.connected?" | Connected":"");
-        draw.AddText({row.x+25,row.y+23},muted,detail.c_str());
+        draw.AddText({row.x+32,row.y+34},muted,detail.c_str());
         draw.PopClipRect();
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s\n%s",p.title.c_str(),detail.c_str());
+        if(ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("%s\n%s",p.title.c_str(),detail.c_str());
         ImGui::PopID();
     }
     ImGui::EndDisabled(); ImGui::EndChild();
@@ -65,20 +78,35 @@ void HardwareId(View& v,float width) {
 }
 
 Actions Render(View& v,ImVec2 size) {
-    style::CompactStyle scoped; Actions a;
-    const float sidebar=size.x>=620?142.f:112.f;
+    style::WorkspaceStyle scoped; Actions a;
+    const bool compact=size.x<620||size.y<460;
+    const float sidebar=compact?112.f:166.f;
     v.tab=std::clamp(v.tab,0,1);
     auto& draw=*ImGui::GetBackgroundDrawList();
     const auto ink=ImGui::GetColorU32(ImGuiCol_Text);
     const auto muted=ImGui::GetColorU32(ImGuiCol_TextDisabled);
     const auto accent=ImGui::GetColorU32(ImGuiCol_CheckMark);
     draw.AddRectFilled({12,12},{size.x-12,size.y-12},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
-    draw.AddRectFilled({12,12},{12+sidebar,size.y-12},ImGui::GetColorU32(style::Color(0x15151B,.22f)),12,ImDrawFlags_RoundCornersLeft);
-    draw.AddLine({12+sidebar,24},{12+sidebar,size.y-24},ImGui::GetColorU32(ImGuiCol_Separator));
-    draw.AddLine({sidebar+32,58},{size.x-28,58},ImGui::GetColorU32(ImGuiCol_Separator));
-    style::DrawBrandLogo(draw,{20,21},28);
-    draw.AddText(style::MenuFont(true),14,{56,28},ink,"keim");
-    draw.AddText(style::MenuFont(true),14,{sidebar+32,28},ink,v.tab==0?"Start client":"Diagnostics");
+    draw.AddRectFilled({12,12},{12+sidebar,size.y-12},ImGui::GetColorU32(style::Color(style::workspace::SidebarRGB)),12,ImDrawFlags_RoundCornersLeft);
+    draw.AddRect({12,12},{size.x-13,size.y-13},ImGui::GetColorU32(ImGuiCol_Border),12);
+    draw.AddLine({12+sidebar,13},{12+sidebar,size.y-13},ImGui::GetColorU32(ImGuiCol_Separator));
+    style::DrawBrandLogo(draw,{compact?20.f:28.f,compact?21.f:31.f},compact?28.f:30.f);
+    draw.AddText(compact?style::MenuFont(true):style::MenuHeadingFont(),compact?14.f:22.f,
+        {compact?56.f:64.f,compact?28.f:34.f},ink,"keim");
+    if(!compact) {
+        draw.AddText({32,72},muted,"Minecraft client");
+        draw.AddText(style::MenuFont(),11,{sidebar+32,48},muted,"GET STARTED");
+    }
+    const char* title=v.tab==1?"Diagnostics":v.licensed?"Start client":"Sign in";
+    draw.PushClipRect({sidebar+32,20},{size.x-(compact?80:28),120},true);
+    draw.AddText(compact?style::MenuHeadingFont():style::MenuDisplayFont(),compact?22.f:28.f,
+        {sidebar+32,compact?25.f:70.f},ink,title);
+    draw.PopClipRect();
+    if(!compact) {
+        const char* description=v.tab==1?"Connection details and recent activity.":
+            v.licensed?"Choose your Minecraft session.":"Verify your license to open the client.";
+        draw.AddText({sidebar+32,110},muted,description);
+    }
 
     // Native caption dragging owns the rest of this strip; exclude these controls.
     const ImVec2 closeMin{size.x-44,22},closeMax{size.x-22,44},minMin{size.x-70,22},minMax{size.x-48,44};
@@ -100,16 +128,22 @@ Actions Render(View& v,ImVec2 size) {
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(10,14));
         ImGui::BeginChild("launcher_navigation",{sidebar,0},ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
+        if(!compact) {
+            ImGui::SetCursorPosY(50); ImGui::SetCursorPosX(20);
+            ImGui::TextDisabled("WORKSPACE"); ImGui::Dummy({0,6});
+        }
         const char* tabs[]={"Start","Logs"};
         for(int i=0;i<2;++i) {
             const bool active=v.tab==i; const auto p=ImGui::GetCursorScreenPos();
             style::StyleScope selected;
             selected.Var(ImGuiStyleVar_ButtonTextAlign,ImVec2(0,.5f));
             selected.Var(ImGuiStyleVar_FramePadding,ImVec2(32,4));
-            selected.Color(ImGuiCol_Button,active?style::Color(0xFFFFFF,.065f):ImVec4(0,0,0,0));
-            selected.Color(ImGuiCol_Text,active?style::Color(style::compact::SelectedTextRGB):style::Color(0xC2C2CC));
-            if(ImGui::Button(tabs[i],{-1,29})) { v.tab=i; ImGui::SetWindowFocus(); }
-            NavigationIcon(*ImGui::GetWindowDrawList(),{p.x+15,p.y+14.5f},i,active?accent:muted);
+            selected.Color(ImGuiCol_Button,active?style::Color(style::workspace::AccentRGB,.09f):ImVec4(0,0,0,0));
+            selected.Color(ImGuiCol_Text,active?style::Color(0xD6EBC6):style::Color(0xADB5AF));
+            const float height=compact?29.f:36.f;
+            if(ImGui::Button(tabs[i],{-1,height})) { v.tab=i; ImGui::SetWindowFocus(); }
+            if(active) ImGui::GetWindowDrawList()->AddRectFilled({p.x,p.y+9},{p.x+2,p.y+height-9},accent,1);
+            NavigationIcon(*ImGui::GetWindowDrawList(),{p.x+15,p.y+height*.5f},i,active?accent:muted);
         }
         ImGui::SetCursorPosY(std::max(ImGui::GetCursorPosY()+16,ImGui::GetWindowHeight()-44));
         ImGui::TextDisabled("Windows x64");
@@ -117,20 +151,23 @@ Actions Render(View& v,ImVec2 size) {
     }
     ImGui::SameLine(0,20);
     ImGui::BeginGroup();
+    if(!compact) ImGui::Dummy({0,82});
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x-16);
-    const float footer=v.tab==0?98.f:64.f;
+    const float footer=v.tab==0?104.f:64.f;
     const ImVec2 contentSize{width,std::max(1.f,ImGui::GetContentRegionAvail().y-footer)};
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,14));
         ImGui::BeginChild("launcher_content",contentSize,ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
         if(v.tab==0&&!v.licensed) {
-            control_panel::Section("License");
-            ImGui::TextWrapped("Verify your Keim license to start the client.");
-            ImGui::Spacing(); ImGui::TextUnformatted("License key");
+            ImGui::PushFont(style::MenuFont(true)); ImGui::TextUnformatted("License key"); ImGui::PopFont();
+            ImGui::Dummy({0,4});
             ImGui::BeginDisabled(v.authBusy);
             ImGui::SetNextItemWidth(-1);
             const auto inputFlags=ImGuiInputTextFlags_EnterReturnsTrue|(v.showLicense?0:ImGuiInputTextFlags_Password);
-            if(ImGui::InputTextWithHint("##license_key","Enter license key",v.licenseKey.data(),v.licenseKey.size(),inputFlags)&&v.licenseKey[0]) a.verifyLicense=true;
+            {
+                style::StyleScope input; input.Var(ImGuiStyleVar_FramePadding,ImVec2(12,9));
+                if(ImGui::InputTextWithHint("##license_key","Enter license key",v.licenseKey.data(),v.licenseKey.size(),inputFlags)&&v.licenseKey[0]) a.verifyLicense=true;
+            }
             ImGui::Checkbox("Show key",&v.showLicense);
             ImGui::EndDisabled();
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
@@ -147,7 +184,6 @@ Actions Render(View& v,ImVec2 size) {
             ImGui::BeginDisabled(v.busy);
             if(ImGui::SmallButton("Refresh")) a.refresh=true;
             ImGui::EndDisabled();
-            ImGui::TextWrapped("Connect and start the client with one click.");
             ImGui::Dummy({0,3});
             InstanceList(v,std::clamp(size.y*.28f,96.f,180.f));
             control_panel::Section(v.busy?"Connection":"Status");
@@ -162,7 +198,16 @@ Actions Render(View& v,ImVec2 size) {
                 if(v.error&&ImGui::SmallButton("Show details")) v.tab=1;
             }
             ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-            ImGui::TextWrapped("After starting, switch to Minecraft. Default keys: INSERT opens the menu, F6 opens the HUD editor, and END quits the client.");
+            ImGui::TextWrapped("After starting, switch to Minecraft.");
+            ImGui::Spacing();
+            for(const auto& shortcut:std::array<std::pair<const char*,const char*>,3>{{{"INSERT","Open menu"},{"F6","HUD editor"},{"END","Quit client"}}}) {
+                const auto p=ImGui::GetCursorScreenPos();
+                auto& contentDraw=*ImGui::GetWindowDrawList();
+                contentDraw.AddRectFilled(p,{p.x+58,p.y+22},ImGui::GetColorU32(style::Color(0xFFFFFF,.045f)),4);
+                contentDraw.AddText({p.x+8,p.y+4},muted,shortcut.first);
+                contentDraw.AddText({p.x+72,p.y+4},muted,shortcut.second);
+                ImGui::Dummy({0,22});
+            }
         } else {
             control_panel::Section("Connection details");
             ImGui::TextWrapped("%s",v.diagnostic.empty()?"No connection attempt yet. Select your Minecraft instance under Start.":v.diagnostic.c_str());
@@ -175,6 +220,10 @@ Actions Render(View& v,ImVec2 size) {
         }
         ImGui::EndChild();
     }
+    {
+        const auto p=ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddLine({p.x,p.y-5},{p.x+width,p.y-5},ImGui::GetColorU32(ImGuiCol_Separator));
+    }
     if(v.tab==0) {
         const bool selected=v.selected>=0&&v.selected<static_cast<int>(v.instances.size());
         const bool running=selected&&v.instances[v.selected].running;
@@ -182,13 +231,13 @@ Actions Render(View& v,ImVec2 size) {
         ImGui::BeginDisabled(disabled);
         {
             style::StyleScope primary;
-            primary.Color(ImGuiCol_Button,style::Color(style::compact::AccentRGB));
-            primary.Color(ImGuiCol_ButtonHovered,style::Color(style::compact::AccentActiveRGB));
-            primary.Color(ImGuiCol_ButtonActive,style::Color(style::compact::AccentPressedRGB));
-            primary.Color(ImGuiCol_Text,style::Color(disabled?0xECECEF:style::compact::AccentInkRGB));
+            primary.Color(ImGuiCol_Button,style::Color(disabled?0x3E4940:style::workspace::AccentRGB));
+            primary.Color(ImGuiCol_ButtonHovered,style::Color(style::workspace::AccentHoverRGB));
+            primary.Color(ImGuiCol_ButtonActive,style::Color(style::workspace::AccentPressedRGB));
+            primary.Color(ImGuiCol_Text,style::Color(disabled?style::workspace::TextRGB:0x182312));
             const char* label=!v.licensed?(v.authBusy?"Verifying license...":"Verify license"):
                 v.busy?"Preparing connection...":running?"Switch to Minecraft":"Start client";
-            if(ImGui::Button(label,{width,34})) { if(v.licensed) a.start=true; else a.verifyLicense=true; }
+            if(ImGui::Button(label,{width,40})) { if(v.licensed) a.start=true; else a.verifyLicense=true; }
         }
         ImGui::EndDisabled();
     }
