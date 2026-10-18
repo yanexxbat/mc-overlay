@@ -200,7 +200,11 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     }
     ImGui::EndChild();
     const bool pageChanged=state.page!=state.renderedPage;
-    if(pageChanged) { state.search[0]='\0'; state.enabledOnly=false; state.settingsOpen=false; ImGui::SetWindowFocus(); }
+    if(pageChanged) {
+        // Release the text editor as well as its buffer when a category changes.
+        if(ImGui::GetActiveID()==ImGui::GetID("##module_search")) ImGui::ClearActiveID();
+        state.search[0]='\0'; state.enabledOnly=false; state.settingsOpen=false; ImGui::SetWindowFocus();
+    }
     std::array<ModuleView,64> modules{};
     const int count=catalog?std::clamp(catalog(owner,state.page,modules),0,int(modules.size())):0;
     int& selected=state.selectedSections[int(state.page)]; selected=std::clamp(selected,0,std::max(0,count-1));
