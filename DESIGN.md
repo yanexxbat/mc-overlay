@@ -401,14 +401,20 @@ prevention remain unchanged.
 
 ### Snapshot HUD and editor
 
-All 19 snapshot HUD elements and the optional Combat debug HUD share compact
-tokens and the 14-pixel `MenuFont`. Active modules and pressed keys use lime-green;
-health, friends and durability use semantic feedback. Long name, item, effect
-and keybind text is clipped within its row, including after element scaling.
+All 20 snapshot HUD elements, Anti Vanish, target information and the optional
+Combat debug HUD share `common/hud_style.hpp`: translucent charcoal surfaces,
+4px corners, a 2px white right rail, white text with a 1px shadow and muted grey
+secondary values. Snapshot text uses the embedded 17px font. In-game surfaces
+do not inherit the menu's lime accent. Health, friends and durability retain
+semantic feedback. Long name, item, effect and keybind text is clipped within
+its row, including after element scaling. Effects and keybinds use stepped
+content-width rows; notifications use separate compact strips. Keystrokes use
+individual dark keycaps with white pressed states. The region map retains its
+six geographic categories in a desaturated palette with white shadowed labels.
 The Reach readout has an anthracite surface below the open crosshair brackets;
 its name clips before the separate health/distance column.
 
-Nineteen HUD elements retain visibility, position, scale, drag previews and reset.
+All HUD elements retain visibility, position, scale, drag previews and reset.
 The F6 editor uses local `CompactStyle`; positions, scales and visibility retain
 their existing persistence. Small-view selection does not hide enabled elements
 from the normal HUD.
