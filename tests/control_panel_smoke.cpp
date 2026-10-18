@@ -1767,14 +1767,17 @@ int main(int argc,char** argv) {
         hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"new HUD escaped a small viewport");
         hudFrame({1280,800},false);
-        // All nineteen real widgets, isolated into a synthetic catalog for visual coverage.
+        // Every real widget, isolated into a synthetic catalog for visual coverage.
         const auto galleryHud=hud; const auto galleryExtra=extra;
         const bool galleryWatermark=mcov::OverlayUiCheck::Settings(overlay).showWatermark;
         io.DisplaySize={1440,1320}; io.DeltaTime=1.f/60; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
         auto& galleryDraw=*ImGui::GetBackgroundDrawList();
+        galleryDraw.AddRectFilledMultiColor({0,0},io.DisplaySize,IM_COL32(118,160,192,255),IM_COL32(118,160,192,255),
+            IM_COL32(22,29,35,255),IM_COL32(22,29,35,255));
         ImGui::PushFont(mcov::style::MenuFont());
         galleryDraw.AddText({24,16},mcov::style::compact::Muted,"HUD catalog / synthetic snapshot data");
         ImGui::PopFont();
+        float columnY[4]={60,60,60,60};
         for(int i=0;i<mcov::kHudModules;++i) {
             for(int j=0;j<mcov::kHudModules;++j) mcov::OverlayUiCheck::HudElement(overlay,j,j==i);
             hud.layout[i]={{0,0},1,true};
@@ -1783,8 +1786,12 @@ int main(int argc,char** argv) {
             mcov::OverlayUiCheck::DrawHud(overlay,hudScene,false);
             const auto r=mcov::OverlayUiCheck::HudRects(overlay)[i];
             Require(r.max.x>r.min.x&&r.max.y>r.min.y,"HUD catalog omitted an element");
-            const ImVec2 shift{24+(i%4)*350.f,52+(i/4)*205.f};
-            for(int v=first;v<galleryDraw.VtxBuffer.Size;++v) { auto& p=galleryDraw.VtxBuffer[v].pos; p={p.x+shift.x,p.y+shift.y}; }
+            const ImVec2 shift{24+(i%4)*350.f,columnY[i%4]};
+            columnY[i%4]+=r.max.y-r.min.y+42;
+            for(int v=first;v<galleryDraw.VtxBuffer.Size;++v) {
+                Require(galleryDraw.VtxBuffer[v].col!=mcov::style::compact::Accent,"HUD element inherited the menu's lime accent");
+                auto& p=galleryDraw.VtxBuffer[v].pos; p={p.x+shift.x,p.y+shift.y};
+            }
             for(int c=command;c<galleryDraw.CmdBuffer.Size-1;++c) { auto& clip=galleryDraw.CmdBuffer[c].ClipRect; clip={clip.x+shift.x,clip.y+shift.y,clip.z+shift.x,clip.w+shift.y}; }
         }
         ImGui::Render(); SaveFrame(device.Get(),context.Get(),output/"hud-catalog.png");

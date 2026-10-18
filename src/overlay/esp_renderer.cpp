@@ -2,6 +2,7 @@
 #include "visual_draw.hpp"
 #include "visual_geometry.hpp"
 #include "../common/flat_style.hpp"
+#include "../common/hud_style.hpp"
 #include "../common/equipment_icons.hpp"
 #include <algorithm>
 #include <array>

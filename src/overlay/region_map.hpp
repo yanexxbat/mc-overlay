@@ -17,8 +17,8 @@ inline constexpr double kBorder=225000, kCell=50000;
 inline constexpr ImVec2 kSize{308,414};
 inline constexpr std::array<const char*,6> kNames={"EU Central","EU West","NA East","NA West","Asia","Oceania"};
 inline constexpr std::array<const char*,6> kShort={"EUc","EUw","NAe","NAw","Asia","Oce"};
-inline constexpr std::array<ImU32,6> kColors={IM_COL32(159,206,99,255),IM_COL32(0,166,99,255),
-    IM_COL32(79,173,234,255),IM_COL32(47,110,186,255),IM_COL32(245,194,66,255),IM_COL32(252,136,3,255)};
+inline constexpr std::array<ImU32,6> kColors={IM_COL32(97,132,112,255),IM_COL32(60,108,100,255),
+    IM_COL32(86,121,148,255),IM_COL32(60,81,104,255),IM_COL32(152,132,86,255),IM_COL32(153,107,81,255)};
 // Geographic facts transcribed from https://donut.auction/regions, 2026-10-15.
 // North (-Z) at the top; +X to the right. Server numbers are map cells, not
 // live scoreboard shard IDs. The map can change independently of the client.
@@ -70,7 +70,7 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
         if(c.labels) {
             const char* label=kShort[kRegions[i]];
             const auto extent=ImGui::CalcTextSize(label);
-            style::hud::Label(d,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},kRegions[i]==3?IM_COL32(255,255,255,255):IM_COL32(12,19,25,255),label);
+            style::hud::Label(d,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},Text,label);
         }
     }
     if(c.grid) for(int n=0;n<=9;++n) {
