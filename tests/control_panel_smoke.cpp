@@ -1438,6 +1438,51 @@ void FreecamUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     Check::Panic(o); Require(!camera.enabled,"Panic left Freecam enabled");
     Check::PrefPath(o,{});
 }
+void ModuleHudChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    using namespace mcov;
+    using Check=OverlayUiCheck;
+    auto storage=std::make_unique<Overlay>(); auto& overlay=*storage;
+    auto scene=std::make_unique<WorldSnapshot>(); CopyField(scene->username,"player");
+    auto& hud=Check::Hud(overlay);
+    for(int a=3;a<keys::kCount;++a) Check::SetModule(overlay,static_cast<keys::Action>(a),false);
+    for(int i=0;i<kHudModules;++i) Check::HudElement(overlay,i,false);
+    hud.visible=true; hud.modules=true; Check::Settings(overlay).showWatermark=true;
+    const auto render=[&](ImVec2 size,bool editing=false) {
+        auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
+        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
+        auto& draw=*ImGui::GetBackgroundDrawList();
+        draw.AddRectFilledMultiColor({0,0},size,IM_COL32(145,192,233,255),IM_COL32(145,192,233,255),
+            IM_COL32(22,29,35,255),IM_COL32(22,29,35,255));
+        Check::DrawHud(overlay,*scene,editing); ImGui::Render();
+        for(const auto& r:Check::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=size.x+.01f&&r.max.y<=size.y+.01f,
+            "Variable-width module HUD escaped the viewport");
+    };
+    const int modules=int(HudModule::Modules),watermark=int(HudModule::Watermark);
+    render({360,440});
+    Require(Check::HudRects(overlay)[modules].max.x==0,"Empty module list must be hidden in game");
+    Check::HudSelection(overlay,modules); render({480,360},true);
+    Require(Check::HudRects(overlay)[modules].max.x>0,"Empty module list must remain editable");
+    hud.layout={};
+    for(auto a:{keys::Action::ChestEsp,keys::Action::SpawnerEsp,keys::Action::Triggerbot,keys::Action::Freecam,
+                keys::Action::NameTags,keys::Action::BoxEsp,keys::Action::KillAura,keys::Action::AutoTotem}) Check::SetModule(overlay,a,true);
+    render({360,440});
+    const auto list=Check::HudRects(overlay)[modules],brand=Check::HudRects(overlay)[watermark];
+    Require(std::abs(list.max.x-brand.max.x)<.1f&&brand.max.y<list.min.y,"Fresh watermark and module list must align without overlap");
+    SaveFrame(device,context,output/"hud-reference.png");
+    const float fullWidth=list.max.x-list.min.x,fullHeight=list.max.y-list.min.y;
+    for(int a=3;a<keys::kCount;++a) Check::SetModule(overlay,static_cast<keys::Action>(a),false);
+    hud.visible=true; Check::SetModule(overlay,keys::Action::BoxEsp,true);
+    render({360,440});
+    auto single=Check::HudRects(overlay)[modules];
+    Require(single.max.x-single.min.x<fullWidth&&single.max.y-single.min.y<fullHeight,"Module bounds did not shrink after toggling modules off");
+    SaveFrame(device,context,output/"hud-single-module.png");
+    hud.layout[modules]={{.6f,.2f},1.6f,true};
+    for(int a=3;a<keys::kCount;++a) if(!keys::System(static_cast<keys::Action>(a))) Check::SetModule(overlay,static_cast<keys::Action>(a),true);
+    for(int i=0;i<kHudModules;++i) Check::HudElement(overlay,i,i==modules||i==watermark);
+    render({320,240});
+    Require(hud.layout[modules].scale==1.6f,"Viewport fitting overwrote the saved HUD scale");
+    SaveFrame(device,context,output/"hud-many-modules-small.png");
+}
 int main(int argc,char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     _set_error_mode(_OUT_TO_STDERR);
@@ -1463,6 +1508,7 @@ int main(int argc,char** argv) {
         mcov::LiquidGlass glass;
         Require(glass.Initialize(device.Get(),context.Get()),"Liquid glass shaders failed to initialize");
         previewGlass=&glass;
+        ModuleHudChecks(device.Get(),context.Get(),output);
         // Die erweiterte Fixture plus mehrere groÃŸe Snapshots passen nicht auf den 1-MB-Teststack.
         auto overlayStorage=std::make_unique<mcov::Overlay>(); auto& overlay=*overlayStorage; mcov::OverlayUiCheck::Seed(overlay);
         const Page pages[]={Page::Combat,Page::Visuals,Page::Blocks,Page::Hud,Page::Stats,Page::Settings,Page::Misc};
