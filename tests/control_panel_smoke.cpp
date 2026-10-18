@@ -1795,6 +1795,18 @@ int main(int argc,char** argv) {
             for(int c=command;c<galleryDraw.CmdBuffer.Size-1;++c) { auto& clip=galleryDraw.CmdBuffer[c].ClipRect; clip={clip.x+shift.x,clip.y+shift.y,clip.z+shift.x,clip.w+shift.y}; }
         }
         ImGui::Render(); SaveFrame(device.Get(),context.Get(),output/"hud-catalog.png");
+        // Every element must fit independently at the largest saved scale on a small viewport.
+        for(int i=0;i<mcov::kHudModules;++i) {
+            for(int j=0;j<mcov::kHudModules;++j) mcov::OverlayUiCheck::HudElement(overlay,j,j==i);
+            hud.layout[i]={{1,1},1.6f,true};
+            hudFrame({320,240},false);
+            const auto r=mcov::OverlayUiCheck::HudRects(overlay)[i];
+            Require(r.max.x>r.min.x&&r.max.y>r.min.y&&r.min.x>=0&&r.min.y>=0&&r.max.x<=320.01f&&r.max.y<=240.01f,
+                "Restyled HUD element is missing or outside a small viewport");
+            for(const auto& command:ImGui::GetBackgroundDrawList()->CmdBuffer) if(command.ElemCount)
+                Require(command.ClipRect.x>=0&&command.ClipRect.y>=0&&command.ClipRect.z<=320.01f&&command.ClipRect.w<=240.01f,
+                    "Restyled HUD clipping escaped a small viewport");
+        }
         hud=galleryHud; extra=galleryExtra; mcov::OverlayUiCheck::Settings(overlay).showWatermark=galleryWatermark;
         // Exercise the new per-row clipping at a saved scale with long values.
         const auto edgeHud=hud; const auto edgeBinds=binds; const auto edgeScene=hudScene;

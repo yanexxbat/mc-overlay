@@ -69,8 +69,10 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
         d.AddRectFilled(a,b,kColors[kRegions[i]]);
         if(c.labels) {
             const char* label=kShort[kRegions[i]];
-            const auto extent=ImGui::CalcTextSize(label);
-            style::hud::Label(d,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},Text,label);
+            // Cell labels need their own smaller size; keep a visible gap between cells.
+            constexpr float labelSize=12.f;
+            const auto extent=ImGui::GetFont()->CalcTextSizeA(labelSize,1000,0,label);
+            style::hud::Label(d,ImGui::GetFont(),labelSize,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},Text,label);
         }
     }
     if(c.grid) for(int n=0;n<=9;++n) {
