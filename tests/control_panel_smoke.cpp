@@ -1752,9 +1752,10 @@ int main(int argc,char** argv) {
         hudFrame({1280,800});
         Require(mcov::OverlayUiCheck::HudRects(overlay)[2].min.x>snapStart.min.x+16,"Small pointer steps got stuck on the HUD grid");
         io.AddKeyEvent(ImGuiMod_Alt,true); io.AddMousePosEvent(snapPick.x+37,snapPick.y+21);
-        hudFrame({1280,800}); hudFrame({1280,800});
+        // ImGui trickles modifier and pointer events over separate frames; HUD geometry
+        // is drawn before the editor applies that frame's pointer update.
+        hudFrame({1280,800}); hudFrame({1280,800}); hudFrame({1280,800});
         const auto freeRect=mcov::OverlayUiCheck::HudRects(overlay)[2];
-        std::cout<<"free start="<<snapStart.min.x<<","<<snapStart.min.y<<" actual="<<freeRect.min.x<<","<<freeRect.min.y<<" alt="<<io.KeyAlt<<" active="<<ImGui::GetCurrentContext()->ActiveId<<" mouse="<<io.MousePos.x<<","<<io.MousePos.y<<" down="<<io.MouseDown[0]<<" dragging="<<ImGui::IsMouseDragging(0,0)<<"\n";
         Require(std::abs(freeRect.min.x-snapStart.min.x-37)<.1f&&std::abs(freeRect.min.y-snapStart.min.y-21)<.1f,
             "Alt did not bypass HUD snapping");
         io.AddMouseButtonEvent(0,false); io.AddKeyEvent(ImGuiMod_Alt,false); hudFrame({1280,800});
