@@ -179,18 +179,24 @@ existing tokens.
 
 - Opaque root `#191C1B`, sidebar `#131615`, text `#E9EDE7`, secondary text `#9CA59F`,
   accent `#B3DB8F`. Thin neutral outlines; active modules use a low-opacity sage tint.
-- Embedded Inter: 22px page title, 14px controls, 11px sidebar group labels.
-- Existing 740 × 520 footprint and 480 × 580 detail pane. Content starts at y=84;
+- Embedded Inter: dedicated 28px page title (22px compact), 14px controls, 11px sidebar group labels.
+- Responsive 860 × 610 workspace, reducing to 740px width below a 1440px viewport;
+  480 × 580 independent detail pane. Sidebar is 166px, or 112px below 620px window
+  width / 460px height. Content starts at y=154 (120px compact);
   equal-width columns use floor(available width / 220), clamped to one or two.
 - 66px module tiles, 7px rounding and 12px text insets. A separate 30px-wide
-  settings button opens details without toggling. Native focus, Space and context
+  settings button with a sliders icon opens details without toggling. Assigned
+  bindings appear as compact keycaps when space permits. Native focus, Space and context
   shortcuts remain available. Tooltips use the ImGui short hover delay.
 - Slider values remain centered over a subtle fill with a 2px sage progress line;
   native dragging, keyboard adjustment and Ctrl-click numeric input remain intact.
-- Actual category module/enabled counts appear on wide menus; compact menus omit
-  the counts. Navigation and content scroll independently, above fixed footers.
+- All / Enabled filters display actual category counts. Enabled includes only
+  active toggle modules. Empty results offer recovery; changing category clears
+  both filters and releases any stale input-editor buffer. Ctrl+F focuses search.
+  Navigation and content scroll independently, above fixed footers.
 - The UI smoke check renders desktop and 480 × 360 layouts and verifies the
-  separate settings target, module states, search, keyboard input and style restoration.
+  separate settings target, filtered module states, empty-view recovery, keyboard
+  search and style restoration. A 1600 × 900 preview exercises the larger workspace.
 
 ## Overview
 

@@ -10,7 +10,7 @@ and `Keim-client.zip`.
 
 ## Features
 
-- Graphite / Sage ImGui menu with a two-column module grid, search and direct settings buttons; matching Keim branding in the launcher and HUD.
+- Graphite / Sage ImGui workspace with a responsive two-column module grid, All/Enabled filters, Ctrl+F search and direct settings buttons; matching Keim branding in the launcher and HUD.
 - Entity and block visuals, target effects, particles and waypoints.
 - Base ESP with Minecraft models and textures visible through walls (1.21.11).
 - 3D Storage ESP with individual block colours, adjustable scan timing and sequential pulses, plus Stash Finder and Spawner ESP.

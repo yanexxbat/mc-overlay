@@ -1,20 +1,23 @@
 # Kompaktes Client-Menü, modulares HUD und Keybinds
 
 Das Client-Menü verwendet **Graphite / Sage**: deckende Graphitflächen,
-eine dunklere Sidebar und Salbeigrün für aktive Module. Die 22-Pixel-Überschrift,
+eine dunklere Sidebar und Salbeigrün für aktive Module. Die 28-Pixel-Überschrift
+(22 Pixel in kompakten Fenstern),
 eine kurze Kategorie-Beschreibung und echte Modul-/Aktiv-Zähler geben Orientierung.
 Breite Modulkacheln zeigen Zustand und einen sichtbaren **…**-Button für die
-Einstellungen. Rechtsklick öffnet ebenfalls das unabhängige Einstellungsfenster.
+Einstellungen. Der Button zeigt ein Regler-Symbol. Rechtsklick öffnet ebenfalls
+das unabhängige Einstellungsfenster.
 Eingebettete Inter-Texte, native Felder und dezente Slider mit sichtbaren Werten
 halten Einstellungen lesbar.
 **Strg-Klick** auf einen Slider erlaubt die direkte Zahleneingabe.
 **Combat, Visuals, Blocks, HUD, Stats, Settings, Misc** stehen links. Der Header
 verschiebt das Menü; **Center** ordnet beide Fenster neu an, **Reset** setzt die aktuelle Kategorie
-zurück. Das Hauptfenster beträgt bis zu 740 × 520 UI-Pixel, das Settings-Fenster
+zurück. Das Hauptfenster beträgt bis zu 860 × 610 UI-Pixel (740 Pixel breit unter
+1440 Pixel Viewport-Breite), das Settings-Fenster
 bis zu 480 × 580; beide sind auf den Viewport minus 24 Pixel begrenzt.
 Die erste Platzierung lässt nach Möglichkeit bis zu 496 Pixel rechts für Settings
-frei. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
-112 Pixel. Der Injector verwendet weiterhin das kompakte Theme mit
+frei. Die Sidebar ist 166 Pixel breit, unter 620 Pixel Fensterbreite oder 460 Pixel
+Fensterhöhe 112 Pixel. Der Injector verwendet weiterhin das kompakte Theme mit
 Start/Diagnose-Sidebar und festem Start-/Schließen-Footer.
 Layoutdetails: [compact-ui.md](compact-ui.md). Injector und Bedienung:
 [launcher.md](launcher.md). Der erhaltene frühere Glasrenderer steht in
@@ -36,6 +39,13 @@ Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegunge
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
 Groß- und Kleinschreibung. Bei null Treffern stellt **Clear search** die Widgets
 wieder her. Ein Kategorienwechsel leert die Suche und schließt die Details.
+**Strg+F** fokussiert die Suche. **All** zeigt alle Module der Kategorie;
+**Enabled** beschränkt die Ansicht auf eingeschaltete Toggle-Module. Die Zähler
+zeigen echte Zustände. Deaktivieren des letzten sichtbaren Moduls führt zu einem
+leeren Zustand mit **Show all modules**. Kategorienwechsel setzt beide Filter zurück.
+Auf breiten Menüs sitzt die Suche im Kopfbereich, auf kleinen in der Sidebar.
+Gesetzte Tastenbelegungen erscheinen bei genügend Platz direkt als kleines Feld
+auf dem Modul; der Tooltip enthält die vollständige Belegung.
 
 **Linksklick** auf die Hauptfläche oder **Leertaste** schaltet ein echtes Toggle-Modul um oder führt
 seine Aktion aus. **Rechtsklick**, **Menü-Taste** oder **Shift+F10** öffnet die
