@@ -202,7 +202,11 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     const bool pageChanged=state.page!=state.renderedPage;
     if(pageChanged) {
         // Release the text editor as well as its buffer when a category changes.
-        if(ImGui::GetActiveID()==ImGui::GetID("##module_search")) ImGui::ClearActiveID();
+        const auto searchId=ImGui::GetID("##module_search");
+        if(ImGui::GetActiveID()==searchId) ImGui::ClearActiveID();
+        if(auto* editor=ImGui::GetInputTextState(searchId)) editor->ReloadUserBufAndMoveToEnd();
+        auto& deactivated=ImGui::GetCurrentContext()->InputTextDeactivatedState;
+        if(deactivated.ID==searchId) deactivated.ClearFreeMemory();
         state.search[0]='\0'; state.enabledOnly=false; state.settingsOpen=false; ImGui::SetWindowFocus();
     }
     std::array<ModuleView,64> modules{};
