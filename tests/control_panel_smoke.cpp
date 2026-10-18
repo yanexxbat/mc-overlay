@@ -282,7 +282,12 @@ ImVec2 ModulePoint(mcov::Overlay& overlay,Page page,int index,int count,ImVec2 v
     auto frame=[&] { Draw(overlay,page,0,viewport); };
     ImGui::GetIO().AddMousePosEvent(-100,-100); frame(); frame(); frame();
     auto* table=ModuleGrid(); const int columns=table->ColumnsCount;
-    Require(table->CurrentRow==(count+columns-1)/columns-1,"Module widget catalog is incomplete");
+    if(table->CurrentRow!=(count+columns-1)/columns-1) {
+        const auto& state=mcov::OverlayUiCheck::Menu(overlay);
+        throw std::runtime_error("Module widget catalog is incomplete: page="+std::to_string(int(page))+
+            " query="+state.search+" enabledOnly="+std::to_string(state.enabledOnly)+
+            " row="+std::to_string(table->CurrentRow)+" columns="+std::to_string(columns));
+    }
     const float rowHeight=table->RowPosY2-table->RowPosY1;
     Require(rowHeight>0,"Module grid has no usable row geometry");
     const int row=index/columns;

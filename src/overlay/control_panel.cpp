@@ -280,12 +280,13 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                     const ImU32 labelInk=active?ImGui::GetColorU32(style::Color(kMenuAccent)):
                         ImGui::GetColorU32(pressed?ImGuiCol_Text:ImGuiCol_TextDisabled);
                     tile.AddText({p.x+12,p.y+39},labelInk,label);
-                    if(module.binding[0]&&std::strcmp(module.binding,"None")!=0) {
-                        const float badgeWidth=ImGui::CalcTextSize(module.binding).x+12;
+                    const char* binding=std::strncmp(module.binding,"Key: ",5)==0?module.binding+5:module.binding;
+                    if(binding[0]&&std::strcmp(binding,"None")!=0) {
+                        const float badgeWidth=ImGui::CalcTextSize(binding).x+12;
                         const float badgeX=p.x+width-82-badgeWidth;
                         if(badgeX>p.x+12+ImGui::CalcTextSize(label).x+12) {
                             tile.AddRectFilled({badgeX,p.y+36},{badgeX+badgeWidth,p.y+56},ImGui::GetColorU32(style::Color(0xFFFFFF,.04f)),4);
-                            tile.AddText({badgeX+6,p.y+39},ImGui::GetColorU32(ImGuiCol_TextDisabled),module.binding);
+                            tile.AddText({badgeX+6,p.y+39},ImGui::GetColorU32(ImGuiCol_TextDisabled),binding);
                         }
                     }
                     if(module.mode==TileMode::Toggle) {
