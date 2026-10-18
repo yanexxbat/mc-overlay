@@ -301,30 +301,41 @@ void Pack::DrawScreen(ImDrawList& d,const WorldSnapshot& s,const CameraProjectio
 }
 void Pack::DrawHud(ImDrawList& d,HudModule kind,const WorldSnapshot& s,const Config& config,const combat::Relations& friends,ImVec2 size,double now) const {
     const auto metrics=Metrics(now); char text[128];
-    DrawHudPanel(d,{0,0},size); style::hud::Heading(d,{0,0},size.x,kHudNames[static_cast<int>(kind)]);
+    if(kind!=HudModule::Keystrokes) {
+        if(kind!=HudModule::Notifications&&kind!=HudModule::Nearby) DrawHudPanel(d,{0,0},size);
+        style::hud::Heading(d,{0,0},size.x,kHudNames[static_cast<int>(kind)]);
+    }
     switch(kind) {
         case HudModule::Speedometer:
-            std::snprintf(text,sizeof(text),"%.2f m/s | %.1f km/h",metrics.speed,metrics.speed*3.6f); LineText(d,27,text);
-            std::snprintf(text,sizeof(text),"Vertical: %+.2f m/s",metrics.verticalSpeed); LineText(d,45,text); break;
+            std::snprintf(text,sizeof(text),"%.2f m/s",metrics.speed); style::hud::Row(d,size.x,28,"Horizontal",text);
+            std::snprintf(text,sizeof(text),"%.1f km/h",metrics.speed*3.6f); style::hud::Row(d,size.x,49,"Speed",text);
+            std::snprintf(text,sizeof(text),"%+.2f m/s",metrics.verticalSpeed); style::hud::Row(d,size.x,70,"Vertical",text); break;
         case HudModule::Clock: { SYSTEMTIME time{}; GetLocalTime(&time); std::snprintf(text,sizeof(text),"%02d:%02d:%02d",time.wHour,time.wMinute,time.wSecond); LineText(d,27,text); break; }
         case HudModule::Session:
-            std::snprintf(text,sizeof(text),"Time %02d:%02d | Distance %.0f m",int(metrics.seconds)/60,int(metrics.seconds)%60,metrics.distance); LineText(d,27,text);
-            std::snprintf(text,sizeof(text),"Damage received: %.1f",metrics.received); LineText(d,45,text);
-            std::snprintf(text,sizeof(text),"Observed damage: %.1f",metrics.observedDamage); LineText(d,63,text);
-            std::snprintf(text,sizeof(text),"Target deaths observed: %d",metrics.targetDeaths); LineText(d,81,text); break;
-        case HudModule::Cps: std::snprintf(text,sizeof(text),"LMB %d CPS | RMB %d CPS",metrics.leftCps,metrics.rightCps); LineText(d,27,text); break;
+            std::snprintf(text,sizeof(text),"%02d:%02d",int(metrics.seconds)/60,int(metrics.seconds)%60); style::hud::Row(d,size.x,28,"Time",text);
+            std::snprintf(text,sizeof(text),"%.0f m",metrics.distance); style::hud::Row(d,size.x,49,"Distance",text);
+            std::snprintf(text,sizeof(text),"%.1f",metrics.received); style::hud::Row(d,size.x,70,"Damage taken",text);
+            std::snprintf(text,sizeof(text),"%.1f",metrics.observedDamage); style::hud::Row(d,size.x,91,"Observed damage",text);
+            std::snprintf(text,sizeof(text),"%d",metrics.targetDeaths); style::hud::Row(d,size.x,112,"Observed deaths",text); break;
+        case HudModule::Cps:
+            std::snprintf(text,sizeof(text),"%d CPS",metrics.leftCps); style::hud::Row(d,size.x,28,"LMB",text);
+            std::snprintf(text,sizeof(text),"%d CPS",metrics.rightCps); style::hud::Row(d,size.x,49,"RMB",text); break;
         case HudModule::Keystrokes: {
             constexpr int keys[]={0x57,0x41,0x53,0x44,0x20,1,2}; constexpr const char* labels[]={"W","A","S","D","SPACE","LMB","RMB"};
-            constexpr ImVec2 positions[]={{48,26},{10,53},{48,53},{86,53},{10,80},{10,107},{69,107}};
-            for(int i=0;i<7;++i) { const auto p=positions[i]; const float width=i==4?110.f:i>4?51.f:34.f;
-                d.AddRectFilled(p,{p.x+width,p.y+23},input_[keys[i]]?style::hud::Pressed:style::hud::Track,4);
+            constexpr ImVec2 positions[]={{44,0},{0,29},{44,29},{88,29},{0,58},{0,87},{66,87}};
+            for(int i=0;i<7;++i) { const auto p=positions[i]; const float width=i==4?128.f:i>4?62.f:40.f;
+                d.AddRectFilled(p,{p.x+width,p.y+25},input_[keys[i]]?style::hud::Pressed:style::hud::Surface,4);
+                if(!input_[keys[i]]) d.AddRectFilled({p.x+width-2,p.y},{p.x+width,p.y+25},style::hud::Rail,1);
                 const auto measure=ImGui::CalcTextSize(labels[i]);
-                d.AddText({p.x+(width-measure.x)*.5f,p.y+(23-measure.y)*.5f},input_[keys[i]]?style::hud::AccentActive:style::hud::Text,labels[i]); }
+                const ImVec2 at{p.x+(width-measure.x)*.5f,p.y+(25-measure.y)*.5f};
+                if(input_[keys[i]]) d.AddText(at,style::hud::Ink,labels[i]);
+                else style::hud::Label(d,at,style::hud::Text,labels[i]); }
             break;
         }
         case HudModule::Radar: {
             const ImVec2 center{size.x*.5f,size.y*.5f+8}; const float radius=std::min(size.x,size.y)*.38f;
             d.AddCircle(center,radius,style::hud::Muted,48);
+            d.AddCircle(center,radius*.5f,style::hud::Separator,48);
             d.AddLine({center.x-radius,center.y},{center.x+radius,center.y},style::hud::Separator);
             d.AddLine({center.x,center.y-radius},{center.x,center.y+radius},style::hud::Separator);
             d.AddTriangleFilled({center.x,center.y-5},{center.x-4,center.y+4},{center.x+4,center.y+4},style::hud::Text);
@@ -338,11 +349,11 @@ void Pack::DrawHud(ImDrawList& d,HudModule kind,const WorldSnapshot& s,const Con
         }
         case HudModule::ArmorStrip: {
             for(int i=0;i<4;++i) { const auto& item=s.equipment[i]; const float x=8+i*54.f;
-                constexpr const char* names[]={"Head","Chest","Legs","Feet"}; d.AddText({x,28},style::hud::Muted,names[i]);
+                constexpr const char* names[]={"Head","Chest","Legs","Feet"}; style::hud::Label(d,{x,28},style::hud::Muted,names[i]);
                 const float remaining=item.maxDamage>0?std::clamp(1-float(item.damage)/item.maxDamage,0.f,1.f):item.present?1.f:0.f;
                 d.AddRectFilled({x,46},{x+46,50},style::hud::Track,2);
                 d.AddRectFilled({x,46},{x+46*remaining,50},remaining<.2f?style::hud::Danger:remaining<.5f?style::hud::Warning:style::hud::Accent,2);
-                std::snprintf(text,sizeof(text),item.present?"%.0f%%":"--",remaining*100); d.AddText({x,55},style::hud::Text,text);
+                std::snprintf(text,sizeof(text),item.present?"%.0f%%":"--",remaining*100); style::hud::Label(d,{x,55},style::hud::Text,text);
             } break;
         }
         case HudModule::Indicators: {
@@ -352,19 +363,23 @@ void Pack::DrawHud(ImDrawList& d,HudModule kind,const WorldSnapshot& s,const Con
             LineText(d,64,s.hasTarget?"Health advantage":"No crosshair target"); break;
         }
         case HudModule::Notifications: {
-            float y=27; const double lifetime=config[Feature::Notifications].lifetime;
+            float y=28; const double lifetime=config[Feature::Notifications].lifetime; int count=0;
             for(int i=0;i<3;++i) { const auto& note=notices_[(noticeHead_-1-i+kNotices*2)%kNotices]; if(now<note.born||now-note.born>lifetime||!note.text[0]) continue;
-                d.PushClipRect({10,y},{size.x-10,std::min(y+34,size.y-8)},true);
-                d.AddText(ImGui::GetFont(),ImGui::GetFontSize(),{10,y},style::hud::Text,note.text.data(),nullptr,size.x-20);
-                d.PopClipRect(); y+=38; }
+                DrawHudPanel(d,{0,y-2},{size.x,y+38});
+                d.PushClipRect({10,y},{size.x-10,std::min(y+36,size.y-4)},true);
+                style::hud::Label(d,ImGui::GetFont(),ImGui::GetFontSize(),{10,y},style::hud::Text,note.text.data(),size.x-20);
+                d.PopClipRect(); y+=44; ++count; }
+            if(!count) { DrawHudPanel(d,{0,26},{size.x,51}); LineText(d,29,"No recent notifications",style::hud::Muted); }
             break;
         }
         case HudModule::Nearby: {
-            float y=27; int count=0;
+            float y=28; int count=0;
             for(const auto& e:std::span(s.entities,std::min(s.entityCount,kMaxEntities))) if(Player(e)&&e.distance<=config[Feature::DetectPlayer].range&&count++<8) {
-                std::snprintf(text,sizeof(text),"%s | %.1fm | %.0f HP",DisplayName(e.name,config.Enabled(Feature::NameProtect),true),e.distance,e.health); LineText(d,y,text); y+=18;
+                DrawHudPanel(d,{0,y-2},{size.x,y+19});
+                std::snprintf(text,sizeof(text),"%.1fm  %.0f HP",e.distance,e.health);
+                style::hud::Row(d,size.x,y,DisplayName(e.name,config.Enabled(Feature::NameProtect),true),text); y+=21;
             }
-            if(!count) LineText(d,27,"No players in range"); break;
+            if(!count) { DrawHudPanel(d,{0,26},{size.x,51}); LineText(d,29,"No players in range",style::hud::Muted); } break;
         }
         default: break;
     }
