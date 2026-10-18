@@ -6,6 +6,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <span>
 
 namespace mcov {
 enum class HudModule { Equipment, Effects, Coordinates, Performance, Compass, Reach, Watermark, Modules, Keybinds,
@@ -34,6 +35,37 @@ inline void MoveHud(HudPlacement& p,HudRect rect,ImVec2 viewport,ImVec2 delta) {
     const ImVec2 travel{std::max(0.f,viewport.x-(rect.max.x-rect.min.x)),std::max(0.f,viewport.y-(rect.max.y-rect.min.y))};
     p.position={travel.x>0?std::clamp((rect.min.x+delta.x)/travel.x,0.f,1.f):0,
                 travel.y>0?std::clamp((rect.min.y+delta.y)/travel.y,0.f,1.f):0};
+}
+inline constexpr float kHudGrid=16.f;
+struct HudSnap {
+    ImVec2 position{};
+    float guideX=-1,guideY=-1;
+};
+inline HudSnap SnapHud(ImVec2 desired,ImVec2 extent,ImVec2 viewport,std::span<const HudRect> peers,int selected,bool snapping) {
+    const ImVec2 travel{std::max(0.f,viewport.x-extent.x),std::max(0.f,viewport.y-extent.y)};
+    desired={std::clamp(desired.x,0.f,travel.x),std::clamp(desired.y,0.f,travel.y)};
+    HudSnap result{desired};
+    if(!snapping) return result;
+    result.position={std::clamp(std::round(desired.x/kHudGrid)*kHudGrid,0.f,travel.x),
+                     std::clamp(std::round(desired.y/kHudGrid)*kHudGrid,0.f,travel.y)};
+    // Prefer nearby matching edges/centres over the grid, including scaled widgets.
+    float bestX=6.f,bestY=6.f;
+    for(size_t i=0;i<peers.size();++i) {
+        const auto& peer=peers[i];
+        if(int(i)==selected||peer.max.x<=peer.min.x||peer.max.y<=peer.min.y) continue;
+        for(float fraction:{0.f,.5f,1.f}) {
+            const float guideX=peer.min.x+(peer.max.x-peer.min.x)*fraction;
+            const float guideY=peer.min.y+(peer.max.y-peer.min.y)*fraction;
+            const float x=guideX-extent.x*fraction,y=guideY-extent.y*fraction;
+            if(x>=0&&x<=travel.x&&std::abs(x-desired.x)<bestX) {
+                bestX=std::abs(x-desired.x); result.position.x=x; result.guideX=guideX;
+            }
+            if(y>=0&&y<=travel.y&&std::abs(y-desired.y)<bestY) {
+                bestY=std::abs(y-desired.y); result.position.y=y; result.guideY=guideY;
+            }
+        }
+    }
+    return result;
 }
 // Runtime-only measurements: changing text/content must not move a widget's anchor.
 // Explicit editor moves, scale changes and viewport changes still use PlaceHud.

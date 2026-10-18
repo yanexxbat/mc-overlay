@@ -103,8 +103,18 @@ void Overlay::SetHudEditing(bool editing) {
 void Overlay::DrawHud(const WorldSnapshot& s) {
     if(!hud_.visible&&!hudEditing_) return;
     ImGui::PushFont(style::hud::Font());
-    DrawAntiVanishHud();
     auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
+    if(hudEditing_&&hudGrid_) {
+        for(int column=1;column*kHudGrid<viewport.x;++column) {
+            const float x=column*kHudGrid;
+            draw.AddLine({x,0},{x,viewport.y},IM_COL32(230,238,245,column%4==0?42:18));
+        }
+        for(int row=1;row*kHudGrid<viewport.y;++row) {
+            const float y=row*kHudGrid;
+            draw.AddLine({0,y},{viewport.x,y},IM_COL32(230,238,245,row%4==0?42:18));
+        }
+    }
+    DrawAntiVanishHud();
     int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
     const int effects=std::min<int>(s.effectCount,kMaxEffects);
     ImFont* listFont=ImGui::GetIO().FontDefault;
@@ -265,6 +275,7 @@ void Overlay::DrawHudEditor() {
     auto& draw=*ImGui::GetWindowDrawList();
     hudSelected_=std::clamp(hudSelected_,0,kHudModules-1);
     const int selected=hudSelected_;
+    HudSnap dragGuide;
     // Das ausgewählte Element bekommt bei überlappenden Vorschauen die oberste
     // Hit-Fläche. Die Toolbar erreicht auch Elemente unter einem anderen Modul.
     for(int pass=0;pass<=kHudModules;++pass) {
@@ -274,12 +285,21 @@ void Overlay::DrawHudEditor() {
         if(extent.x<=0||extent.y<=0) continue;
         ImGui::SetCursorScreenPos(rect.min); ImGui::PushID(i);
         ImGui::InvisibleButton("##move",extent);
-        if(ImGui::IsItemActivated()) hudSelected_=i;
+        if(ImGui::IsItemActivated()) {
+            hudSelected_=i;
+            hudDragOffset_={ImGui::GetIO().MousePos.x-rect.min.x,ImGui::GetIO().MousePos.y-rect.min.y};
+        }
         if(ImGui::IsItemActive()&&ImGui::IsMouseDragging(0,0)) {
-            MoveHud(hud_.layout[i],rect,size,ImGui::GetIO().MouseDelta); preferencesDirty_=true;
+            const auto& io=ImGui::GetIO();
+            auto peers=hudRects_;
+            for(int peer=0;peer<kHudModules;++peer) if(!HudEnabled(peer)) peers[peer]={};
+            dragGuide=SnapHud({io.MousePos.x-hudDragOffset_.x,io.MousePos.y-hudDragOffset_.y},extent,size,peers,i,hudSnap_&&!io.KeyAlt);
+            MoveHud(hud_.layout[i],rect,size,{dragGuide.position.x-rect.min.x,dragGuide.position.y-rect.min.y});
+            rect={dragGuide.position,{dragGuide.position.x+extent.x,dragGuide.position.y+extent.y}};
+            preferencesDirty_=true;
         }
         if(ImGui::IsItemHovered()) {
-            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move",kHudNames[i]);
+            ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move / Alt: free move",kHudNames[i]);
         }
         draw.AddRect(rect.min,rect.max,hudSelected_==i?style::hud::Text:IM_COL32(174,184,194,100),4*hud_.layout[i].scale);
         if(hudSelected_==i&&!HudEnabled(i)) {
@@ -290,8 +310,10 @@ void Overlay::DrawHudEditor() {
         }
         ImGui::PopID();
     }
+    if(dragGuide.guideX>=0) draw.AddLine({dragGuide.guideX,0},{dragGuide.guideX,size.y},IM_COL32(220,236,250,170));
+    if(dragGuide.guideY>=0) draw.AddLine({0,dragGuide.guideY},{size.x,dragGuide.guideY},IM_COL32(220,236,250,170));
     const bool compact=size.x<640||size.y<480;
-    const float width=std::min(540.f,size.x-24),height=compact?110.f:90.f;
+    const float width=std::min(540.f,size.x-24),height=compact?140.f:120.f;
     ImGui::SetCursorScreenPos({(size.x-width)*.5f,size.y-height-12});
     {
     style::StyleScope toolbar;
@@ -311,6 +333,9 @@ void Overlay::DrawHudEditor() {
     ImGui::SetNextItemWidth(std::max(80.f,available-104-ImGui::GetStyle().ItemSpacing.x-ImGui::CalcTextSize("Scale").x-ImGui::GetStyle().ItemInnerSpacing.x));
     if(ImGui::SliderFloat("Scale",&hud_.layout[hudSelected_].scale,.65f,1.6f,"%.2f x")) preferencesDirty_=true;
     ImGui::SameLine(); if(ImGui::Button("Reset layout",{104,0})) { hud_.layout={}; preferencesDirty_=true; }
+    ImGui::Checkbox("Grid",&hudGrid_); ImGui::SameLine();
+    ImGui::Checkbox("Snap",&hudSnap_); ImGui::SameLine();
+    ImGui::TextDisabled("16 px / Alt: free move");
     ImGui::EndChild();
     }
     ImGui::End();

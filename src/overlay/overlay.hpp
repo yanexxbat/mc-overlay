@@ -271,6 +271,8 @@ private:
     unsigned captureModifierMask_=0;
     bool captureArmed_=false;
     bool hudEditing_=false;
+    bool hudGrid_=true,hudSnap_=true;
+    ImVec2 hudDragOffset_{};
     int hudSelected_=0;
     std::array<HudRect,kHudModules> hudRects_{};
     HudContentAnchor moduleHudAnchor_{},watermarkHudAnchor_{};
