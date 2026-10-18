@@ -1,5 +1,5 @@
 #include "control_panel.hpp"
-#include "../common/compact_style.hpp"
+#include "../common/workspace_style.hpp"
 #include "imgui_internal.h"
 #include <algorithm>
 #include <array>
@@ -18,7 +18,7 @@ constexpr const char* kDescriptions[]={
     "Explore blocks and your surroundings.", "Your information, at a glance.",
     "Player and client information.", "Make Keim feel like yours.",
     "Small tools for everyday play."};
-constexpr unsigned kMenuAccent=0xB3DB8F;
+constexpr unsigned kMenuAccent=style::workspace::AccentRGB;
 
 bool FilterTab(const char* label,int count,bool selected,float width) {
     ImGui::PushID(label);
@@ -31,22 +31,6 @@ bool FilterTab(const char* label,int count,bool selected,float width) {
     draw.AddText({p.x+10,p.y+7},ImGui::GetColorU32(selected?ImGuiCol_Text:ImGuiCol_TextDisabled),text);
     if(selected) draw.AddRectFilled({p.x+10,p.y+27},{p.x+width-10,p.y+29},ImGui::GetColorU32(ImGuiCol_CheckMark),1);
     ImGui::PopID(); return clicked;
-}
-
-// Scoped to the control panel: world visuals and the HUD keep their own palette.
-void ApplyMenuStyle() {
-    auto& s=ImGui::GetStyle();
-    s.WindowRounding=12; s.FrameRounding=5; s.PopupRounding=8;
-    s.Colors[ImGuiCol_WindowBg]=style::Color(0x191C1B);
-    s.Colors[ImGuiCol_PopupBg]=style::Color(0x232725);
-    s.Colors[ImGuiCol_Text]=style::Color(0xE9EDE7);
-    s.Colors[ImGuiCol_TextDisabled]=style::Color(0x9CA59F);
-    s.Colors[ImGuiCol_Border]=style::Color(0xFFFFFF,.085f);
-    s.Colors[ImGuiCol_Separator]=style::Color(0xFFFFFF,.075f);
-    for(auto color:{ImGuiCol_CheckMark,ImGuiCol_SliderGrab,ImGuiCol_SliderGrabActive,
-                    ImGuiCol_NavCursor,ImGuiCol_TextLink}) s.Colors[color]=style::Color(kMenuAccent);
-    for(auto color:{ImGuiCol_ButtonActive,ImGuiCol_Header,ImGuiCol_TabSelected,
-                    ImGuiCol_TextSelectedBg}) s.Colors[color]=style::Color(kMenuAccent,.16f);
 }
 
 bool Matches(const char* text,const char* query) {
@@ -129,7 +113,7 @@ int SubTabs(const char* id,const char* const* labels,int count,int selected,bool
     return selected;
 }
 Actions RenderMenu(State& state,const Status& status,void* owner,Content content,Catalog catalog,Activate activate) {
-    style::CompactStyle scoped; ApplyMenuStyle(); Actions actions;
+    style::WorkspaceStyle scoped; Actions actions;
     const auto* viewport=ImGui::GetMainViewport(); const auto work=viewport->WorkSize;
     if(work.x<180||work.y<180) return actions;
     const float preferredWidth=work.x>=1440?860.f:740.f;
@@ -160,7 +144,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     auto& draw=*ImGui::GetWindowDrawList();
     const float sidebar=compact?112.f:166.f;
     draw.AddRectFilled(pos,{pos.x+size.x,pos.y+size.y},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
-    draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(0x131615)),12,ImDrawFlags_RoundCornersLeft);
+    draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(style::workspace::SidebarRGB)),12,ImDrawFlags_RoundCornersLeft);
     draw.AddRect(pos,{pos.x+size.x-1,pos.y+size.y-1},ImGui::GetColorU32(ImGuiCol_Border),12);
     draw.AddLine({pos.x+sidebar,pos.y+1},{pos.x+sidebar,pos.y+size.y-1},ImGui::GetColorU32(ImGuiCol_Separator));
     ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-58),32});
