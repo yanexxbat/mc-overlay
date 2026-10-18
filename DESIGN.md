@@ -413,6 +413,18 @@ The F6 editor uses local `CompactStyle`; positions, scales and visibility retain
 their existing persistence. Small-view selection does not hide enabled elements
 from the normal HUD.
 
+### In-game module list and watermark
+
+The active module HUD follows the supplied reference: compact names sorted by
+rendered width, right-aligned stepped charcoal backgrounds, white shadowed text
+and a continuous 2px white rail. Relevant configured values use smaller muted
+text. Rows use 18px type and a 25px line height; there is no enclosing panel or
+section heading. The watermark is a plain 20px `keim / player` label using the
+snapshot username (or just `keim` before a username is available). New layouts
+place both at the top right; existing placements and editor scaling are retained.
+Content changes preserve the list's top and nearest horizontal edge. An empty
+list is hidden in game and has a selectable placeholder in the editor.
+
 ### Preserved world surfaces and bindings
 
 Keyboard/mouse bindings retain modifier chords, Toggle/Hold, conflict detection
