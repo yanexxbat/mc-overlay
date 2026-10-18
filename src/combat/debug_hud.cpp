@@ -5,12 +5,14 @@
 
 namespace mcov::combat {
 namespace {
-constexpr float kMargin=16, kPanelWidth=320, kLineHeight=18, kPlotHeight=68, kPadding=12;
+constexpr float kMargin=16, kPanelWidth=320, kLineHeight=22, kPlotHeight=68, kPadding=12;
 constexpr ImU32 kText=style::hud::Text, kMuted=style::hud::Muted,
     kAccent=style::hud::Accent, kTarget=style::hud::AccentActive;
 }
 void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,const ImVec2& viewport) {
     if(!c.enabled || viewport.x<64 || viewport.y<64 || !std::isfinite(viewport.x) || !std::isfinite(viewport.y)) return;
+    ImGui::PushFont(style::hud::Font());
+    struct FontScope { ~FontScope() { ImGui::PopFont(); } } fontScope;
     draw.PushClipRect(ImVec2(0,0),viewport,true);
     struct ClipScope { ImDrawList& draw; ~ClipScope() { draw.PopClipRect(); } } clip{draw};
     const ImVec2 center(viewport.x*0.5f,viewport.y*0.5f);

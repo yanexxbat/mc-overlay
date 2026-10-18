@@ -37,20 +37,22 @@ void Overlay::DrawAntiVanishHud() {
         rows[count++]=&r;if(count==5)break;
     }
     if(!count)return;
+    ImGui::PushFont(style::hud::Font());
     auto* draw=ImGui::GetBackgroundDrawList();const auto viewport=ImGui::GetIO().DisplaySize;
     const float width=std::min(380.f,viewport.x-24.f),line=ImGui::GetTextLineHeight(),rowHeight=line*2+10;
     const ImVec2 start{std::max(12.f,(viewport.x-width)*.5f),54};
-    const ImVec2 end{start.x+width,start.y+line+20+count*rowHeight};
-    draw->AddRectFilled(start,end,IM_COL32(22,22,28,225),7);
+    const ImVec2 end{start.x+width,std::min(viewport.y-12,start.y+line+20+count*rowHeight)};
+    style::hud::Panel(*draw,start,end);
     draw->PushClipRect({start.x+10,start.y+6},{end.x-10,end.y-6},true);
-    draw->AddText({start.x+12,start.y+9},IM_COL32(238,238,244,255),"Anti Vanish");
+    style::hud::Label(*draw,{start.x+12,start.y+9},style::hud::Muted,"Anti Vanish");
     float y=start.y+line+19;
     for(int i=0;i<count;++i){const auto& r=*rows[i];char title[96];
         std::snprintf(title,sizeof(title),"%s  %s",AntiVanishTag(r.evidence),AntiVanishName(r,rockstarConfig_.Enabled(rockstar::Feature::NameProtect)));
-        const auto color=r.evidence&antivanish::Critical?IM_COL32(255,120,113,255):r.evidence&antivanish::Visible?IM_COL32(143,215,167,255):IM_COL32(236,205,134,255);
-        draw->AddText({start.x+12,y},color,title);draw->AddText({start.x+12,y+line+2},IM_COL32(188,188,198,255),r.reason);y+=rowHeight;
+        const auto color=r.evidence&antivanish::Critical?style::hud::Danger:r.evidence&antivanish::Visible?style::hud::Text:style::hud::Warning;
+        style::hud::Label(*draw,{start.x+12,y},color,title);style::hud::Label(*draw,{start.x+12,y+line+2},style::hud::Muted,r.reason);y+=rowHeight;
     }
     draw->PopClipRect();
+    ImGui::PopFont();
 }
 void Overlay::DrawAntiVanishSettings() {
     auto& c=antiVanishConfig_;bool dirty=false;

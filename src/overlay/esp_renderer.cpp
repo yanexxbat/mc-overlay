@@ -333,7 +333,7 @@ void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
     const float width=std::min(viewport.x-12,fixed+TextWidth(font,size,name.data()));
     const float height=size+8;
     const ImVec2 lo{origin.x+(viewport.x-width)*.5f,origin.y+std::clamp(viewport.y*.13f,48.f,96.f)};
-    draw.AddRectFilled(lo,{lo.x+width,lo.y+height},IM_COL32(14,14,18,215),height*.4f);
+    style::hud::Panel(draw,lo,{lo.x+width,lo.y+height});
     // Das eigene Pill-ClipRect begrenzt auch sehr lange Namen auf kleinen Viewports.
     ClipScope clip(draw,{lo.x+padding,lo.y},{width-padding*2,height});
     float x=lo.x+padding;
@@ -341,9 +341,9 @@ void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
         Text(draw,font,size,{x,lo.y+4},color,value); x+=TextWidth(font,size,value)+gap;
     };
     field(distance,kMuted);
-    if (showPing) field(ping,IM_COL32(112,231,151,255));
-    field(name.data(),kText);
-    if (showHealth) field(health,IM_COL32(248,101,116,255));
+    if (showPing) field(ping,style::hud::Muted);
+    field(name.data(),style::hud::Text);
+    if (showHealth) field(health,e.health/e.maxHealth<.25f?style::hud::Danger:style::hud::Muted);
 }
 } // namespace
 
