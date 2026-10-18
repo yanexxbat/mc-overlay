@@ -62,6 +62,21 @@ int main() {
         p.scale=std::numeric_limits<float>::quiet_NaN(); p.position.x=std::numeric_limits<float>::infinity();
         const auto safe=PlaceHud(p,{120,80},{232,180},{16,40});
         Require(std::isfinite(safe.max.x)&&safe.max.x<=120&&safe.max.y<=80,"invalid layout produced unsafe HUD geometry");
+        const std::array<HudRect,1> peers={HudRect{{100,80},{220,180}}};
+        auto snap=SnapHud({37,53},{80,40},{640,480},{},-1,true);
+        Require(snap.position.x==32&&snap.position.y==48,"HUD grid did not round to 16-pixel cells");
+        snap=SnapHud({103,200},{80,40},{640,480},peers,-1,true);
+        Require(snap.position.x==100&&snap.guideX==100,"HUD left edges failed to align");
+        snap=SnapHud({137,137},{80,40},{640,480},peers,-1,true);
+        Require(snap.position.x==140&&snap.position.y==140&&snap.guideX==220&&snap.guideY==180,"Different-size HUD right/bottom edges failed to align");
+        snap=SnapHud({119,109},{80,40},{640,480},peers,-1,true);
+        Require(snap.position.x==120&&snap.position.y==110&&snap.guideX==160&&snap.guideY==130,"HUD centres failed to align");
+        snap=SnapHud({103,83},{80,40},{640,480},peers,0,true);
+        Require(snap.guideX<0&&snap.guideY<0,"Dragged element snapped to itself");
+        snap=SnapHud({103,83},{80,40},{640,480},peers,-1,false);
+        Require(snap.position.x==103&&snap.position.y==83&&snap.guideX<0,"Free movement still snapped");
+        snap=SnapHud({1000,-30},{123,60},{200,100},{},-1,true);
+        Require(snap.position.x==77&&snap.position.y==0,"Grid snapping pushed a HUD element out of bounds");
         std::cout<<"PASS client controls: toggle/hold, chords, focus, menu/capture suppression, mouse buttons, conflicts, HUD resize/drag/clamp\n";
     } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

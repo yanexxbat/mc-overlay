@@ -419,6 +419,13 @@ The F6 editor uses local `CompactStyle`; positions, scales and visibility retain
 their existing persistence. Small-view selection does not hide enabled elements
 from the normal HUD.
 
+The HUD editor shows a 16px grid with stronger 64px lines behind the widgets.
+Dragging snaps to the grid and, within 6px, to matching edges or centres of
+enabled peers. Alignment guides appear during a snap. Grid visibility and
+snapping have separate editor toggles; holding Alt temporarily enables free
+movement. Pointer offsets are measured from drag start so sub-grid mouse motion
+accumulates. These editor aids never appear in the normal HUD.
+
 ### In-game module list and watermark
 
 The active module HUD follows the supplied reference: compact names sorted by

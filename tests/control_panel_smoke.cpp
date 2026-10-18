@@ -1743,6 +1743,20 @@ int main(int argc,char** argv) {
         io.AddMousePosEvent(pick.x,pick.y); hudFrame({1280,800}); io.AddMouseButtonEvent(0,true); hudFrame({1280,800});
         io.AddMousePosEvent(pick.x+100,pick.y+20); hudFrame({1280,800}); io.AddMouseButtonEvent(0,false); hudFrame({1280,800});
         Require(hud.layout[2].position.x>before.x,"HUD editor drag did not move the coordinates module");
+        // Snapping must accumulate small pointer movement; Alt bypasses both grid and peer alignment.
+        const auto snapStart=mcov::OverlayUiCheck::HudRects(overlay)[2];
+        const ImVec2 snapPick{snapStart.min.x+25,snapStart.min.y+30};
+        io.AddMousePosEvent(snapPick.x,snapPick.y); hudFrame({1280,800});
+        io.AddMouseButtonEvent(0,true); hudFrame({1280,800});
+        for(int step=1;step<=32;++step) { io.AddMousePosEvent(snapPick.x+step,snapPick.y); hudFrame({1280,800}); }
+        hudFrame({1280,800});
+        Require(mcov::OverlayUiCheck::HudRects(overlay)[2].min.x>snapStart.min.x+16,"Small pointer steps got stuck on the HUD grid");
+        io.AddKeyEvent(ImGuiMod_Alt,true); io.AddMousePosEvent(snapPick.x+37,snapPick.y+21);
+        hudFrame({1280,800}); hudFrame({1280,800});
+        const auto freeRect=mcov::OverlayUiCheck::HudRects(overlay)[2];
+        Require(std::abs(freeRect.min.x-snapStart.min.x-37)<.1f&&std::abs(freeRect.min.y-snapStart.min.y-21)<.1f,
+            "Alt did not bypass HUD snapping");
+        io.AddMouseButtonEvent(0,false); io.AddKeyEvent(ImGuiMod_Alt,false); hudFrame({1280,800});
         io.AddMousePosEvent(-100,-100); hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"HUD module escaped small viewport");
         SaveFrame(device.Get(),context.Get(),output/"modular-hud-small.png");
