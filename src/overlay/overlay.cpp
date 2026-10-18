@@ -1836,7 +1836,7 @@ void Overlay::DrawSettingsTab() {
                 !depthActive_?"Idle":
                 depth&&depth->status.load()==std::uint32_t(DepthStatus::Unsupported)?"Unavailable":"Waiting":"1.21.11 OpenGL only");
             panel::CheckRow("Reduced motion",&menu_.reduceMotion);
-            panel::ValueRow("Menu material","Graphite / Sage / 98% opacity");
+            panel::ValueRow("Menu material","Graphite / Sage / Solid");
             panel::ValueRow("Background capture","Not required");
             if(panel::CheckRow("Exclude from screen capture",&settings_.excludeFromCapture)) ApplyCaptureAffinity();
             ImGui::EndTable();

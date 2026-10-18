@@ -23,7 +23,7 @@ constexpr unsigned kMenuAccent=0xB3DB8F;
 void ApplyMenuStyle() {
     auto& s=ImGui::GetStyle();
     s.WindowRounding=12; s.FrameRounding=5; s.PopupRounding=8;
-    s.Colors[ImGuiCol_WindowBg]=style::Color(0x191C1B,.98f);
+    s.Colors[ImGuiCol_WindowBg]=style::Color(0x191C1B);
     s.Colors[ImGuiCol_PopupBg]=style::Color(0x232725);
     s.Colors[ImGuiCol_Text]=style::Color(0xE9EDE7);
     s.Colors[ImGuiCol_TextDisabled]=style::Color(0x9CA59F);
@@ -144,7 +144,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     auto& draw=*ImGui::GetWindowDrawList();
     const float sidebar=size.x>=620?150.f:112.f;
     draw.AddRectFilled(pos,{pos.x+size.x,pos.y+size.y},ImGui::GetColorU32(ImGuiCol_WindowBg),12);
-    draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(0x131615,.96f)),12,ImDrawFlags_RoundCornersLeft);
+    draw.AddRectFilled(pos,{pos.x+sidebar,pos.y+size.y},ImGui::GetColorU32(style::Color(0x131615)),12,ImDrawFlags_RoundCornersLeft);
     draw.AddRect(pos,{pos.x+size.x-1,pos.y+size.y-1},ImGui::GetColorU32(ImGuiCol_Border),12);
     draw.AddLine({pos.x+sidebar,pos.y+1},{pos.x+sidebar,pos.y+size.y-1},ImGui::GetColorU32(ImGuiCol_Separator));
     ImGui::SetCursorScreenPos({pos.x+8,pos.y+5}); ImGui::InvisibleButton("##drag",{std::max(1.f,size.x-58),32});
@@ -208,11 +208,14 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                     const auto p=ImGui::GetCursorScreenPos(); const float width=ImGui::GetContentRegionAvail().x;
                     const bool active=module.mode==TileMode::Toggle&&module.enabled;
                     bool clicked=false,details=false;
+                    auto& tile=*ImGui::GetWindowDrawList();
+                    tile.AddRectFilled(p,{p.x+width,p.y+66},
+                        ImGui::GetColorU32(active?style::Color(kMenuAccent,.065f):style::Color(0xFFFFFF,.025f)),7);
                     {
                         style::StyleScope widget;
                         widget.Var(ImGuiStyleVar_FrameRounding,7);
-                        widget.Color(ImGuiCol_Button,active?style::Color(kMenuAccent,.065f):style::Color(0xFFFFFF,.025f));
-                        widget.Color(ImGuiCol_ButtonHovered,active?style::Color(kMenuAccent,.11f):style::Color(0xFFFFFF,.06f));
+                        widget.Color(ImGuiCol_Button,ImVec4(0,0,0,0));
+                        widget.Color(ImGuiCol_ButtonHovered,style::Color(0xFFFFFF,.035f));
                         widget.Color(ImGuiCol_ButtonActive,style::Color(kMenuAccent,.16f));
                         // A separate, keyboard-accessible settings target avoids accidental toggles.
                         clicked=ImGui::Button("##module_widget",{width-34,66});
@@ -222,9 +225,6 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                     }
                     const bool hovered=ImGui::IsItemHovered();
                     const bool pressed=ImGui::IsItemActive();
-                    auto& tile=*ImGui::GetWindowDrawList();
-                    tile.AddRectFilled({p.x+width-38,p.y},{p.x+width,p.y+66},
-                        ImGui::GetColorU32(active?style::Color(kMenuAccent,.065f):style::Color(0xFFFFFF,.025f)),7,ImDrawFlags_RoundCornersRight);
                     tile.AddRect(p,{p.x+width,p.y+66},ImGui::GetColorU32(active?style::Color(kMenuAccent,.19f):style::Color(0xFFFFFF,.055f)),7);
                     tile.PushClipRect({p.x+12,p.y+10},{p.x+width-40,p.y+31},true);
                     tile.AddText(style::MenuFont(true),14,{p.x+12,p.y+12},ImGui::GetColorU32(ImGuiCol_Text),module.name);
@@ -246,7 +246,6 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                             module.mode==TileMode::Action?"Click to run. Right-click for settings.":"Click to open settings.");
                         ImGui::EndTooltip();
                     }
-                    const auto after=ImGui::GetCursorScreenPos();
                     ImGui::SetCursorScreenPos({p.x+width-32,p.y+2});
                     {
                         style::StyleScope settingsButton;
@@ -254,7 +253,7 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
                         if(ImGui::Button("...##settings",{30,62})) details=true;
                         if(ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Open %s settings",module.name);
                     }
-                    ImGui::SetCursorScreenPos(after);
+                    ImGui::SetCursorScreenPos({p.x,p.y+66});
                     if(clicked) {
                         if(module.mode==TileMode::Settings) details=true;
                         else if(activate) activate(owner,state.page,i);

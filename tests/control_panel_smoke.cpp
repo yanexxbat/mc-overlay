@@ -328,6 +328,17 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
             }
         }
     }
+    // The visible settings target must never toggle the module beneath it.
+    const auto settingsPoint=ModulePoint(overlay,Page::Visuals,0,26);
+    const auto* settingsGrid=ModuleGrid();
+    const ImVec2 settingsButton{settingsGrid->Columns[0].WorkMaxX-17,settingsPoint.y};
+    const bool beforeSettings=mcov::OverlayUiCheck::Box(overlay);
+    io.AddMousePosEvent(settingsButton.x,settingsButton.y); Draw(overlay,Page::Visuals,0,{1280,800});
+    io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Visuals,0,{1280,800});
+    io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Visuals,0,{1280,800});
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&
+        mcov::OverlayUiCheck::Menu(overlay).settingsSection==0&&mcov::OverlayUiCheck::Box(overlay)==beforeSettings,
+        "Visible settings button toggled the module or failed to open its settings");
     // Native button focus supports Space, and Shift+F10 opens its settings.
     ClickModule(overlay,Page::Visuals,0,26,0);
     const bool box=mcov::OverlayUiCheck::Box(overlay);
