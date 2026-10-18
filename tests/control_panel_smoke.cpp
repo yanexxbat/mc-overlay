@@ -50,6 +50,7 @@ struct OverlayUiCheck {
     static const control_panel::State& Menu(const Overlay& o) { return o.menu_; }
     static void CloseDetails(Overlay& o) { o.menu_.settingsOpen=false; }
     static int Modules(const Overlay& o,Page page,std::span<control_panel::ModuleView> out) { return o.ReadModules(page,out); }
+    static void Activate(Overlay& o,Page page,int index) { o.ActivateModule(page,index); }
     static void ReduceMotion(Overlay& o,bool value) { o.menu_.reduceMotion=value; }
     static void Center(Overlay& o) { o.menu_.positioned=false; o.menu_.settingsPlacement.positioned=false; }
     static float AimFov(const Overlay& o) { return o.combat_.aimFov; }
@@ -704,6 +705,44 @@ void SearchChecks(mcov::Overlay& overlay) {
     Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Visuals&&!mcov::OverlayUiCheck::Menu(overlay).search[0],
         "Category navigation retained a stale search");
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
+}
+void WorkspaceChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
+    auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned;
+    mcov::OverlayUiCheck::Seed(overlay);
+    std::array<mcov::control_panel::ModuleView,64> modules{};
+    const int count=mcov::OverlayUiCheck::Modules(overlay,Page::Visuals,modules);
+    for(int i=0;i<count;++i) if(modules[i].mode==mcov::control_panel::TileMode::Toggle&&modules[i].enabled)
+        mcov::OverlayUiCheck::Activate(overlay,Page::Visuals,i);
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,true);
+    auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
+    auto& io=ImGui::GetIO(); frame(); frame();
+    auto click=[&](ImVec2 p) {
+        io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame();
+        io.AddMouseButtonEvent(0,false); frame(); frame();
+    };
+    auto* root=ImGui::FindWindowByName("Keim control panel");
+    click({root->Pos.x+166+22+82+6+55,root->Pos.y+116+14});
+    Require(mcov::OverlayUiCheck::Menu(overlay).enabledOnly,"Enabled filter did not activate");
+    auto* table=ModuleGrid();
+    Require(table->CurrentRow==0&&table->CurrentColumn==0,"Enabled filter included disabled modules");
+    SaveFrame(device,context,output/"studio-enabled.png");
+    click({table->Columns[0].WorkMinX+45,table->OuterRect.Min.y+table->RowCellPaddingY+33});
+    Require(!mcov::OverlayUiCheck::Box(overlay),"Filtered tile toggled the wrong underlying module");
+    auto* grid=Child("/module_grid_");
+    click({grid->DC.CursorStartPos.x+65,grid->DC.CursorStartPos.y+30});
+    Require(!mcov::OverlayUiCheck::Menu(overlay).enabledOnly,"Empty enabled view did not recover");
+    io.AddKeyEvent(ImGuiMod_Ctrl,true); io.AddKeyEvent(ImGuiKey_F,true); frame();
+    io.AddKeyEvent(ImGuiKey_F,false); io.AddKeyEvent(ImGuiMod_Ctrl,false); frame();
+    io.AddInputCharactersUTF8("AURA"); frame(); frame();
+    Require(std::strcmp(mcov::OverlayUiCheck::Menu(overlay).search,"AURA")==0,"Ctrl+F did not focus module search");
+    Require(ModuleGrid()->CurrentRow==0&&ModuleGrid()->CurrentColumn==0,"Keyboard search did not filter modules");
+    io.AddMousePosEvent(-100,-100);
+    mcov::OverlayUiCheck::AllowCombat(overlay); mcov::OverlayUiCheck::Center(overlay);
+    for(int i=0;i<3;++i) Draw(overlay,Page::Combat,0,{1600,900});
+    Require(ImGui::FindWindowByName("Keim control panel")->Size.x==860,"Wide workspace did not expand");
+    SaveFrame(device,context,output/"studio-grid.png");
+    OpenModuleSettings(overlay,Page::Combat,"",1,10,{1600,900});
+    SaveFrame(device,context,output/"studio-workspace.png");
 }
 void CompactKeybindChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     OpenModuleSettings(overlay,Page::Settings,"",2,5,{480,360});
@@ -1534,6 +1573,7 @@ int main(int argc,char** argv) {
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
         SearchChecks(overlay);
+        WorkspaceChecks(device.Get(),context.Get(),output);
         CompactKeybindChecks(overlay,device.Get(),context.Get(),output);
         ConfigChecks(device.Get(),context.Get(),output);
         HoleUiChecks(device.Get(),context.Get(),output);
