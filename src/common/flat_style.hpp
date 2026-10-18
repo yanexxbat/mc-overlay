@@ -22,6 +22,7 @@ void ApplyFlatTheme(ImGuiStyle& style);
 bool LoadFonts(float uiSize = 17.0f);
 ImFont* MenuFont(bool bold = false);
 ImFont* MenuHeadingFont();
+ImFont* MenuDisplayFont();
 ImFont* MenuIconFont();
 ImFont* ClassicMenuFont();
 // The colour mascot shares the existing font texture; no per-frame uploads.

@@ -23,6 +23,7 @@ struct State {
     int theme = 0; // Compatibility with existing callers; one compact client theme.
     std::array<int,7> selectedSections{};
     char search[64]{};
+    bool enabledOnly = false;
     bool reduceMotion = false;
     bool positioned = false;
     bool dragging = false;
@@ -63,7 +64,7 @@ private:
     int previous_;
 };
 
-// Compact translucent client navigation; controls remain renderer independent.
+// Responsive client workspace; controls remain renderer independent.
 // presentation state only. The caller owns all real module settings and actions.
 Actions Render(State& state, const Status& status, void* owner, Content content,
                Catalog catalog=nullptr,Activate activate=nullptr);

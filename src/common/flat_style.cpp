@@ -275,6 +275,7 @@ bool LoadFonts(float uiSize) {
     }
     ImFontConfig classic; classic.PixelSnapH=true; classic.SizePixels=13;
     io.Fonts->AddFontDefault(&classic);
+    io.Fonts->AddFontFromMemoryTTF(inter_semibold.data(), static_cast<int>(inter_semibold.size()), 28.f, &cfg);
     InstallBrandLogo(*io.Fonts,*medium);
     return true;
 }
@@ -301,6 +302,10 @@ ImFont* MenuIconFont() {
 ImFont* MenuHeadingFont() {
     const auto& fonts=ImGui::GetIO().Fonts->Fonts;
     return fonts.Size>=2?fonts[1]:ImGui::GetFont();
+}
+ImFont* MenuDisplayFont() {
+    const auto& fonts=ImGui::GetIO().Fonts->Fonts;
+    return fonts.Size>=7?fonts.back():MenuHeadingFont();
 }
 ImFont* ClassicMenuFont() {
     const auto& fonts=ImGui::GetIO().Fonts->Fonts;
