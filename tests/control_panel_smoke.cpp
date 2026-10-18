@@ -1474,9 +1474,8 @@ void ModuleHudChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     hud.visible=true; Check::SetModule(overlay,keys::Action::BoxEsp,true);
     render({360,440});
     auto single=Check::HudRects(overlay)[modules];
-    const auto singleBrand=Check::HudRects(overlay)[watermark];
-    std::cout<<"HUD brand "<<singleBrand.min.x<<","<<singleBrand.min.y<<" - "<<singleBrand.max.x<<","<<singleBrand.max.y<<"\n";
-    for(const auto& cmd:ImGui::GetBackgroundDrawList()->CmdBuffer) std::cout<<"clip "<<cmd.ClipRect.x<<","<<cmd.ClipRect.y<<","<<cmd.ClipRect.z<<","<<cmd.ClipRect.w<<" count "<<cmd.ElemCount<<"\n";
+    Require(std::abs(single.max.x-list.max.x)<.1f&&std::abs(single.min.y-list.min.y)<.1f,
+        "Toggling modules moved the right/top anchor");
     Require(single.max.x-single.min.x<fullWidth&&single.max.y-single.min.y<fullHeight,"Module bounds did not shrink after toggling modules off");
     SaveFrame(device,context,output/"hud-single-module.png");
     hud.layout[modules]={{.6f,.2f},1.6f,true};

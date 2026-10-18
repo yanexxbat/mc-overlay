@@ -273,6 +273,7 @@ private:
     bool hudEditing_=false;
     int hudSelected_=0;
     std::array<HudRect,kHudModules> hudRects_{};
+    HudContentAnchor moduleHudAnchor_{},watermarkHudAnchor_{};
     std::filesystem::path preferencesPath_{};
     bool preferencesDirty_=false;
     std::uint64_t preferenceSaveAt_=0;

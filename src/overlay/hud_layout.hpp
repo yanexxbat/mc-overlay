@@ -34,6 +34,26 @@ inline void MoveHud(HudPlacement& p,HudRect rect,ImVec2 viewport,ImVec2 delta) {
     p.position={travel.x>0?std::clamp((rect.min.x+delta.x)/travel.x,0.f,1.f):0,
                 travel.y>0?std::clamp((rect.min.y+delta.y)/travel.y,0.f,1.f):0};
 }
+// Runtime-only measurements: changing text/content must not move a widget's anchor.
+// Explicit editor moves, scale changes and viewport changes still use PlaceHud.
+struct HudContentAnchor {
+    HudPlacement placement{};
+    HudRect rect{};
+    ImVec2 viewport{};
+};
+inline HudRect PlaceHudContent(HudPlacement& p,ImVec2 viewport,ImVec2 size,ImVec2 start,HudContentAnchor& previous) {
+    const bool contentOnly=p.placed&&previous.placement.placed&&p.scale==previous.placement.scale&&
+        p.position.x==previous.placement.position.x&&p.position.y==previous.placement.position.y&&
+        viewport.x==previous.viewport.x&&viewport.y==previous.viewport.y;
+    auto rect=PlaceHud(p,viewport,size,start);
+    if(contentOnly) {
+        const float x=p.position.x>=.5f?previous.rect.max.x-rect.max.x:previous.rect.min.x-rect.min.x;
+        MoveHud(p,rect,viewport,{x,previous.rect.min.y-rect.min.y});
+        rect=PlaceHud(p,viewport,size,start);
+    }
+    previous={p,rect,viewport};
+    return rect;
+}
 struct HudSettings {
     bool visible=true,equipment=true,effects=true,coordinates=true,compass=true,performance=false,reachMarker=true;
     bool modules=true,keybinds=true;

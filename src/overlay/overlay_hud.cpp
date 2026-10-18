@@ -192,7 +192,14 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                 if(!overlap) { start=candidate; found=true; break; }
             }
         }
-        const auto rect=PlaceHud(placement,viewport,size,start); hudRects_[i]=rect;
+        const auto oldPosition=placement.position;
+        const auto rect=kind==HudModule::Modules?PlaceHudContent(placement,viewport,size,start,moduleHudAnchor_):
+            kind==HudModule::Watermark?PlaceHudContent(placement,viewport,size,start,watermarkHudAnchor_):
+            PlaceHud(placement,viewport,size,start);
+        hudRects_[i]=rect;
+        if(placement.position.x!=oldPosition.x||placement.position.y!=oldPosition.y) {
+            preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500;
+        }
         if(!wasPlaced) { preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+500; }
         // Bestehende Snapshot-Widgets zeichnen lokal; nur ihre eigenen Vertices
         // und Clip-Commands werden versetzt/skaliert. Keine JNI-Abfragen im HUD.
