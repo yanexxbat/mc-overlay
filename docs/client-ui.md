@@ -1,10 +1,12 @@
 # Kompaktes Client-Menü, modulares HUD und Keybinds
 
-Das Client-Layout folgt der Paint-Skizze `design/reference-module-widgets.png`:
-Kategorien enthalten Modul-Widgets; Rechtsklick öffnet deren Einstellungen in
-einem unabhängigen Fenster. Das bestätigte Theme bleibt kompakt,
-anthrazitfarben, transparent und mit gedämpftem Korallorange. Kleine Inter-Texte,
-native Felder und Slider mit sichtbaren Werten halten Einstellungen lesbar.
+Das Client-Menü verwendet **Graphite / Sage**: deckende Graphitflächen,
+eine dunklere Sidebar und Salbeigrün für aktive Module. Die 22-Pixel-Überschrift,
+eine kurze Kategorie-Beschreibung und echte Modul-/Aktiv-Zähler geben Orientierung.
+Breite Modulkacheln zeigen Zustand und einen sichtbaren **…**-Button für die
+Einstellungen. Rechtsklick öffnet ebenfalls das unabhängige Einstellungsfenster.
+Eingebettete Inter-Texte, native Felder und dezente Slider mit sichtbaren Werten
+halten Einstellungen lesbar.
 **Strg-Klick** auf einen Slider erlaubt die direkte Zahleneingabe.
 **Combat, Visuals, Blocks, HUD, Stats, Settings, Misc** stehen links. Der Header
 verschiebt das Menü; **Center** ordnet beide Fenster neu an, **Reset** setzt die aktuelle Kategorie
@@ -12,32 +14,34 @@ zurück. Das Hauptfenster beträgt bis zu 740 × 520 UI-Pixel, das Settings-Fens
 bis zu 480 × 580; beide sind auf den Viewport minus 24 Pixel begrenzt.
 Die erste Platzierung lässt nach Möglichkeit bis zu 496 Pixel rechts für Settings
 frei. Die Sidebar ist 150 Pixel breit, unter 620 Pixel Fensterbreite
-112 Pixel. Der Injector verwendet dasselbe freigegebene kompakte Theme mit
+112 Pixel. Der Injector verwendet weiterhin das kompakte Theme mit
 Start/Diagnose-Sidebar und festem Start-/Schließen-Footer.
 Layoutdetails: [compact-ui.md](compact-ui.md). Injector und Bedienung:
 [launcher.md](launcher.md). Der erhaltene frühere Glasrenderer steht in
 [liquid-ui.md](liquid-ui.md). Das HUD verwendet nun dasselbe kompakte Theme;
 Welt-Visuals behalten ihre bisherigen Styles.
 
-Der Client komponiert seine dunkle Oberfläche direkt mit Alpha 0,88 über das
-Spiel. **Settings → Overlay → Menu material** zeigt **Translucent dark / 88%
-opacity**, **Background capture** zeigt **Not required**. Der Client benötigt
+Die Menüoberfläche ist deckend, damit Spiel und überlappende Fenster die Schrift
+nicht beeinträchtigen. **Settings → Overlay → Menu material** zeigt **Graphite /
+Sage / Solid**, **Background capture** zeigt **Not required**. Der Client benötigt
 keine Desktop-Aufnahme, Unschärfe oder Brechung. **Exclude from screen capture**
 gilt auch bei geöffnetem Menü.
 
 ## Kategorien, Module und Einstellungen
 
 Eine Kategorie links auswählen. Ihre Module stehen direkt in einem scrollbaren
-Raster mit einer bis drei Spalten. Alle 82 Bereiche bleiben erreichbar.
+Raster mit einer bis zwei Spalten. Alle 85 Bereiche bleiben erreichbar.
 Die 66 Pixel hohen Widgets zeigen Name, Zustand beziehungsweise Aktion und bei
 Toggle-Modulen eine Anzeige unten rechts; der Tooltip zeigt vorhandene Belegungen.
 **Search** filtert Modulnamen innerhalb der Kategorie ohne Unterschied zwischen
 Groß- und Kleinschreibung. Bei null Treffern stellt **Clear search** die Widgets
 wieder her. Ein Kategorienwechsel leert die Suche und schließt die Details.
 
-**Linksklick** oder **Leertaste** schaltet ein echtes Toggle-Modul um oder führt
+**Linksklick** auf die Hauptfläche oder **Leertaste** schaltet ein echtes Toggle-Modul um oder führt
 seine Aktion aus. **Rechtsklick**, **Menü-Taste** oder **Shift+F10** öffnet die
-Einstellungen ohne Umschalten. Settings-only-Widgets öffnen diese auch per
+Einstellungen ohne Umschalten. Der separate **…**-Button rechts öffnet ebenfalls
+die Einstellungen, ohne den Modulzustand zu ändern, und ist per Tastatur erreichbar.
+Settings-only-Widgets öffnen diese auch per
 Linksklick. **Friends**, **Entity filters**, **Block types**, **Stats** und
 **Settings** zeigen ihre tatsächlichen Einstellungen ohne erfundenen
 Aktivierungszustand. **HUD → Editor** und **Misc → Panic** behalten ihre Aktion.

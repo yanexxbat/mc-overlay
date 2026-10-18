@@ -170,6 +170,28 @@ components:
 
 # Design System: Keim Compact Controls
 
+## Current client menu: Graphite / Sage (2026-10-18)
+
+The client menu overrides the shared tokens below through scoped `ApplyMenuStyle()`
+in `src/overlay/control_panel.cpp`. This section takes precedence for the client
+menu and its module settings; the launcher, HUD and world visuals retain their
+existing tokens.
+
+- Opaque root `#191C1B`, sidebar `#131615`, text `#E9EDE7`, secondary text `#9CA59F`,
+  accent `#B3DB8F`. Thin neutral outlines; active modules use a low-opacity sage tint.
+- Embedded Inter: 22px page title, 14px controls, 11px sidebar group labels.
+- Existing 740 × 520 footprint and 480 × 580 detail pane. Content starts at y=84;
+  equal-width columns use floor(available width / 220), clamped to one or two.
+- 66px module tiles, 7px rounding and 12px text insets. A separate 30px-wide
+  settings button opens details without toggling. Native focus, Space and context
+  shortcuts remain available. Tooltips use the ImGui short hover delay.
+- Slider values remain centered over a subtle fill with a 2px sage progress line;
+  native dragging, keyboard adjustment and Ctrl-click numeric input remain intact.
+- Actual category module/enabled counts appear on wide menus; compact menus omit
+  the counts. Navigation and content scroll independently, above fixed footers.
+- The UI smoke check renders desktop and 480 × 360 layouts and verifies the
+  separate settings target, module states, search, keyboard input and style restoration.
+
 ## Overview
 
 **Creative North Star: "Compact Translucent Controls"**
@@ -206,7 +228,8 @@ keep these operations consistent. World effects retain their styles.
 Shared drawing tokens come from `src/common/compact_theme.hpp`; control styling
 comes from `src/common/compact_style.hpp`. The injector's solid
 primary button and list treatment come from `src/injector/launcher_ui.cpp`.
-The frontmatter is normative; obsolete launcher lavender primitives are removed.
+The frontmatter is normative for shared surfaces; the current client-menu section
+above overrides it for menu windows. Obsolete launcher lavender primitives are removed.
 
 ### Primary
 

@@ -1,5 +1,11 @@
 # Kompaktes, transparentes Client-, Injector- und HUD-Theme
 
+**Stand 18.10.2026:** Das Client-Menü wurde durch das deckende **Graphite / Sage**-
+Design ersetzt. Aktuelle Menügestaltung und Bedienung stehen in
+[client-ui.md](client-ui.md) und im Abschnitt „Current client menu“ in
+[DESIGN.md](../DESIGN.md). Die folgenden früheren Menüfarben und Rasterangaben
+dokumentieren den Vorgänger; Injector und HUD behalten ihre gemeinsamen Tokens.
+
 Das bestaetigte visuelle Theme folgt `design/reference-translucent-menu.png`:
 eine ruhige anthrazitfarbene Oberflaeche mit schmaler Sidebar, kleinen Reglern
 und gedaempftem Korallorange. Das aktuelle Client-Layout folgt der vom Benutzer
