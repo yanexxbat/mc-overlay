@@ -834,7 +834,6 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
     const float lineHeight = ImGui::GetTextLineHeight() + 4.0f;
     const float height     = 24.0f + snapshot.effectCount * lineHeight + 4.0f;
 
-    DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     style::hud::Heading(*draw,{x,y},kPanelWidth,"Status effects");
 
     float row = y + 24.0f;
@@ -862,11 +861,14 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
         const ImU32 colour  = expiring ? style::hud::Warning : style::hud::Text;
 
         const ImVec2 size = ImGui::CalcTextSize(timing);
-        draw->PushClipRect({x+10,row},{x+kPanelWidth-18-size.x,row+ImGui::GetTextLineHeight()},true);
-        DrawHudText(draw, x + 10.0f, row, colour, name);
+        const float rowWidth=std::min(kPanelWidth,ImGui::CalcTextSize(name).x+size.x+30);
+        const float left=x+kPanelWidth-rowWidth;
+        DrawHudPanel(*draw,{left,row-1},{x+kPanelWidth,row+lineHeight-1});
+        draw->PushClipRect({left+10,row},{x+kPanelWidth-18-size.x,row+ImGui::GetTextLineHeight()+1},true);
+        DrawHudText(draw, left + 10.0f, row, colour, name);
         draw->PopClipRect();
         DrawHudText(draw, x + kPanelWidth - 10.0f - size.x, row,
-                   expiring ? colour : style::hud::Text, timing);
+                   expiring ? colour : style::hud::Muted, timing);
         row += lineHeight;
     }
     return height + kPanelGap;
@@ -875,45 +877,46 @@ float Overlay::DrawEffectsPanel(const WorldSnapshot& snapshot, float x, float y)
 float Overlay::DrawCoordinatesPanel(const WorldSnapshot& snapshot, float x, float y) {
     ImDrawList* draw = ImGui::GetBackgroundDrawList();
     const float lineHeight = ImGui::GetTextLineHeight() + 3.0f;
-    const float height     = 24.0f + 4 * lineHeight + 4.0f;
+    const float height     = 28.0f + 6 * lineHeight;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     style::hud::Heading(*draw,{x,y},kPanelWidth,"Coordinates");
 
     char line[96];
-    float row = y + 24.0f;
+    float row = y + 28.0f;
 
-    std::snprintf(line, sizeof(line), "XYZ   %.1f  %.1f  %.1f", snapshot.posX, snapshot.posY, snapshot.posZ);
-    DrawHudText(draw, x + 10.0f, row, style::hud::Text, line);
-    row += lineHeight;
+    const char* axes[]={"X","Y","Z"}; const double values[]={snapshot.posX,snapshot.posY,snapshot.posZ};
+    for(int i=0;i<3;++i) {
+        std::snprintf(line,sizeof(line),"%.1f",values[i]); style::hud::Row(*draw,kPanelWidth,row,axes[i],line); row+=lineHeight;
+    }
 
     // Chunk-local coordinates, the same numbers F3 shows.
     const int blockX = static_cast<int>(std::floor(snapshot.posX));
     const int blockZ = static_cast<int>(std::floor(snapshot.posZ));
-    std::snprintf(line, sizeof(line), "Chunk %d %d  (%d %d)",
+    std::snprintf(line, sizeof(line), "%d %d  (%d %d)",
                   blockX >> 4, blockZ >> 4, blockX & 15, blockZ & 15);
-    DrawHudText(draw, x + 10.0f, row, style::hud::Muted, line);
+    style::hud::Row(*draw,kPanelWidth,row,"Chunk",line);
     row += lineHeight;
 
     // The 1:8 overworld/nether ratio, in whichever direction is useful.
     const bool inNether = std::strstr(snapshot.dimension, "nether") != nullptr;
     if (inNether) {
-        std::snprintf(line, sizeof(line), "Over  %.0f  ~  %.0f", snapshot.posX * 8.0f, snapshot.posZ * 8.0f);
+        std::snprintf(line, sizeof(line), "%.0f  ~  %.0f", snapshot.posX * 8.0f, snapshot.posZ * 8.0f);
     } else {
-        std::snprintf(line, sizeof(line), "Nether %.0f  ~  %.0f", snapshot.posX / 8.0f, snapshot.posZ / 8.0f);
+        std::snprintf(line, sizeof(line), "%.0f  ~  %.0f", snapshot.posX / 8.0f, snapshot.posZ / 8.0f);
     }
-    DrawHudText(draw, x + 10.0f, row, style::hud::Accent, line);
+    style::hud::Row(*draw,kPanelWidth,row,inNether?"Overworld":"Nether",line);
     row += lineHeight;
 
-    std::snprintf(line, sizeof(line), "Facing %s  %.0f deg", FacingName(snapshot.yawDeg), YawToBearing(snapshot.yawDeg));
-    DrawHudText(draw, x + 10.0f, row, style::hud::Muted, line);
+    std::snprintf(line, sizeof(line), "%s  %.0f deg", FacingName(snapshot.yawDeg), YawToBearing(snapshot.yawDeg));
+    style::hud::Row(*draw,kPanelWidth,row,"Facing",line);
 
     return height + kPanelGap;
 }
 
 float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, float y) {
     ImDrawList* draw = ImGui::GetBackgroundDrawList();
-    const float height = 132.0f;
+    const float height = 146.0f;
 
     DrawHudPanel(*draw, ImVec2(x, y), ImVec2(x + kPanelWidth, y + height));
     style::hud::Heading(*draw,{x,y},kPanelWidth,"Performance");
@@ -923,7 +926,7 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
     std::snprintf(line, sizeof(line), "%d fps   %.1f ms", snapshot.fps >= 0 ? snapshot.fps
                                                                             : static_cast<int>(ImGui::GetIO().Framerate),
                   latest);
-    DrawHudText(draw, x + 10.0f, y + 22.0f, style::hud::Text, line);
+    DrawHudText(draw, x + 10.0f, y + 28.0f, style::hud::Text, line);
 
     // ImGui's plot widgets need a window; on the background draw list we render
     // the series by hand, which also lets the two graphs share one panel.
@@ -946,16 +949,16 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
         style::hud::Label(*draw,{px+3,py+1},style::hud::Muted,scale);
     };
 
-    plot(frameMsHistory_, x + 10.0f, y + 40.0f, kPanelWidth - 20.0f, 34.0f, style::hud::Accent, 20.0f);
+    plot(frameMsHistory_, x + 10.0f, y + 50.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Accent, 20.0f);
 
     if (snapshot.heapMaxBytes > 0) {
         const float usedMb = static_cast<float>(snapshot.heapUsedBytes) / (1024.0f * 1024.0f);
         const float maxMb  = static_cast<float>(snapshot.heapMaxBytes) / (1024.0f * 1024.0f);
         std::snprintf(line, sizeof(line), "heap %.0f / %.0f MB", usedMb, maxMb);
-        DrawHudText(draw, x + 10.0f, y + 78.0f, style::hud::Text, line);
-        plot(heapHistory_, x + 10.0f, y + 94.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Muted, maxMb * 0.25f);
+        DrawHudText(draw, x + 10.0f, y + 86.0f, style::hud::Text, line);
+        plot(heapHistory_, x + 10.0f, y + 108.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Muted, maxMb * 0.25f);
     } else {
-        DrawHudText(draw, x + 10.0f, y + 78.0f, style::hud::Muted, "heap unavailable");
+        DrawHudText(draw, x + 10.0f, y + 86.0f, style::hud::Muted, "heap unavailable");
     }
 
     return height + kPanelGap;

@@ -152,8 +152,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         switch(kind) {
             case HudModule::Equipment:size.y=equipment?24+equipment*(lineHeight+9):50;break;
             case HudModule::Effects:size.y=effects?28+effects*(lineHeight+4):50;break;
-            case HudModule::Coordinates:size.y=28+4*(lineHeight+3);break;
-            case HudModule::Performance:size.y=132;break;
+            case HudModule::Coordinates:size.y=28+6*(lineHeight+3);break;
+            case HudModule::Performance:size.y=146;break;
             case HudModule::Compass:size={320,26};break;
             case HudModule::Reach:size.y=60;break;
             case HudModule::Watermark:size=watermarkSize;break;
