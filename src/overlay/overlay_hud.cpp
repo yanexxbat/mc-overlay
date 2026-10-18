@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <cstdio>
 #include <cctype>
+#include <cfloat>
+#include <string_view>
 
 namespace mcov {
 namespace {
@@ -217,12 +219,12 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                     if(a==keys::Index(keys::Action::Hud)) continue;
                     const bool on=ModuleEnabled(static_cast<keys::Action>(a));
                     if(!bindings_[a].key) continue;
-                        const auto key=BindName(bindings_[a]); const auto extent=ImGui::CalcTextSize(key.c_str());
-                        const float keyX=std::max(10.f,size.x-10-extent.x);
-                        draw.PushClipRect({10,y},{std::max(10.f,keyX-8),y+lineHeight},true);
-                        draw.AddText({10,y},on?style::compact::Accent:style::compact::Muted,keys::kNames[a]);
-                        draw.PopClipRect();
-                        draw.AddText({keyX,y},style::compact::Text,key.c_str());
+                    const auto key=BindName(bindings_[a]); const auto extent=ImGui::CalcTextSize(key.c_str());
+                    const float keyX=std::max(10.f,size.x-10-extent.x);
+                    draw.PushClipRect({10,y},{std::max(10.f,keyX-8),y+lineHeight},true);
+                    draw.AddText({10,y},on?style::compact::Accent:style::compact::Muted,keys::kNames[a]);
+                    draw.PopClipRect();
+                    draw.AddText({keyX,y},style::compact::Text,key.c_str());
                     y+=lineHeight+4;
                 } break;
             }
