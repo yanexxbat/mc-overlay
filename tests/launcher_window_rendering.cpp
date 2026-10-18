@@ -48,17 +48,21 @@ struct FlatAppRenderingCheck {
         app.context_->CopyResource(readback.Get(),back.Get());
         D3D11_MAPPED_SUBRESOURCE mapped{};
         Require(SUCCEEDED(app.context_->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)),"Readback failed");
-        int translucent=0,transparent=0,ink=0,mascot=0;
+        int opaque=0,graphite=0,transparent=0,ink=0,mascot=0;
+        const bool compact=app.width_<620||app.height_<460;
+        const int mascotX=compact?20:28,mascotY=compact?21:31;
         for(int y=0;y<app.height_;++y) for(int x=0;x<app.width_;++x) {
             const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.RowPitch+x*4;
-            if(pixel[3]>=220&&pixel[3]<=244) ++translucent;
+            if(pixel[3]==255) ++opaque;
+            if(pixel[0]==25&&pixel[1]==28&&pixel[2]==27&&pixel[3]==255) ++graphite;
             if(pixel[3]==0) ++transparent;
             if(pixel[0]>150&&pixel[1]>150&&pixel[2]>150) ++ink;
-            if(x>=20&&x<48&&y>=21&&y<49&&pixel[1]>pixel[0]*1.2f&&pixel[1]>pixel[2]*1.4f&&pixel[3]>128) ++mascot;
+            if(x>=mascotX&&x<mascotX+30&&y>=mascotY&&y<mascotY+30&&pixel[1]>pixel[0]*1.2f&&pixel[1]>pixel[2]*1.4f&&pixel[3]>128) ++mascot;
         }
         Save(png,app.width_,app.height_,mapped);
         app.context_->Unmap(readback.Get(),0);
-        Require(translucent>app.width_*app.height_*.75,"Native launcher lost its translucent panel");
+        Require(opaque>app.width_*app.height_*.75,"Native launcher lost its opaque workspace panel");
+        Require(graphite>app.width_*app.height_*.3,"Native launcher lost its Graphite / Sage palette");
         Require(transparent>app.width_*20,"Native launcher lost its transparent margins");
         Require(ink>500,"Native launcher controls are invisible");
         Require(mascot>40,"Keim mascot lost its colour or is missing from the launcher");
@@ -69,7 +73,7 @@ struct FlatAppRenderingCheck {
         const bool rounded=kind!=ERROR&&!PtInRegion(region,0,0)&&PtInRegion(region,app.width_/2,app.height_/2);
         DeleteObject(region);
         Require(rounded,"Native launcher lost its rounded region");
-        std::cout<<"Native frame "<<app.width_<<'x'<<app.height_<<": translucent="<<translucent<<" transparent="<<transparent<<" visible ink="<<ink<<'\n';
+        std::cout<<"Native frame "<<app.width_<<'x'<<app.height_<<": opaque="<<opaque<<" graphite="<<graphite<<" transparent="<<transparent<<" visible ink="<<ink<<'\n';
     }
 };
 }
@@ -92,7 +96,7 @@ int main(int argc,char** argv) {
         view.tab=1; view.diagnostic="Connection details appear here.";
         SetWindowPos(static_cast<HWND>(app.hwnd()),nullptr,0,0,480,380,SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
         mcov::FlatAppRenderingCheck::Frame(app,view,output.empty()?output:output/"launcher-native-diagnose.png");
-        std::cout<<"PASS native launcher: hidden initialization, translucent swapchain, controls, resize, rounded clipping\n";
+        std::cout<<"PASS native launcher: hidden initialization, graphite workspace, controls, resize, rounded clipping\n";
         return 0;
     } catch(const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
 }

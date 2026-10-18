@@ -1,5 +1,6 @@
 #pragma once
 #include "compact_style.hpp"
+#include <initializer_list>
 
 namespace mcov::style {
 namespace workspace {

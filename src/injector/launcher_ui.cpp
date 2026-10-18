@@ -2,6 +2,7 @@
 #include "../common/workspace_style.hpp"
 #include "../overlay/control_panel.hpp"
 #include <algorithm>
+#include <utility>
 
 namespace mcov::launcher {
 namespace {
