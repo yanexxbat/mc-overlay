@@ -1,13 +1,13 @@
 #include "debug_hud.hpp"
 #include "imgui.h"
-#include "../common/compact_theme.hpp"
+#include "../common/hud_style.hpp"
 #include <cstdio>
 
 namespace mcov::combat {
 namespace {
 constexpr float kMargin=16, kPanelWidth=320, kLineHeight=18, kPlotHeight=68, kPadding=12;
-constexpr ImU32 kText=style::compact::Text, kMuted=style::compact::Muted,
-    kAccent=style::compact::Accent, kTarget=style::compact::AccentActive;
+constexpr ImU32 kText=style::hud::Text, kMuted=style::hud::Muted,
+    kAccent=style::hud::Accent, kTarget=style::hud::AccentActive;
 }
 void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,const ImVec2& viewport) {
     if(!c.enabled || viewport.x<64 || viewport.y<64 || !std::isfinite(viewport.x) || !std::isfinite(viewport.y)) return;
@@ -21,12 +21,12 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
     const float width=std::min(kPanelWidth,viewport.x-2*kMargin);
     const float height=2*kPadding+(c.target ? 3*kLineHeight : 0)+(c.packetStats ? 2*kLineHeight : 0)+(c.trace ? kPlotHeight+kLineHeight : 0);
     const ImVec2 start(kMargin,kMargin),end(kMargin+width,kMargin+height);
-    style::compact::Panel(draw,start,end);
+    style::hud::Panel(draw,start,end);
     draw.PushClipRect(ImVec2(start.x+kPadding,start.y),ImVec2(end.x-kPadding,end.y),true);
     ClipScope bodyClip{draw};
     float y=start.y+kPadding;
     char text[256];
-    auto line=[&](const char* value,ImU32 color=kText) { draw.AddText(ImVec2(start.x+kPadding,y),color,value); y+=kLineHeight; };
+    auto line=[&](const char* value,ImU32 color=kText) { style::hud::Label(draw,ImVec2(start.x+kPadding,y),color,value); y+=kLineHeight; };
     if(c.target) {
         if(s.target) {
             std::snprintf(text,sizeof(text),"%.*s  %.2fm  %.1f deg",static_cast<int>(s.target->name.size()),s.target->name.data(),s.target->range,s.target->angle);
@@ -58,7 +58,7 @@ void CombatHud::Draw(ImDrawList& draw,const DebugSnapshot& s,const HudConfig& c,
             }
             draw.AddPolyline(wantedYaw.data(),static_cast<int>(count),kTarget,0,1);
             draw.AddPolyline(actualYaw.data(),static_cast<int>(count),kText,0,1.5f);
-            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),style::compact::Rgba(style::compact::AccentActiveRGB,100),0,1);
+            draw.AddPolyline(wantedPitch.data(),static_cast<int>(count),IM_COL32(169,177,185,100),0,1);
             draw.AddPolyline(actualPitch.data(),static_cast<int>(count),IM_COL32(236,236,239,100),0,1);
         }
     }

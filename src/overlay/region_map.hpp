@@ -1,6 +1,6 @@
 #pragma once
 #include "../common/shared_state.hpp"
-#include "../common/compact_theme.hpp"
+#include "../common/hud_style.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -56,12 +56,12 @@ inline bool Overworld(std::string_view dimension) {
            name=="resourcekey[minecraft:dimension / minecraft:overworld]";
 }
 inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live) {
-    using namespace style::compact;
+    using namespace style::hud;
     Panel(d,{0,0},kSize); Heading(d,{0,0},kSize.x,"DonutSMP region map");
     constexpr float left=19,top=52,side=270,cell=side/9;
-    d.AddText({left,30},Muted,"-225k");
+    style::hud::Label(d,{left,30},Muted,"-225k");
     const auto right=ImGui::CalcTextSize("+225k X");
-    d.AddText({left+side-right.x,30},Muted,"+225k X");
+    style::hud::Label(d,{left+side-right.x,30},Muted,"+225k X");
     const bool server=DonutServer(s.serverAddress),world=Overworld(s.dimension);
     const int current=live&&server&&world?CellAt(s.posX,s.posZ):-1;
     for(int i=0;i<81;++i) {
@@ -70,7 +70,7 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
         if(c.labels) {
             const char* label=kShort[kRegions[i]];
             const auto extent=ImGui::CalcTextSize(label);
-            d.AddText({a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},kRegions[i]==3?IM_COL32(255,255,255,255):IM_COL32(12,19,25,255),label);
+            style::hud::Label(d,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},kRegions[i]==3?IM_COL32(255,255,255,255):IM_COL32(12,19,25,255),label);
         }
     }
     if(c.grid) for(int n=0;n<=9;++n) {
@@ -89,11 +89,11 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
         d.AddCircleFilled(p,5,IM_COL32(12,19,25,255),16);
         d.AddCircleFilled(p,3,IM_COL32(255,255,255,255),16);
     }
-    d.AddText({left,top+side+4},Muted,"Z: -225k top / +225k bottom");
+    style::hud::Label(d,{left,top+side+4},Muted,"Z: -225k top / +225k bottom");
     for(int i=0;i<6;++i) {
         const float x=left+(i%3)*94.f,y=346+(i/3)*19.f;
         d.AddRectFilled({x,y+3},{x+7,y+10},kColors[i],2);
-        d.AddText({x+11,y},Text,kNames[i]);
+        style::hud::Label(d,{x+11,y},Text,kNames[i]);
     }
     char status[100]{};
     if(!live) std::snprintf(status,sizeof(status),"Waiting for live player data");
@@ -102,6 +102,6 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
     else if(current<0) std::snprintf(status,sizeof(status),"Position outside mapped area");
     else if(c.coordinates) std::snprintf(status,sizeof(status),"%s | X %.0f  Z %.0f",kNames[kRegions[current]],s.posX,s.posZ);
     else std::snprintf(status,sizeof(status),"%s",kNames[kRegions[current]]);
-    d.AddText({10,390},current>=0?Text:Muted,status);
+    style::hud::Label(d,{10,390},current>=0?Text:Muted,status);
 }
 } // namespace mcov::regionmap

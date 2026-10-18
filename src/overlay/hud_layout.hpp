@@ -1,6 +1,7 @@
 #pragma once
 #include "imgui.h"
 #include "../common/compact_theme.hpp"
+#include "../common/hud_style.hpp"
 #include "region_map.hpp"
 #include <array>
 #include <algorithm>
@@ -65,6 +66,6 @@ struct HudSettings {
     std::array<HudPlacement,kHudModules> layout{};
 };
 inline void DrawHudPanel(ImDrawList& draw,ImVec2 min,ImVec2 max) {
-    style::compact::Panel(draw,min,max);
+    style::hud::Panel(draw,min,max);
 }
 } // namespace mcov
