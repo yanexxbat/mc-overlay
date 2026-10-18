@@ -659,7 +659,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     const ImVec2 centerButton{root->Pos.x+root->Size.x-182,root->Pos.y+root->Size.y-23};
     io.AddMousePosEvent(centerButton.x,centerButton.y); frame(); io.AddMouseButtonEvent(0,true); frame();
     io.AddMouseButtonEvent(0,false); frame(); frame();
-    Require(root->Pos.x==22&&root->Pos.y==140,"Center did not restore the initial module grid placement");
+    Require(root->Pos.x==22&&root->Pos.y==(800-root->Size.y)*.5f,"Center did not restore the initial module grid placement");
     Require(pane->Pos.x==root->Pos.x+root->Size.x+16&&pane->Pos.y==root->Pos.y,
         "Center positioned settings relative to the old module grid");
     mcov::OverlayUiCheck::Center(overlay); io.AddMousePosEvent(-100,-100);
@@ -683,7 +683,7 @@ void SearchChecks(mcov::Overlay& overlay) {
     mcov::OverlayUiCheck::CloseDetails(overlay);
     auto frame=[&] { Draw(overlay,Page::Combat,0,{1280,800}); }; frame(); frame();
     auto& io=ImGui::GetIO(); auto* root=ImGui::FindWindowByName("Keim control panel");
-    const ImVec2 p{root->Pos.x+45,root->Pos.y+58};
+    const ImVec2 p{root->Pos.x+root->Size.x-200,root->Pos.y+58};
     io.AddMousePosEvent(p.x,p.y); frame(); io.AddMouseButtonEvent(0,true); frame(); io.AddMouseButtonEvent(0,false); frame();
     io.AddInputCharactersUTF8("AURA"); frame(); frame(); frame();
     Require(ModuleGrid()->CurrentRow==0&&ModuleGrid()->CurrentColumn==0,"Case-insensitive widget search failed");
@@ -1615,7 +1615,7 @@ int main(int argc,char** argv) {
         mcov::OverlayUiCheck::ResetVisuals(overlay); Require(mcov::OverlayUiCheck::Box(overlay),"Visuals reset failed");
         mcov::OverlayUiCheck::CloseDetails(overlay); frame(Page::Visuals); frame(Page::Visuals);
         auto* nav=Child("/navigation_");
-        const float tabHeight=29;
+        const float tabHeight=36;
         click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+tabHeight*.5f});
         Require(mcov::OverlayUiCheck::Menu(overlay).page==Page::Combat,"Left navigation did not select Combat");
         nav=Child("/navigation_"); click({nav->Pos.x+nav->Size.x*.5f,nav->Pos.y+5*(tabHeight+6)+tabHeight*.5f},Page::Combat);
