@@ -137,7 +137,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         row.width=row.labelWidth=listFont->CalcTextSizeA(kModuleFontSize,FLT_MAX,0,row.label.c_str()).x;
     }
     char watermark[80];
-    std::snprintf(watermark,sizeof(watermark),s.username[0]?"keim / %.32s":"keim",s.username);
+    const char* username=rockstar::Pack::DisplayName(s.username,rockstarConfig_.Enabled(rockstar::Feature::NameProtect),true);
+    std::snprintf(watermark,sizeof(watermark),s.username[0]?"keim / %.32s":"keim",username);
     const ImVec2 watermarkSize{listFont->CalcTextSizeA(20.f,FLT_MAX,0,watermark).x+2,27};
     float stackY=44;
     const float lineHeight=ImGui::GetTextLineHeight();

@@ -46,7 +46,9 @@ inline HudRect PlaceHudContent(HudPlacement& p,ImVec2 viewport,ImVec2 size,ImVec
         p.position.x==previous.placement.position.x&&p.position.y==previous.placement.position.y&&
         viewport.x==previous.viewport.x&&viewport.y==previous.viewport.y;
     auto rect=PlaceHud(p,viewport,size,start);
-    if(contentOnly) {
+    const bool resized=std::abs((rect.max.x-rect.min.x)-(previous.rect.max.x-previous.rect.min.x))>.01f||
+        std::abs((rect.max.y-rect.min.y)-(previous.rect.max.y-previous.rect.min.y))>.01f;
+    if(contentOnly&&resized) {
         const float x=p.position.x>=.5f?previous.rect.max.x-rect.max.x:previous.rect.min.x-rect.min.x;
         MoveHud(p,rect,viewport,{x,previous.rect.min.y-rect.min.y});
         rect=PlaceHud(p,viewport,size,start);
