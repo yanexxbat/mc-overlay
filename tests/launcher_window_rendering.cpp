@@ -49,7 +49,7 @@ struct FlatAppRenderingCheck {
         D3D11_MAPPED_SUBRESOURCE mapped{};
         Require(SUCCEEDED(app.context_->Map(readback.Get(),0,D3D11_MAP_READ,0,&mapped)),"Readback failed");
         int opaque=0,graphite=0,transparent=0,ink=0,mascot=0;
-        const bool compact=app.width_<620||app.height_<460;
+        const bool compact=app.width_<620||app.height_<560;
         const int mascotX=compact?20:28,mascotY=compact?21:31;
         for(int y=0;y<app.height_;++y) for(int x=0;x<app.width_;++x) {
             const auto* pixel=static_cast<const unsigned char*>(mapped.pData)+y*mapped.RowPitch+x*4;

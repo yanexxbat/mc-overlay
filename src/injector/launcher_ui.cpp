@@ -80,7 +80,7 @@ void HardwareId(View& v,float width) {
 
 Actions Render(View& v,ImVec2 size) {
     style::WorkspaceStyle scoped; Actions a;
-    const bool compact=size.x<620||size.y<460;
+    const bool compact=size.x<620||size.y<560;
     const float sidebar=compact?112.f:166.f;
     v.tab=std::clamp(v.tab,0,1);
     auto& draw=*ImGui::GetBackgroundDrawList();
@@ -186,7 +186,9 @@ Actions Render(View& v,ImVec2 size) {
             if(ImGui::SmallButton("Refresh")) a.refresh=true;
             ImGui::EndDisabled();
             ImGui::Dummy({0,3});
-            InstanceList(v,std::clamp(size.y*.28f,96.f,180.f));
+            const float listHeight=v.instances.empty()?96.f:std::min(
+                float(v.instances.size())*62.f+2,std::clamp(size.y*.25f,96.f,180.f));
+            InstanceList(v,listHeight);
             control_panel::Section(v.busy?"Connection":"Status");
             if(v.busy) {
                 ImGui::TextWrapped("%s",v.phase.c_str());
@@ -198,16 +200,18 @@ Actions Render(View& v,ImVec2 size) {
                 if(v.needsJdk&&ImGui::Button("Select JDK folder")) a.chooseJdk=true;
                 if(v.error&&ImGui::SmallButton("Show details")) v.tab=1;
             }
-            ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-            ImGui::TextWrapped("After starting, switch to Minecraft.");
-            ImGui::Spacing();
-            for(const auto& shortcut:std::array<std::pair<const char*,const char*>,3>{{{"INSERT","Open menu"},{"F6","HUD editor"},{"END","Quit client"}}}) {
+            if(!v.busy&&!v.error&&!v.needsJdk) {
+              ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
+              ImGui::TextWrapped("After starting, switch to Minecraft.");
+              ImGui::Spacing();
+              for(const auto& shortcut:std::array<std::pair<const char*,const char*>,3>{{{"INSERT","Open menu"},{"F6","HUD editor"},{"END","Quit client"}}}) {
                 const auto p=ImGui::GetCursorScreenPos();
                 auto& contentDraw=*ImGui::GetWindowDrawList();
                 contentDraw.AddRectFilled(p,{p.x+58,p.y+22},ImGui::GetColorU32(style::Color(0xFFFFFF,.045f)),4);
                 contentDraw.AddText({p.x+8,p.y+4},muted,shortcut.first);
                 contentDraw.AddText({p.x+72,p.y+4},muted,shortcut.second);
                 ImGui::Dummy({0,22});
+              }
             }
         } else {
             control_panel::Section("Connection details");
