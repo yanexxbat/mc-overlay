@@ -12,8 +12,8 @@ constexpr float kModuleFontSize=18.f;
 constexpr float kModuleRowHeight=25.f;
 constexpr float kModuleInset=8.f;
 constexpr float kModuleRail=2.f;
-constexpr ImU32 kHudText=IM_COL32(246,247,249,255);
-constexpr ImU32 kHudDetail=IM_COL32(169,177,185,255);
+constexpr ImU32 kHudText=style::hud::Text;
+constexpr ImU32 kHudDetail=style::hud::Muted;
 struct ModuleRow {
     std::string label;
     std::string detail;
@@ -31,8 +31,7 @@ std::string HudModuleName(const char* name) {
     return label;
 }
 void HudText(ImDrawList& draw,ImFont* font,float size,ImVec2 pos,ImU32 color,const char* text) {
-    draw.AddText(font,size,{pos.x+1,pos.y+1},IM_COL32(0,0,0,180),text);
-    draw.AddText(font,size,pos,color,text);
+    style::hud::Label(draw,font,size,pos,color,text);
 }
 void DrawModuleList(ImDrawList& draw,ImFont* font,std::span<const ModuleRow> rows,ImVec2 size) {
     const float right=size.x-kModuleRail;
@@ -45,13 +44,13 @@ void DrawModuleList(ImDrawList& draw,ImFont* font,std::span<const ModuleRow> row
             corners&=~ImDrawFlags_RoundCornersNone;
             corners|=ImDrawFlags_RoundCornersBottomLeft;
         }
-        draw.AddRectFilled({left,y},{right,y+kModuleRowHeight},IM_COL32(16,21,26,158),4,corners);
+        draw.AddRectFilled({left,y},{right,y+kModuleRowHeight},style::hud::Surface,4,corners);
         const ImVec2 pos{left+kModuleInset,y+(kModuleRowHeight-kModuleFontSize)*.5f};
         HudText(draw,font,kModuleFontSize,pos,kHudText,row.label.c_str());
         if(!row.detail.empty()) HudText(draw,font,kModuleFontSize-2,
             {right-kModuleInset-row.detailWidth,pos.y+1},kHudDetail,row.detail.c_str());
     }
-    draw.AddRectFilled({right,0},size,IM_COL32(245,247,249,245),1);
+    draw.AddRectFilled({right,0},size,style::hud::Rail,1);
 }
 } // namespace
 bool Overlay::HudEnabled(int i) const {
@@ -103,7 +102,7 @@ void Overlay::SetHudEditing(bool editing) {
 }
 void Overlay::DrawHud(const WorldSnapshot& s) {
     if(!hud_.visible&&!hudEditing_) return;
-    ImGui::PushFont(style::MenuFont());
+    ImGui::PushFont(style::hud::Font());
     DrawAntiVanishHud();
     auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
     int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
@@ -156,18 +155,20 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Coordinates:size.y=28+4*(lineHeight+3);break;
             case HudModule::Performance:size.y=132;break;
             case HudModule::Compass:size={320,26};break;
-            case HudModule::Reach:size.y=54;break;
+            case HudModule::Reach:size.y=60;break;
             case HudModule::Watermark:size=watermarkSize;break;
             case HudModule::Modules:size={moduleRows[0].width+2*kModuleInset+kModuleRail,std::max(1,active)*kModuleRowHeight};break;
             case HudModule::Keybinds:size.y=28+std::max(1,assigned)*(lineHeight+4);break;
             case HudModule::Radar:size={196,196};break;
-            case HudModule::Keystrokes:size={130,138};break;
-            case HudModule::Speedometer:size.y=68;break;
-            case HudModule::Session:size.y=102;break;
+            case HudModule::Keystrokes:size={128,112};break;
+            case HudModule::Speedometer:size.y=94;break;
+            case HudModule::Session:size.y=137;break;
+            case HudModule::Clock:size={132,52};break;
+            case HudModule::Cps:size={180,73};break;
             case HudModule::ArmorStrip:size.y=78;break;
             case HudModule::Indicators:size.y=84;break;
-            case HudModule::Notifications:size.y=145;break;
-            case HudModule::Nearby:size.y=176;break;
+            case HudModule::Notifications:size.y=160;break;
+            case HudModule::Nearby:size.y=200;break;
             case HudModule::RegionMap:size=regionmap::kSize;break;
             default:break;
         }
@@ -207,8 +208,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         const int vertexStart=draw.VtxBuffer.Size;
         draw.PushClipRect({0,0},size,false); const int commandStart=draw.CmdBuffer.Size-1;
         if(empty&&kind!=HudModule::Modules) {
-            DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]);
-            draw.AddText({10,28},style::compact::Muted,"No data / editor preview");
+            DrawHudPanel(draw,{0,0},size); style::hud::Heading(draw,{0,0},size.x,kHudNames[i]);
+            style::hud::Label(draw,{10,28},style::hud::Muted,"No data / editor preview");
         } else switch(kind) {
             case HudModule::Equipment:DrawEquipmentPanel(s,0,0);break;
             case HudModule::Effects:DrawEffectsPanel(s,0,0);break;
@@ -222,17 +223,20 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Modules:
                 DrawModuleList(draw,listFont,{moduleRows.data(),size_t(std::max(1,active))},size); break;
             case HudModule::Keybinds: {
-                DrawHudPanel(draw,{0,0},size); style::compact::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
+                style::hud::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
                 for(int a=3;a<keys::kCount;++a) {
                     if(a==keys::Index(keys::Action::Hud)) continue;
                     const bool on=ModuleEnabled(static_cast<keys::Action>(a));
                     if(!bindings_[a].key) continue;
                     const auto key=BindName(bindings_[a]); const auto extent=ImGui::CalcTextSize(key.c_str());
+                    const float rowWidth=std::min(size.x,ImGui::CalcTextSize(keys::kNames[a]).x+extent.x+30);
+                    DrawHudPanel(draw,{size.x-rowWidth,y-2},{size.x,y+lineHeight+2});
                     const float keyX=std::max(10.f,size.x-10-extent.x);
-                    draw.PushClipRect({10,y},{std::max(10.f,keyX-8),y+lineHeight},true);
-                    draw.AddText({10,y},on?style::compact::Accent:style::compact::Muted,keys::kNames[a]);
+                    const float labelX=size.x-rowWidth+10;
+                    draw.PushClipRect({labelX,y},{std::max(labelX,keyX-8),y+lineHeight+1},true);
+                    style::hud::Label(draw,{labelX,y},on?style::hud::Text:style::hud::Muted,keys::kNames[a]);
                     draw.PopClipRect();
-                    draw.AddText({keyX,y},style::compact::Text,key.c_str());
+                    style::hud::Label(draw,{keyX,y},style::hud::Muted,key.c_str());
                     y+=lineHeight+4;
                 } break;
             }
@@ -277,12 +281,12 @@ void Overlay::DrawHudEditor() {
         if(ImGui::IsItemHovered()) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move",kHudNames[i]);
         }
-        draw.AddRect(rect.min,rect.max,hudSelected_==i?style::compact::Accent:IM_COL32(174,174,184,100),8*hud_.layout[i].scale);
+        draw.AddRect(rect.min,rect.max,hudSelected_==i?style::hud::Text:IM_COL32(174,184,194,100),4*hud_.layout[i].scale);
         if(hudSelected_==i&&!HudEnabled(i)) {
             const float width=ImGui::CalcTextSize("Disabled").x+12;
             const ImVec2 badge{std::max(rect.min.x,rect.max.x-width),std::max(0.f,rect.min.y-22)};
-            draw.AddRectFilled(badge,{badge.x+width,badge.y+20},style::compact::Surface,4);
-            draw.AddText({badge.x+6,badge.y+3},style::compact::AccentActive,"Disabled");
+            draw.AddRectFilled(badge,{badge.x+width,badge.y+20},style::hud::Surface,4);
+            style::hud::Label(draw,{badge.x+6,badge.y+3},style::hud::Muted,"Disabled");
         }
         ImGui::PopID();
     }
