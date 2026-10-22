@@ -163,8 +163,13 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     bool filterChanged;
     {
         style::StyleScope search;
-        search.Var(ImGuiStyleVar_FramePadding,compact?ImVec2(7,3):ImVec2(12,8));
+        search.Var(ImGuiStyleVar_FramePadding,compact?ImVec2(26,3):ImVec2(30,8));
         filterChanged=ImGui::InputTextWithHint("##module_search",compact?"Search":"Search modules...",state.search,sizeof(state.search));
+        const auto lo=ImGui::GetItemRectMin(),hi=ImGui::GetItemRectMax();
+        const ImVec2 lens{lo.x+12,(lo.y+hi.y)*.5f-1};
+        const auto ink=ImGui::GetColorU32(ImGuiCol_TextDisabled);
+        draw.AddCircle(lens,4,ink,16,1.4f);
+        draw.AddLine({lens.x+3,lens.y+3},{lens.x+7,lens.y+7},ink,1.4f);
         if(ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) ImGui::SetTooltip("Search this category  /  Ctrl+F");
     }
     draw.AddText(style::MenuFont(),11,{pos.x+20,pos.y+(compact?85:104)},ImGui::GetColorU32(ImGuiCol_TextDisabled),"WORKSPACE");
@@ -326,10 +331,9 @@ Actions RenderMenu(State& state,const Status& status,void* owner,Content content
     ImGui::SetCursorScreenPos({pos.x+32,pos.y+size.y-30}); ImGui::TextDisabled("%s",status.connected?"Connected":"Offline");
     draw.AddLine({contentX,pos.y+size.y-47},{pos.x+size.x-22,pos.y+size.y-47},ImGui::GetColorU32(ImGuiCol_Separator));
     ImGui::SetCursorScreenPos({pos.x+sidebar+22,pos.y+size.y-30});
-    ImGui::TextDisabled("%s",compact?status.version:"Right-click to configure");
-    ImGui::SameLine(std::max(sidebar+80,size.x-206));
-    if(ImGui::SmallButton("Center")) { state.position=homePosition; state.settingsPlacement.positioned=false; }
-    ImGui::SameLine(0,9); if(ImGui::SmallButton("Reset")) actions.reset=true;
+    ImGui::TextDisabled("%s",status.memory[0]?status.memory:compact?status.version:"Right-click to configure");
+    ImGui::SameLine(std::max(sidebar+80,size.x-170));
+    if(ImGui::SmallButton("Center UI")) { state.position=homePosition; state.dragging=false; state.settingsPlacement.positioned=false; state.settingsPlacement.dragging=false; }
     ImGui::SameLine(0,9); if(ImGui::SmallButton("Close")) actions.close=true;
     ImGui::End();
     if(actions.close) state.settingsOpen=false;

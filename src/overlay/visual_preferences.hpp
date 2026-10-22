@@ -8,9 +8,10 @@
 
 namespace mcov::visual_preferences {
 
-// Only style/filter settings are persisted. Module activation still follows the
-// existing startup and keybind behavior, and HUD preferences remain separate.
+// Player ESP keeps its master and component choices alongside styling/filters.
+// Other modules and HUD preferences retain their own persistence paths.
 inline void Write(std::ostream& out,const VisualSettings& c) {
+    out<<"visual-player "<<c.enabled<<' '<<c.boxEsp<<' '<<c.skeleton<<' '<<c.nameTags<<' '<<c.healthBars<<' '<<c.distanceText<<' '<<c.tracers<<' '<<c.targetInfo<<'\n';
     out<<"visual-box "<<int(c.boxStyle)<<' '<<c.cornerFraction<<' '<<c.boxThickness<<' '<<c.boxRounding<<' '
        <<c.filledBox<<' '<<c.fillGradient<<' '<<c.fillAlpha<<' '<<c.fillBottomAlpha<<' '<<c.skeletonThickness<<'\n';
     out<<"visual-bars "<<int(c.barPlacement)<<' '<<c.healthGradient<<' '<<c.armorBars<<' '<<c.barThickness<<'\n';
@@ -33,7 +34,9 @@ inline void Write(std::ostream& out,const VisualSettings& c) {
 
 inline bool Read(std::string_view tag,std::istream& row,VisualSettings& current) {
     auto c=current;
-    if(tag=="visual-box") {
+    if(tag=="visual-player") {
+        if(!(row>>c.enabled>>c.boxEsp>>c.skeleton>>c.nameTags>>c.healthBars>>c.distanceText>>c.tracers>>c.targetInfo)) return false;
+    } else if(tag=="visual-box") {
         int style;
         if(!(row>>style>>c.cornerFraction>>c.boxThickness>>c.boxRounding>>c.filledBox>>c.fillGradient>>
              c.fillAlpha>>c.fillBottomAlpha>>c.skeletonThickness)||style<0||style>int(EspBoxStyle::Wire3D)) return false;

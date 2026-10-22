@@ -61,7 +61,16 @@ void Profiles() {
     s.smp.base.enabled=true; s.smp.base.padding=6; s.smp.base.colour={.3f,.4f,.5f,.6f};
     s.binds[keys::Index(keys::Action::BaseEsp)]={0x42,0,keys::Mode::Toggle};
     s.binds[keys::Index(keys::Action::StashFinder)]={0x4A,keys::Ctrl,keys::Mode::Hold};
+    s.smp.storage.textures=true; s.visuals.enabled=false;
+    s.binds[keys::Index(keys::Action::PlayerEsp)]={0x50,keys::Alt,keys::Mode::Hold};
     std::string text; Require(Encode(s,text),"Could not encode SMP profile"); Snapshot result;
+    Require(Decode(text,result)&&result.smp.storage.textures&&!result.visuals.enabled&&result.visuals.boxEsp&&
+        result.binds[keys::Index(keys::Action::PlayerEsp)].mode==keys::Mode::Hold,"Player ESP / storage options did not round-trip");
+    std::istringstream beforePlayer(text); std::ostringstream oldPlayer; std::string oldField;
+    const auto playerBind="bind."+std::to_string(keys::Index(keys::Action::PlayerEsp))+".";
+    while(std::getline(beforePlayer,oldField)) if(!oldField.starts_with("visuals.enabled ")&&!oldField.starts_with("smp.storage.textures ")&&!oldField.starts_with(playerBind)) oldPlayer<<oldField<<'\n';
+    Require(Decode(oldPlayer.str(),result)&&result.visuals.enabled&&!result.smp.storage.textures&&
+        !result.binds[keys::Index(keys::Action::PlayerEsp)].key,"Old profiles did not migrate Player ESP and opt-in storage textures");
     Require(Decode(text,result)&&result.smp.storage.colours[0].w==.4f&&result.smp.storage.mask==(1u<<kBlockEnderChest)&&
         result.smp.storage.interval==2400&&result.smp.storage.pulseDuration==4200&&!result.smp.storage.pulse&&
         result.smp.stash.enabled&&result.smp.stash.minContainers==16&&result.smp.spawner.enabled&&
@@ -269,6 +278,10 @@ void StorageTextures() {
     auto s=Scene(); smp::StorageSettings c; c.mask=(1u<<kBlockChest)|(1u<<kBlockBarrel);
     Add(s,2,0,6); Add(s,-2,0,6,kBlockBarrel); Add(s,0,0,8,kBlockEnderChest); Add(s,0,0,200); Add(s,1,0,1,kBlockDiamond);
     s.storageCount=s.blockCount; std::copy_n(s.blocks,s.blockCount,s.storageBlocks);
+    base::StorageRequest disabled;
+    smp::BuildStorageRequest(disabled,s,c,true,32,1,true,1000);
+    Require(!disabled.enabled&&disabled.count==0,"Storage textures must default to off");
+    c.textures=true;
     base::StorageRequest result;
     auto request=[&](const WorldSnapshot& scene,const smp::StorageSettings& settings,bool enabled,float range,float opacity,bool fresh,std::uint64_t now)->const base::StorageRequest& {
         smp::BuildStorageRequest(result,scene,settings,enabled,range,opacity,fresh,now); return result;
@@ -276,6 +289,9 @@ void StorageTextures() {
     auto r=request(s,c,true,32,.75f,true,1000);
     Require(r.enabled&&r.count==2&&r.opacity==.75f&&r.sentAtMs==1000,"Storage texture selection ignored mask or distance");
     Require(r.regions[0].minX==-2&&r.regions[0].maxX==-1&&r.regions[0].maxY==1,"Storage request did not isolate each container");
+    c.textures=false;
+    Require(!request(s,c,true,32,.75f,true,1050).enabled&&result.count==0,"Texture switch retained the previous active request");
+    c.textures=true;
     std::swap(s.storageBlocks[0],s.storageBlocks[1]); s.posX+=.1f;
     Require(request(s,c,true,32,.4f,true,1100).revision==r.revision,"Order, movement or opacity restarted storage extraction");
     Require(!request(s,c,true,32,1,false,1100).enabled,"Stale snapshot kept storage textures active");
@@ -293,6 +309,7 @@ void StorageTextures() {
     Require(request(s,c,true,128,1,true,1100).count==kMaxBlocks,"Storage textures inherited the eight-area Base ESP limit");
 }
 void StorageGeometry() {
+    ImGui::GetIO().Fonts->SetTexID(ImTextureID(123));
     auto s=Scene(); Add(s,2,0,6); smp::Config c; c.storage.mask=1u<<kBlockChest;
     auto& draw=*ImGui::GetBackgroundDrawList(); const auto flags=draw.Flags;
     draw.Flags&=~(ImDrawListFlags_AntiAliasedLines|ImDrawListFlags_AntiAliasedLinesUseTex);
@@ -300,15 +317,31 @@ void StorageGeometry() {
     std::vector<float> tags(first,.35f);
     { depth::Scope scope(tags); smp::DrawBlocks(draw,s,p,c,true,32,1,0,{1280,720});
       Require(depth::tags==&tags,"Storage renderer did not restore depth tagging"); }
-    Require(draw.VtxBuffer.Size==first,"Storage texture mode still draws box edges");
+    Require(draw.VtxBuffer.Size>first,"Storage boxes disappeared with labels and tracers disabled");
+    bool fill=false,edge=false;
+    unsigned minFill=255,maxFill=0;
+    const auto fillRgb=ImGui::ColorConvertFloat4ToU32(c.storage.Colour(kBlockChest))&~IM_COL32_A_MASK;
+    for(int i=first;i<draw.VtxBuffer.Size;++i) {
+        const auto alpha=(draw.VtxBuffer[i].col>>IM_COL32_A_SHIFT)&255;
+        fill|=alpha>0&&alpha<64; edge|=alpha>=64&&alpha<200;
+        if((draw.VtxBuffer[i].col&~IM_COL32_A_MASK)==fillRgb) {
+            minFill=std::min(minFill,alpha); maxFill=std::max(maxFill,alpha);
+        }
+        Require(std::isfinite(draw.VtxBuffer[i].pos.x)&&std::isfinite(draw.VtxBuffer[i].pos.y),"Invalid storage projection");
+    }
+    Require(fill&&edge,"Storage lost its transparent fill or thin outline");
+    Require(maxFill>minFill+20,"Storage faces lost their gradient");
+    const int boxes=draw.VtxBuffer.Size;
+    smp::DrawBlocks(draw,s,p,c,true,32,0,0,{1280,720});
+    Require(draw.VtxBuffer.Size==boxes,"Zero opacity left storage boxes visible");
     c.storage.tracers=true;
     { depth::Scope scope(tags); smp::DrawBlocks(draw,s,p,c,true,32,1,0,{1280,720}); }
-    Require(draw.VtxBuffer.Size>first,"Optional storage tracer disappeared");
+    Require(draw.VtxBuffer.Size>boxes+(boxes-first),"Optional storage tracer disappeared");
     for(int i=first;i<draw.VtxBuffer.Size;++i) Require(tags[i]==0,"Storage annotation became occluded by world depth");
     draw.Flags=flags;
 }
 void Rendering() {
-    auto s=Scene(); smp::Config c; c.storage.tracers=true; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
+    auto s=Scene(); smp::Config c; c.storage.colours[0]={1,0,0,1}; c.storage.colours[2]={0,1,0,1};
     c.storage.mask=(1u<<kBlockChest)|(1u<<kBlockEnderChest); Add(s,-2,0,6); Add(s,2,0,6,kBlockEnderChest); Add(s,0,0,8,kBlockSpawner);
     auto& draw=*ImGui::GetBackgroundDrawList(); CameraProjection projection(s,1280,720); const int before=draw.VtxBuffer.Size;
     smp::DrawBlocks(draw,s,projection,c,false,32,1,0,{1280,720}); Require(draw.VtxBuffer.Size==before,"Disabled block modules drew geometry");

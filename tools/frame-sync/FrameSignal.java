@@ -34,6 +34,18 @@ public final class FrameSignal {
     // Das Modell behält seine echte Rotation; Spin-Movement nutzt separat die Kamera.
     public static volatile Object silentPlayer;
     public static volatile float viewYaw, viewPitch;
+    // Spin angles are consumed only at LocalPlayer's packet-building call sites.
+    // The entity itself keeps its normal camera rotation for all local physics.
+    public static volatile boolean packetRotationEnabled;
+    public static volatile float packetYaw, packetPitch;
+    public static volatile long packetRotationProfiles;
+    public static synchronized void markPacketRotation(long mask) { packetRotationProfiles |= mask; }
+    public static float packetYaw(Object entity, float original) {
+        return packetRotationEnabled && entity == silentPlayer ? packetYaw : original;
+    }
+    public static float packetPitch(Object entity, float original) {
+        return packetRotationEnabled && entity == silentPlayer ? packetPitch : original;
+    }
     public static volatile long cameraProfiles, turnProfiles;
     public static synchronized void markCamera(long mask) { cameraProfiles |= mask; }
     public static synchronized void markTurn(long mask) { turnProfiles |= mask; }
@@ -64,12 +76,12 @@ public final class FrameSignal {
     public static double turnYaw(Object entity, double delta) {
         if (entity != silentPlayer) return delta;
         if (Double.isFinite(delta)) viewYaw=(float)Math.IEEEremainder(viewYaw+delta*ENTITY_TURN_SCALE,360);
-        return 0;
+        return packetRotationEnabled ? delta : 0;
     }
     public static double turnPitch(Object entity, double delta) {
         if (entity != silentPlayer) return delta;
         if (Double.isFinite(delta)) viewPitch=(float)Math.max(-90,Math.min(90,viewPitch+delta*ENTITY_TURN_SCALE));
-        return 0;
+        return packetRotationEnabled ? delta : 0;
     }
     public static volatile long freecamProfiles;
     private static final long[] freecamParts = new long[4];
@@ -102,10 +114,12 @@ public final class FrameSignal {
         return true;
     }
     public static volatile boolean antiVanishEnabled;
+    public static volatile boolean chunkFinderEnabled;
     public static volatile boolean combatEnabled;
     // Nur nach RegisterNatives aktiviert. Der Hook läuft auf dem Minecraft-Client-Thread.
     private static native void nativeCombatTick(Object client);
     public static void combatTick(Object client) {
+        if(chunkFinderEnabled) ChunkFinderBridge.tick(client);
         if(antiVanishEnabled) AntiVanishBridge.tick(client);
         if (!combatEnabled) return;
         try { nativeCombatTick(client); }

@@ -78,6 +78,19 @@ public final class FrameSyncAttachCheck {
                 require(Math.abs(target.entity().getClass().getField("testMovementYaw").getFloat(target.entity())-18)<.001f,
                     "Loaded movement scope was not retransformed "+target.id());
                 signal.getField("movementEnabled").setBoolean(null,false);
+                signal.getField("packetYaw").setFloat(null,137);
+                signal.getField("packetPitch").setFloat(null,89);
+                signal.getField("packetRotationEnabled").setBoolean(null,true);
+                for(String method:new String[]{"testSendPosition","testSendRiding","testSendVectorPosition","testSendLegacyPosition","testSendLegacyRiding"}) {
+                    target.entity().getClass().getMethod(method).invoke(target.entity());
+                    Object packet=target.entity().getClass().getField("testLastPacket").get(null);
+                    require(packet.getClass().getField("yaw").getFloat(packet)==137 &&
+                            packet.getClass().getField("pitch").getFloat(packet)==89,
+                            "Loaded packet rotation hook missing "+target.id());
+                }
+                require(target.entity().getClass().getField("testYaw").getFloat(target.entity())==0,
+                        "Packet hook changed physical yaw "+target.id());
+                signal.getField("packetRotationEnabled").setBoolean(null,false);
                 signal.getMethod("updateFreecam",double.class,double.class,double.class).invoke(null,123d,81d,-46d);
                 target.update().invoke(target.camera(),values);
                 require(target.camera().getClass().getField(p.detached()).getBoolean(target.camera()),"Loaded freecam camera hook missing "+target.id());

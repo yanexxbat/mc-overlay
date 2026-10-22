@@ -9,6 +9,42 @@ import mcov.FrameSignal;
 /** Actual instrumented Java fixture bytecode; no game code or render JNI. */
 public final class FrameSyncCheck {
     private static void require(boolean value, String message) { if (!value) throw new AssertionError(message); }
+    private static void checkPacketRotation(URLClassLoader loader,FrameProfiles.Profile p,int index) throws Exception {
+        Class<?> local=Class.forName(p.localPlayer().replace('/','.'),true,loader);
+        Object self=local.getConstructor().newInstance(),other=local.getConstructor().newInstance();
+        local.getField("testYaw").setFloat(self,17);
+        local.getField("testPitch").setFloat(self,-12);
+        local.getField("testYaw").setFloat(other,41);
+        FrameSignal.silentPlayer=self; FrameSignal.viewYaw=17; FrameSignal.viewPitch=-12;
+        FrameSignal.packetRotationEnabled=true;
+        try {
+            require((FrameSignal.packetRotationProfiles&(1L<<index))!=0,"Missing packet rotation hook "+p.id());
+            for(float spin:new float[]{-179,-90,0,90,179}) {
+                FrameSignal.packetYaw=spin; FrameSignal.packetPitch=89;
+                for(String method:new String[]{"testSendPosition","testSendRiding","testSendVectorPosition","testSendLegacyPosition","testSendLegacyRiding"}) {
+                    local.getMethod(method).invoke(self);
+                    Object packet=local.getField("testLastPacket").get(null);
+                    require(packet.getClass().getField("yaw").getFloat(packet)==spin &&
+                            packet.getClass().getField("pitch").getFloat(packet)==89,"Packet lost silent rotation "+p.id());
+                    require((float)local.getMethod(p.yaw()).invoke(self)==17 &&
+                            (float)local.getMethod(p.pitch()).invoke(self)==-12,"Packet changed local physics rotation "+p.id());
+                    require(local.getField("testYaw").getFloat(self)==17 &&
+                            local.getField("testPitch").getFloat(self)==-12,"Direct field reads still see spin "+p.id());
+                    local.getMethod(method).invoke(other);
+                    packet=local.getField("testLastPacket").get(null);
+                    require(packet.getClass().getField("yaw").getFloat(packet)==41,"Packet changed another player "+p.id());
+                }
+            }
+            local.getMethod(p.turn(),double.class,double.class).invoke(self,40d,20d);
+            require(local.getField("testYaw").getFloat(self)==23 && FrameSignal.viewYaw==23 &&
+                    local.getField("testPitch").getFloat(self)==-9 && FrameSignal.viewPitch==-9,
+                    "Mouse look did not update physical and camera rotations together "+p.id());
+            FrameSignal.packetRotationEnabled=false;
+            local.getMethod("testSendPosition").invoke(self);
+            Object packet=local.getField("testLastPacket").get(null);
+            require(packet.getClass().getField("yaw").getFloat(packet)==23,"Disabled spin left stale packet rotation "+p.id());
+        } finally { FrameSignal.packetRotationEnabled=false; FrameSignal.silentPlayer=null; }
+    }
     private static void checkFreecam(URLClassLoader loader,FrameProfiles.Profile p,int index) throws Exception {
         Class<?> local=Class.forName(p.localPlayer().replace('/','.'),true,loader);
         Object self=local.getConstructor().newInstance(),other=local.getConstructor().newInstance();
@@ -110,6 +146,7 @@ public final class FrameSyncCheck {
                 require(update != null, "Missing camera method");
                 Class<?>[] types = update.getParameterTypes();
                 checkMovement(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
+                checkPacketRotation(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
                 checkFreecam(loader,profile,java.util.Arrays.asList(FrameProfiles.PROFILES).indexOf(profile));
                 for (int iteration = 0; iteration < 200; iteration++) {
                     frame.invoke(owner, true);

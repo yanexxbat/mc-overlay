@@ -31,7 +31,8 @@ camera/entity projection stability.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
-  All 84 real sections remain reachable. Left-click or Space operates the real
+  All settings remain reachable through 76 module tiles, including 17 in Visuals.
+  Left-click or Space operates the real
   toggle/action; settings-only widgets open their controls. Menu / Shift+F10
   opens settings without toggling. The approved compact translucent anthracite,
   lime-green, embedded Inter and rounded fills remain the visual identity.
@@ -79,15 +80,30 @@ camera/entity projection stability.
   category module widgets and their independent settings controls.
 - Preserve the clean rounded entity ESP, configurable Target Aura and Target
   Marker, soft particles/trails and the glowing friend/self hats.
+- Visuals groups entity controls in one **Player ESP** tile with its own master
+  toggle and initially unbound keybind. Its settings selector contains Boxes,
+  Skeleton, Name tags, Health / armor, Distance, Tracers, Target info,
+  Entity filters / colours, Glow and Offscreen arrows. The master suppresses
+  these visuals while retaining component choices; other cosmetic tiles remain
+  separate. Automatic preferences and named profiles retain the master and
+  component settings. Legacy profiles default the master to enabled, and existing
+  binding indices remain compatible.
 - SMP controls extend the existing **Blocks** category: Storage ESP selects
   13 storage block types with independent RGBA colours, labels and tracers.
-  Clipped world-space cube edges replace flat Storage ESP rectangles. Known
-  matches persist during rescans; discoveries and removals fade progressively.
-  Scan pause (200Ã¢â‚¬â€œ3000 ms) and sequential pulse cycle (500Ã¢â‚¬â€œ6000 ms) persist;
-  Reduced motion shows steady frames. Both scan and presentation are bounded
-  to 1024 matches. Storage ESP uses its own 4Ã¢â‚¬â€œ512 radius and a 1 ms loaded-chunk
+  Transparent full-cell gradients and soft clipped outlines use each container
+  type's colour. **Container textures** optionally adds the through-wall Minecraft
+  texture pass on 1.21.11; it defaults off, including for older configs without
+  this field. Disabling it clears the texture request immediately while the
+  coloured gradient boxes remain. Both preferences and named profiles save it.
+  Opacity controls boxes and textures; Soft glow adjusts the front-edge halo
+  using the existing saved glow setting. Type colours also apply to annotations.
+  Known matches persist during rescans; discoveries and removals fade
+  progressively. Scan pause (200-3000 ms) persists; legacy pulse fields
+  remain compatible without adding scan bands or a sequential pulse effect.
+  Both scan and presentation are bounded to 1024 matches. Storage ESP uses its
+  own 4-512 radius and a 1 ms loaded-chunk
   block-entity traversal; ordinary Block ESP/Chunkfinder sweeps cannot delay it.
-  Preserve known results and pulse presentation. Audit existing JNI signatures
+  Preserve known results and type colours. Audit existing JNI signatures
   across all runtime profiles, retain a bounded compatibility fallback and save
   the extended radius in both automatic preferences and named configs.
   Stash Finder records container clusters by chunk; Spawner ESP has its own
@@ -183,6 +199,17 @@ Snapshot HUDs use the shared rounded ImGui fill and font; their editor applies
 `CompactStyle` locally. HUD presentation adds no capture, blur or new renderer.
 
 ## Verification limits
+
+For the Player ESP consolidation and optional Storage textures, the seven focused
+checks `client_controls`, `smp_features`, `rockstar_features`, `control_panel`,
+`depth_rendering`, `portable_client` and `esp_rendering` passed. The portable
+`build/client/Keim.exe` and `build/Keim-client.zip` were rebuilt. An independent
+finish review returned **ship** after reviewing the relevant source and four
+native synthetic captures under `.impeccable/review/player-esp/`:
+`player-esp-desktop.png`, `player-esp-small.png`,
+`storage-texture-settings-desktop.png` and `storage-texture-settings-small.png`.
+These checks establish native UI behavior, not appearance in a running Minecraft
+world; no live Minecraft validation was performed for this update.
 
 For the Base texture update, all 26 available regression checks passed across
 the final runs. The sandbox run passed 25; `frame_attach` passed separately

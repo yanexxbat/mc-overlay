@@ -1,4 +1,5 @@
 #include "smp_features.hpp"
+#include "storage_cell.hpp"
 #include "../common/block_scan_volume.hpp"
 #include "../common/chunk_hints.hpp"
 #include <cstdio>
@@ -248,7 +249,6 @@ void DrawBlocks(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& 
     auto* savedTags=depth::tags;
     struct Restore { std::vector<float>* previous; ~Restore() { depth::tags=previous; } } restore{savedTags};
     depth::tags=nullptr; const int first=draw.VtxBuffer.Size;
-    const auto origin=ImGui::GetMainViewport()->Pos;
     const auto render=[&](const BlockSnapshot& block,float alpha,StorageHighlight highlight) {
         const bool storage=storageEnabled&&StorageKind(block.kind)&&(c.storage.mask&(1u<<block.kind));
         const bool spawner=c.spawner.enabled&&block.kind==kBlockSpawner;
@@ -261,8 +261,11 @@ void DrawBlocks(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& 
         if(colour.w<=.001f) return;
         const ImU32 ink=ImGui::ColorConvertFloat4ToU32(colour);
         ScreenRect rect; const bool haveRect=p.Bounds(bounds,rect);
-        // Container models are composited by Minecraft's texture pass. The
-        // external overlay only adds optional labels and tracers.
+        // Keep the real container texture visible beneath a lightly tinted
+        // world-space cell, with all twelve edges visible through walls.
+        if(storage) {
+            soft::StorageCell(draw,s,p,bounds,colour,glow,glowTexture);
+        }
         if(spawner&&haveRect) soft::Outline(draw,{rect.left,rect.top},{rect.right,rect.bottom},4,1.5f,colour,colour,c.spawner.glow,glowTexture);
         if(!haveRect) return;
         if(storage?c.storage.tracers:c.spawner.tracers)
@@ -333,6 +336,7 @@ void DrawBases(ImDrawList& draw,const WorldSnapshot& s,const CameraProjection& p
 void BuildStorageRequest(base::StorageRequest& r,const WorldSnapshot& s,const StorageSettings& c,bool enabled,
                                                 float range,float opacity,bool fresh,std::uint64_t now) {
     r={}; r.sentAtMs=now; r.opacity=opacity;
+    if(!c.textures) return;
     if(!enabled||!fresh||!s.dimension[0]||!std::isfinite(opacity)||opacity<=0||opacity>1||!std::isfinite(range)||range<=0) return;
     std::snprintf(r.dimension,sizeof(r.dimension),"%s",s.dimension);
     std::snprintf(r.server,sizeof(r.server),"%s",s.serverAddress);

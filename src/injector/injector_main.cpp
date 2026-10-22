@@ -18,6 +18,7 @@
 #include "../common/flat_app.hpp"
 #include "../common/client_paths.hpp"
 #include "../common/win_handle.hpp"
+#include "../common/crash_handler.hpp"
 #include "../common/ipc.hpp"
 #include "../common/log.hpp"
 #include "../common/keyauth.hpp"
@@ -214,6 +215,7 @@ struct AppState {
 };
 }
 int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
+    mcov::InstallCrashHandler();
     int count=0; auto args=CommandLineToArgvW(GetCommandLineW(),&count);
     if(args&&count==3&&std::wstring(args[1])==L"--verify-package") {
         try { launcher::PreparePackage(args[2]); LocalFree(args); return 0; }

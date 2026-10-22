@@ -10,11 +10,11 @@
 
 namespace mcov {
 enum class HudModule { Equipment, Effects, Coordinates, Performance, Compass, Reach, Watermark, Modules, Keybinds,
-    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Notifications, Nearby, RegionMap, Count };
+    Radar, Keystrokes, Speedometer, Session, ArmorStrip, Indicators, Clock, Cps, Notifications, Nearby, RegionMap, TargetInfo, Count };
 inline constexpr int kHudModules=static_cast<int>(HudModule::Count);
 inline constexpr std::array<const char*,kHudModules> kHudNames={"Equipment","Status effects","Coordinates","Performance",
     "Compass","Reach indicator","Watermark","Active modules","Keybinds","Radar","Keystrokes","Speedometer",
-    "Session statistics","Armor strip","Combat indicators","Clock","Click rate","Notifications","Nearby players","Region map"};
+    "Session statistics","Armor strip","Combat indicators","Clock","Click rate","Notifications","Nearby players","Region map","Target Info"};
 struct HudPlacement {
     ImVec2 position{}; // Normalisiert im verfügbaren Weg, damit Auflösungswechsel die Anker erhalten.
     float scale=1;

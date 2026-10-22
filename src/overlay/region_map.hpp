@@ -1,5 +1,6 @@
 #pragma once
 #include "../common/shared_state.hpp"
+#include "../common/block_scan_volume.hpp"
 #include "../common/hud_style.hpp"
 #include <algorithm>
 #include <array>
@@ -7,11 +8,60 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <span>
+#include <vector>
+#include <cstring>
 
 namespace mcov::regionmap {
 struct Config {
     bool enabled=false;
     bool labels=true,grid=true,coordinates=true;
+};
+struct ScannedArea { int minX{},minZ{},maxX{},maxZ{}; };
+class ScanHistory {
+    std::vector<ScannedArea> areas_;
+    std::array<char,kNameLen> dimension_{};
+    std::array<char,kAddrLen> server_{};
+    std::uint64_t scan_{};
+public:
+    bool Matches(const WorldSnapshot& s) const {
+        return !std::strncmp(dimension_.data(),s.dimension,kNameLen)&&!std::strncmp(server_.data(),s.serverAddress,kAddrLen);
+    }
+    void Update(const WorldSnapshot& s,bool enabled,std::uint32_t mask) {
+        if(!Matches(s)) {
+            areas_.clear(); scan_=0;
+            std::memcpy(dimension_.data(),s.dimension,kNameLen);
+            std::memcpy(server_.data(),s.serverAddress,kAddrLen);
+        }
+        if(!enabled||!mask||!s.dimension[0]||!s.blockScanId||!s.blockScanComplete||s.blockScanTruncated||
+           (s.blockScanMask&mask)!=mask||s.blockScanRadius<kMinBlockScanRadius||s.blockScanRadius>kMaxBlockScanRadius||
+           std::abs(double(s.blockScanX))>3e7||std::abs(double(s.blockScanZ))>3e7||s.blockScanId==scan_) return;
+        if(s.blockScanId<scan_) areas_.clear();
+        scan_=s.blockScanId;
+        const double radius=s.blockScanRadius;
+        const ScannedArea area{int(std::ceil((s.blockScanX-radius)/16.)),int(std::ceil((s.blockScanZ-radius)/16.)),
+            int(std::floor((s.blockScanX+radius-15)/16.)),int(std::floor((s.blockScanZ+radius-15)/16.))};
+        if(area.minX>area.maxX||area.minZ>area.maxZ) return;
+        const auto contains=[](const ScannedArea& a,const ScannedArea& b) {
+            return a.minX<=b.minX&&a.minZ<=b.minZ&&a.maxX>=b.maxX&&a.maxZ>=b.maxZ;
+        };
+        if(std::any_of(areas_.begin(),areas_.end(),[&](const auto& old){return contains(old,area);})) return;
+        std::erase_if(areas_,[&](const auto& old){return contains(area,old);});
+        if(areas_.size()==2048) areas_.erase(areas_.begin());
+        areas_.push_back(area);
+    }
+    std::span<const ScannedArea> Areas(const WorldSnapshot& s) const {
+        return Matches(s)?std::span<const ScannedArea>(areas_):std::span<const ScannedArea>{};
+    }
+    void UpdateChunks(const WorldSnapshot& s,const chunks::Report& report) {
+        if(!Matches(s)){areas_.clear();scan_=0;std::memcpy(dimension_.data(),s.dimension,kNameLen);std::memcpy(server_.data(),s.serverAddress,kAddrLen);}
+        if(report.status!=chunks::Status::Scanning||report.revision==scan_)return;
+        scan_=report.revision;
+        for(int i=0;i<std::clamp(report.scannedCount,0,4096);++i){const auto c=report.scannedChunks[i];
+            if(std::any_of(areas_.begin(),areas_.end(),[&](const auto& a){return c.x>=a.minX&&c.x<=a.maxX&&c.z>=a.minZ&&c.z<=a.maxZ;}))continue;
+            if(areas_.size()==2048)areas_.erase(areas_.begin());areas_.push_back({c.x,c.z,c.x,c.z});
+        }
+    }
 };
 inline constexpr double kBorder=225000, kCell=50000;
 inline constexpr ImVec2 kSize{308,414};
@@ -55,7 +105,7 @@ inline bool Overworld(std::string_view dimension) {
     return name=="overworld"||name=="minecraft:overworld"||
            name=="resourcekey[minecraft:dimension / minecraft:overworld]";
 }
-inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live) {
+inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live,std::span<const ScannedArea> scanned={}) {
     using namespace style::hud;
     Panel(d,{0,0},kSize); Heading(d,{0,0},kSize.x,"DonutSMP region map");
     constexpr float left=19,top=52,side=270,cell=side/9;
@@ -74,6 +124,17 @@ inline void Draw(ImDrawList& d,const WorldSnapshot& s,const Config& c,bool live)
             const auto extent=ImGui::GetFont()->CalcTextSizeA(labelSize,1000,0,label);
             style::hud::Label(d,ImGui::GetFont(),labelSize,{a.x+(cell-extent.x)*.5f,a.y+(cell-extent.y)*.5f},Text,label);
         }
+    }
+    if(server&&world) {
+        d.PushClipRect({left,top},{left+side,top+side},true);
+        for(const auto& area:scanned) {
+            const double x0=area.minX*16.,z0=area.minZ*16.,x1=(area.maxX+1)*16.,z1=(area.maxZ+1)*16.;
+            if(x1<=-kBorder||x0>=kBorder||z1<=-kBorder||z0>=kBorder) continue;
+            const ImVec2 a{left+float((x0+kBorder)/(2*kBorder))*side,top+float((z0+kBorder)/(2*kBorder))*side};
+            const ImVec2 b{left+float((x1+kBorder)/(2*kBorder))*side,top+float((z1+kBorder)/(2*kBorder))*side};
+            d.AddRectFilled(a,{std::max(a.x+1.f,b.x),std::max(a.y+1.f,b.y)},IM_COL32(112,112,112,255));
+        }
+        d.PopClipRect();
     }
     if(c.grid) for(int n=0;n<=9;++n) {
         const float v=n*cell;

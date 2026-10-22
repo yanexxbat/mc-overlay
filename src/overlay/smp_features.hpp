@@ -15,6 +15,7 @@ inline constexpr std::uint32_t kStorageMask=[] { std::uint32_t mask=0; for(auto 
 inline constexpr std::uint32_t kStashDefaultMask=(1u<<kBlockChest)|(1u<<kBlockTrappedChest)|(1u<<kBlockShulker)|(1u<<kBlockBarrel);
 inline bool StorageKind(std::uint8_t kind) { return kind<kBlockKindCount&&(kStorageMask&(1u<<kind)); }
 struct StorageSettings {
+    bool textures=false;
     std::uint32_t mask=kStorageMask;
     bool labels=false,tracers=false;
     int interval=1000,pulseDuration=1500;

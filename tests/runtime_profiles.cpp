@@ -257,13 +257,17 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     const auto beforeSpinAttacks=report.attacks;
     request.spin.enabled=true; request.spin.direction=0; request.spin.pitchMode=1;
     step(8);
-    const auto spinningYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
+    auto movementSignal=env->FindClass("mcov/FrameSignal"); Healthy(env);
+    const auto packetGate=field(movementSignal,"packetRotationEnabled","Z",true);
+    const auto spinningYaw=env->GetStaticFloatField(movementSignal,field(movementSignal,"packetYaw","F",true)); Healthy(env);
+    const auto physicalYaw=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
     Require(report.spinStatus==mcov::combat::SpinStatus::Active&&report.attacks==beforeSpinAttacks&&
-        std::abs(mcov::combat::Wrap(spinningYaw-9))>1&&std::abs(view(cameraYaw)-9)<.001f,
+        std::abs(mcov::combat::Wrap(spinningYaw-9))>1&&std::abs(view(cameraYaw)-9)<.001f&&
+        std::abs(physicalYaw-9)<.001f&&env->GetStaticBooleanField(movementSignal,packetGate)==JNI_TRUE,
         "Spinbot failed to rotate independently without attacking");
+    Healthy(env);
     // TatsÃ¤chliche instrumentierte Physik-Getter: VorwÃ¤rts/seitwÃ¤rts/diagonal
     // bleiben kamera-relativ, unabhÃ¤ngig von Spin-Yaw und dem Down-Pitch.
-    auto movementSignal=env->FindClass("mcov/FrameSignal"); Healthy(env);
     const auto movementGate=field(movementSignal,"movementEnabled","Z",true);
     const auto viewYawField=field(movementSignal,"viewYaw","F",true);
     Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_TRUE,"Spinbot did not enable movement correction"); Healthy(env);
@@ -306,18 +310,25 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.spinStatus==mcov::combat::SpinStatus::Paused&&std::abs(spinPausedYaw-9)<.001f,
         "Spinbot retained rotation after input pause");
     Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Input pause retained movement correction"); Healthy(env);
+    Require(env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Input pause retained packet rotation"); Healthy(env);
     request.inputAllowed=true; step(2);
     request.config.enabled=true; ++request.revision;
     floating(player,b.clsPlayer,"testCooldown",0); step();
     Require(report.debug.target&&report.spinStatus==mcov::combat::SpinStatus::CombatPriority,
         "Spinbot overrode Kill Aura target rotation");
     Require(env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Combat priority retained Spinbot movement correction"); Healthy(env);
+    Require(env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Combat priority retained Spinbot packet rotation"); Healthy(env);
     request.config.enabled=false; request.spin.enabled=false; ++request.revision; step();
     Require(report.spinStatus==mcov::combat::SpinStatus::Disabled&&std::abs(view(cameraYaw)-9)<.001f,
         "Disabling Spinbot disturbed camera restoration");
+    Require(env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Disabled Spinbot retained packet rotation"); Healthy(env);
+    request.spin.enabled=true; step();
+    request.sentAtMs=GetTickCount64()-1000; step(1,false);
+    Require(env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Expired IPC retained packet rotation"); Healthy(env);
     const auto freecamAttacks=report.attacks;
     request.freecam.enabled=true; request.config.enabled=true; request.spin.enabled=true; ++request.revision; step();
     Require(report.freecamStatus==mcov::freecam::Status::Active&&!report.debug.target&&report.attacks==freecamAttacks,"Freecam did not take priority over combat/spin");
+    Require(env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Freecam retained Spinbot packet rotation"); Healthy(env);
     const auto bodyBeforeFreecam=env->CallFloatMethod(player,b.mEntityYaw); Healthy(env);
     env->CallVoidMethod(player,turn,40.0,20.0); Healthy(env); step();
     Require(std::abs(env->CallFloatMethod(player,b.mEntityYaw)-bodyBeforeFreecam)<.001,"Freecam mouse look rotated player"); Healthy(env);
@@ -387,6 +398,16 @@ void TestLiveCombat(JNIEnv* env,const Bindings& b,jobject loader,jobject client)
     Require(report.spinStatus==mcov::combat::SpinStatus::SilentUnavailable &&
         env->GetStaticBooleanField(movementSignal,movementGate)==JNI_FALSE,"Spinbot started without safe movement hooks"); Healthy(env);
     unsupportedMovement.Close(env); testCombat=nullptr;
+    const auto packetBits=field(movementSignal,"packetRotationProfiles","J",true);
+    const auto savedPackets=env->GetStaticLongField(movementSignal,packetBits); Healthy(env);
+    env->SetStaticLongField(movementSignal,packetBits,0); Healthy(env);
+    mcov::agent::MinecraftCombat unsupportedPackets;
+    Require(unsupportedPackets.Install(env,b,block.get(),reinterpret_cast<void*>(&TestCombatTick)),"packet diagnostic bridge did not install");
+    env->SetStaticLongField(movementSignal,packetBits,savedPackets); Healthy(env);
+    testCombat=&unsupportedPackets; step(2);
+    Require(report.spinStatus==mcov::combat::SpinStatus::SilentUnavailable &&
+        env->GetStaticBooleanField(movementSignal,packetGate)==JNI_FALSE,"Spinbot started without packet hooks"); Healthy(env);
+    unsupportedPackets.Close(env); testCombat=nullptr;
     const auto freecamBits=field(movementSignal,"freecamProfiles","J",true);
     const auto savedFreecam=env->GetStaticLongField(movementSignal,freecamBits); Healthy(env);
     env->SetStaticLongField(movementSignal,freecamBits,0); Healthy(env);

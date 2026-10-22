@@ -55,13 +55,24 @@ void Overlay::PlayModuleSound(bool enabled,bool hit) {
     const int type=hit?std::clamp(c.mode,0,2):enabled?1:0,volume=std::clamp(int(c.opacity*3),0,2);
     PlaySoundW(reinterpret_cast<LPCWSTR>(tones[type*3+volume].wav.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
 }
+void Overlay::PlaySpectateSound() {
+    static const Tone tone(660,.12f);
+    PlaySoundW(reinterpret_cast<LPCWSTR>(tone.wav.data()),nullptr,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);
+}
 void Overlay::Panic() {
     keyEngine_.DiscardHoldRestoration();
     for(int i=3;i<keys::kCount;++i) if(!keys::System(static_cast<keys::Action>(i))) SetModuleEnabled(static_cast<keys::Action>(i),false);
+    visuals_.enabled=false;
     visuals_.boxEsp=visuals_.skeleton=visuals_.tracers=visuals_.nameTags=visuals_.healthBars=visuals_.distanceText=visuals_.targetInfo=false;
     auraConfig_.enabled=targetCubeConfig_.enabled=localHatConfig_.enabled=false;
     hud_.visible=false; rockstarPack_.ResetWorld(); worldVisuals_.Reset(); stashFinder_.Reset(); baseFinder_.Reset(); storagePulse_.Reset(); panicActive_=true;
+    for(int i=0;i<kHudModules;++i) SetHudEnabled(i,false);
+    auraRenderer_.Reset(); targetCube_.Reset(); nextClickTick_=0;
     preferencesDirty_=true; preferenceSaveAt_=GetTickCount64()+300; PushScanRequest(); PushCombatRequest();
+    menu_.settingsOpen=false;
+    captureAction_=-1;
+    SetHudEditing(false);
+    SetMenuVisible(false);
 }
 void Overlay::UpdateRockstar() {
     if(!rockstarConfig_.Enabled(rockstar::Feature::ChestEsp)) storagePulse_.Reset();
@@ -84,7 +95,8 @@ void Overlay::UpdateRockstar() {
     // HUD/Statistik verarbeitet immer den neuesten Sampler, keine GPU-Verzoegerung.
     const auto& s=lastSnapshot_;
     const int newStashes=stashFinder_.Update(s,smpConfig_.Detection());
-    baseFinder_.Update(s,ChunkDetection());
+    UpdateChunkFinder();
+    if(chunkFinder_.enabled)scannedChunks_.UpdateChunks(s,*chunkReport_);
     if(newStashes&&smpConfig_.stash.enabled&&smpConfig_.stash.notifications) {
         char text[112]; const auto* latest=stashFinder_.Latest();
         if(newStashes==1) std::snprintf(text,sizeof(text),"Stash found: %d containers at %.0f %.0f %.0f",latest->count,latest->centre.x,latest->centre.y,latest->centre.z);
@@ -193,6 +205,7 @@ void Overlay::DrawMiscTab() {
         ImGui::TextWrapped("Disable Freecam to return to your player. Menus, focus loss and world changes release the camera. Only loaded chunks are visible. Set Toggle or Hold under Settings / Keybinds.");
     } else {
         panel::Section("Disable all modules"); ImGui::TextUnformatted("Panic key"); ImGui::SameLine(); DrawBind(keys::Action::Panic);
+        ImGui::TextUnformatted("F12 always disables all modules and hides the UI.");
         if(ImGui::Button("Disable all modules now")) Panic();
         ImGui::TextWrapped("Stops combat and macros, clears transient effects and hides ESP/HUD. Friends and saved waypoints are retained. Enable a module to resume.");
     }

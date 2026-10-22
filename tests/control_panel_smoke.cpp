@@ -20,6 +20,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <set>
 #include <sstream>
 #include <fstream>
 #include <crtdbg.h>
@@ -46,6 +47,8 @@ struct OverlayUiCheck {
         CopyField(o.lastSnapshot_.gameVersion,"1.21.11");
         CopyField(o.lastSnapshot_.mappingProfile,"intermediary-1.21.11");
     }
+    static bool PlayerEnabled(const Overlay& o) { return o.visuals_.enabled; }
+    static void PlayerSection(Overlay& o,int section) { o.playerEspSection_=section; }
     static bool Box(const Overlay& o) { return o.visuals_.boxEsp; }
     static const control_panel::State& Menu(const Overlay& o) { return o.menu_; }
     static void CloseDetails(Overlay& o) { o.menu_.settingsOpen=false; }
@@ -71,9 +74,13 @@ struct OverlayUiCheck {
     static bool Module(Overlay& o,keys::Action a) { return o.ModuleEnabled(a); }
     static void SetModule(Overlay& o,keys::Action a,bool on) { o.SetModuleEnabled(a,on); }
     static void Panic(Overlay& o) { o.Panic(); }
+    static items::TotemConfig& Totem(Overlay& o) { return o.combat_.autoTotem; }
+    static void PanicUi(Overlay& o) { o.menuVisible_=o.hudEditing_=o.menu_.settingsOpen=true; o.captureAction_=keys::Index(keys::Action::KillAura); }
+    static bool UiHidden(const Overlay& o) { return !o.menuVisible_&&!o.hudEditing_&&!o.menu_.settingsOpen&&o.captureAction_<0; }
     static void UpdateWorld(Overlay& o,const WorldSnapshot& s,double now) {
         o.worldVisuals_.Update(s,now,o.worldVisualsConfig_,s.hasTarget?s.targetEntityId:0);
     }
+    static chunks::Report& ChunkReport(Overlay& o) { return *o.chunkReport_; }
     static ChunkFinderSettings& Chunk(Overlay& o) { return o.chunkFinder_; }
     static BlockEspSettings& Blocks(Overlay& o) { return o.blocks_; }
     static holes::Settings& Holes(Overlay& o) { return o.holeSettings_; }
@@ -120,6 +127,7 @@ struct OverlayUiCheck {
     static void ClearConfigStatus(Overlay& o) { o.configStatus_.clear(); o.configError_=false; }
     static void RefreshConfigs(Overlay& o) { o.RefreshConfigs(); }
     static void DrawHud(Overlay& o,const WorldSnapshot& s,bool editing) {
+        o.agentConnected_=true; o.heartbeatClock_.Observe(++pulse,GetTickCount64());
         o.windowW_=int(ImGui::GetIO().DisplaySize.x); o.windowH_=int(ImGui::GetIO().DisplaySize.y);
         o.hudEditing_=editing; o.DrawHud(s); if(editing) o.DrawHudEditor();
     }
@@ -145,6 +153,7 @@ struct OverlayUiCheck {
             throw std::runtime_error("Friend hat glow initialization failed");
         FriendHatRenderer::Prepare(*ImGui::GetBackgroundDrawList());
     }
+    static ImTextureID GlowTexture(const Overlay& o) { return o.auraBlend_.GlowTexture(); }
     static void EquipmentPreview(EntitySnapshot& e) {
         e.details.ping=42; e.details.armorValue=20;
         constexpr const char* keys[]={"diamond_helmet","diamond_chestplate","diamond_leggings","diamond_boots","diamond_sword","totem_of_undying"};
@@ -307,6 +316,13 @@ void ClickModule(mcov::Overlay& overlay,Page page,int index,int count,int button
 }
 void OpenModuleSettings(mcov::Overlay& overlay,Page page,const char* id,int index,int count,ImVec2 viewport={1280,800}) {
     (void)id;
+    // Legacy component-focused checks now enter the single Player ESP tile.
+    if(page==Page::Visuals&&count==26) {
+        constexpr int mapping[]={0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,0,10,11,12,0,13,14,15,16,0};
+        constexpr int parts[]={0,1,2,3,4,5,6,-1,-1,-1,-1,-1,-1,-1,-1,-1,7,-1,-1,-1,8,-1,-1,-1,-1,9};
+        if(parts[index]>=0) mcov::OverlayUiCheck::PlayerSection(overlay,parts[index]);
+        index=mapping[index]; count=17;
+    }
     std::array<mcov::control_panel::ModuleView,64> modules{};
     mcov::OverlayUiCheck::Modules(overlay,page,modules); const bool original=modules[index].enabled;
     ClickModule(overlay,page,index,count,1,viewport);
@@ -335,24 +351,24 @@ void ModuleTileChecks(mcov::Overlay& overlay) {
         }
     }
     // The visible settings target must never toggle the module beneath it.
-    const auto settingsPoint=ModulePoint(overlay,Page::Visuals,0,26);
+    const auto settingsPoint=ModulePoint(overlay,Page::Visuals,0,17);
     const auto* settingsGrid=ModuleGrid();
     const ImVec2 settingsButton{settingsGrid->Columns[0].WorkMaxX-17,settingsPoint.y};
-    const bool beforeSettings=mcov::OverlayUiCheck::Box(overlay);
+    const bool beforeSettings=mcov::OverlayUiCheck::PlayerEnabled(overlay);
     io.AddMousePosEvent(settingsButton.x,settingsButton.y); Draw(overlay,Page::Visuals,0,{1280,800});
     io.AddMouseButtonEvent(0,true); Draw(overlay,Page::Visuals,0,{1280,800});
     io.AddMouseButtonEvent(0,false); Draw(overlay,Page::Visuals,0,{1280,800});
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&
-        mcov::OverlayUiCheck::Menu(overlay).settingsSection==0&&mcov::OverlayUiCheck::Box(overlay)==beforeSettings,
+        mcov::OverlayUiCheck::Menu(overlay).settingsSection==0&&mcov::OverlayUiCheck::PlayerEnabled(overlay)==beforeSettings,
         "Visible settings button toggled the module or failed to open its settings");
     // Native button focus supports Space, and Shift+F10 opens its settings.
-    ClickModule(overlay,Page::Visuals,0,26,0);
-    const bool box=mcov::OverlayUiCheck::Box(overlay);
+    ClickModule(overlay,Page::Visuals,0,17,0);
+    const bool box=mcov::OverlayUiCheck::PlayerEnabled(overlay);
     io.AddMousePosEvent(-100,-100); Draw(overlay,Page::Visuals,0,{1280,800});
     ImGui::GetCurrentContext()->NavCursorVisible=true;
     io.AddKeyEvent(ImGuiKey_Space,true); Draw(overlay,Page::Visuals,0,{1280,800});
     io.AddKeyEvent(ImGuiKey_Space,false); Draw(overlay,Page::Visuals,0,{1280,800});
-    Require(mcov::OverlayUiCheck::Box(overlay)!=box,"Keyboard could not activate the module widget");
+    Require(mcov::OverlayUiCheck::PlayerEnabled(overlay)!=box,"Keyboard could not activate the module widget");
     io.AddKeyEvent(ImGuiMod_Shift,true); io.AddKeyEvent(ImGuiKey_F10,true); Draw(overlay,Page::Visuals,0,{1280,800});
     io.AddKeyEvent(ImGuiKey_F10,false); io.AddKeyEvent(ImGuiMod_Shift,false); Draw(overlay,Page::Visuals,0,{1280,800});
     Require(mcov::OverlayUiCheck::Menu(overlay).settingsOpen&&mcov::OverlayUiCheck::Menu(overlay).settingsSection==0,
@@ -449,7 +465,7 @@ void StorageRangeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,cons
 }
 void LargeScanUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     auto owned=std::make_unique<mcov::Overlay>(); auto& overlay=*owned; mcov::OverlayUiCheck::Seed(overlay);
-    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) for(int section:{0,3}) {
+    for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) for(int section:{0}) {
         auto& blocks=mcov::OverlayUiCheck::Blocks(overlay); auto& chunks=mcov::OverlayUiCheck::Chunk(overlay);
         int& radius=section==0?blocks.radius:chunks.radius;
         float& distance=section==0?blocks.maxDraw:chunks.maxDraw;
@@ -474,6 +490,7 @@ void LargeScanUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const s
         const std::string name=section==0?"block-radius-512-":"chunk-radius-512-";
         SaveFrame(device,context,output/(name+(size.x>500?"desktop.png":"small.png")));
     }
+    mcov::OverlayUiCheck::Chunk(overlay).radius=512;mcov::OverlayUiCheck::Chunk(overlay).maxDraw=900;
     mcov::OverlayUiCheck::PrefPath(overlay,output/"large-scan-preferences.ini");
     mcov::OverlayUiCheck::Save(overlay);
     auto& chunks=mcov::OverlayUiCheck::Chunk(overlay); chunks.radius=4; chunks.maxDraw=8;
@@ -506,6 +523,13 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     clickStorage(swatch); Require(ImGui::GetCurrentContext()->OpenPopupStack.Size>0,"Per-type storage colour picker did not open");
     ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape,true); storageFrame(); ImGui::GetIO().AddKeyEvent(ImGuiKey_Escape,false); storageFrame();
     ImGui::GetIO().AddMousePosEvent(-100,-100); storageFrame();
+    ImGui::SetScrollY(storageContent,0); storageFrame(); storageFrame();
+    auto* storageTable=ImGui::GetCurrentContext()->Tables.GetByKey(storageContent->GetID("storage_settings"));
+    Require(storageTable&&!c.storage.textures,"Container textures did not start disabled");
+    const ImVec2 textureToggle{storageTable->Columns[0].WorkMinX+20,
+        storageTable->OuterRect.Min.y+7*(height+2*storageTable->RowCellPaddingY)+storageTable->RowCellPaddingY+height*.5f};
+    clickStorage(textureToggle); Require(c.storage.textures,"Container texture checkbox did not enable textures");
+    clickStorage(textureToggle); Require(!c.storage.textures,"Container texture checkbox did not disable textures");
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
         for(int index:{4,7,8,9,3}) {
@@ -534,7 +558,9 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::OverlayUiCheck::Growth(overlay).Update(*scene,mcov::OverlayUiCheck::ChunkSettings(overlay));
     Require(mcov::OverlayUiCheck::Growth(overlay).Finds().size()==1,"Base Finder UI discovery fixture failed");
     mcov::OverlayUiCheck::Snapshot(overlay,*scene);
-    mcov::OverlayUiCheck::Chunk(overlay).chunks=false; mcov::OverlayUiCheck::Chunk(overlay).deepslate=false;
+    auto& chunkResult=mcov::OverlayUiCheck::ChunkReport(overlay);chunkResult.status=mcov::chunks::Status::Scanning;chunkResult.sampledAtMs=GetTickCount64();chunkResult.count=1;
+    chunkResult.finds[0]={0,0,2,12,65,-64,320,1u<<mcov::chunks::Pistons,0};
+
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
@@ -570,12 +596,12 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
         ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"base-esp-world-desktop.png":"base-esp-world-small.png"));
     }
     auto storageScene=std::make_unique<mcov::WorldSnapshot>(); *storageScene=*scene; storageScene->blockCount=0;
-    storageScene->camX=5; storageScene->camY=68; storageScene->camZ=-6; storageScene->yawDeg=25; storageScene->pitchDeg=12;
-    storageScene->posX=5; storageScene->posY=64; storageScene->posZ=-6;
-    for(int i=0;i<6;++i) {
+    storageScene->camX=3; storageScene->camY=67; storageScene->camZ=-1; storageScene->yawDeg=35; storageScene->pitchDeg=25;
+    storageScene->posX=3; storageScene->posY=64; storageScene->posZ=-1;
+    for(int i=0;i<8;++i) {
         auto& b=storageScene->blocks[storageScene->blockCount++]; b={};
-        b.x=float(i%3*2-2); b.y=64; b.z=float(i/3*3+4);
-        b.kind=i==1?mcov::kBlockEnderChest:i==4?mcov::kBlockShulker:mcov::kBlockChest;
+        b.x=float(i<6?i-3:(i-6)*2-1); b.y=64; b.z=i<6?3.f:6.f;
+        b.kind=i==6?mcov::kBlockEnderChest:i==7?mcov::kBlockShulker:mcov::kBlockChest;
     }
     mcov::smp::Config storageConfig; mcov::smp::StoragePulse storagePulse;
     storagePulse.Update(*storageScene,storageConfig.storage,true,48,0);
@@ -583,29 +609,39 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
         auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},size,IM_COL32(24,26,30,255));
-        draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: optional Storage ESP annotations (models render in Minecraft)");
+        draw->AddText({16,16},IM_COL32(230,230,235,255),"Storage ESP: soft glow + gradients");
+        draw->AddText({16,34},IM_COL32(170,175,185,255),"Synthetic fixture; game textures render in Minecraft");
         const mcov::CameraProjection projection(*storageScene,size.x,size.y);
         const int vertices=draw->VtxBuffer.Size;
         storageConfig.storage.labels=storageConfig.storage.tracers=false;
-        mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,1,size,0,&storagePulse,.75);
-        Require(draw->VtxBuffer.Size==vertices,"Storage texture mode still drew overlay boxes");
-        storageConfig.storage.labels=storageConfig.storage.tracers=true;
-        mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,1,size,0,&storagePulse,.75);
-        Require(draw->VtxBuffer.Size>vertices,"Storage annotations disappeared");
-        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"storage-annotations-desktop.png":"storage-annotations-small.png"));
+        mcov::OverlayUiCheck::InitGlow(overlay,device);
+        mcov::smp::DrawBlocks(*draw,*storageScene,projection,storageConfig,true,48,1,.75f,size,
+            mcov::OverlayUiCheck::GlowTexture(overlay),&storagePulse,.75);
+        Require(draw->VtxBuffer.Size>vertices,"Storage translucent boxes disappeared");
+        ImGui::Render(); SaveFrame(device,context,output/(size.x>500?"storage-boxes-desktop.png":"storage-boxes-small.png"));
     }
     // Saved preferences use the same typed SMP schema as named profiles.
-    c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
+    c.storage.textures=true; c.storage.colours[2]={.21f,.32f,.43f,.54f}; c.storage.mask=1u<<mcov::kBlockEnderChest; c.stash.minContainers=21; c.spawner.tracers=true;
     c.storage.interval=2600; c.storage.pulseDuration=4800; c.storage.pulse=false;
     c.base.padding=7; c.base.fillOpacity=.21f; c.base.colour={.6f,.5f,.4f,.3f};
     c.finder.minKelpHeight=24;
+    auto& advanced=mcov::OverlayUiCheck::Chunk(overlay);advanced.detection.baseScore=17;advanced.detection.rotatedMin=7;
+    advanced.display=1;advanced.threads=4;advanced.maxChunks=233;advanced.farmColor={.1f,.2f,.3f,1};
     mcov::OverlayUiCheck::PrefPath(overlay,output/"smp-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
-    Require(c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
+    Require(c.storage.textures&&c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
         c.storage.interval==2600&&c.storage.pulseDuration==4800&&!c.storage.pulse&&
         c.base.enabled&&c.base.padding==7&&c.base.fillOpacity==.21f&&c.base.colour.w==.3f&&c.finder.enabled&&c.finder.minKelpHeight==24,
         "Automatic preferences lost SMP colours/filters/settings");
-    Require(!mcov::OverlayUiCheck::Chunk(overlay).chunks&&!mcov::OverlayUiCheck::Chunk(overlay).deepslate,
-        "Automatic preferences lost Chunkfinder highlight/filter choices");
+    Require(advanced.detection.baseScore==17&&advanced.detection.rotatedMin==7&&advanced.display==1&&advanced.threads==4&&advanced.maxChunks==233&&advanced.farmColor.z==.3f,
+        "Automatic preferences lost Chunkfinder detector/display settings");
+    auto config=mcov::OverlayUiCheck::ConfigSnapshot(overlay);std::string encoded;mcov::client_configs::Snapshot decoded;
+    Require(mcov::client_configs::Encode(config,encoded)&&mcov::client_configs::Decode(encoded,decoded)&&decoded.chunks.detection.baseScore==17&&decoded.chunks.maxChunks==233,"Chunkfinder named config round trip");
+    // Simulate a profile from before the new detector schema.
+    std::ostringstream advancedText;mcov::client_configs::Archive advancedArchive(advancedText);mcov::client_configs::ChunkAdvanced(advancedArchive,advanced);
+    std::set<std::string> newKeys;std::istringstream fields(advancedText.str());std::string field;
+    while(std::getline(fields,field))newKeys.insert(field.substr(0,field.find(' ')));
+    std::istringstream source(encoded);std::ostringstream chunkLegacy;while(std::getline(source,field))if(!newKeys.contains(field.substr(0,field.find(' '))))chunkLegacy<<field<<'\n';
+    Require(mcov::client_configs::Decode(chunkLegacy.str(),decoded)&&decoded.chunks.detection.baseScore==8&&decoded.chunks.display==0,"Legacy Chunkfinder profile migration");
     std::ifstream storagePrefs(output/"smp-preferences.ini"); std::ostringstream beforeStoragePulse; std::string storageLine;
     while(std::getline(storagePrefs,storageLine)) if(!storageLine.starts_with("smp.storage.interval ")&&
         !storageLine.starts_with("smp.storage.pulse ")&&!storageLine.starts_with("smp.storage.pulseDuration ")) beforeStoragePulse<<storageLine<<'\n';
@@ -662,7 +698,7 @@ void SettingsWindowChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11Devi
     io.AddMousePosEvent(grip.x+35,grip.y+15); frame(); io.AddMouseButtonEvent(0,false); frame();
     Require(root->Pos.x==original.x+35&&root->Pos.y==original.y+15,"Module grid drag lost its offset");
     OpenModuleSettings(overlay,Page::Visuals,"",0,26);
-    const ImVec2 centerButton{root->Pos.x+root->Size.x-182,root->Pos.y+root->Size.y-23};
+    const ImVec2 centerButton{root->Pos.x+root->Size.x-150,root->Pos.y+root->Size.y-23};
     io.AddMousePosEvent(centerButton.x,centerButton.y); frame(); io.AddMouseButtonEvent(0,true); frame();
     io.AddMouseButtonEvent(0,false); frame(); frame();
     Require(root->Pos.x==22&&root->Pos.y==(800-root->Size.y)*.5f,"Center did not restore the initial module grid placement");
@@ -718,7 +754,7 @@ void WorkspaceChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     const int count=mcov::OverlayUiCheck::Modules(overlay,Page::Visuals,modules);
     for(int i=0;i<count;++i) if(modules[i].mode==mcov::control_panel::TileMode::Toggle&&modules[i].enabled)
         mcov::OverlayUiCheck::Activate(overlay,Page::Visuals,i);
-    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::BoxEsp,true);
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::PlayerEsp,true);
     auto frame=[&] { Draw(overlay,Page::Visuals,0,{1280,800}); };
     auto& io=ImGui::GetIO(); frame(); frame();
     auto click=[&](ImVec2 p) {
@@ -732,7 +768,7 @@ void WorkspaceChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     Require(table->CurrentRow==0&&table->CurrentColumn==0,"Enabled filter included disabled modules");
     SaveFrame(device,context,output/"studio-enabled.png");
     click({table->Columns[0].WorkMinX+45,table->OuterRect.Min.y+table->RowCellPaddingY+33});
-    Require(!mcov::OverlayUiCheck::Box(overlay),"Filtered tile toggled the wrong underlying module");
+    Require(!mcov::OverlayUiCheck::PlayerEnabled(overlay),"Filtered tile toggled the wrong underlying module");
     auto* grid=Child("/module_grid_");
     click({grid->DC.CursorStartPos.x+65,grid->DC.CursorStartPos.y+30});
     Require(!mcov::OverlayUiCheck::Menu(overlay).enabledOnly,"Empty enabled view did not recover");
@@ -828,7 +864,11 @@ void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
         click({popup->DC.CursorStartPos.x+30,popup->DC.CursorStartPos.y+index*(height+ctx.Style.ItemSpacing.y)+height*.5f});
     };
     mcov::OverlayUiCheck::ResetVisuals(overlay);
-    OpenModuleSettings(overlay,Page::Visuals,"",0,26); choose("box_controls",2);
+    OpenModuleSettings(overlay,Page::Visuals,"",0,26);
+    choose("player_esp_controls",1);
+    Require(table("skeleton_controls")!=nullptr,"Player ESP settings selector did not open Skeleton");
+    choose("player_esp_controls",0);
+    choose("box_controls",2);
     Require(c.boxStyle==mcov::EspBoxStyle::Wire3D,"Box mode did not update the real renderer settings");
     c.tracers=true; OpenModuleSettings(overlay,Page::Visuals,"",5,26); choose("tracer_controls",3);
     Require(c.tracerOrigin==mcov::EspTracerOrigin::Custom,"Tracer origin did not update the real renderer settings");
@@ -837,7 +877,7 @@ void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     OpenModuleSettings(overlay,Page::Visuals,"",3,26); choose("health_controls",1);
     Require(c.barPlacement==mcov::EspBarPlacement::Horizontal,"Bar placement was not wired to the renderer");
     const auto* t=table("health_controls");
-    const auto armorPoint=controlPoint("health_controls",7);
+    const auto armorPoint=controlPoint("health_controls",4);
     click({t->Columns[0].WorkMinX+25,armorPoint.y});
     Require(!c.armorBars,"Armor checkbox did not update the real renderer settings");
     io.AddMousePosEvent(-100,-100);
@@ -854,6 +894,10 @@ void VisualMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
             Require(table(names[section])->OuterRect.Max.y<=content->InnerRect.Max.y+1,
                     "New visual controls were unreachable by scrolling");
             if(section==0) SaveFrame(device,context,output/(size.x<500?"visual-controls-box-bottom-small.png":"visual-controls-box-bottom-desktop.png"));
+            if(section==0) {
+                ImGui::SetScrollY(content,0); Draw(overlay,Page::Visuals,0,size); Draw(overlay,Page::Visuals,0,size);
+                SaveFrame(device,context,output/(size.x<500?"player-esp-small.png":"player-esp-desktop.png"));
+            }
         }
     }
     mcov::OverlayUiCheck::ResetVisuals(overlay); mcov::OverlayUiCheck::Center(overlay);
@@ -917,7 +961,7 @@ void MarkerMenuChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceCo
     content=Child("/content_");
     ImGui::SetScrollY(content,0);
     for(int i=0;i<3;++i) Draw(overlay,Page::Visuals,0,{480,360});
-    Require(mcov::OverlayUiCheck::Menu(overlay).settingsSection==8,"Marker selection did not survive compact layout");
+    Require(mcov::OverlayUiCheck::Menu(overlay).settingsSection==2,"Marker selection did not survive compact layout");
     SaveFrame(device,context,output/"marker-settings-small.png");
     mcov::OverlayUiCheck::MarkerDetails(overlay,false);
     ImGui::SetScrollY(Child("/content_"),0);
@@ -989,17 +1033,18 @@ void WorldVisualChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     }
     const auto& binds=mcov::OverlayUiCheck::Binds(overlay);
     for(int index=mcov::keys::Index(mcov::keys::Action::Trails);index<mcov::keys::kCount;++index)
-        Require(!binds[index].key,"New visual binds collided with existing Minecraft keys");
+        if(!mcov::keys::System(static_cast<mcov::keys::Action>(index)))
+            Require(!binds[index].key,"New visual binds collided with existing Minecraft keys");
     // Neue Keybind-Aktionen schalten die tatsÃ¤chlichen Module, inklusive des eigenen Huts.
     mcov::keys::Input input{}; mcov::OverlayUiCheck::Input(overlay,input);
     const mcov::keys::Action actions[]={mcov::keys::Action::HitBubbles,mcov::keys::Action::KillEffect,
         mcov::keys::Action::BreadCrumbs,mcov::keys::Action::ChinaHat};
     for(int i=0;i<4;++i) {
         auto& binding=mcov::OverlayUiCheck::Binds(overlay)[mcov::keys::Index(actions[i])];
-        binding={0x78+i,0,mcov::keys::Mode::Toggle};
-        input[0x78+i]=true; mcov::OverlayUiCheck::Input(overlay,input);
+        binding={0x76+i,0,mcov::keys::Mode::Toggle};
+        input[0x76+i]=true; mcov::OverlayUiCheck::Input(overlay,input);
         Require(!*enabled[3+i],"New keybind failed to disable real visual configuration");
-        input={}; mcov::OverlayUiCheck::Input(overlay,input); input[0x78+i]=true;
+        input={}; mcov::OverlayUiCheck::Input(overlay,input); input[0x76+i]=true;
         mcov::OverlayUiCheck::Input(overlay,input); Require(*enabled[3+i],"New keybind failed to re-enable real configuration");
         input={}; mcov::OverlayUiCheck::Input(overlay,input); binding={};
     }
@@ -1098,6 +1143,17 @@ void EspChecks(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceContext* 
         const int count=draw.VtxBuffer.Size;
         ImGui::Render(); return count;
     };
+    auto& extra=mcov::OverlayUiCheck::Rockstar(overlay);
+    extra[mcov::rockstar::Feature::GlowEsp].enabled=true;
+    extra[mcov::rockstar::Feature::Arrows].enabled=true;
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::PlayerEsp,false);
+    Require(frame({585,745})==0,"Player ESP master left component geometry visible");
+    Require(config.boxEsp&&config.skeleton&&config.nameTags&&extra[mcov::rockstar::Feature::GlowEsp].enabled,
+        "Player ESP master discarded component selections");
+    mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::PlayerEsp,true);
+    Require(frame({585,745})>0,"Player ESP did not restore selected components");
+    extra[mcov::rockstar::Feature::GlowEsp].enabled=false;
+    extra[mcov::rockstar::Feature::Arrows].enabled=false;
     Require(frame({585,745})>0,"Production ESP preview was empty");
     SaveFrame(device,context,output/"esp-reference.png");
     entity.health=8;
@@ -1519,14 +1575,14 @@ void ModuleHudChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std
     Require(Check::HudRects(overlay)[modules].max.x>0,"Empty module list must remain editable");
     hud.layout={};
     for(auto a:{keys::Action::ChestEsp,keys::Action::SpawnerEsp,keys::Action::Triggerbot,keys::Action::Freecam,
-                keys::Action::NameTags,keys::Action::BoxEsp,keys::Action::KillAura,keys::Action::AutoTotem}) Check::SetModule(overlay,a,true);
+                keys::Action::NameTags,keys::Action::PlayerEsp,keys::Action::KillAura,keys::Action::AutoTotem}) Check::SetModule(overlay,a,true);
     render({360,440});
     const auto list=Check::HudRects(overlay)[modules],brand=Check::HudRects(overlay)[watermark];
     Require(std::abs(list.max.x-brand.max.x)<.1f&&brand.max.y<list.min.y,"Fresh watermark and module list must align without overlap");
     SaveFrame(device,context,output/"hud-reference.png");
     const float fullWidth=list.max.x-list.min.x,fullHeight=list.max.y-list.min.y;
     for(int a=3;a<keys::kCount;++a) Check::SetModule(overlay,static_cast<keys::Action>(a),false);
-    hud.visible=true; Check::SetModule(overlay,keys::Action::BoxEsp,true);
+    hud.visible=true; Check::SetModule(overlay,keys::Action::PlayerEsp,true);
     render({360,440});
     auto single=Check::HudRects(overlay)[modules];
     Require(std::abs(single.max.x-list.max.x)<.1f&&std::abs(single.min.y-list.min.y)<.1f,
@@ -1573,7 +1629,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={10,26,11,21,3,5,10};
+        constexpr int sectionCounts[]={10,17,11,21,3,5,10};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1723,7 +1779,10 @@ int main(int argc,char** argv) {
         mcov::WorldSnapshot markerScene{}; markerScene.posX=-123; markerScene.posY=64; markerScene.posZ=29;
         mcov::CopyField(markerScene.dimension,"Overworld"); mcov::CopyField(markerScene.serverAddress,"Local world");
         Require(pack.AddMarker(markerScene,"Home \"one\""),"test waypoint could not be saved");
+        auto& savedTotem=mcov::OverlayUiCheck::Totem(overlay); savedTotem.healthThreshold=7.5f;
+        hud.layout[int(mcov::HudModule::TargetInfo)]={{.2f,.6f},1.2f,true};
         mcov::OverlayUiCheck::Save(overlay); binds=mcov::keys::Defaults(); hud={}; extra={}; pack.ClearMarkers();
+        savedTotem.healthThreshold=20;
         savedCrystal={}; savedAnchor={}; savedVisuals={};
         mcov::OverlayUiCheck::Settings(overlay).occludeWorldEffects=true;
         mcov::OverlayUiCheck::Load(overlay);
@@ -1745,11 +1804,16 @@ int main(int argc,char** argv) {
                 "combat settings must persist without auto-enabling modules");
         Require(binds[auraKey].key==0x4B&&binds[auraKey].mode==mcov::keys::Mode::Hold&&!hud.effects&&
                 hud.layout[2].placed&&hud.layout[2].position.x==.4f&&hud.layout[2].scale==1.3f,"HUD/bind preferences did not survive save/load");
+        Require(savedTotem.healthThreshold==7.5f&&hud.layout[int(mcov::HudModule::TargetInfo)].position.x==.2f&&
+                hud.layout[int(mcov::HudModule::TargetInfo)].position.y==.6f&&hud.layout[int(mcov::HudModule::TargetInfo)].scale==1.2f,
+                "Totem threshold or target HUD placement did not survive save/load");
         Require(extra[mcov::rockstar::Feature::Wings].enabled&&extra[mcov::rockstar::Feature::Wings].size==1.7f&&extra[mcov::rockstar::Feature::Wings].end.w==.4f&&hud.extras[0]&&
                 binds[mcov::keys::Index(mcov::keys::Action::Wings)].mode==mcov::keys::Mode::Hold&&pack.Markers()[0].p.x==-123&&std::string(pack.Markers()[0].label.data())=="Home \"one\"","new effects / HUD / quoted waypoint preferences did not survive save/load");
         // Panic muss auch vorher aktive Hold-Module abschalten; Loslassen darf sie nicht wiederherstellen.
         mcov::OverlayUiCheck::Input(overlay,{}); input={}; input[0x47]=true; mcov::OverlayUiCheck::Input(overlay,input);
-        mcov::OverlayUiCheck::Panic(overlay); input={}; mcov::OverlayUiCheck::Input(overlay,input);
+        mcov::OverlayUiCheck::PanicUi(overlay); input[VK_F12]=true; mcov::OverlayUiCheck::Input(overlay,input,true);
+        Require(mcov::OverlayUiCheck::UiHidden(overlay),"F12 did not close menu, settings, HUD editor and key capture");
+        input={}; mcov::OverlayUiCheck::Input(overlay,input);
         for(int i=3;i<mcov::keys::kCount;++i) if(!mcov::keys::System(static_cast<mcov::keys::Action>(i)))
             Require(!mcov::OverlayUiCheck::Module(overlay,static_cast<mcov::keys::Action>(i)),"Panic left a module enabled");
         Require(pack.Markers()[0].used,"Panic erased a saved waypoint");
@@ -1835,6 +1899,7 @@ int main(int argc,char** argv) {
         pack.Notify("Wings enabled",double(GetTickCount64())/1000); pack.Notify("Waypoint saved",double(GetTickCount64())/1000);
         hudScene.entityCount=1; auto& nearby=hudScene.entities[0]; nearby.entityId=50; nearby.uuid={1,50}; nearby.distance=12;
         nearby.health=18; nearby.x=hudScene.posX+8; nearby.z=hudScene.posZ+5; nearby.flags=mcov::kEntityIsPlayer|mcov::kEntityIsLiving; mcov::CopyField(nearby.name,"Nearby player");
+        hudScene.targetEntityId=nearby.entityId; nearby.maxHealth=20;
         hudFrame({1280,800},false); SaveFrame(device.Get(),context.Get(),output/"rockstar-hud.png");
         hudFrame({480,360}); hudFrame({480,360});
         for(const auto& r:mcov::OverlayUiCheck::HudRects(overlay)) Require(r.min.x>=0&&r.min.y>=0&&r.max.x<=480.01f&&r.max.y<=360.01f,"new HUD escaped a small viewport");
@@ -1937,46 +2002,32 @@ int main(int argc,char** argv) {
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
         }
-        auto& finder=mcov::OverlayUiCheck::Chunk(overlay); finder.enabled=true; finder.minHints=2; finder.labels=false;
-        mcov::WorldSnapshot chunkScene{}; chunkScene.camY=2; chunkScene.camZ=-4; chunkScene.fovDeg=70; chunkScene.nearPlane=.05f; chunkScene.farPlane=1024;
-        mcov::CopyField(chunkScene.dimension,"overworld"); mcov::CopyField(chunkScene.serverAddress,"chunk fixture");
-        chunkScene.blockScanId=1; chunkScene.blockScanComplete=1; chunkScene.blockScanRadius=finder.radius;
-        chunkScene.blockScanMask=mcov::OverlayUiCheck::ChunkSettings(overlay).Mask();
-        chunkScene.blockCount=3;
-        chunkScene.blocks[0]={0,0,4,mcov::kBlockRotatedDeepslate,{}};
-        chunkScene.blocks[1]={1,0,4,mcov::kBlockRotatedDeepslate,{}};
-        chunkScene.blocks[2]={2,0,4,mcov::kBlockDiamond,{}};
-        ImVec2 chunkViewport{1280,800};
-        auto chunkFrame=[&] {
-            io.DisplaySize=chunkViewport; ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
-            auto* draw=ImGui::GetBackgroundDrawList(); draw->AddRectFilled({0,0},chunkViewport,IM_COL32(24,26,30,255));
-            draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic fixture: suspicious blocks and whole chunks");
-            mcov::OverlayUiCheck::Growth(overlay).Update(chunkScene,mcov::OverlayUiCheck::ChunkSettings(overlay));
-            const int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene); ImGui::Render(); return vertices;
+        auto& finder=mcov::OverlayUiCheck::Chunk(overlay);finder.enabled=true;finder.labels=false;
+        auto& report=mcov::OverlayUiCheck::ChunkReport(overlay);report.status=mcov::chunks::Status::Scanning;report.count=2;report.blockCount=2;
+        report.finds[0]={0,0,1,0,0,-64,320,1,0};report.finds[1]={-1,0,2,12,0,-64,320,1u<<mcov::chunks::Pistons,0};
+        report.blocks[0]={0,0,4,mcov::chunks::Placed|(4<<8)};report.blocks[1]={1,0,4,mcov::chunks::Geodes|(22<<8)};
+        mcov::WorldSnapshot chunkScene{};chunkScene.camX=22;chunkScene.camY=20;chunkScene.camZ=-20;chunkScene.yawDeg=30;chunkScene.pitchDeg=15;
+        chunkScene.fovDeg=70;chunkScene.nearPlane=.05f;chunkScene.farPlane=1024;ImVec2 chunkViewport{1280,800};
+        auto chunkFrame=[&]{
+            report.sampledAtMs=GetTickCount64();io.DisplaySize=chunkViewport;ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
+            auto* draw=ImGui::GetBackgroundDrawList();draw->AddRectFilled({0,0},chunkViewport,IM_COL32(24,26,30,255));
+            draw->AddText({16,16},IM_COL32(230,230,235,255),"Synthetic Chunkfinder fixture: placed blocks / underground base");
+            int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene);ImGui::Render();return vertices;
         };
-        Require(chunkFrame()>0,"qualified deepslate chunk did not render");
+        const int tint=chunkFrame();Require(tint>0,"Color-only chunks did not render");
+        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-tint.png");
+        finder.orbs=false;const int withoutOrbs=chunkFrame();finder.orbs=true;Require(chunkFrame()>withoutOrbs,"Chunk orbit toggle had no effect");
+        finder.display=1;const int detailed=chunkFrame();Require(detailed>tint,"Detailed mode did not add evidence outlines");
         SaveFrame(device.Get(),context.Get(),output/"chunkfinder-blocks.png");
-        finder.minHints=3; Require(chunkFrame()==0,"chunk threshold counted ordinary ores");
-        auto& growthSettings=mcov::OverlayUiCheck::Smp(overlay).finder; growthSettings.minAmethyst=1;
-        for(int i=0;i<3;++i) {
-            auto& b=chunkScene.blocks[chunkScene.blockCount++]; b={}; b.x=float(i); b.y=12; b.z=8; b.kind=mcov::kBlockKelp; b.kelpHeight=18;
-        }
-        auto& crystal=chunkScene.blocks[chunkScene.blockCount++]; crystal={}; crystal.x=-1; crystal.y=3; crystal.z=8; crystal.kind=mcov::kBlockAmethystCluster;
-        ++chunkScene.blockScanId; chunkScene.camX=22; chunkScene.camY=20; chunkScene.camZ=-20; chunkScene.yawDeg=30; chunkScene.pitchDeg=15;
-        finder.chunks=finder.blocks=true; const int both=chunkFrame();
-        Require(both>0&&mcov::OverlayUiCheck::Growth(overlay).Finds().size()==2,"Growth clues did not join Chunkfinder across chunk boundaries");
-        finder.labels=true; chunkFrame();
-        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-desktop.png");
-        chunkViewport={480,360}; Require(chunkFrame()>0,"Small viewport lost whole chunk rendering");
-        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-small.png"); chunkViewport={1280,800};
-        finder.labels=false;
-        finder.chunks=false; const int onlyBlocks=chunkFrame(); Require(onlyBlocks>0&&onlyBlocks<both,"Whole-chunk toggle also removed individual blocks");
-        finder.chunks=true; finder.blocks=false; Require(chunkFrame()>0,"Individual-block toggle removed whole chunk outlines");
-        finder.chunks=false; Require(chunkFrame()==0,"Turning both highlight options off left geometry");
-        finder.chunks=finder.blocks=true;
-        mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::ChunkFinder,false);
-        Require(chunkFrame()==0&&!mcov::OverlayUiCheck::ChunkSettings(overlay).enabled,"Chunkfinder off left growth markers active");
-        finder={}; mcov::OverlayUiCheck::Smp(overlay).finder.enabled=false;
+        finder.blocks=false;Require(chunkFrame()<detailed,"Block highlighting toggle had no effect");finder.blocks=true;finder.labels=true;
+        chunkFrame();SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-desktop.png");
+        chunkViewport={480,360};Require(chunkFrame()>0,"Small viewport lost chunk rendering");
+        SaveFrame(device.Get(),context.Get(),output/"chunkfinder-world-small.png");chunkViewport={1280,800};
+        finder.height=1;finder.renderY=8;Require(chunkFrame()>0,"Fixed height failed");finder.height=2;Require(chunkFrame()>0,"Column mode failed");
+        finder.beacons=true;Require(chunkFrame()>0,"Beacon mode failed");
+        report.count=0;report.blockCount=0;Require(chunkFrame()==0,"Empty findings left geometry");report.count=2;
+        mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::ChunkFinder,false);Require(chunkFrame()==0,"Disabled Chunkfinder rendered");
+        finder={};mcov::OverlayUiCheck::Smp(overlay).finder.enabled=false;
         auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
         aura.pulseAmplitude=0;
         mcov::OverlayUiCheck::ReduceMotion(overlay,true);
@@ -2005,7 +2056,8 @@ int main(int argc,char** argv) {
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();
-        std::cout<<"PASS control panel: translucent client, 7 categories / 85 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
+        std::cout<<"PASS control panel: translucent client, 7 categories / 76 module widgets, unified Chunkfinder/Base ESP settings/persistence, real toggles, search, style ownership, drag, marker settings, key capture/conflicts, saved HUD layout, ESP/friend hats/aura/Rockstar pack and compact launcher\n";
         return 0;
     } catch (const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }
+

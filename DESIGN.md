@@ -295,7 +295,7 @@ for settings. The sidebar is 150 pixels wide, reducing to 112 pixels below
 620 pixels root width. It holds Search, seven categories and connection status.
 Category changes clear search and close details.
 
-All 77 sections are reached through a scrolling `module_grid` child.
+All 76 module tiles are reached through a scrolling `module_grid` child.
 Its equal-width table uses one to three columns: floor of available width divided
 by 174 pixels, clamped to that range, with 5 × 5 pixel cell padding. Search matches
 category module names without case sensitivity; zero results show **Clear search**.
@@ -389,6 +389,14 @@ when the layout changes.
 
 ### Containers and module state
 
+Visuals presents 17 tiles, with **Player ESP** grouping its entity controls in
+one independent settings pane. The master switch and keybind remain visible
+above a native section dropdown: Boxes, Skeleton, Name tags, Health / armor,
+Distance, Tracers, Target info, Entity filters / colours, Glow and Offscreen
+arrows. An off-state hint explains that component choices are retained. This
+uses the current Graphite / Sage menu controls and scrolling behavior; cosmetic
+modules retain their separate tiles.
+
 Left-click or Space on a widget toggles the real module or runs its action.
 Settings-only widgets open their controls. Right-click, Menu or Shift+F10 opens
 the independent settings window without toggling. Widget status reads **Enabled**,
@@ -414,8 +422,19 @@ and optional labels use the incumbent native rows and compact scrolling pane.
 
 Storage ESP uses the same native radius row up to 512 blocks. Its status reflects
 the independent loaded-container scan, with a clearly named compatibility fallback.
-Scan interval controls the post-sweep pause; Pulse cycle controls the existing
-visual pulse. Preserve type colours, 3D frames and known matches between sweeps.
+Scan interval controls the post-sweep pause. Transparent full-cell gradients and
+soft outlines use the configurable container-type colour, with an optional
+Minecraft texture pass. Camera-facing sides are faint at the bottom and stronger
+at the top; horizontal faces have a restrained uniform tint. Thin, slightly
+lightened front edges carry an adjustable halo, while rear edges remain dimmer
+without a halo. Fills and outlines inherit opacity and marker alpha.
+The native settings rows show **Opacity**, **Soft glow** and **Container textures**
+(off by default). **Visibility** reads **Filled boxes** or **Filled boxes + textures**
+to match that choice, followed by **Block types and colours** and **Reset colours**.
+The texture switch leaves coloured gradient boxes visible
+when off; its supporting copy identifies the 1.21.11 requirement. Preserve the
+current Graphite / Sage menu controls, type-coloured
+annotations and known matches between sweeps; no scan bands are drawn.
 
 ### Launcher
 

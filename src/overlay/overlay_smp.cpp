@@ -71,16 +71,18 @@ void Overlay::DrawSmpSettings(int section) {
             dirty|=panel::SliderRow("Scan radius",&appearance.range,kMinBlockScanRadius,kMaxBlockScanRadius,"%.0f blocks");
             dirty|=panel::SliderIntRow("Scan interval",&c.interval,200,3000,"%d ms");
             dirty|=panel::CheckRow("Block names and distance",&c.labels); dirty|=panel::CheckRow("Tracers",&c.tracers);
-            dirty|=panel::SliderRow("Texture opacity",&appearance.opacity,0,1,"%.2f");
-            panel::ValueRow("Visibility","Textures through walls");
+            dirty|=panel::SliderRow("Opacity",&appearance.opacity,0,1,"%.2f");
+            dirty|=panel::SliderRow("Soft glow",&appearance.glow,0,1.5f,"%.2f");
+            dirty|=panel::CheckRow("Container textures",&c.textures);
+            panel::ValueRow("Visibility",c.textures?"Filled boxes + textures":"Filled boxes");
             ImGui::EndTable();
         }
-        panel::Section("Block types and label colours"); dirty|=Types(c.mask,&c.colours);
-        if(ImGui::Button("Reset label colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
+        panel::Section("Block types and colours"); dirty|=Types(c.mask,&c.colours);
+        if(ImGui::Button("Reset colours")) { c.colours=smp::StorageSettings{}.colours; dirty=true; }
         if(!c.mask) ImGui::TextWrapped("Select at least one block type to show Storage ESP.");
-        ImGui::TextWrapped("Shows container models through walls with Minecraft's current resource-pack textures (1.21.11). Colours apply to optional labels and tracers.");
+        ImGui::TextWrapped("Soft outlines and transparent gradients use each container type's colour. Enable Container textures to also show Minecraft's resource-pack models through walls (1.21.11). Colours also apply to labels and tracers.");
         ImGui::TextWrapped("Searches loaded containers independently of Block ESP and Chunkfinder. Scan interval is the pause after a sweep.");
-        if(appearance.enabled&&agentConnected_&&haveSnapshot_) {
+        if(c.textures&&appearance.enabled&&agentConnected_&&haveSnapshot_) {
             const auto now=GetTickCount64();
             const bool fresh=storageTextureReport_.sampledAtMs&&now>=storageTextureReport_.sampledAtMs&&now-storageTextureReport_.sampledAtMs<1500;
             if(std::strcmp(lastSnapshot_.gameVersion,"1.21.11")) ImGui::TextWrapped("Container textures require Minecraft 1.21.11.");

@@ -8,6 +8,23 @@
 using namespace mcov::items;
 void Check(bool value,const char* message) { if(!value) throw std::runtime_error(message); }
 int main() try {
+    {
+        Frame frame; frame.world=frame.alive=frame.ownMenu=frame.totemSupported=true;
+        frame.inventory[0]=Item::Totem;
+        Request request; request.sentAtMs=100; request.inputAllowed=true;
+        request.totem.enabled=true; request.totem.healthThreshold=8;
+        Controller controller;
+        frame.health=8.1f;
+        Check(controller.Tick(request,frame,100).operation==Operation::None&&controller.GetReport().totem==Status::WaitingHealth,"totem swapped above health threshold");
+        frame.health=8;
+        Check(controller.Tick(request,frame,100).operation==Operation::SwapTotem,"totem did not swap at health threshold");
+        frame.health=7; request.sentAtMs=200;
+        Check(controller.Tick(request,frame,200).operation==Operation::SwapTotem,"totem did not swap below health threshold");
+        frame.health=std::numeric_limits<float>::quiet_NaN(); request.sentAtMs=300;
+        Check(controller.Tick(request,frame,300).operation==Operation::None,"invalid health triggered a totem swap");
+        frame.health=4; request.totem.healthThreshold=std::numeric_limits<float>::infinity();
+        Check(controller.Tick(request,frame,300).operation==Operation::None,"invalid threshold triggered a totem swap");
+    }
     Frame f; f.world=f.alive=f.ownMenu=f.totemSupported=f.macroSupported=f.anchorSupported=true;
     Request r; r.sentAtMs=1000; r.inputAllowed=true; r.totem.enabled=true;
     f.inventory[0]=Item::Totem;

@@ -19,6 +19,17 @@ void Overlay::UpdateAntiVanish() {
     const auto now=GetTickCount64();
     if(!antiVanishConfig_.enabled||panicActive_||!agentConnected_||!haveSnapshot_||!heartbeatClock_.Alive(now)||!antiVanishReport_.sampledAtMs||now<antiVanishReport_.sampledAtMs||now-antiVanishReport_.sampledAtMs>1500||antiVanishReport_.status!=antivanish::Status::Active){antiVanishPrevious_={};return;}
     if(antiVanishPrevious_.sampledAtMs==antiVanishReport_.sampledAtMs)return;
+    bool spectateTriggered=false;
+    for(std::uint32_t i=0;i<std::min(antiVanishReport_.count,std::uint32_t(antivanish::kRows));++i) {
+        const auto& row=antiVanishReport_.rows[i];
+        const auto warning=row.evidence&(antivanish::Spectator|antivanish::Critical);
+        if(!warning) continue;
+        bool previous=false;
+        for(std::uint32_t j=0;j<std::min(antiVanishPrevious_.count,std::uint32_t(antivanish::kRows));++j)
+            if(antiVanishPrevious_.rows[j].id==row.id&&(antiVanishPrevious_.rows[j].evidence&warning)==warning) { previous=true; break; }
+        spectateTriggered|=!previous;
+    }
+    if(spectateTriggered) PlaySpectateSound();
     if(now-antiVanishNoticeWindow_>=4000){antiVanishNoticeWindow_=now;antiVanishNoticeCount_=0;}
     if(antiVanishConfig_.notifications&&rockstarConfig_.Enabled(rockstar::Feature::Notifications)) {
         for(std::uint32_t i=0;i<std::min(antiVanishReport_.count,std::uint32_t(antivanish::kRows));++i){const auto& row=antiVanishReport_.rows[i];bool found=false;

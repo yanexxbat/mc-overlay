@@ -270,6 +270,10 @@ bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;  // do not litter imgui.ini next to the exe
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+#ifdef NDEBUG
+    io.ConfigErrorRecoveryEnableTooltip=false;
+    io.ConfigDebugHighlightIdConflicts=false;
+#endif
     style::ApplyFlatTheme(ImGui::GetStyle());
 
     ImGui_ImplWin32_Init(hwnd_);
@@ -396,6 +400,7 @@ void Overlay::TrackTargetWindow() {
 void Overlay::PollHotkeys() {
     keys::Input input{};
     const auto read=[&](int key){if(key>0&&key<256) input[key]=(::GetAsyncKeyState(key)&0x8000)!=0;};
+    read(VK_F12);
     if(captureAction_>=0) for(int i=1;i<256;++i) read(i);
     else {
         for(const auto& bind:bindings_) read(bind.key);
@@ -487,6 +492,7 @@ bool Overlay::RunFrame() {
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+    processMemory_.Update();
 
     const bool glassVisible=false; // The translucent client menu composites directly over the game.
     glass_.BeginFrame(hwnd_,ImGui::GetIO().DisplaySize,glassVisible);
@@ -667,8 +673,8 @@ void Overlay::DrawTargetCube(const WorldSnapshot& snapshot,const CameraProjectio
 void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     if(panicActive_) return;
     const bool extraEffects=std::any_of(rockstarConfig_.modules.begin(),rockstarConfig_.modules.end(),[](const auto& c){return c.enabled;});
-    const bool entitiesEnabled = visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
-                                 visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo;
+    const bool entitiesEnabled = visuals_.enabled && (visuals_.boxEsp || visuals_.skeleton || visuals_.tracers ||
+                                 visuals_.nameTags || visuals_.healthBars || visuals_.distanceText || visuals_.targetInfo);
     const auto relations=combatMenu_.Relations().Read();
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
@@ -685,10 +691,12 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const CameraProjection projection(snapshot, width, height, depthActive_?0:settings_.fovTrim);
     const auto target=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&combatReport_.debug.target&&
         combatReport_.sampledAtMs&&GetTickCount64()-combatReport_.sampledAtMs<=kCombatLeaseMs?combatReport_.debug.target->id:snapshot.hasTarget?snapshot.targetEntityId:0;
+    auto extraConfig=rockstarConfig_;
+    if(!visuals_.enabled) { extraConfig[rockstar::Feature::GlowEsp].enabled=false; extraConfig[rockstar::Feature::Arrows].enabled=false; }
     if(extraEffects) {
-        rockstarPack_.DrawWorld(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,relations,target,{width,height},
+        rockstarPack_.DrawWorld(*ImGui::GetBackgroundDrawList(),snapshot,projection,extraConfig,relations,target,{width,height},
             auraConfig_.startColor,auraConfig_.endColor,auraBlend_.Callbacks(),{auraBlend_.GlowTexture(),auraBlend_.RingTexture(),auraBlend_.FeatherTexture()},menu_.reduceMotion);
-        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,projection,rockstarConfig_,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000,
+        rockstarPack_.DrawScreen(*ImGui::GetBackgroundDrawList(),snapshot,projection,extraConfig,{width,height},auraConfig_.startColor,auraConfig_.endColor,double(GetTickCount64())/1000,
             auraBlend_.Callbacks(),{auraBlend_.GlowTexture(),auraBlend_.RingTexture(),auraBlend_.FeatherTexture()});
     }
     worldVisuals_.Draw(*ImGui::GetBackgroundDrawList(),projection,{width,height},worldVisualsConfig_,
@@ -766,9 +774,7 @@ void Overlay::SampleTelemetry(const WorldSnapshot& snapshot) {
     frameMsHistory_[historyCursor_] = io.DeltaTime * 1000.0f;
     fpsHistory_[historyCursor_]     = snapshot.fps >= 0 ? static_cast<float>(snapshot.fps)
                                                         : io.Framerate;
-    heapHistory_[historyCursor_]    = snapshot.heapUsedBytes > 0
-                                        ? static_cast<float>(snapshot.heapUsedBytes) / (1024.0f * 1024.0f)
-                                        : 0.0f;
+    heapHistory_[historyCursor_] = processMemory_.Megabytes();
     historyCursor_ = (historyCursor_ + 1) % kHistory;
 }
 
@@ -951,15 +957,9 @@ float Overlay::DrawPerformancePanel(const WorldSnapshot& snapshot, float x, floa
 
     plot(frameMsHistory_, x + 10.0f, y + 50.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Accent, 20.0f);
 
-    if (snapshot.heapMaxBytes > 0) {
-        const float usedMb = static_cast<float>(snapshot.heapUsedBytes) / (1024.0f * 1024.0f);
-        const float maxMb  = static_cast<float>(snapshot.heapMaxBytes) / (1024.0f * 1024.0f);
-        std::snprintf(line, sizeof(line), "heap %.0f / %.0f MB", usedMb, maxMb);
-        DrawHudText(draw, x + 10.0f, y + 86.0f, style::hud::Text, line);
-        plot(heapHistory_, x + 10.0f, y + 108.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Muted, maxMb * 0.25f);
-    } else {
-        DrawHudText(draw, x + 10.0f, y + 86.0f, style::hud::Muted, "heap unavailable");
-    }
+    processMemory_.Format(line,sizeof(line));
+    DrawHudText(draw, x + 10.0f, y + 86.0f, style::hud::Text, line);
+    plot(heapHistory_, x + 10.0f, y + 108.0f, kPanelWidth - 20.0f, 30.0f, style::hud::Muted, 32.f);
 
     return height + kPanelGap;
 }
@@ -1098,13 +1098,13 @@ void Overlay::PushScanRequest() {
     const auto finder=ChunkDetection();
     const std::uint32_t mask = (blocks_.enabled ? blocks_.mask : 0u) |
         (beacon?1u<<kBlockBeacon:0)|
-        (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0)|(finder.enabled?finder.Mask():0);
-    const int radius=std::max({blocks_.enabled?blocks_.radius:4,chunkFinder_.enabled?chunkFinder_.radius:4,
+        (stash.enabled?stash.mask:0)|(spawner.enabled?1u<<kBlockSpawner:0);
+    const int radius=std::max({blocks_.enabled?blocks_.radius:4,
         beacon?int(rockstarConfig_[rockstar::Feature::BeaconRadius].range):4,
-        stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4,finder.enabled?finder.radius:4});
-    const int interval=std::min({blocks_.enabled?blocks_.interval:3000,chunkFinder_.enabled?chunkFinder_.interval:3000,
+        stash.enabled?stash.radius:4,spawner.enabled?spawner.radius:4});
+    const int interval=std::min({blocks_.enabled?blocks_.interval:3000,
         beacon?1000:3000,
-        stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000,finder.enabled?finder.interval:3000});
+        stash.enabled?stash.interval:3000,spawner.enabled?spawner.interval:3000});
     block->scanMask.store(mask, std::memory_order_release);
     storage::Request storageRequest;
     storageRequest.sentAtMs=GetTickCount64(); storageRequest.enabled=storage&&!panicActive_&&smpConfig_.storage.mask;
@@ -1112,6 +1112,11 @@ void Overlay::PushScanRequest() {
     storageRequest.radius=unsigned(std::clamp(int(std::lround(rockstarConfig_[rockstar::Feature::ChestEsp].range)),kMinBlockScanRadius,kMaxBlockScanRadius));
     storageRequest.intervalMs=unsigned(smpConfig_.storage.interval);
     block->storageRequest.Publish(storageRequest);
+    chunks::Request chunkRequest;chunkRequest.sentAtMs=GetTickCount64();chunkRequest.clearId=chunkClearId_;
+    chunkRequest.enabled=chunkFinder_.enabled&&!panicActive_&&agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(chunkRequest.sentAtMs);
+    chunkRequest.detection=chunkFinder_.detection;chunkRequest.threads=chunkFinder_.threads;chunkRequest.chunksPerTick=chunkFinder_.chunksPerTick;
+    chunkRequest.alertsPerMinute=chunkFinder_.alertsPerMinute;chunkRequest.chat=chunkFinder_.chat;
+    block->chunkRequest.Publish(chunkRequest);block->chunkReport.Read(*chunkReport_);
     const bool storageFresh=haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(storageRequest.sentAtMs)&&snapshotReceivedAt_&&
         storageRequest.sentAtMs>=snapshotReceivedAt_&&storageRequest.sentAtMs-snapshotReceivedAt_<1500;
     const auto& storageAppearance=rockstarConfig_[rockstar::Feature::ChestEsp];
@@ -1310,9 +1315,10 @@ void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
 // Theme + menu
 // ---------------------------------------------------------------------------
 void Overlay::DrawMenu() {
+    char memory[64]; processMemory_.Format(memory,sizeof(memory));
     const panel::Status status{
         agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()), statusLine_.c_str(),
-        lastSnapshot_.gameVersion[0] ? lastSnapshot_.gameVersion : "detecting", target_.pid};
+        lastSnapshot_.gameVersion[0] ? lastSnapshot_.gameVersion : "detecting", target_.pid,memory};
     const auto actions=panel::Render(menu_,status,this,[](void* owner,panel::Page page) {
         auto& self=*static_cast<Overlay*>(owner);
         switch (page) {
@@ -1366,22 +1372,42 @@ void Overlay::ResetMenuPage(panel::Page page) {
 
 
 void Overlay::DrawVisualsTab() {
-    constexpr const char* sections[]={"Box ESP","Skeleton","Name tags","Health bars","Distance labels",
-        "Tracers","Target info","Target aura","Target marker","Trails","Hit particles","Ambient particles",
-        "Hit bubbles","Kill effect","BreadCrumbs","China hat","Entity filters","Jump circles","Wings","Halo / Nimb",
-        "Glow ESP","Damage markers","Damage vignette","Target circle","Crosshair","Offscreen arrows"};
+    constexpr const char* sections[]={"Player ESP","Target aura","Target marker","Trails","Hit particles","Ambient particles",
+        "Hit bubbles","Kill effect","BreadCrumbs","China hat","Jump circles","Wings","Halo / Nimb",
+        "Damage markers","Damage vignette","Target circle","Crosshair"};
     visualsSection_=panel::SubTabs("visual_sections",sections,IM_ARRAYSIZE(sections),visualsSection_);
-    if(visualsSection_>=17) { DrawRockstarSettings(static_cast<rockstar::Feature>(visualsSection_-17)); return; }
+    if(visualsSection_==0) {
+        constexpr const char* parts[]={"Boxes","Skeleton","Name tags","Health / armor","Distance","Tracers","Target info",
+            "Entity filters / colours","Glow","Offscreen arrows"};
+        constexpr int legacy[]={0,1,2,3,4,5,6,16,20,25};
+        if(panel::BeginRows("player_esp_controls")) {
+            if(panel::CheckRow("Enable Player ESP",&visuals_.enabled)) preferencesDirty_=true;
+            DrawBind(keys::Action::PlayerEsp,true);
+            panel::ComboRow("Settings",&playerEspSection_,parts,IM_ARRAYSIZE(parts));
+            ImGui::EndTable();
+        }
+        playerEspSection_=std::clamp(playerEspSection_,0,int(IM_ARRAYSIZE(parts))-1);
+        if(!visuals_.enabled) ImGui::TextDisabled("Player ESP is off. Your component settings are retained.");
+        panel::Section(parts[playerEspSection_]);
+        DrawVisualSection(legacy[playerEspSection_]);
+        return;
+    }
+    constexpr int legacy[]={0,7,8,9,10,11,12,13,14,15,17,18,19,21,22,23,24};
+    DrawVisualSection(legacy[visualsSection_]);
+}
+
+void Overlay::DrawVisualSection(int section) {
+    if(section>=17) { DrawRockstarSettings(static_cast<rockstar::Feature>(section-17)); return; }
     bool changed=false;
     const auto enumRow=[&]<class Enum,std::size_t N>(const char* label,Enum& value,const char* const (&items)[N]) {
         int index=static_cast<int>(value);
         if(panel::ComboRow(label,&index,items,int(N))) { value=static_cast<Enum>(index); changed=true; }
     };
     // Jede Funktion besitzt ihre Regler; gemeinsame Entity-Filter bleiben an einer Stelle.
-    switch(visualsSection_) {
+    switch(section) {
         case 0:
             if(panel::BeginRows("box_controls")) {
-                panel::CheckRow("Enable Box ESP",&visuals_.boxEsp); DrawBind(keys::Action::BoxEsp,true);
+                changed|=panel::CheckRow("Enable Box ESP",&visuals_.boxEsp); DrawBind(keys::Action::BoxEsp,true);
                 ImGui::BeginDisabled(!visuals_.boxEsp);
                 constexpr const char* boxes[]={"2D corners","2D full box","3D wire box"};
                 constexpr const char* highlights[]={"Off","Bounds","Humanoid"};
@@ -1418,7 +1444,7 @@ void Overlay::DrawVisualsTab() {
             break;
         case 1:
             if(panel::BeginRows("skeleton_controls")) {
-                panel::CheckRow("Enable skeleton",&visuals_.skeleton); DrawBind(keys::Action::Skeleton,true);
+                changed|=panel::CheckRow("Enable skeleton",&visuals_.skeleton); DrawBind(keys::Action::Skeleton,true);
                 ImGui::BeginDisabled(!visuals_.skeleton);
                 changed|=panel::SliderRow("Skeleton thickness",&visuals_.skeletonThickness,.5f,3,"%.1f px");
                 ImGui::EndDisabled(); ImGui::EndTable();
@@ -1426,7 +1452,7 @@ void Overlay::DrawVisualsTab() {
             break;
         case 2:
             if(panel::BeginRows("nametag_controls")) {
-                panel::CheckRow("Enable name tags",&visuals_.nameTags); DrawBind(keys::Action::NameTags,true);
+                changed|=panel::CheckRow("Enable name tags",&visuals_.nameTags); DrawBind(keys::Action::NameTags,true);
                 ImGui::BeginDisabled(!visuals_.nameTags);
                 changed|=panel::CheckRow("Show HP",&visuals_.nameTagHealth);
                 changed|=panel::CheckRow("Player ping",&visuals_.nameTagPing);
@@ -1438,17 +1464,12 @@ void Overlay::DrawVisualsTab() {
             break;
         case 3:
             if(panel::BeginRows("health_controls")) {
-                panel::CheckRow("Enable health bars",&visuals_.healthBars);
+                changed|=panel::CheckRow("Enable health bars",&visuals_.healthBars);
                 ImGui::BeginDisabled(!visuals_.healthBars);
                 constexpr const char* placement[]={"Vertical","Horizontal"};
                 enumRow("Bar placement",visuals_.barPlacement,placement);
                 changed|=panel::SliderRow("Bar thickness",&visuals_.barThickness,2,6,"%.1f px");
-                changed|=panel::CheckRow("Health gradient",&visuals_.healthGradient);
-                changed|=panel::ColorRow("Health accent",visuals_.healthColor);
-                ImGui::BeginDisabled(!visuals_.healthGradient);
-                changed|=panel::ColorRow("Low HP colour",visuals_.healthLow);
-                changed|=panel::ColorRow("Half HP colour",visuals_.healthMiddle);
-                ImGui::EndDisabled();
+                panel::ValueRow("Health colours","Green >10 / Yellow 5-10 / Red <5 HP");
                 changed|=panel::CheckRow("Show armor bar",&visuals_.armorBars);
                 ImGui::BeginDisabled(!visuals_.armorBars);
                 changed|=panel::ColorRow("Armor colour",visuals_.armorColor);
@@ -1459,7 +1480,7 @@ void Overlay::DrawVisualsTab() {
             break;
         case 4:
             if(panel::BeginRows("distance_controls")) {
-                panel::CheckRow("Enable distance labels",&visuals_.distanceText);
+                changed|=panel::CheckRow("Enable distance labels",&visuals_.distanceText);
                 changed|=panel::CheckRow("Text outline (shared)",&visuals_.textOutline);
                 changed|=panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
@@ -1468,7 +1489,7 @@ void Overlay::DrawVisualsTab() {
             break;
         case 5:
             if(panel::BeginRows("tracer_controls")) {
-                panel::CheckRow("Enable tracers",&visuals_.tracers);
+                changed|=panel::CheckRow("Enable tracers",&visuals_.tracers);
                 ImGui::BeginDisabled(!visuals_.tracers);
                 constexpr const char* origins[]={"Bottom","Center","Top","Custom"};
                 enumRow("Line origin",visuals_.tracerOrigin,origins);
@@ -1486,14 +1507,14 @@ void Overlay::DrawVisualsTab() {
             break;
         case 6:
             if(panel::BeginRows("target_info_controls")) {
-                panel::CheckRow("Enable target info",&visuals_.targetInfo);
+                changed|=panel::CheckRow("Enable target info",&visuals_.targetInfo);
                 changed|=panel::SliderRow("Label size (shared)",&visuals_.labelSize,9,18,"%.0f px");
                 ImGui::EndTable();
             }
             break;
         case 7: DrawTargetAuraSettings(); break;
         case 8: DrawTargetMarkerSettings(); break;
-        case 9: case 10: case 11: case 12: case 13: case 14: case 15: DrawWorldVisualSettings(visualsSection_-9); break;
+        case 9: case 10: case 11: case 12: case 13: case 14: case 15: DrawWorldVisualSettings(section-9); break;
         case 16:
             MenuColumns("visual_filter_columns",[&](int column) {
                 MenuHeading(column==0 ? "Visible entities" : "Entity colours");

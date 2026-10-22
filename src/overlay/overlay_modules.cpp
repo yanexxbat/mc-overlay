@@ -15,14 +15,13 @@ constexpr Definition combat[]={Module("Kill Aura",Action::KillAura),Module("Aim 
     Module("Triggerbot",Action::Triggerbot),Module("Auto Totem",Action::AutoTotem),{"Friends"},
     Module("Crystal Macro",Action::CrystalMacro),Module("Anchor Macro",Action::AnchorMacro),Module("Hit sounds",Action::HitSounds),
     Module("Spinbot",Action::Spinbot),Module("Auto Trident",Action::AutoTrident)};
-constexpr Definition visuals[]={Module("Box ESP",Action::BoxEsp),Module("Skeleton",Action::Skeleton),Module("Name tags",Action::NameTags),
-    Option("Health bars",Flag::Health),Option("Distance labels",Flag::Distance),Option("Tracers",Flag::Tracers),Option("Target info",Flag::TargetInfo),
+constexpr Definition visuals[]={Module("Player ESP",Action::PlayerEsp),
     Module("Target aura",Action::TargetAura),Module("Target marker",Action::TargetMarker),Module("Trails",Action::Trails),
     Module("Hit particles",Action::HitParticles),Module("Ambient particles",Action::AmbientParticles),Module("Hit bubbles",Action::HitBubbles),
-    Module("Kill effect",Action::KillEffect),Module("BreadCrumbs",Action::BreadCrumbs),Module("China hat",Action::ChinaHat),{"Entity filters"},
-    Module("Jump circles",Action::JumpCircles),Module("Wings",Action::Wings),Module("Halo / Nimb",Action::Halo),Module("Glow ESP",Action::GlowEsp),
+    Module("Kill effect",Action::KillEffect),Module("BreadCrumbs",Action::BreadCrumbs),Module("China hat",Action::ChinaHat),
+    Module("Jump circles",Action::JumpCircles),Module("Wings",Action::Wings),Module("Halo / Nimb",Action::Halo),
     Module("Damage markers",Action::DamageMarkers),Module("Damage vignette",Action::DamageInfo),Module("Target circle",Action::TargetCircle),
-    Module("Crosshair",Action::Crosshair),Module("Offscreen arrows",Action::Arrows)};
+    Module("Crosshair",Action::Crosshair)};
 constexpr Definition blocks[]={Module("Block ESP",Action::BlockEsp),{"Block types"},Option("Tracers",Flag::BlockTracers),
     Module("Chunkfinder",Action::ChunkFinder),Module("Storage ESP",Action::ChestEsp),Module("Beacon radius",Action::BeaconRadius),Module("Chunk borders",Action::ChunkBorders),
     Module("Stash Finder",Action::StashFinder),Module("Spawner ESP",Action::SpawnerEsp),Module("Base ESP",Action::BaseEsp),Module("Hole ESP",Action::HoleEsp)};

@@ -144,6 +144,19 @@ def emit_class(name, fields, methods, specials, parent_name='java/lang/Object'):
                 code += b'\x2a\x59\xb4'+u2(cp.ref(9,name,backing,'F'))+load
                 code += b'\x14'+u2(cp.number('D',.15))+b'\x6b\x90\x62\xb5'+u2(cp.ref(9,name,backing,'F'))
             code += b'\xb1'
+        elif special and special[0] == 'send_rotation':
+            entity,yaw,pitch,packet,packet_desc=special[1:]
+            code=b'\xbb'+u2(cp.cls(packet))+b'\x59'
+            if packet_desc.startswith('(DDD'): code+=b'\x0e\x0e\x0e'
+            elif packet_desc.startswith('(L'):
+                vector=packet_desc[2:packet_desc.index(';')]
+                code+=b'\xbb'+u2(cp.cls(vector))+b'\x59\xb7'+u2(cp.ref(10,vector,'<init>','()V'))
+            for getter in (yaw,pitch):
+                code+=b'\x2a\xb6'+u2(cp.ref(10,entity,getter,'()F'))
+            code+=b'\x04'
+            if packet_desc.endswith('ZZ)V'): code+=b'\x03'
+            code+=b'\xb7'+u2(cp.ref(10,packet,'<init>',packet_desc))
+            code+=b'\xb3'+u2(cp.ref(9,name,'testLastPacket','Ljava/lang/Object;'))+b'\xb1'
         elif special and special[0] == 'movement':
             entity,yaw,pitch,nested,move,vec,axes=special[1:]
             code=b''
@@ -418,6 +431,24 @@ def generate(profiles_path, output):
         for backing in ('testMoveX','testMoveY','testMoveZ'):
             add(core['entity'],'fields',backing,'D')
         add(core['entity'],'fields','testMovementGuard','Ljava/lang/Object;')
+        # Real constructor arguments are captured by packet objects. Network
+        # getters must see spin angles while every ordinary getter sees the view.
+        add(core['localPlayer'],'fields','testLastPacket','Ljava/lang/Object;',True)
+        for packet_suffix,method,desc in (
+            ('PosRot','testSendPosition','(DDDFFZZ)V'),
+            ('Rot','testSendRiding','(FFZZ)V'),
+            ('VectorPosRot','testSendVectorPosition','(L'+core['vec3']+';FFZZ)V'),
+            ('LegacyPosRot','testSendLegacyPosition','(DDDFFZ)V'),
+            ('LegacyRot','testSendLegacyRiding','(FFZ)V')):
+            packet=core['localPlayer']+'TestPacket$'+packet_suffix
+            add(packet,'methods','<init>',desc)
+            add(packet,'fields','yaw','F'); add(packet,'fields','pitch','F')
+            slot=7 if desc.startswith('(DDD') else 2 if desc.startswith('(L') else 1
+            cls(packet)['specials'][('<init>',desc)]=('constructor_fields',[
+                ('yaw','F',bytes([0x17,slot])),('pitch','F',bytes([0x17,slot+1]))])
+            add(core['localPlayer'],'methods',method,'()V')
+            cls(core['localPlayer'])['specials'][(method,'()V')]=('send_rotation',core['entity'],
+                profile['members']['methodEntityYaw'][0],geometry['members']['headPitch'][0],packet,desc)
         for key in ('movementRelative','movementTravel','movementJump','movementPlayerTravel','movementPlayerJump','movementLocalStep'):
             if key not in geometry['members']: continue
             member=geometry['members'][key]; owner=geometry['owners'][key]

@@ -28,7 +28,37 @@ int main() {
         ImGui::CreateContext(); auto& io=ImGui::GetIO(); io.DisplaySize={640,480}; io.DeltaTime=1.f/60;
         unsigned char* pixels; int w,h; io.Fonts->GetTexDataAsRGBA32(&pixels,&w,&h);
         auto scene=std::make_unique<mcov::WorldSnapshot>();
+        {
+            ScanHistory history;
+            mcov::CopyField(scene->dimension,"Overworld"); mcov::CopyField(scene->serverAddress,"donutsmp.net");
+            scene->blockScanId=1; scene->blockScanMask=1u<<mcov::kBlockRotatedDeepslate;
+            scene->blockScanRadius=32; scene->blockScanX=scene->blockScanZ=-1;
+            history.Update(*scene,true,scene->blockScanMask);
+            Require(history.Areas(*scene).empty(),"Incomplete scan greyed chunks");
+            scene->blockScanComplete=scene->blockScanTruncated=1;
+            history.Update(*scene,true,scene->blockScanMask);
+            Require(history.Areas(*scene).empty(),"Truncated scan greyed chunks");
+            scene->blockScanTruncated=0;
+            history.Update(*scene,true,scene->blockScanMask);
+            Require(history.Areas(*scene).size()==1,"Completed empty scan lost its coverage");
+            const auto area=history.Areas(*scene).front();
+            Require(area.minX==-2&&area.minZ==-2&&area.maxX==1&&area.maxZ==1,"Negative or partial chunk boundaries were marked incorrectly");
+            history.Update(*scene,true,scene->blockScanMask);
+            Require(history.Areas(*scene).size()==1,"Repeated snapshot duplicated scan coverage");
+            ++scene->blockScanId; scene->blockScanRadius=16;
+            history.Update(*scene,true,scene->blockScanMask);
+            Require(history.Areas(*scene).size()==1,"Contained scan duplicated existing coverage");
+            mcov::CopyField(scene->dimension,"The Nether");
+            Require(history.Areas(*scene).empty(),"Scan coverage leaked into another dimension");
+            history.Update(*scene,false,scene->blockScanMask);
+            mcov::CopyField(scene->dimension,"Overworld");
+            Require(history.Areas(*scene).empty(),"World change retained stale coverage");
+        }
         for(const char* name:{"overworld","the_nether","the_end"}) {
+            ScanHistory coverage;auto report=std::make_unique<mcov::chunks::Report>();report->status=mcov::chunks::Status::Scanning;
+            report->revision=1;report->scannedCount=2;report->scannedChunks[0]={-4,3};report->scannedChunks[1]={8,-7};
+            coverage.UpdateChunks(*scene,*report);coverage.UpdateChunks(*scene,*report);
+            Require(coverage.Areas(*scene).size()==2,"Chunkfinder coverage lost empty/negative chunks or duplicated results");
             const auto identifier=std::string("minecraft:")+name;
             mcov::CopyDimensionName(scene->dimension,"ResourceKey[minecraft:dimension / "+identifier+"]");
             Require(scene->dimension==identifier,"Agent dimension name truncated before identifier");

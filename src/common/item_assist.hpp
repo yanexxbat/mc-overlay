@@ -12,10 +12,11 @@ enum class Target : std::uint8_t { None, OtherBlock, CrystalBase, Anchor, Crysta
 enum class Status : std::uint32_t { Off, Ready, HoldingTotem, NoTotem, Pending, WaitingBind, WaitingTarget,
     MissingItem, Paused, InventoryBusy, NoWorld, Unsupported, Error, Conflict, AnchorSafeDimension, OffhandFuel,
     LowHealth, NeedTotem, OutOfRange, ConfirmationTimeout, CrosshairMismatch,
-    NeedTrident, NeedRiptide, NeedWater, ChargingTrident, ReleaseTrident, WaitingTridentRecovery };
+    NeedTrident, NeedRiptide, NeedWater, ChargingTrident, ReleaseTrident, WaitingTridentRecovery, WaitingHealth };
 inline const char* Text(Status s) {
     switch(s) {
         case Status::Off:return "Off";
+        case Status::WaitingHealth:return "Waiting for the configured health threshold";
         case Status::Ready:return "Ready";
         case Status::HoldingTotem:return "Totem equipped";
         case Status::NoTotem:return "No totem in inventory";
@@ -45,7 +46,14 @@ inline const char* Text(Status s) {
     }
     return "Unavailable";
 }
-struct TotemConfig { bool enabled=false; std::uint32_t retryMs=100; };
+struct TotemConfig {
+    bool enabled=false;
+    std::uint32_t retryMs=100;
+    float healthThreshold=20.f;
+    bool ShouldEquip(float health) const {
+        return enabled&&std::isfinite(health)&&health>0&&std::isfinite(healthThreshold)&&health<=std::clamp(healthThreshold,1.f,20.f);
+    }
+};
 struct TridentConfig {
     bool enabled=false;
     int chargeTicks=10;
@@ -188,6 +196,8 @@ public:
             else if(!allowed) report_.totem=Status::Paused;
             else if(!f.ownMenu||!f.cursorEmpty) report_.totem=Status::InventoryBusy;
             else if(f.offhand==Item::Totem) report_.totem=Status::HoldingTotem;
+            else if(!std::isfinite(f.health)||!std::isfinite(r.totem.healthThreshold)) report_.totem=Status::Paused;
+            else if(!r.totem.ShouldEquip(f.health)) report_.totem=Status::WaitingHealth;
             else {
                 const int slot=Find(f,Item::Totem,36);
                 if(slot<0) report_.totem=Status::NoTotem;

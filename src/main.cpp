@@ -21,6 +21,7 @@
 #include "common/auth_handoff.hpp"
 #include "common/client_paths.hpp"
 #include "common/win_handle.hpp"
+#include "common/crash_handler.hpp"
 
 #include "common/log.hpp"
 #include "overlay/overlay.hpp"
@@ -47,6 +48,7 @@ void PrintBanner() {
 } // namespace
 
 int main(int argc, char** argv) {
+    mcov::InstallCrashHandler();
     const bool skipAutoLoad = ParseFlag(argc, argv, "--no-agent");
 
     const std::wstring executableDirectory = mcov::ExecutableDirectory();

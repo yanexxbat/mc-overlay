@@ -43,6 +43,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::HoleEsp:return holeSettings_.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
+        case keys::Action::PlayerEsp:return visuals_.enabled;
         case keys::Action::BoxEsp:return visuals_.boxEsp;
         case keys::Action::Skeleton:return visuals_.skeleton;
         case keys::Action::NameTags:return visuals_.nameTags;
@@ -85,6 +86,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::RegionMap:hud_.regionMap.enabled=value;preferencesDirty_=true;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
+        case keys::Action::PlayerEsp:visuals_.enabled=value;preferencesDirty_=true;break;
         case keys::Action::BoxEsp:visuals_.boxEsp=value;break;
         case keys::Action::Skeleton:visuals_.skeleton=value;break;
         case keys::Action::NameTags:visuals_.nameTags=value;break;
@@ -111,8 +113,17 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
     }
 }
 void Overlay::ProcessKeyInput(const keys::Input& input,bool focused) {
+    const bool panicPressed=input[VK_F12]&&!keyInput_[VK_F12];
     const bool middlePressed=input[VK_MBUTTON]&&!keyInput_[VK_MBUTTON];
     keyInput_=input; const bool capturing=captureAction_>=0;
+    if(input[VK_F12]) {
+        if(panicPressed) Panic();
+        keyEngine_.Update(bindings_,input,false,false,true,
+            [&](keys::Action a){return ModuleEnabled(a);},[&](keys::Action a,bool on){SetModuleEnabled(a,on);},
+            [](keys::Action){});
+        capturePrevious_=input;
+        return;
+    }
     if(capturing) {
         if(!focused||!menuVisible_) captureAction_=-1;
         else {
@@ -228,6 +239,7 @@ void Overlay::SavePreferences() {
       out<<"world-depth "<<settings_.occludeWorldEffects<<'\n';
       out<<"freecam "<<combat_.freecam.speed<<' '<<combat_.freecam.boost<<'\n';
       out<<"trident-charge "<<std::clamp(autoTrident_.chargeTicks,10,40)<<'\n';
+      out<<"totem "<<combat_.autoTotem.healthThreshold<<' '<<combat_.autoTotem.retryMs<<'\n';
       out<<"trident-random "<<autoTrident_.randomizeCharge<<' '<<std::clamp(autoTrident_.extraChargeTicks,0,10)<<'\n';
       visual_preferences::Write(out,visuals_);
       client_configs::Archive smpArchive(out); client_configs::Smp(smpArchive,smpConfig_);
@@ -263,6 +275,8 @@ void Overlay::LoadPreferences() {
     std::string header; std::getline(in,header); if(header!="mcov-client 1") { preferenceStatus_="Unsupported preferences format; defaults loaded."; return; }
     std::map<std::string,std::string> antiVanishValues;bool antiVanishUnique=true;
     std::map<std::string,std::string> smpValues; bool smpUnique=true;
+    bool targetLayoutPresent=false;
+    const bool targetEnabled=visuals_.targetInfo;
     std::string line; for(int lines=0;lines<512&&std::getline(in,line);++lines) {
         if(line.size()>512) continue; std::istringstream row(line); std::string tag; row>>tag;
         if(tag=="bind") { int i,k,mode; unsigned mods;
@@ -273,6 +287,11 @@ void Overlay::LoadPreferences() {
         } else if(tag.starts_with("smp.")||tag.starts_with("chunks.")||tag.starts_with("holes.")) {
             const auto split=line.find(' ');
             if(split==std::string::npos||!smpValues.emplace(tag,line.substr(split+1)).second) smpUnique=false;
+        } else if(tag=="totem") {
+            float threshold; unsigned retry;
+            if(row>>threshold>>retry&&std::isfinite(threshold)&&threshold>=1&&threshold<=20&&retry>=50&&retry<=500) {
+                combat_.autoTotem.healthThreshold=threshold; combat_.autoTotem.retryMs=retry;
+            }
         } else if(tag=="trident-charge") {
             int ticks; if(row>>ticks&&ticks>=10&&ticks<=40) autoTrident_.chargeTicks=ticks;
         } else if(tag=="trident-random") {
@@ -301,8 +320,10 @@ void Overlay::LoadPreferences() {
                 hud_.regionMap.labels=labels!=0; hud_.regionMap.grid=grid!=0; hud_.regionMap.coordinates=coords!=0;
             }
         } else if(tag=="place") { int i,placed; float x,y,scale;
-            if(row>>i>>x>>y>>scale>>placed&&i>=0&&i<kHudModules&&std::isfinite(x)&&std::isfinite(y)&&std::isfinite(scale))
+            if(row>>i>>x>>y>>scale>>placed&&i>=0&&i<kHudModules&&std::isfinite(x)&&std::isfinite(y)&&std::isfinite(scale)) {
                 hud_.layout[i]={{std::clamp(x,0.f,1.f),std::clamp(y,0.f,1.f)},std::clamp(scale,.65f,1.6f),placed==1};
+                if(i==int(HudModule::TargetInfo)) targetLayoutPresent=true;
+            }
         } else if(tag=="rockstar") {
             int i=0; rockstar::Options c;
             if(row>>i>>c.enabled>>c.auraColours>>c.mode>>c.range>>c.size>>c.lifetime>>c.speed>>c.opacity>>c.glow>>c.start.x>>c.start.y>>c.start.z>>c.start.w>>c.end.x>>c.end.y>>c.end.z>>c.end.w&&i>=0&&i<rockstar::kCount) rockstarConfig_.modules[i]=c;
@@ -315,6 +336,8 @@ void Overlay::LoadPreferences() {
             }
         }
     }
+    if(!targetLayoutPresent) visuals_.targetInfo=targetEnabled;
+    for(int i=0;i<keys::kCount;++i) if(i!=keys::Index(keys::Action::Panic)&&bindings_[i].key==VK_F12) bindings_[i]={};
     // Beschädigte/doppelte Belegungen aktivieren keine zwei Module zugleich.
     for(int i=0;i<keys::kCount;++i) for(int j=0;j<i;++j)
         if(bindings_[i].key&&bindings_[i].key==bindings_[j].key&&bindings_[i].modifiers==bindings_[j].modifiers)

@@ -33,6 +33,7 @@
 #include "geometry_bindings.hpp"
 #include "frame_sync.hpp"
 #include "antivanish_bridge.hpp"
+#include "chunk_finder_bridge.hpp"
 #include "entity_details_cache.hpp"
 #include "entity_identity_cache.hpp"
 #include "../common/equipment_icons.hpp"
@@ -59,6 +60,7 @@ std::atomic<bool> g_stop{false};
 std::atomic<bool> g_started{false};
 FrameSync        g_frameSync;
 mcov::agent::AntiVanishBridge g_antiVanish;
+mcov::agent::ChunkFinderBridge g_chunkFinder;
 mcov::agent::DepthCapture g_depthCapture;
 void JNICALL OnDepthReady(JNIEnv* env,jclass,jobject renderer,jlong epoch) { g_depthCapture.Capture(env,renderer,static_cast<std::uint64_t>(epoch)); }
 mcov::agent::BaseTextureCapture<> g_baseTextures;
@@ -1487,6 +1489,7 @@ void SamplerThread() {
         g_depthCapture.RefreshRequest(env);
         g_baseTextures.RefreshRequest(env); g_storageTextures.RefreshRequest(env);
         g_antiVanish.Refresh(env);
+        g_chunkFinder.Refresh(env);
         if (loopNow >= nextHeartbeatTick) {
             if (auto* block = g_channel.block()) block->heartbeat.fetch_add(1, std::memory_order_release);
             nextHeartbeatTick = loopNow + 100;
@@ -1537,6 +1540,7 @@ void SamplerThread() {
                     MCOV_LOG_INFO("textured Storage ESP bridge active: %s",bindings.set->id);
                 else MCOV_LOG_INFO("textured Storage ESP unavailable for this renderer/profile");
                 if(g_antiVanish.Install(env,bindings,g_channel.block())) MCOV_LOG_INFO("Anti Vanish roster bridge active: %s",bindings.set->id);
+                if(g_chunkFinder.Install(env,bindings,g_channel.block())) MCOV_LOG_INFO("Chunkfinder snapshot bridge active: %s",bindings.set->id);
                 else MCOV_LOG_INFO("Anti Vanish unavailable for this renderer/profile");
                 if(g_inventory.Install(env,bindings,g_channel.block(),reinterpret_cast<void*>(&OnCombatTick),reinterpret_cast<void*>(&OnMacroUse)))
                     MCOV_LOG_INFO("inventory client-tick bridge active: %s",bindings.set->id);
@@ -1765,6 +1769,7 @@ void SamplerThread() {
     g_depthCapture.Close(env);
     g_baseTextures.Close(env); g_storageTextures.Close(env);
     g_antiVanish.Close(env);
+    g_chunkFinder.Close(env);
     g_combat.Close(env);
     g_inventory.Close(env);
     g_frameSync.Close(env);

@@ -401,7 +401,7 @@ public:
                 Menu(env,player,f);
                 auto offhand=env->CallObjectMethod(player,b_.mGetEquipped,b_.slotConstants[kSlotOffHand]); Check(env); f.offhand=Item(env,offhand);
                 const bool macroActive=site_.kind!=items::Item::Empty;
-                const bool needTotem=request.totem.enabled&&f.offhand!=items::Item::Totem&&items::Lease(request,now)&&!f.paused&&f.ownMenu&&f.cursorEmpty;
+                const bool needTotem=request.totem.ShouldEquip(f.health)&&f.offhand!=items::Item::Totem&&items::Lease(request,now)&&!f.paused&&f.ownMenu&&f.cursorEmpty;
                 if(needTotem||macroActive||controller_.HasRestore()) {
                     inventory=env->GetObjectField(player,b_.fInventory); Check(env);
                     if(!inventory) f.ownMenu=false;

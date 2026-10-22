@@ -48,6 +48,7 @@ struct Status {
     const char* agent = "waiting for agent";
     const char* version = "detecting";
     std::uint32_t pid = 0;
+    const char* memory = "";
 };
 struct Actions { bool close = false; bool reset = false; };
 using Content = void (*)(void*, Page);

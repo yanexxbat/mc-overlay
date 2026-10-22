@@ -152,11 +152,8 @@ void Skeleton(ImDrawList& draw, const HumanoidRig& rig, const CameraProjection& 
         draw.AddLine(start,end,color,thickness);
     }
 }
-ImU32 HealthColor(float fraction,const VisualSettings& config) {
-    if (!config.healthGradient) return Color(config.healthColor);
-    const float t=Safe(fraction,0,0,1);
-    return t<.5f ? visual::Mix(Color(config.healthLow),Color(config.healthMiddle),t*2) :
-        visual::Mix(Color(config.healthMiddle),Color(config.healthColor),(t-.5f)*2);
+ImU32 HealthColor(float health) {
+    return health>10.f?IM_COL32(76,232,140,255):health>=5.f?IM_COL32(255,196,76,255):IM_COL32(245,71,89,255);
 }
 void Meter(ImDrawList& draw, ImVec2 lo, ImVec2 hi, float fraction, bool horizontal,
            ImU32 firstColor, ImU32 lastColor) {
@@ -183,10 +180,10 @@ float HealthBar(ImDrawList& draw, ImFont& font, float fontSize, const EntitySnap
         const float fraction=std::clamp(e.health/e.maxHealth,0.f,1.f);
         const ImVec2 lo=horizontal ? ImVec2{rect.left,rect.bottom+5} : ImVec2{rect.left-6-thickness,rect.top};
         const ImVec2 hi=horizontal ? ImVec2{rect.right,lo.y+thickness} : ImVec2{rect.left-6,rect.bottom};
-        const ImU32 current=HealthColor(fraction,config);
+        const ImU32 current=HealthColor(e.health);
         // Use a short range around current HP, preserving HP-dependent color
         // even on a partially filled bar instead of retaining green at low HP.
-        Meter(draw,lo,hi,fraction,horizontal,HealthColor(std::max(0.f,fraction-.22f),config),current);
+        Meter(draw,lo,hi,fraction,horizontal,current,current);
         ++rows;
         if (!config.nameTags && !horizontal && height>=48 && width>=30) {
             char value[24]; std::snprintf(value,sizeof(value),"%.0f",std::max(0.f,e.health));
@@ -317,11 +314,10 @@ void NameTag(ImDrawList& draw,ImFont& font,float size,const EntitySnapshot& e,Sc
     if (ping) field(latency,e.details.ping<0 ? kMuted : e.details.ping>250 ? IM_COL32(248,101,116,255) :
                            e.details.ping>100 ? IM_COL32(244,202,113,255) : IM_COL32(112,231,151,255));
     field(name.data(),kText);
-    if (hp) field(health,HealthColor(std::clamp(e.health/e.maxHealth,0.f,1.f),config));
+    if (hp) field(health,HealthColor(e.health));
 }
-void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
-                const EntitySnapshot& e, float labelSize, ImVec2 origin, ImVec2 viewport,bool protect) {
-    if (viewport.x<160 || viewport.y<120) return;
+ImVec2 TargetInfo(ImDrawList* output, ImFont& font,
+                const EntitySnapshot& e, float labelSize, ImVec2 viewport,bool protect) {
     const float size=std::clamp(labelSize+1,11.f,19.f),gap=16.f,padding=10.f;
     char distance[32],ping[24],health[24];
     std::snprintf(distance,sizeof(distance),"%.1fm",e.distance);
@@ -333,7 +329,9 @@ void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
     const auto name=Name(font,size,e,std::max(20.f,std::min(240.f,viewport.x-12-fixed)),protect);
     const float width=std::min(viewport.x-12,fixed+TextWidth(font,size,name.data()));
     const float height=size+8;
-    const ImVec2 lo{origin.x+(viewport.x-width)*.5f,origin.y+std::clamp(viewport.y*.13f,48.f,96.f)};
+    if(!output) return {width,height};
+    auto& draw=*output;
+    const ImVec2 lo{};
     style::hud::Panel(draw,lo,{lo.x+width,lo.y+height});
     // Das eigene Pill-ClipRect begrenzt auch sehr lange Namen auf kleinen Viewports.
     ClipScope clip(draw,{lo.x+padding,lo.y},{width-padding*2,height});
@@ -344,21 +342,29 @@ void TargetInfo(ImDrawList& draw, ImFont& font, const WorldSnapshot& snapshot,
     field(distance,kMuted);
     if (showPing) field(ping,style::hud::Muted);
     field(name.data(),style::hud::Text);
-    if (showHealth) field(health,e.health/e.maxHealth<.25f?style::hud::Danger:style::hud::Muted);
+    if (showHealth) field(health,HealthColor(e.health));
+    return {width,height};
 }
 } // namespace
+
+ImVec2 EspRenderer::TargetInfoSize(const EntitySnapshot& target,const VisualSettings& config,ImVec2 viewport) {
+    return TargetInfo(nullptr,*style::MenuFont(),target,Safe(config.labelSize,12,9,18),viewport,config.nameProtect);
+}
+void EspRenderer::DrawTargetInfo(ImDrawList& draw,const EntitySnapshot& target,const VisualSettings& config,ImVec2 viewport) {
+    if(!config.enabled) return;
+    TargetInfo(&draw,*style::MenuFont(),target,Safe(config.labelSize,12,9,18),viewport,config.nameProtect);
+}
 
 void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
                        const CameraProjection& projection, const VisualSettings& config,
                        ImVec2 viewport, ImVec2 origin,ImTextureID itemTexture) {
+    if(!config.enabled) return;
     if (!std::isfinite(viewport.x) || !std::isfinite(viewport.y) ||
         !std::isfinite(origin.x) || !std::isfinite(origin.y) || viewport.x<1 || viewport.y<1) return;
     ClipScope clip(draw,origin,viewport);
     auto& font=*style::MenuFont();
     const float size=Safe(config.labelSize,12,9,18);
     const float skeletonThickness=Safe(config.skeletonThickness,1.1f,.5f,3);
-    const EntitySnapshot* target=nullptr;
-    ScreenRect targetRect{};
     for (std::uint32_t i=0;i<std::min(snapshot.entityCount,kMaxEntities);++i) {
         const auto& e=snapshot.entities[i];
         if (!Visible(e,config)) continue;
@@ -380,7 +386,6 @@ void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
             continue;
         }
         rect={rect.left+origin.x,rect.top+origin.y,rect.right+origin.x,rect.bottom+origin.y};
-        if (selected) { target=&e; targetRect=rect; }
         if (selected && config.boxEsp) Highlight(draw,e,haveRig ? &rig : nullptr,snapshot,projection,rect,config,origin,viewport);
         if (config.boxEsp) Box(draw,rect,visual::BoundsCuboid(bounds),snapshot,projection,
                               color,config,selected,origin,viewport);
@@ -391,22 +396,10 @@ void EspRenderer::Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
         if (width>=24 && config.nameTags) {
             NameTag(draw,font,size,e,rect,config,origin,viewport,itemTexture);
         }
-        // Beim Ziel steht die Entfernung schon oben in der kompakten Infozeile.
-        if (width>=24 && !config.nameTags && config.distanceText && !(selected && config.targetInfo)) {
+        if (width>=24 && !config.nameTags && config.distanceText) {
             char distance[32]; std::snprintf(distance,sizeof(distance),"%.1fm",e.distance);
             CenteredText(draw,font,size,center,rect.bottom+4+barOffset,kMuted,distance,origin,viewport,config);
         }
-    }
-    if (config.targetInfo && target) {
-        bool gear=false;
-        if (config.nameTagEquipment) for (const auto& item:target->details.equipment) gear|=item.present!=0;
-        const float infoTop=origin.y+std::clamp(viewport.y*.13f,48.f,96.f);
-        const float nameTop=std::max(targetRect.top-size-11,origin.y+(gear ? 28.f : 2.f));
-        // Der Entity-Nametag hat Vorrang, wenn er am oberen Rand die globale
-        // Zielzeile schneiden würde. So überlagert diese keine Ausrüstung.
-        const bool overlap=config.nameTags && targetRect.right-targetRect.left>=24 &&
-            nameTop+size+7>=infoTop && nameTop-(gear ? 25.f : 0.f)<=infoTop+size+9;
-        if (!overlap) TargetInfo(draw,font,snapshot,*target,size,origin,viewport,config.nameProtect);
     }
 }
 

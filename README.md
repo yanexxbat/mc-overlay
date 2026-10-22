@@ -15,11 +15,11 @@ and `Keim-client.zip`.
 - Base ESP with Minecraft models and textures visible through walls (1.21.11).
 - 3D Storage ESP with individual block colours, adjustable scan timing and sequential pulses, plus Stash Finder and Spawner ESP.
 - Storage ESP scans loaded container positions directly with its own 4â€“512 block radius, independently of long Block ESP/Chunkfinder sweeps.
-- Chunkfinder marks possible bases from horizontal deepslate, tall kelp and large amethyst buds/clusters, with whole-chunk frames and individual block boxes.
-- Block ESP and Chunkfinder support up to 512 blocks of scan radius and 1024 m draw distance, with nearby-first, time-sliced scans of locally loaded blocks.
+- Chunkfinder scans loaded chunks on background workers for placed blocks, underground bases, farms and mined geodes, with configurable evidence filters, colors and alerts. See [Chunkfinder](docs/chunk-finder.md).
+- Block ESP supports a 512-block scan radius and 1024 m draw distance. Chunkfinder independently inspects loaded chunks across their full height.
 - Hole ESP marks 1Ã—1 bedrock, obsidian and mixed holes with coloured 3D frames and a separate short-range scan. See [Hole ESP](docs/hole-esp.md).
 - Combat and item-assist controls with friend management.
-- Spinbot with independent camera, direction/pitch controls and Toggle/Hold binding.
+- Spinbot with silent packet rotation, independent camera/movement, direction/pitch controls and Toggle/Hold binding. See [rotation behavior and limits](docs/spinbot.md).
 - Freecam with independent flight, adjustable speed/boost and Toggle/Hold binding.
 - 20 HUD elements with individual visibility, drag-and-drop placement and scaling.
 - DonutSMP region map covering -225,000 to +225,000, with six server regions and live Overworld position.
@@ -58,17 +58,18 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The current client uses IPC v33; restart an
+when replacing an already loaded agent. The current client uses IPC v37; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
 or **Chunkfinder** to configure them. Storage ESP uses world-aligned 3D frames;
 known containers stay visible throughout rescans. **Scan interval** sets the pause
 between sweeps (200â€“3000 ms); **Pulse cycle** sets the visual cycle (500â€“6000 ms).
-**Chunkfinder** combines deepslate and growth
-clues as **Possible Base**, with separate per-chunk minimums. Whole-chunk frames
-and individual block boxes are both enabled by default and independently adjustable.
-These clues can also occur naturally. **Base ESP â†’ Display â†’ Minecraft textures**
+**Chunkfinder** groups evidence into placed blocks, bases, farms and mined geodes.
+Its default display tints the nearest findings at feet height. Detailed mode adds
+outlines, evidence labels and individual clue blocks. Findings, alerts and scanning
+limits are configurable in General and Options. These are heuristic clues.
+**Base ESP â†’ Display â†’ Minecraft textures**
 renders loaded blocks around detected container clusters through walls. It also
 works with Stash Finder off. Minecraft textures are the default display at full
 opacity on 1.21.11. Texture opacity and area expansion are adjustable; detection

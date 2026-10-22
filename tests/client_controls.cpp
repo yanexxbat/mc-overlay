@@ -15,6 +15,9 @@ int main() {
             keys::KeyName(0x87)=="F24"&&keys::KeyName(0x69)=="Numpad 9"&&keys::KeyName(0x05)=="Mouse 4"&&
             keys::KeyName(0xFF)=="Key 255","English key labels lost a key identity");
         auto bindings=keys::Defaults(); keys::Input input{}; keys::Engine engine;
+        Require(bindings[keys::Index(keys::Action::Panic)].key==0x7B,"Panic must default to F12");
+        auto reserved=bindings; reserved[keys::Index(keys::Action::KillAura)]={0x7B,keys::Ctrl,keys::Mode::Toggle};
+        Require(keys::Conflict(reserved,keys::Index(keys::Action::KillAura)),"F12 must remain reserved even with modifiers");
         std::array<bool,keys::kCount> modules{}; int invocations=0;
         const auto action=keys::Action::KillAura; const auto index=keys::Index(action);
         bindings[index]={0x4B,keys::Ctrl,keys::Mode::Toggle};

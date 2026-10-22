@@ -160,6 +160,16 @@ void MeterPixels(ID3D11Device* device,ID3D11DeviceContext* context) {
     pixels=Render(device,context,scene,config);
     const auto* half=pixels.At(healthX,int(rect.bottom-4));
     Require(half[0]>150&&half[1]>100&&half[2]<100,"Half health was not yellow");
+    scene.entities[0].maxHealth=40; config.healthGradient=false;
+    for(const auto hp:{4.f,5.f,10.f,11.f}) {
+        scene.entities[0].health=hp;
+        pixels=Render(device,context,scene,config);
+        const auto* color=pixels.At(healthX,int(rect.bottom-3));
+        if(hp>10) Require(color[1]>color[0],"Absolute HP above 10 must be green");
+        else if(hp>=5) Require(color[0]>150&&color[1]>100&&color[2]<100,"HP boundaries 5 and 10 must be yellow");
+        else Require(color[0]>color[1]*2,"Absolute HP below 5 must be red");
+    }
+    scene.entities[0].health=10; scene.entities[0].maxHealth=20;
     config.barPlacement=EspBarPlacement::Horizontal;
     pixels=Render(device,context,scene,config);
     Require(pixels.At(int(rect.left+5),int(rect.bottom+6))[0]>100,"Horizontal health bar missing");

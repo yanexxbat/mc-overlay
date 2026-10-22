@@ -140,6 +140,7 @@ endif()
 # Shared compile settings
 # ---------------------------------------------------------------------------
 add_library(mcov_settings INTERFACE)
+target_link_libraries(mcov_settings INTERFACE psapi)
 
 target_compile_definitions(mcov_settings INTERFACE
     WIN32_LEAN_AND_MEAN
@@ -317,6 +318,9 @@ if(Java_JAVAC_EXECUTABLE)
         COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_CLASSES} ${MCOV_SIGNAL_CLASSES} ${MCOV_TOOLS_DIR}
         COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_SIGNAL_CLASSES}
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/ChunkFinderProfiles.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/ChunkFinderDetector.java
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/ChunkFinderBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
             ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishProfiles.java
@@ -332,6 +336,7 @@ if(Java_JAVAC_EXECUTABLE)
         COMMAND ${Java_JAR_EXECUTABLE} -J-Djava.io.tmpdir=${CMAKE_BINARY_DIR} --create --file ${MCOV_TOOLS_DIR}/frame-sync-agent.jar
             --manifest ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/manifest.mf -C ${MCOV_FRAME_CLASSES} .
         DEPENDS ${MCOV_FRAME_SOURCES} tools/frame-sync/FrameSignal.java tools/frame-sync/manifest.mf
+            tools/frame-sync/ChunkFinderProfiles.java tools/frame-sync/ChunkFinderDetector.java tools/frame-sync/ChunkFinderBridge.java
             tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java
             tools/frame-sync/AntiVanishProfiles.java tools/frame-sync/AntiVanishTracker.java tools/frame-sync/AntiVanishPackets.java tools/frame-sync/AntiVanishBridge.java
         COMMENT "Compiling Java frame synchronization helpers (Java 17 bytecode)"
@@ -560,6 +565,14 @@ if(MCOV_BUILD_COMPAT_CHECKS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/portable_client.py" "$<TARGET_FILE:mcov>"
         "$<TARGET_FILE_DIR:mcov_overlay>" "${CMAKE_BINARY_DIR}/portable-check" "${MCOV_CLIENT_ARCHIVE}")
     set_tests_properties(runtime_profiles PROPERTIES TIMEOUT 120)
+    set(MCOV_CHUNK_TEST_DIR ${CMAKE_BINARY_DIR}/chunk-test)
+    add_custom_command(OUTPUT ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderCheck.class ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderBridgeCheck.class
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_CHUNK_TEST_DIR}
+        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_CHUNK_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/ChunkFinderCheck.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/ChunkFinderBridgeCheck.java
+        DEPENDS mcov_frame_agent tests/ChunkFinderCheck.java tests/ChunkFinderBridgeCheck.java VERBATIM)
+    add_custom_target(mcov_chunk_check ALL DEPENDS ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderCheck.class ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderBridgeCheck.class)
+    add_test(NAME chunk_finder COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_SIGNAL_CLASSES};${MCOV_CHUNK_TEST_DIR}" mcov.ChunkFinderCheck)
+    add_test(NAME chunk_finder_bridge COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_SIGNAL_CLASSES};${MCOV_CHUNK_TEST_DIR}" mcov.ChunkFinderBridgeCheck)
     set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
     add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
             ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class

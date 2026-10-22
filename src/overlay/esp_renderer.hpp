@@ -11,6 +11,7 @@ enum class EspTracerOrigin { Bottom, Center, Top, Custom };
 enum class EspHighlight { Off, Bounds, Humanoid };
 
 struct VisualSettings {
+    bool enabled = true; // Player ESP master; component choices remain intact.
     bool boxEsp = true;
     bool skeleton = true;
     bool filledBox = false;
@@ -34,8 +35,6 @@ struct VisualSettings {
     float skeletonThickness = 1.1f;
     float labelSize = 12.f;
 
-    // Existing menu controls keep their meanings; the health accent is the
-    // healthy endpoint of the optional red/yellow/green ramp.
     float playerColor[4] = {.94f, .94f, .96f, 1.f};
     float hostileColor[4] = {.94f, .94f, .96f, 1.f};
     float otherColor[4] = {.94f, .94f, .96f, 1.f};
@@ -73,6 +72,8 @@ struct VisualSettings {
 // unveränderten Snapshot; keine JNI-Abfragen und keine Positionshistorie.
 class EspRenderer final {
 public:
+    static ImVec2 TargetInfoSize(const EntitySnapshot& target,const VisualSettings& config,ImVec2 viewport);
+    static void DrawTargetInfo(ImDrawList& draw,const EntitySnapshot& target,const VisualSettings& config,ImVec2 viewport);
     static void Draw(ImDrawList& draw, const WorldSnapshot& snapshot,
                      const CameraProjection& projection, const VisualSettings& config,
                      ImVec2 viewportSize, ImVec2 viewportOrigin = {}, ImTextureID itemTexture = 0);

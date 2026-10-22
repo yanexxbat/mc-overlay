@@ -126,11 +126,25 @@ inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
     std::istringstream in(out.str()); std::string line;
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
+inline void ChunkAdvanced(Archive& a,ChunkFinderSettings& c) {
+    auto& d=c.detection;
+    a.Value("chunks.signals",d.signals,0,(1u<<chunks::SignalCount)-1);
+    a.Value("chunks.deepslateMin",d.deepslateMin,1,16);a.Value("chunks.rotatedMin",d.rotatedMin,0,16);
+    a.Value("chunks.cobbledMin",d.cobbledMin,1,32);a.Value("chunks.endStoneMin",d.endStoneMin,1,16);
+    a.Value("chunks.baseScore",d.baseScore,2,40);a.Value("chunks.farmChance",d.farmChance,25,99);a.Value("chunks.geodeSensitivity",d.geodeSensitivity,1,10);
+    a.Value("chunks.display",c.display,0,1);a.Value("chunks.height",c.height,0,2);a.Value("chunks.renderY",c.renderY,-64,320);
+    a.Value("chunks.opacity",c.opacity,5,90);a.Value("chunks.thickness",c.thickness,.02,2);a.Value("chunks.maxChunks",c.maxChunks,8,400);
+    a.Value("chunks.maxBlocks",c.maxBlocks,20,1000);a.Value("chunks.beacons",c.beacons);a.Value("chunks.orbs",c.orbs);
+    a.Value("chunks.threads",c.threads,1,4);a.Value("chunks.chunksPerTick",c.chunksPerTick,1,12);
+    a.Value("chunks.chat",c.chat);a.Value("chunks.toasts",c.toasts);a.Value("chunks.sound",c.sound);a.Value("chunks.alertsPerMinute",c.alertsPerMinute,1,30);
+    a.Color("chunks.baseColor",c.baseColor);a.Color("chunks.farmColor",c.farmColor);a.Color("chunks.geodeColor",c.geodeColor);
+}
 inline void Chunks(Archive& a,ChunkFinderSettings& c) {
     a.Value("chunks.enabled",c.enabled); a.Value("chunks.blocks",c.blocks); a.Value("chunks.labels",c.labels);
     a.Value("chunks.chunks",c.chunks); a.Value("chunks.deepslate",c.deepslate);
     a.Value("chunks.radius",c.radius,kMinBlockScanRadius,kMaxBlockScanRadius); a.Value("chunks.interval",c.interval,200,3000);
     a.Value("chunks.minHints",c.minHints,1,32); a.Value("chunks.maxDraw",c.maxDraw,8,kMaxBlockDrawDistance); a.Color("chunks.color",c.color);
+    ChunkAdvanced(a,c);
 }
 inline void AntiVanish(Archive& a,antivanish::Config& c) {
     a.Value("antivanish.enabled",c.enabled);a.Value("antivanish.notifications",c.notifications);
@@ -149,6 +163,12 @@ inline void AddHoleDefaults(std::map<std::string,std::string>& values) {
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
+    values.emplace("chunks.orbs","1");
+    if(!values.contains("chunks.signals")) {
+        ChunkFinderSettings defaults;std::ostringstream out;Archive archive(out);ChunkAdvanced(archive,defaults);
+        std::istringstream in(out.str());std::string line;
+        while(std::getline(in,line)){const auto split=line.find(' ');values.emplace(line.substr(0,split),line.substr(split+1));}
+    }
     if(!values.contains("chunks.chunks")&&!values.contains("chunks.deepslate")) {
         values.emplace("chunks.chunks","1"); values.emplace("chunks.deepslate","1");
     }
@@ -161,6 +181,7 @@ inline void AddBaseDefaults(std::map<std::string,std::string>& values) {
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
 inline void AddStorageTimingDefaults(std::map<std::string,std::string>& values) {
+    values.emplace("smp.storage.textures","0");
     // Missing the complete group denotes a legacy file; partial damage fails.
     if(!values.contains("smp.storage.interval")&&!values.contains("smp.storage.pulse")&&!values.contains("smp.storage.pulseDuration")) {
         values.emplace("smp.storage.interval","1000"); values.emplace("smp.storage.pulse","1");
@@ -168,6 +189,7 @@ inline void AddStorageTimingDefaults(std::map<std::string,std::string>& values) 
     }
 }
 inline void Smp(Archive& a,smp::Config& s) {
+    a.Value("smp.storage.textures",s.storage.textures);
     a.Value("smp.storage.mask",s.storage.mask,0,smp::kStorageMask);
     a.Value("smp.storage.labels",s.storage.labels); a.Value("smp.storage.tracers",s.storage.tracers);
     a.Value("smp.storage.interval",s.storage.interval,200,3000);
@@ -194,7 +216,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(overlay,clickThroughWhenIdle); FIELD(overlay,hideWhenUnfocused);
     FIELD(overlay,showWatermark); FIELD(overlay,vsync); FIELD(overlay,excludeFromCapture);
     FIELD(overlay,focusMode,0,3); a.Value("menu.reducedMotion",s.reducedMotion);
-    FIELD(visuals,boxEsp); FIELD(visuals,skeleton); FIELD(visuals,filledBox); FIELD(visuals,tracers);
+    FIELD(visuals,enabled); FIELD(visuals,boxEsp); FIELD(visuals,skeleton); FIELD(visuals,filledBox); FIELD(visuals,tracers);
     FIELD(visuals,nameTags); FIELD(visuals,nameTagHealth); FIELD(visuals,nameTagPing); FIELD(visuals,nameTagEquipment);
     FIELD(visuals,healthBars); FIELD(visuals,distanceText); FIELD(visuals,targetInfo); FIELD(visuals,nameProtect);
     FIELD(visuals,showPlayers); FIELD(visuals,showHostiles); FIELD(visuals,showOther);
@@ -219,6 +241,7 @@ inline void Visit(Archive& a,Snapshot& s) {
     FIELD(combat,aimFov,2,90); FIELD(combat,aimRange,1,8); FIELD(combat,aimGain,.02,1);
     FIELD(combat,aimMaxStep,2,80); FIELD(combat,aimPlayersOnly); FIELD(combat,autoTotem.enabled);
     FIELD(combat,autoTotem.retryMs,50,500); FIELD(combat,cps,1,20); FIELD(combat,jitter,0,.9);
+    FIELD(combat,autoTotem.healthThreshold,1,20);
     FIELD(combat,maxDistance,1,6); FIELD(combat,livingOnly); FIELD(combat,requireHoldKey); FIELD(combat,holdKey,1,254);
     FIELD(killAura,enabled); FIELD(killAura,seed); FIELD(killAura,target.playersOnly);
     FIELD(killAura,attack.range,.1,6); FIELD(killAura,hud.enabled); FIELD(killAura,hud.target);
@@ -427,6 +450,17 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
         values.emplace(tridentBind+"key","0"); values.emplace(tridentBind+"modifiers","0"); values.emplace(tridentBind+"mode","0");
     }
     values.emplace("trident.randomizeCharge","1"); values.emplace("trident.extraChargeTicks","3");
+    values.emplace("combat.autoTotem.healthThreshold","20");
+    const auto targetLayout="hud.layout."+std::to_string(int(HudModule::TargetInfo))+".";
+    if(std::none_of(values.begin(),values.end(),[&](const auto& field){return field.first.starts_with(targetLayout);})) {
+        values.emplace(targetLayout+"x","0"); values.emplace(targetLayout+"y","0");
+        values.emplace(targetLayout+"scale","1"); values.emplace(targetLayout+"placed","0");
+    }
+    values.emplace("visuals.enabled","1");
+    const auto playerBind="bind."+std::to_string(keys::Index(keys::Action::PlayerEsp))+".";
+    if(!values.contains(playerBind+"key")&&!values.contains(playerBind+"modifiers")&&!values.contains(playerBind+"mode")) {
+        values.emplace(playerBind+"key","0"); values.emplace(playerBind+"modifiers","0"); values.emplace(playerBind+"mode","0");
+    }
     Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;

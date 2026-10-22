@@ -21,6 +21,25 @@ final class FrameTransformer implements ClassFileTransformer {
     private final Class<?> signals;
     volatile String failure;
     FrameTransformer(Instrumentation inst, Class<?> signals) { this.inst = inst; this.signals=signals; this.signalModule = signals.getModule(); }
+    private static int packetAxis(String local, String owner, String method, String descriptor) {
+        if (!descriptor.equals("()F")) return 0;
+        for (FrameProfiles.Profile p : FrameProfiles.PROFILES)
+            if (p.localPlayer().equals(local) &&
+                (p.localPlayer().equals(owner) || p.player().equals(owner) || p.living().equals(owner) || p.entity().equals(owner))) {
+                if (p.yaw().equals(method)) return 1;
+                if (p.pitch().equals(method)) return 2;
+            }
+        return 0;
+    }
+    private static boolean fullPositionPacket(String local,String descriptor) {
+        if(descriptor.equals("(DDDFFZ)V") || descriptor.equals("(DDDFFZZ)V")) return true;
+        for(FrameProfiles.Profile p:FrameProfiles.PROFILES) if(p.localPlayer().equals(local)) {
+            // Newer clients pass a Vec3 instead of three separate coordinates.
+            String vector=p.travelDesc().substring(0,p.travelDesc().indexOf(')'));
+            if(descriptor.equals(vector+"FFZZ)V")) return true;
+        }
+        return false;
+    }
     @Override public byte[] transform(Module module, ClassLoader loader, String name, Class<?> previous,
                                       ProtectionDomain domain, byte[] original) {
         if (!FrameProfiles.isTarget(name) && !DepthProfiles.isTarget(name)) return null;
@@ -29,6 +48,9 @@ final class FrameTransformer implements ClassFileTransformer {
             boolean[] recognized = {false};
             Set<String> declaredMethods=new HashSet<>(),declaredFields=new HashSet<>();
             Set<String> overwrittenReceivers=new HashSet<>();
+            Map<String,Set<String>> packetConstructors=new java.util.HashMap<>();
+            Map<String,Integer> packetAxes=new java.util.HashMap<>();
+            Set<String> fullPacketFamilies=new HashSet<>();
             reader.accept(new ClassVisitor(Opcodes.ASM8) {
                 @Override public FieldVisitor visitField(int access, String field, String descriptor, String signature, Object value) {
                     if((access & Opcodes.ACC_STATIC)==0) declaredFields.add(field+descriptor);
@@ -41,8 +63,26 @@ final class FrameTransformer implements ClassFileTransformer {
                     if((access & Opcodes.ACC_STATIC)==0) recognized[0] |= DepthProfiles.marker(name,method,descriptor);
                     boolean cameraSetup=false;
                     for(FrameProfiles.Profile p:FrameProfiles.PROFILES) if(p.camera().equals(name)&&p.freeSetup().equals(method)&&p.freeSetupDesc().equals(descriptor)) cameraSetup=true;
-                    if(!cameraSetup) return null;
+                    boolean localPlayer=false;
+                    for(FrameProfiles.Profile p:FrameProfiles.PROFILES) if(p.localPlayer().equals(name)) localPlayer=true;
+                    if(!cameraSetup && !localPlayer) return null;
                     return new MethodVisitor(Opcodes.ASM8) {
+                        @Override public void visitMethodInsn(int opcode,String owner,String callee,String desc,boolean iface) {
+                            if((access & Opcodes.ACC_STATIC)!=0 || !descriptor.equals("()V")) return;
+                            int axis=packetAxis(name,owner,callee,desc);
+                            if(opcode==Opcodes.INVOKEVIRTUAL && axis!=0)
+                                packetAxes.merge(method+descriptor,axis,(a,b)->a|b);
+                            // Vanilla's PosRot and Rot nested packet classes, both protocol
+                            // layouts. Require a PosRot sibling and both rotation getters.
+                            if(opcode==Opcodes.INVOKESPECIAL && callee.equals("<init>") && owner.contains("$")) {
+                                boolean full=fullPositionPacket(name,desc);
+                                if(full || desc.equals("(FFZ)V") || desc.equals("(FFZZ)V")) {
+                                    String family=owner.substring(0,owner.lastIndexOf('$'));
+                                    packetConstructors.computeIfAbsent(method+descriptor,k->new HashSet<>()).add(family);
+                                    if(full) fullPacketFamilies.add(family);
+                                }
+                            }
+                        }
                         @Override public void visitVarInsn(int opcode,int variable) {
                             if(variable==0 && opcode>=Opcodes.ISTORE && opcode<=Opcodes.ASTORE) overwrittenReceivers.add(method+descriptor);
                         }
@@ -57,6 +97,11 @@ final class FrameTransformer implements ClassFileTransformer {
             // Camera's position field also works when the optional accessor is
             // remapped/inherited through an interface or replaced by a mod.
             if (!recognized[0]) return null;
+            Set<String> packetMethods=new HashSet<>();
+            for(var entry:packetConstructors.entrySet())
+                if(packetAxes.getOrDefault(entry.getKey(),0)==3 &&
+                    entry.getValue().stream().anyMatch(fullPacketFamilies::contains))
+                    packetMethods.add(entry.getKey());
             // Forge's named game modules must read the bootstrap helper module.
             if (module != null && module.isNamed()) inst.redefineModule(module, Set.of(signalModule),
                     Map.of(), Map.of(), Set.of(), Map.of());
@@ -72,6 +117,7 @@ final class FrameTransformer implements ClassFileTransformer {
                     boolean concrete=(access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE))==0;
                     int movementAxis=concrete ? FrameProfiles.movementAxis(name,method,descriptor) : 0;
                     int movementPart=concrete ? FrameProfiles.movementPart(name,method,descriptor) : 0;
+                    boolean packetMethod=concrete && packetMethods.contains(method+descriptor);
                     boolean depthPass=DepthProfiles.worldPass(name,method,descriptor);
                     FrameProfiles.Profile cameraProfile=null;
                     for(FrameProfiles.Profile p:FrameProfiles.PROFILES)
@@ -88,7 +134,8 @@ final class FrameTransformer implements ClassFileTransformer {
                         default -> type.getInternalName();
                     });
                     final Object[] initialLocals=parameters.toArray();
-                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0) return next;
+                    if (role == 0 && FrameProfiles.cameraMask(name)==0 && !depthPass && movementAxis==0 && movementPart==0 && !packetMethod) return next;
+                    if(packetMethod) changed[0]=true;
                     if(movementAxis!=0 || movementPart!=0) { changed[0]=true; movementMethods.add(method+descriptor); }
                     if (role != 0 || freeCamera!=null) changed[0] = true;
                     final AnalyzerAdapter analyzer=freeCamera!=null?new AnalyzerAdapter(name,access,method,descriptor,next):null;
@@ -142,6 +189,13 @@ final class FrameTransformer implements ClassFileTransformer {
                             }
                         }
                         @Override public void visitMethodInsn(int opcode,String owner,String callee,String desc,boolean iface) {
+                            int packetAxis=packetMethod && opcode==Opcodes.INVOKEVIRTUAL ? packetAxis(name,owner,callee,desc) : 0;
+                            if(packetAxis!=0) {
+                                super.visitInsn(Opcodes.DUP);
+                                super.visitMethodInsn(opcode,owner,callee,desc,iface);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,"mcov/FrameSignal",packetAxis==1?"packetYaw":"packetPitch","(Ljava/lang/Object;F)F",false);
+                                return;
+                            }
                             // Der Welt-Depth wird vor dem Hand-/GUI-Pass geloescht.
                             // Den bestehenden Operand-Stack unveraendert lassen.
                             if(depthPass && owner.equals("com/mojang/blaze3d/systems/CommandEncoder") && callee.equals("clearDepthTexture") && desc.equals("(Lcom/mojang/blaze3d/textures/GpuTexture;D)V")) {
@@ -229,6 +283,8 @@ final class FrameTransformer implements ClassFileTransformer {
             }
             for(int i=0;i<FrameProfiles.PROFILES.length;++i) {
                 FrameProfiles.Profile p=FrameProfiles.PROFILES[i]; long mask=1L<<i;
+                if(p.localPlayer().equals(name) && !packetMethods.isEmpty())
+                    signals.getMethod("markPacketRotation",long.class).invoke(null,mask);
                 if(p.camera().equals(name)&&declaredMethods.contains(p.freeSetup()+p.freeSetupDesc())&&!overwrittenReceivers.contains(p.freeSetup()+p.freeSetupDesc())&&declaredMethods.contains(p.setPosition()+"(DDD)V")&&declaredMethods.contains(p.setRotation()+"(FF)V")&&declaredFields.contains(p.detached()+"Z"))
                     signals.getMethod("markFreecam",int.class,long.class).invoke(null,1,mask);
                 if(p.renderer().equals(name)&&declaredMethods.contains(p.hand()+p.handDesc())) signals.getMethod("markFreecam",int.class,long.class).invoke(null,4,mask);

@@ -97,6 +97,16 @@ public:
                 movementSupported_=(static_cast<std::uint64_t>(movements)&(std::uint64_t{1}<<i))!=0;
         }
         viewYaw_=jvm::TryField(env,signal_,"viewYaw","F",true); viewPitch_=jvm::TryField(env,signal_,"viewPitch","F",true);
+        packetEnabled_=jvm::TryField(env,signal_,"packetRotationEnabled","Z",true);
+        packetYaw_=jvm::TryField(env,signal_,"packetYaw","F",true);
+        packetPitch_=jvm::TryField(env,signal_,"packetPitch","F",true);
+        const auto packetBits=jvm::TryField(env,signal_,"packetRotationProfiles","J",true);
+        if(packetEnabled_ && packetYaw_ && packetPitch_ && packetBits) {
+            const auto bits=env->GetStaticLongField(signal_,packetBits);
+            if(env->ExceptionCheck()) env->ExceptionClear();
+            else for(std::size_t i=0;i<std::size(mappings::kRuntimeProfiles);++i) if(std::strcmp(b.set->id,mappings::kRuntimeProfiles[i].set->id)==0)
+                packetSupported_=(static_cast<std::uint64_t>(bits)&(std::uint64_t{1}<<i))!=0;
+        }
         freecamUpdate_=jvm::TryMethod(env,signal_,"updateFreecam","(DDD)V",true);
         freecamStop_=jvm::TryMethod(env,signal_,"stopFreecam","()V",true);
         const auto freecamBits=jvm::TryField(env,signal_,"freecamProfiles","J",true);
@@ -134,6 +144,9 @@ public:
         if(env->ExceptionCheck()) env->ExceptionClear();
         if(signal_ && movementEnabled_) env->SetStaticBooleanField(signal_,movementEnabled_,JNI_FALSE);
         if(env->ExceptionCheck()) env->ExceptionClear();
+        if(signal_ && packetEnabled_) env->SetStaticBooleanField(signal_,packetEnabled_,JNI_FALSE);
+        if(env->ExceptionCheck()) env->ExceptionClear();
+        spinPacketActive_=false;
         if(signal_ && freecamStop_) env->CallStaticVoidMethod(signal_,freecamStop_);
         if(env->ExceptionCheck()) env->ExceptionClear();
         freecamActive_=false;
@@ -212,6 +225,7 @@ public:
             }
             // Freecam owns the detached view and pauses every combat action.
             if(freecam.enabled) {
+                SetPacketRotation(false);
                 frame_.inputAllowed=false; report_.debug=assist_.Step(frame_); SetMovement(false); spinbot_.Reset();
                 if(!silentSupported_||!freecamSupported_) {
                     EndSilent(); report_.freecamStatus=freecam::Status::Unsupported;
@@ -274,14 +288,24 @@ public:
             }
             frame_.entities={entitiesData_.data(),count_};
             if(cfg.enabled) frame_.attackHitId=RayTarget(frame_.observedRotation,std::min(cfg.attack.range,*frame_.gameAttackReach));
+            const auto spinOrigin=spinPacketActive_ ? spinPose_ : Rotation(player_);
+            SetPacketRotation(false);
             report_.debug=assist_.Step(frame_);
             bool spinning=false;
             if(spin.enabled) {
-                if(!silentSupported_ || !movementSupported_) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::SilentUnavailable; }
+                if(!silentSupported_ || !movementSupported_ || !packetSupported_) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::SilentUnavailable; }
                 else if(report_.debug.target) { spinbot_.Reset(); spinStatus_=combat::SpinStatus::CombatPriority; }
-                else if(auto pose=spinbot_.Step(spin,Rotation(player_),frame_.cameraRotation,frame_.dt)) {
-                    ApplyRotation(*pose); spinning=true; spinStatus_=combat::SpinStatus::Active;
-                    report_.debug.current=Rotation(player_);
+                else if(auto pose=spinbot_.Step(spin,spinOrigin,frame_.cameraRotation,frame_.dt)) {
+                    // Keep the real entity aligned with the view, including direct field
+                    // reads and physics paths outside the old movement getter scopes.
+                    ApplyRotation(frame_.cameraRotation);
+                    SyncModelRotation(player_,*pose,spinOrigin,false);
+                    spinPose_=*pose;
+                    env_->SetStaticFloatField(signal_,packetYaw_,static_cast<jfloat>(pose->yaw)); Check();
+                    env_->SetStaticFloatField(signal_,packetPitch_,static_cast<jfloat>(pose->pitch)); Check();
+                    SetPacketRotation(true);
+                    spinning=true; spinStatus_=combat::SpinStatus::Active;
+                    report_.debug.current=*pose;
                 }
             } else spinbot_.Reset();
             // Nur Spin nutzt die Kamera für Physik. Umschalten/Pause setzt das
@@ -342,7 +366,7 @@ private:
         env_->CallVoidMethod(player_,setPitch_,static_cast<jfloat>(pose.pitch)); Check();
         SyncModelRotation(player_,Rotation(player_),previous);
     }
-    void SyncModelRotation(jobject player,combat::Angles applied,combat::Angles previous) {
+    void SyncModelRotation(jobject player,combat::Angles applied,combat::Angles previous,bool entityHistory=true) {
         const auto yaw=static_cast<jfloat>(applied.yaw);
         const auto oldYaw=static_cast<jfloat>(applied.yaw+combat::Wrap(previous.yaw-applied.yaw));
         // Alle Modellwinkel gehören zur tatsächlich angewendeten Spielerrotation.
@@ -351,8 +375,10 @@ private:
         env_->SetFloatField(player,headYaw_,yaw); Check();
         env_->SetFloatField(player,bodyYawOld_,oldYaw); Check();
         env_->SetFloatField(player,headYawOld_,oldYaw); Check();
-        env_->SetFloatField(player,yawOld_,oldYaw); Check();
-        env_->SetFloatField(player,pitchOld_,static_cast<jfloat>(previous.pitch)); Check();
+        if(entityHistory) {
+            env_->SetFloatField(player,yawOld_,oldYaw); Check();
+            env_->SetFloatField(player,pitchOld_,static_cast<jfloat>(previous.pitch)); Check();
+        }
     }
     void BeginSilent(combat::Angles camera) {
         env_->SetStaticFloatField(signal_,viewYaw_,static_cast<jfloat>(camera.yaw)); Check();
@@ -368,6 +394,7 @@ private:
         return {yaw,pitch};
     }
     void EndSilent(bool restore=true) {
+        SetPacketRotation(false);
         if(freecamStop_) { env_->CallStaticVoidMethod(signal_,freecamStop_); Check(); }
         freecamActive_=false;
         spinbot_.Reset();
@@ -391,6 +418,10 @@ private:
     }
     void SetMovement(bool active) {
         if(movementEnabled_) { env_->SetStaticBooleanField(signal_,movementEnabled_,active?JNI_TRUE:JNI_FALSE); Check(); }
+    }
+    void SetPacketRotation(bool active) {
+        if(packetEnabled_) { env_->SetStaticBooleanField(signal_,packetEnabled_,active?JNI_TRUE:JNI_FALSE); Check(); }
+        spinPacketActive_=active;
     }
     void Check() {
         if(env_->ExceptionCheck()) {
@@ -457,6 +488,8 @@ private:
     combat::Spinbot spinbot_;
     combat::SpinStatus spinStatus_{};
     bool spinRequested_{};
+    bool packetSupported_{},spinPacketActive_{};
+    combat::Angles spinPose_{};
     bool freecamRequested_{},freecamSupported_{},freecamActive_{};
     combat::Vec3 freecamPosition_{};
     jmethodID freecamUpdate_{},freecamStop_{};
@@ -472,6 +505,7 @@ private:
     jclass signal_{},entityClass_{},livingClass_{},playerClass_{};
     jfieldID enabled_{},playerField_{},levelField_{},screenField_{},guiField_{},modeField_{},crosshair_{};
     jfieldID silentPlayer_{},viewYaw_{},viewPitch_{},yawOld_{},pitchOld_{},movementEnabled_{};
+    jfieldID packetEnabled_{},packetYaw_{},packetPitch_{};
     jfieldID bodyYaw_{},bodyYawOld_{},headYaw_{},headYawOld_{};
     jfieldID minimum_[3]{},maximum_[3]{},vecFields_[3]{};
     jmethodID x_{},y_{},z_{},id_{},name_{},health_{},uuid_{},uuidHigh_{},uuidLow_{},yaw_{},pitch_{};

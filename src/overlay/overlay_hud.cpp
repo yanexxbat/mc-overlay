@@ -68,6 +68,7 @@ bool Overlay::HudEnabled(int i) const {
         case HudModule::Watermark:return settings_.showWatermark;
         case HudModule::Modules:return hud_.modules;
         case HudModule::Keybinds:return hud_.keybinds;
+        case HudModule::TargetInfo:return visuals_.enabled&&visuals_.targetInfo;
         default:return false;
     }
 }
@@ -86,6 +87,7 @@ void Overlay::SetHudEnabled(int i,bool value) {
         case HudModule::Watermark:settings_.showWatermark=value;break;
         case HudModule::Modules:hud_.modules=value;break;
         case HudModule::Keybinds:hud_.keybinds=value;break;
+        case HudModule::TargetInfo:visuals_.targetInfo=value;break;
         default:break;
     }
 }
@@ -101,7 +103,7 @@ void Overlay::SetHudEditing(bool editing) {
     }
 }
 void Overlay::DrawHud(const WorldSnapshot& s) {
-    if(!hud_.visible&&!hudEditing_) return;
+    if((panicActive_&&!hudEditing_)||(!hud_.visible&&!hudEditing_)) return;
     ImGui::PushFont(style::hud::Font());
     auto& draw=*ImGui::GetBackgroundDrawList(); const ImVec2 viewport{float(windowW_),float(windowH_)};
     if(hudEditing_&&hudGrid_) {
@@ -117,13 +119,25 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
     DrawAntiVanishHud();
     int equipment=0; for(const auto& item:s.equipment) equipment+=item.present!=0;
     const int effects=std::min<int>(s.effectCount,kMaxEffects);
+    auto targetConfig=visuals_;
+    targetConfig.nameProtect=rockstarConfig_.Enabled(rockstar::Feature::NameProtect);
+    const EntitySnapshot* target=nullptr;
+    const auto now=GetTickCount64();
+    const auto targetId=combatMenu_.Store().Read().values.enabled&&combatReport_.status==CombatBridgeStatus::Active&&
+        combatReport_.debug.target&&combatReport_.sampledAtMs&&now>=combatReport_.sampledAtMs&&now-combatReport_.sampledAtMs<=kCombatLeaseMs?
+        combatReport_.debug.target->id:s.hasTarget?s.targetEntityId:0;
+    if(agentConnected_&&heartbeatClock_.Alive(now)&&targetId)
+        for(const auto& entity:std::span(s.entities,std::min(s.entityCount,kMaxEntities)))
+            if(entity.entityId==targetId) { target=&entity; break; }
     ImFont* listFont=ImGui::GetIO().FontDefault;
     if(!listFont) listFont=ImGui::GetFont();
     std::array<ModuleRow,keys::kCount> moduleRows;
     int active=0,assigned=0;
     for(int i=3;i<keys::kCount;++i) if(i!=keys::Index(keys::Action::Hud)) {
         const auto action=static_cast<keys::Action>(i);
-        if(action!=keys::Action::BaseFinder&&!keys::System(action)&&ModuleEnabled(action)) {
+        if(action!=keys::Action::BaseFinder&&action!=keys::Action::BoxEsp&&action!=keys::Action::Skeleton&&
+            action!=keys::Action::NameTags&&action!=keys::Action::GlowEsp&&action!=keys::Action::Arrows&&
+            !keys::System(action)&&ModuleEnabled(action)) {
             auto& row=moduleRows[active++]; row.label=HudModuleName(keys::kNames[i]);
             char detail[32]{};
             switch(action) {
@@ -156,7 +170,8 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         if(hudEditing_&&(viewport.x<640||viewport.y<480)&&i!=hudSelected_) continue;
         if(!HudEnabled(i)&&!hudEditing_) continue;
         const bool empty=(kind==HudModule::Equipment&&!equipment)||(kind==HudModule::Effects&&!effects)||
-                         (kind==HudModule::Reach&&!s.hasTarget)||(kind==HudModule::Modules&&!active)||(kind==HudModule::Keybinds&&!assigned);
+                         (kind==HudModule::Reach&&!s.hasTarget)||(kind==HudModule::Modules&&!active)||(kind==HudModule::Keybinds&&!assigned)||
+                         (kind==HudModule::TargetInfo&&!target);
         if(empty&&!hudEditing_) continue;
         ImVec2 size{232,50};
         switch(kind) {
@@ -180,6 +195,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             case HudModule::Notifications:size.y=160;break;
             case HudModule::Nearby:size.y=200;break;
             case HudModule::RegionMap:size=regionmap::kSize;break;
+            case HudModule::TargetInfo:if(target) size=EspRenderer::TargetInfoSize(*target,targetConfig,viewport);break;
             default:break;
         }
         ImVec2 start{16,stackY};
@@ -189,9 +205,10 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         else if(kind==HudModule::Watermark) start={viewport.x-size.x-16,12};
         else if(kind==HudModule::Modules) start={viewport.x-size.x-16,44};
         else if(kind==HudModule::Keybinds) start={viewport.x-size.x-16,viewport.y-size.y-16};
+        else if(kind==HudModule::TargetInfo) start={(viewport.x-size.x)*.5f,std::clamp(viewport.y*.13f,48.f,96.f)};
         else if(i>=int(HudModule::Radar)) start={264+(i-int(HudModule::Radar))%3*250.f,viewport.y-size.y-20-(i-int(HudModule::Radar))/3*180.f};
         auto& placement=hud_.layout[i]; const bool wasPlaced=placement.placed;
-        if(!wasPlaced&&i>=int(HudModule::Radar)) {
+        if(!wasPlaced&&i>=int(HudModule::Radar)&&kind!=HudModule::TargetInfo) {
             // Nur neue Startpositionen suchen; gespeicherte und bewusst ueberlappende Layouts bleiben erhalten.
             bool found=false;
             const float left=viewport.x>=1000?264.f:16.f;
@@ -207,6 +224,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
         const auto oldPosition=placement.position;
         const auto rect=kind==HudModule::Modules?PlaceHudContent(placement,viewport,size,start,moduleHudAnchor_):
             kind==HudModule::Watermark?PlaceHudContent(placement,viewport,size,start,watermarkHudAnchor_):
+            kind==HudModule::TargetInfo?PlaceHudContent(placement,viewport,size,start,targetHudAnchor_):
             PlaceHud(placement,viewport,size,start);
         hudRects_[i]=rect;
         if(placement.position.x!=oldPosition.x||placement.position.y!=oldPosition.y) {
@@ -232,6 +250,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
             }
             case HudModule::Modules:
                 DrawModuleList(draw,listFont,{moduleRows.data(),size_t(std::max(1,active))},size); break;
+            case HudModule::TargetInfo:EspRenderer::DrawTargetInfo(draw,*target,targetConfig,viewport);break;
             case HudModule::Keybinds: {
                 style::hud::Heading(draw,{0,0},size.x,kHudNames[i]); float y=28;
                 for(int a=3;a<keys::kCount;++a) {
@@ -250,7 +269,7 @@ void Overlay::DrawHud(const WorldSnapshot& s) {
                     y+=lineHeight+4;
                 } break;
             }
-            case HudModule::RegionMap:regionmap::Draw(draw,s,hud_.regionMap,agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(GetTickCount64()));break;
+            case HudModule::RegionMap:regionmap::Draw(draw,s,hud_.regionMap,agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(GetTickCount64()),scannedChunks_.Areas(s));break;
             default:rockstarPack_.DrawHud(draw,kind,s,rockstarConfig_,combatMenu_.Relations().Read(),size,double(GetTickCount64())/1000); break;
         }
         const int commandEnd=draw.CmdBuffer.Size;
@@ -297,6 +316,7 @@ void Overlay::DrawHudEditor() {
             MoveHud(hud_.layout[i],rect,size,{dragGuide.position.x-rect.min.x,dragGuide.position.y-rect.min.y});
             rect={dragGuide.position,{dragGuide.position.x+extent.x,dragGuide.position.y+extent.y}};
             preferencesDirty_=true;
+            preferenceSaveAt_=GetTickCount64()+500;
         }
         if(ImGui::IsItemHovered()) {
             ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll); ImGui::SetTooltip("%s: drag to move / Alt: free move",kHudNames[i]);

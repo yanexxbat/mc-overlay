@@ -17,6 +17,7 @@
 //                       repositioned, which would otherwise yank the mouse out
 //                       of the game every time the overlay tracked a resize.
 #pragma once
+#include "../common/process_memory.hpp"
 #include "../common/liquid_glass.hpp"
 
 #include <cstdint>
@@ -77,7 +78,12 @@ struct ChunkFinderSettings {
     bool enabled=false,blocks=true,labels=true,chunks=true,deepslate=true;
     int radius=20,interval=900,minHints=1;
     float maxDraw=64;
-    ImVec4 color{.48f,.85f,1.f,.95f};
+    ImVec4 color{1.f,214.f/255,10.f/255,1.f};
+    chunks::Detection detection{};
+    int display=0,height=0,renderY=64,maxChunks=96,maxBlocks=200,threads=2,chunksPerTick=3,alertsPerMinute=6;
+    float opacity=30,thickness=.15f;
+    bool beacons=false,orbs=true,chat=true,toasts=true,sound=true;
+    ImVec4 baseColor{1,59.f/255,48.f/255,1},farmColor{52.f/255,199.f/255,89.f/255,1},geodeColor{175.f/255,82.f/255,222.f/255,1};
 };
 
 struct CombatSettings {
@@ -197,6 +203,7 @@ private:
     smp::BaseFinderSettings ChunkDetection() const;
     void NormalizeChunkFinder();
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
+    void UpdateChunkFinder();
     void  DrawBlocksTab();
     void DrawSmpSettings(int section);
     void DrawScanStatus();
@@ -208,11 +215,13 @@ private:
     void UpdateAntiVanish();
     void UpdateRockstar();
     void Panic();
+    void PlaySpectateSound();
     void PlayModuleSound(bool enabled,bool hit=false);
 
     void SampleTelemetry(const WorldSnapshot& snapshot);
 
     void DrawVisualsTab();
+    void DrawVisualSection(int section);
     void DrawTargetAuraSettings();
     void DrawTargetMarkerSettings();
     void DrawWorldVisualSettings(int section);
@@ -263,6 +272,7 @@ private:
     bool moduleObservationReady_=false;
     OverlaySettings settings_{};
     HudSettings     hud_{};
+    regionmap::ScanHistory scannedChunks_{};
     keys::Bindings bindings_=keys::Defaults();
     keys::Engine keyEngine_{};
     keys::Input keyInput_{},capturePrevious_{};
@@ -275,7 +285,7 @@ private:
     ImVec2 hudDragOffset_{};
     int hudSelected_=0;
     std::array<HudRect,kHudModules> hudRects_{};
-    HudContentAnchor moduleHudAnchor_{},watermarkHudAnchor_{};
+    HudContentAnchor moduleHudAnchor_{},watermarkHudAnchor_{},targetHudAnchor_{};
     std::filesystem::path preferencesPath_{};
     bool preferencesDirty_=false;
     std::uint64_t preferenceSaveAt_=0;
@@ -285,6 +295,7 @@ private:
     std::string selectedConfig_{},configStatus_{};
     bool configListReady_=false,configError_=false;
     int visualsSection_=0;
+    int playerEspSection_=0;
     int blocksSection_=0;
     int hudSection_=0;
     int statsSection_=0;
@@ -294,6 +305,9 @@ private:
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
+    std::unique_ptr<chunks::Report> chunkReport_=std::make_unique<chunks::Report>();
+    std::uint64_t chunkClearId_=0,chunkAlert_=0,chunkWorld_=0;
+    std::vector<std::pair<std::uint64_t,std::string>> chunkNotices_;
     std::uint64_t antiVanishNoticeWindow_{};int antiVanishNoticeCount_{};
     antivanish::Config antiVanishConfig_{};
     antivanish::Report antiVanishReport_{},antiVanishPrevious_{};
@@ -321,6 +335,7 @@ private:
     float frameMsHistory_[kHistory] = {};
     float heapHistory_[kHistory]  = {};
     int   historyCursor_          = 0;
+    ProcessMemory processMemory_{};
     std::uint64_t lastTelemetryFrame_ = 0;
 
     bool menuVisible_    = false;
