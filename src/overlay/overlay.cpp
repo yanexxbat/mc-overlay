@@ -415,6 +415,11 @@ void Overlay::PollHotkeys() {
 void Overlay::SetMenuVisible(bool visible) {
     if (menuVisible_ == visible) return;
     menuVisible_ = visible;
+    // Focus changes remain immediate; exit is a non-interactive visual tail.
+    if(visible&&!menu_.motion.window.initialized)
+        menu_.motion.window.Step(0,0,false);
+    menu_.motion.visible=visible;
+    if(menu_.reduceMotion) menu_.motion.window.Step(visible?1.f:0.f,0,false);
 
     if (visible) {
         hudEditing_=false;
@@ -576,7 +581,7 @@ bool Overlay::RunFrame() {
             else DrawEsp(lastSnapshot_);
         }
         if(haveSnapshot_||hudEditing_) DrawHud(lastSnapshot_);
-        if (menuVisible_) DrawMenu();
+        if (menuVisible_||(!panicActive_&&!menu_.motion.visible&&menu_.motion.window.value>0)) DrawMenu(!menuVisible_);
         if(hudEditing_) DrawHudEditor();
     }
     if(preferencesDirty_&&::GetTickCount64()>=preferenceSaveAt_) SavePreferences();
@@ -679,7 +684,7 @@ void Overlay::DrawEsp(const WorldSnapshot& snapshot) {
     const bool haveFriends=std::any_of(relations.begin(),relations.end(),[](const auto& entry) {
         return entry.used && entry.relation==combat::Relation::Friend;
     });
-    if (!entitiesEnabled && !holeSettings_.enabled && !blocks_.enabled && !chunkFinder_.enabled && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !smpConfig_.finder.enabled && !auraConfig_.enabled &&
+    if (!entitiesEnabled && !holeSettings_.enabled && !blocks_.enabled && !chunkFinder_.enabled && !chunkFinder_.lightDebug && !smpConfig_.stash.enabled && !smpConfig_.spawner.enabled && !smpConfig_.base.enabled && !smpConfig_.finder.enabled && !auraConfig_.enabled &&
         !worldVisualsConfig_.Enabled()&&!localHatConfig_.enabled&&
         !haveFriends && !extraEffects && !combatMenu_.Store().Read().values.enabled &&
         !auraRenderer_.Targets()[0].valid && !auraRenderer_.Targets()[1].valid) { targetCube_.Reset(); return; }
@@ -1113,10 +1118,10 @@ void Overlay::PushScanRequest() {
     storageRequest.intervalMs=unsigned(smpConfig_.storage.interval);
     block->storageRequest.Publish(storageRequest);
     chunks::Request chunkRequest;chunkRequest.sentAtMs=GetTickCount64();chunkRequest.clearId=chunkClearId_;
-    chunkRequest.enabled=chunkFinder_.enabled&&!panicActive_&&agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(chunkRequest.sentAtMs);
+    chunkRequest.enabled=(chunkFinder_.enabled||chunkFinder_.lightDebug)&&!panicActive_&&agentConnected_&&haveSnapshot_&&heartbeatClock_.Alive(chunkRequest.sentAtMs);
     chunkRequest.detection=chunkFinder_.detection;chunkRequest.threads=chunkFinder_.threads;chunkRequest.chunksPerTick=chunkFinder_.chunksPerTick;
     chunkRequest.alertsPerMinute=chunkFinder_.alertsPerMinute;chunkRequest.chat=chunkFinder_.chat;
-    block->chunkRequest.Publish(chunkRequest);block->chunkReport.Read(*chunkReport_);
+    chunkRequest.detection.lightEsp=chunkFinder_.lightDebug; if(chunkFinder_.lightDebug){chunkRequest.detection.mode=chunkFinder_.enabled&&chunkFinder_.detection.mode!=1?2:1;chunkRequest.detection.skyActivity=true;if(!chunkFinder_.enabled){chunkRequest.chat=false;chunkRequest.detection.redstoneActivity=false;}} block->chunkRequest.Publish(chunkRequest);block->chunkReport.Read(*chunkReport_);
     const bool storageFresh=haveSnapshot_&&agentConnected_&&heartbeatClock_.Alive(storageRequest.sentAtMs)&&snapshotReceivedAt_&&
         storageRequest.sentAtMs>=snapshotReceivedAt_&&storageRequest.sentAtMs-snapshotReceivedAt_<1500;
     const auto& storageAppearance=rockstarConfig_[rockstar::Feature::ChestEsp];
@@ -1314,7 +1319,8 @@ void Overlay::UpdateAimLock(const WorldSnapshot& snapshot) {
 // ---------------------------------------------------------------------------
 // Theme + menu
 // ---------------------------------------------------------------------------
-void Overlay::DrawMenu() {
+void Overlay::DrawMenu(bool fadingOut) {
+    menu_.motion.visible=!fadingOut;
     char memory[64]; processMemory_.Format(memory,sizeof(memory));
     const panel::Status status{
         agentConnected_ && heartbeatClock_.Alive(::GetTickCount64()), statusLine_.c_str(),
@@ -1679,9 +1685,9 @@ void Overlay::DrawCombatTab() {
 }
 
 void Overlay::DrawBlocksTab() {
-    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP","Hole ESP"};
+    constexpr const char* sections[]={"Block ESP","Block types","Tracers","Chunkfinder","Storage ESP","Beacon radius","Chunk borders","Stash Finder","Spawner ESP","Base ESP","Hole ESP","Light ESP"};
     blocksSection_=panel::SubTabs("block_sections",sections,IM_ARRAYSIZE(sections),blocksSection_);
-    if(blocksSection_==10) { DrawHoleSettings(); return; }
+    if(blocksSection_==11){DrawLightSettings();return;} if(blocksSection_==10) { DrawHoleSettings(); return; }
     if(blocksSection_==3) { DrawChunkFinderSettings(); return; }
     if(blocksSection_==4||blocksSection_>=7) { DrawSmpSettings(blocksSection_==4?0:blocksSection_-6); return; }
     if(blocksSection_>=4) { DrawRockstarSettings(static_cast<rockstar::Feature>(rockstar::Index(rockstar::Feature::ChestEsp)+blocksSection_-4)); return; }

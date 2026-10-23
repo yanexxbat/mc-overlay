@@ -5,7 +5,7 @@ import java.util.*;
 /** Pure analysis of owned chunk snapshots. Never reads a live world. */
 final class ChunkFinderDetector {
     static final int PLACED=0,EXPOSED=1,BASE=2,COBBLE=3,MASONRY=4,OBSIDIAN=5,PISTONS=6,STAIRS=7,SHAFTS=8,ROOMS=9,ORE=10,STORAGE=11,ITEMS=12,MOBS=13,FARM=14,REPEATERS=15,BEES=16,FLOORS=17,PLANTS=18,WORKSHOPS=19,GEODES=20;
-    static final int UNKNOWN=0,AIR=1,FLUID=2,SOLID=3,SLATE=4,ROTATED=5,COBBLED=6,END=7,COBBLE_BLOCK=8,MASONRY_BLOCK=9,OBSIDIAN_BLOCK=10,PISTON=11,STAIR=12,ORE_BLOCK=13,CONTAINER=14,REPEATER=15,POWERED=16,HIVE=17,NEST=18,FLOWER=19,VINE=20,WORKSHOP=21,AMETHYST=22,BUDDING=23,SPAWNER=24,SCULK=25,VILLAGE=26,RAIL=27,WEB=28,PORTAL=29;
+    static final int UNKNOWN=0,AIR=1,FLUID=2,SOLID=3,SLATE=4,ROTATED=5,COBBLED=6,END=7,COBBLE_BLOCK=8,MASONRY_BLOCK=9,OBSIDIAN_BLOCK=10,PISTON=11,STAIR=12,ORE_BLOCK=13,CONTAINER=14,REPEATER=15,POWERED=16,HIVE=17,NEST=18,FLOWER=19,VINE=20,WORKSHOP=21,AMETHYST=22,BUDDING=23,SPAWNER=24,SCULK=25,VILLAGE=26,RAIL=27,WEB=28,PORTAL=29,AMETHYST_CLUSTER=30;
     record Cell(int kind,boolean open) {}
     static Cell classify(String state) {
         int start=state.indexOf("minecraft:");
@@ -32,6 +32,7 @@ final class ChunkFinderDetector {
             case "furnace","blast_furnace","smoker","anvil","chipped_anvil","damaged_anvil","enchanting_table","crafting_table" -> WORKSHOP;
             case "amethyst_block" -> AMETHYST;
             case "budding_amethyst" -> BUDDING;
+            case "amethyst_cluster" -> AMETHYST_CLUSTER;
             case "spawner","trial_spawner" -> SPAWNER;
             case "sculk","sculk_sensor","sculk_shrieker","reinforced_deepslate" -> SCULK;
             case "bell","dirt_path" -> VILLAGE;
@@ -83,7 +84,7 @@ final class ChunkFinderDetector {
         }
         int slate=0,rotated=0,cobbled=0,endstone=0; int[] counts=new int[21];
         Set<Integer> floorColumns=new HashSet<>(); List<Point> evidence=new ArrayList<>();
-        Set<Long> geodeVisited=new HashSet<>(); boolean geode=false;
+        boolean geode=false;
         for(int y=minY;y<maxY;++y) for(int z=z0;z<z0+16;++z) for(int x=x0;x<x0+16;++x) {
             Cell c=g.at(x,y,z); int k=c.kind;
             if(k==UNKNOWN) continue;
@@ -138,23 +139,8 @@ final class ChunkFinderDetector {
                 } else if(k==WORKSHOP&&!near(villages,x,y,z,24)&&!near(cities,x,y,z,24)) signal=WORKSHOPS;
             }
             if(signal>=0&&on(settings,signal)) {++counts[signal];add(evidence,x,y,z,signal);}
-            if(k==AMETHYST&&on(settings,GEODES)&&!geodeVisited.contains(pack(x,y,z))) {
-                ArrayDeque<Point> todo=new ArrayDeque<>();List<Point> component=new ArrayList<>();
-                todo.add(new Point(x,y,z,GEODES));boolean budding=false,complete=true;int amethyst=0;
-                while(!todo.isEmpty()) {
-                    Point p=todo.removeFirst();long key=pack(p.x,p.y,p.z);if(!geodeVisited.add(key)) continue;
-                    if(component.size()>=8192) {complete=false;break;}
-                    Cell a=g.at(p.x,p.y,p.z);if(a.kind!=AMETHYST&&a.kind!=BUDDING) continue;
-                    component.add(p);budding|=a.kind==BUDDING;if(a.kind==AMETHYST)++amethyst;
-                    for(int[] d:SIDES) {
-                        int xx=p.x+d[0],yy=p.y+d[1],zz=p.z+d[2];Cell n=g.at(xx,yy,zz);
-                        if(n.kind==UNKNOWN) complete=false;
-                        else if(n.kind==AMETHYST||n.kind==BUDDING) todo.add(new Point(xx,yy,zz,GEODES));
-                    }
-                }
-                if(complete&&!budding&&amethyst>=Math.max(12,112-settings[7]*10)) {
-                    geode=true;for(Point p:component) if(Math.floorDiv(p.x,16)==cx&&Math.floorDiv(p.z,16)==cz) add(evidence,p.x,p.y,p.z,GEODES);
-                }
+            if(k==AMETHYST_CLUSTER&&on(settings,GEODES)) {
+                geode=true;add(evidence,x,y,z,GEODES);
             }
         }
         int score=0,bits=0;int[] weights=new int[21];

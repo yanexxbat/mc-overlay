@@ -22,6 +22,10 @@ public:
     // Also renders from WM_TIMER during the native modal window-drag loop.
     void Run(std::function<void()> draw);
     void RequestClose() { closing_ = true; }
+    // Optional presentation hook: Alt+F4 follows the same exit as the UI button.
+    std::function<void()> onCloseRequested;
+    void HandleCloseRequest() { if(onCloseRequested) onCloseRequested(); else RequestClose(); }
+    void SetOpacity(float opacity);
     void RenderFrame();
 
     void SetNoDragRect(float x0, float y0, float x1, float y1);

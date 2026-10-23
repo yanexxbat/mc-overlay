@@ -127,7 +127,12 @@ inline void AddFinderDefaults(std::map<std::string,std::string>& values) {
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
 inline void ChunkAdvanced(Archive& a,ChunkFinderSettings& c) {
+    a.Value("chunks.lightDebug",c.lightDebug);
+    a.Value("chunks.lightRadius",c.lightRadius,3,24);a.Value("light.distance",c.lightDistance,8,kMaxBlockDrawDistance);
+    a.Value("chunks.lightOpacity",c.lightOpacity,.1,1);
     auto& d=c.detection;
+    a.Value("light.radius",d.lightRadius,1,16);a.Value("light.minimum",d.lightMin,1,15);a.Value("light.denoise",d.lightDenoise);
+    a.Value("chunks.method",d.mode,0,2);a.Value("chunks.skyActivity",d.skyActivity);a.Value("chunks.redstoneActivity",d.redstoneActivity);
     a.Value("chunks.signals",d.signals,0,(1u<<chunks::SignalCount)-1);
     a.Value("chunks.deepslateMin",d.deepslateMin,1,16);a.Value("chunks.rotatedMin",d.rotatedMin,0,16);
     a.Value("chunks.cobbledMin",d.cobbledMin,1,32);a.Value("chunks.endStoneMin",d.endStoneMin,1,16);
@@ -163,7 +168,11 @@ inline void AddHoleDefaults(std::map<std::string,std::string>& values) {
     while(std::getline(in,line)) { const auto split=line.find(' '); values.emplace(line.substr(0,split),line.substr(split+1)); }
 }
 inline void AddChunkHighlightDefaults(std::map<std::string,std::string>& values) {
+    values.try_emplace("chunks.lightDebug","0");values.try_emplace("light.distance","64");values.try_emplace("light.radius","8");values.try_emplace("light.minimum","5");values.try_emplace("light.denoise","1");
+    values.try_emplace("chunks.lightRadius","10");
+    values.try_emplace("chunks.lightOpacity","0.7");
     values.emplace("chunks.orbs","1");
+    if(!values.contains("chunks.method")){values.emplace("chunks.method","1");values.emplace("chunks.skyActivity","1");values.emplace("chunks.redstoneActivity","1");}
     if(!values.contains("chunks.signals")) {
         ChunkFinderSettings defaults;std::ostringstream out;Archive archive(out);ChunkAdvanced(archive,defaults);
         std::istringstream in(out.str());std::string line;
@@ -461,7 +470,7 @@ inline bool Decode(const std::string& text,Snapshot& snapshot) {
     if(!values.contains(playerBind+"key")&&!values.contains(playerBind+"modifiers")&&!values.contains(playerBind+"mode")) {
         values.emplace(playerBind+"key","0"); values.emplace(playerBind+"modifiers","0"); values.emplace(playerBind+"mode","0");
     }
-    Snapshot candidate; Archive archive(values); Visit(archive,candidate);
+    const auto lightBind="bind."+std::to_string(keys::Index(keys::Action::LightEsp))+"."; if(!values.contains(lightBind+"key")&&!values.contains(lightBind+"modifiers")&&!values.contains(lightBind+"mode")){values.emplace(lightBind+"key","0");values.emplace(lightBind+"modifiers","0");values.emplace(lightBind+"mode","0");} Snapshot candidate; Archive archive(values); Visit(archive,candidate);
     candidate.killAura=combat::MakeKillAuraConfig(candidate.killAura);
     if(!archive.valid||!values.empty()||!combat::Validate(candidate.killAura)) return false;
     snapshot=std::move(candidate); return true;

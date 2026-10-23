@@ -10,6 +10,7 @@
 #include <d3d11.h>
 #include <dwmapi.h>
 
+#include <algorithm>
 #include <cwchar>
 #include <cstdio>
 #include <stdexcept>
@@ -70,6 +71,9 @@ LRESULT WINAPI FlatAppWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
             if (wParam == kMoveTimerId && app) app->RenderFrame();
             return 0;
 
+        case WM_CLOSE:
+            if(app) { app->HandleCloseRequest(); if(::IsIconic(hwnd)) app->RequestClose(); return 0; }
+            break;
         case WM_DESTROY:
             ::PostQuitMessage(0);
             return 0;
@@ -232,6 +236,12 @@ void FlatApp::Shutdown() {
 void FlatApp::SetNoDragRect(float x0, float y0, float x1, float y1) {
     noDrag_[0] = x0; noDrag_[1] = y0; noDrag_[2] = x1; noDrag_[3] = y1;
     hasNoDrag_ = true;
+}
+
+void FlatApp::SetOpacity(float opacity) {
+    // The shell already uses WS_EX_LAYERED; no render-target/shader changes.
+    const auto alpha=static_cast<BYTE>(std::clamp(opacity,0.f,1.f)*255.f+.5f);
+    ::SetLayeredWindowAttributes(static_cast<HWND>(hwnd_),0,alpha,LWA_ALPHA);
 }
 
 bool FlatApp::PointIsDraggable(int x, int y) const {

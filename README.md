@@ -15,7 +15,7 @@ and `Keim-client.zip`.
 - Base ESP with Minecraft models and textures visible through walls (1.21.11).
 - 3D Storage ESP with individual block colours, adjustable scan timing and sequential pulses, plus Stash Finder and Spawner ESP.
 - Storage ESP scans loaded container positions directly with its own 4â€“512 block radius, independently of long Block ESP/Chunkfinder sweeps.
-- Chunkfinder scans loaded chunks on background workers for placed blocks, underground bases, farms and mined geodes, with configurable evidence filters, colors and alerts. See [Chunkfinder](docs/chunk-finder.md).
+- Chunkfinder offers Activity (received underground light/redstone changes), Block clues (background terrain analysis) and Combined modes, with grouped settings, a DonutSMP preset, material highlights and orbiting orbs. See [Chunkfinder](docs/chunk-finder.md).
 - Block ESP supports a 512-block scan radius and 1024 m draw distance. Chunkfinder independently inspects loaded chunks across their full height.
 - Hole ESP marks 1Ã—1 bedrock, obsidian and mixed holes with coloured 3D frames and a separate short-range scan. See [Hole ESP](docs/hole-esp.md).
 - Combat and item-assist controls with friend management.
@@ -58,7 +58,7 @@ Profiles live in `configs/<name>.ini` beside the client; copy that folder and
 
 The launcher needs a **64-bit JDK matching the game's Java major version**.
 Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The current client uses IPC v37; restart an
+when replacing an already loaded agent. The current client uses IPC v39; restart an
 already running Minecraft instance before reattaching with the updated client.
 
 Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**

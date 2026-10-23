@@ -11,6 +11,7 @@ public final class ChunkFinderCheck {
     static int[] defaults(){return new int[]{((1<<21)-1)&~(1<<10),1,2,4,2,8,50,5};}
     static ChunkFinderDetector.Result run(Grid g,int[] c){return ChunkFinderDetector.analyze(g,0,0,-16,48,false,c,new int[4],Set.of());}
     public static void main(String[] args){
+        ChunkActivityCheck.run();
         var g=new Grid();var c=defaults();
         check(ChunkFinderDetector.classify("Block{minecraft:deepslate}[axis=z]").kind()==5,"rotated state");
         check(ChunkFinderDetector.classify("Block{minecraft:deepslate_diamond_ore}").kind()==13,"ore is not raw slate");
@@ -36,8 +37,17 @@ public final class ChunkFinderCheck {
         g=new Grid();g.put(4,20,4,21);g.put(5,20,4,21);g.put(6,20,4,21);check((run(g,c).categories()&4)!=0,"workshop");g.put(16,20,4,26);check(run(g,c).categories()==0,"village exclusion across chunks");
         g=new Grid();for(int x=2;x<7;++x)g.put(x,20,4,19);check((run(g,c).categories()&4)!=0,"underground flowers");g.biome="minecraft:lush_caves";check(run(g,c).categories()==0,"natural biome excluded");
         g=new Grid();for(int x=4;x<8;++x)for(int y=4;y<8;++y)for(int z=4;z<8;++z)g.put(x,y,z,22);
-        check((run(g,c).categories()&8)!=0,"mined geode");g.put(5,5,5,23);check((run(g,c).categories()&8)==0,"budding protects natural geode");
-        g=new Grid();c[7]=10;for(int x=12;x<32;++x)g.put(x,4,4,22);check((run(g,c).categories()&8)==0,"incomplete geode excluded");
+        check((run(g,c).categories()&8)==0,"amethyst shell alone ignored");
+        g.put(5,5,5,23);check((run(g,c).categories()&8)==0,"budding amethyst ignored");
+        for(String id:List.of("small_amethyst_bud","medium_amethyst_bud","large_amethyst_bud")) {
+            g.put(4,4,4,ChunkFinderDetector.classify("minecraft:"+id).kind());
+            check((run(g,c).categories()&8)==0,"bud stage ignored: "+id);
+        }
+        g=new Grid();g.put(15,-5,4,ChunkFinderDetector.classify("minecraft:amethyst_cluster[facing=east,waterlogged=true]").kind());
+        var cluster=run(g,c);check((cluster.categories()&8)!=0,"fully grown cluster detected at chunk edge");
+        check(cluster.blocks().size()==1&&cluster.blocks().get(0).kind()==30&&cluster.blocks().get(0).x()==15,"only actual cluster highlighted");
+        c[7]=1;check((run(g,c).categories()&8)!=0,"legacy sensitivity does not suppress cluster");
+        c[0]&=~(1<<20);check((run(g,c).categories()&8)==0,"cluster toggle disables detection");
         g=new Grid();c=defaults();c[5]=6;check((ChunkFinderDetector.analyze(g,0,0,-16,48,false,c,new int[]{0,20,0,0},Set.of()).categories()&2)!=0,"mob cluster");
         c[0]=0;check(run(g,c).categories()==0,"all detectors disabled");
         check(ChunkFinderBridge.key(-1,-2)!=ChunkFinderBridge.key(-2,-1),"negative chunk identity");

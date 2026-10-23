@@ -7,6 +7,9 @@ enum Signal : unsigned { Placed,IgnoreExposed,Base,Cobble,Masonry,Obsidian,Pisto
 inline constexpr std::uint32_t kDefaultSignals=((1u<<SignalCount)-1)&~(1u<<Ore);
 inline constexpr int kMaxFinds=2048,kMaxEvidence=1000;
 struct Detection {
+    int mode=1; // 0 block clues, 1 activity, 2 combined
+    bool skyActivity=true,redstoneActivity=true;
+    bool lightEsp=false,lightDenoise=true; int lightRadius=8,lightMin=5;
     std::uint32_t signals=kDefaultSignals;
     int deepslateMin=1,rotatedMin=2,cobbledMin=4,endStoneMin=2,baseScore=8,farmChance=50,geodeSensitivity=5;
 };
@@ -30,6 +33,7 @@ struct Report {
     Status status=Status::Unavailable;
     int count=0,blockCount=0,scanned=0,pending=0,scannedCount=0;
     bool limited=false;
+    int activityStatus=0,baselines=0;
     std::array<Find,kMaxFinds> finds{};
     std::array<Evidence,kMaxEvidence> blocks{};
     std::array<ScannedChunk,4096> scannedChunks{};

@@ -19,7 +19,12 @@ std::string ChunkClues(const chunks::Find& f) {
         if(f.evidence&(1u<<24))add("End stone outside End");
         if(text.empty())add("Placed");
     }
-    constexpr const char* names[]={"","","","Cobble","Masonry","Obsidian","Pistons","Stairs","Shaft","Room","Ore","Storage","Items","Mobs","","Redstone","Bees","Floor","Plants","Workshop","Geode"};
+    if(f.category&16) {
+        if(f.evidence&(1u<<25))add("Block light change");
+        if(f.evidence&(1u<<26))add("Sky light change");
+        if(f.evidence&(1u<<27))add("Redstone change");
+    }
+    constexpr const char* names[]={"","","","Cobble","Masonry","Obsidian","Pistons","Stairs","Shaft","Room","Ore","Storage","Items","Mobs","","Redstone","Bees","Floor","Plants","Workshop","Amethyst cluster"};
     for(unsigned bit=3;bit<chunks::SignalCount;++bit) {
         const unsigned group=bit<=13?2:bit==20?8:4;
         if((f.category&group)&&(f.evidence&(1u<<bit))&&names[bit][0])add(names[bit]);
@@ -101,7 +106,7 @@ void Overlay::DrawItemAssistSettings(int section) {
             changed|=panel::CheckRow("Strict world confirmation",&macro.strictConfirmation);
             changed|=panel::CheckRow("Require real crosshair hit",&macro.requireCrosshairHit);
             changed|=panel::SliderRow("Maximum range",&macro.maxRange,1,6,"%.1f m");
-            changed|=panel::SliderRow("Minimum health (0 = off)",&macro.minHealth,0,20,"%.0f HP");
+            changed|=panel::SliderRow("Minimum health (0 = off)",&macro.minHealth,0,20,"%.0f HP",true);
             changed|=panel::CheckRow("Require offhand totem",&macro.requireTotem);
             changed|=panel::CheckRow("Restore previous slot",&macro.restoreSlot);
             if(anchor) {
@@ -143,26 +148,76 @@ smp::BaseFinderSettings Overlay::ChunkDetection() const {
     c.maxDraw=chunkFinder_.maxDraw; c.labels=chunkFinder_.labels; c.colour=chunkFinder_.color;
     return c;
 }
+void Overlay::DrawLightSettings() {
+    auto& c=chunkFinder_;bool dirty=false;
+    if(control_panel::BeginRows("light_esp_settings")) {
+        dirty|=control_panel::CheckRow("Enable Light ESP",&c.lightDebug);DrawBind(keys::Action::LightEsp,true);
+        dirty|=control_panel::SliderIntRow("Scan radius",&c.detection.lightRadius,1,16,"%d chunks");
+        dirty|=control_panel::SliderIntRow("Minimum light",&c.detection.lightMin,1,15,"%d");
+        dirty|=control_panel::CheckRow("Denoise",&c.detection.lightDenoise);
+        dirty|=control_panel::SliderRow("Edge softness",&c.lightRadius,3,24,"%.0f px");
+        dirty|=control_panel::SliderRow("Opacity",&c.lightOpacity,.1f,1,"%.2f");
+        dirty|=control_panel::SliderRow("Draw distance",&c.lightDistance,8,kMaxBlockDrawDistance,"%.0f m");
+        ImGui::EndTable();
+    }
+    ImGui::TextWrapped("Continuous 2D areas for existing block light below Y 0, stronger than sky light. Works independently of Chunkfinder. Loaded chunks only; brighter levels use a lighter tint.");
+    if(!agentConnected_)ImGui::TextDisabled("Connect to Minecraft to receive light updates.");
+    else if(chunkReport_->status==chunks::Status::Unavailable||chunkReport_->status==chunks::Status::Failed)ImGui::TextWrapped("Light scan unavailable. Restart Minecraft with the updated client.");
+    if(dirty){panicActive_=false;preferencesDirty_=true;preferenceSaveAt_=GetTickCount64()+500;PushScanRequest();}
+}
+
 void Overlay::DrawChunkFinderSettings() {
     auto& c=chunkFinder_;auto& d=c.detection;bool dirty=false;
     const auto hint=[](const char* text){if(ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))ImGui::SetTooltip("%s",text);};
     const auto toggle=[&](const char* label,chunks::Signal signal,const char* text){bool on=(d.signals&(1u<<signal))!=0;if(panel::CheckRow(label,&on)){if(on)d.signals|=1u<<signal;else d.signals&=~(1u<<signal);dirty=true;}hint(text);};
-    panel::Section("General");
+    panel::Section("Detection");
     if(panel::BeginRows("chunkfinder_controls")) {
         bool enabled=ModuleEnabled(keys::Action::ChunkFinder);
         if(panel::CheckRow("Enable Chunkfinder",&enabled)){SetModuleEnabled(keys::Action::ChunkFinder,enabled);dirty=true;}
         DrawBind(keys::Action::ChunkFinder,true);
+        const char* methods[]={"Block clues","Activity","Combined"};
+        dirty|=panel::ComboRow("Method",&d.mode,methods,3);
+        if(d.mode!=0) {
+            dirty|=panel::CheckRow("Sky light changes",&d.skyActivity);
+            dirty|=panel::CheckRow("Redstone changes",&d.redstoneActivity);
+        }
+        ImGui::EndTable();
+    }
+    if(d.mode!=0)ImGui::TextWrapped("Watches light changes beneath terrain and redstone updates below Y 0. First updates establish a baseline; later changes can flag activity. Your own chunk is excluded.");
+    else ImGui::TextWrapped("Looks for unusual blocks and structures. Server-generated or hidden block states can cause false positives.");
+    if(ImGui::Button("Use DonutSMP setup")) {
+        d.mode=2;d.skyActivity=d.redstoneActivity=true;d.rotatedMin=0;
+        d.signals=(d.signals&~((1u<<chunks::Placed)|(1u<<chunks::Base)|(1u<<chunks::Farm)))|(1u<<chunks::Geodes);
+        dirty=true;
+    }
+    hint("Selects Combined with light/redstone activity and fully grown amethyst clusters. Disables placed-block, base and farm clues to avoid terrain false positives. Does not reveal hidden containers.");
+    const auto& r=*chunkReport_;const auto now=GetTickCount64();
+    bool fresh=agentConnected_&&r.sampledAtMs&&now>=r.sampledAtMs&&now-r.sampledAtMs<1500;
+    if(!c.enabled)ImGui::TextWrapped("Enable Chunkfinder to scan loaded chunks.");
+    else if(d.mode==0&&!(d.signals&((1u<<chunks::Placed)|(1u<<chunks::Base)|(1u<<chunks::Farm)|(1u<<chunks::Geodes))))ImGui::TextWrapped("Enable a detection group to start scanning.");
+    else if(!fresh)ImGui::TextWrapped("Waiting for the Minecraft connection.");
+    else if(r.status==chunks::Status::Unavailable)ImGui::TextWrapped("Chunk scanning is unavailable. Restart Minecraft with the updated client.");
+    else if(r.status==chunks::Status::Failed)ImGui::TextWrapped("Chunk scanning stopped after an error. Toggle the module off and on to retry.");
+    else if(r.status==chunks::Status::Waiting)ImGui::TextWrapped("Join a world to start scanning.");
+    else if(d.mode!=0) {
+        if(r.activityStatus==0)ImGui::TextWrapped("Activity listener unavailable. Restart Minecraft with this client, or select Block clues.");
+        else ImGui::TextWrapped("Listening for activity | %d chunk baselines | %d discoveries",r.baselines,r.count);
+    } else ImGui::TextWrapped("%d chunks scanned | %d queued | %d discoveries",r.scanned,r.pending,r.count);
+    ImGui::TextWrapped("Only loaded chunks are scanned. Structure filters and confidence scores are clues, not proof of a base. Discoveries outside loaded chunks may be outdated.");
+    if(r.limited)ImGui::TextWrapped("A scan or tracking limit was reached. Some updates could not be evaluated. Reduce render distance or clear discoveries.");
+    ImGui::Spacing();
+    if(d.mode!=1&&ImGui::CollapsingHeader("Placed block clues")&&panel::BeginRows("chunk_Placed_block_clues")) {
         toggle("Placed blocks",chunks::Placed,"Blocks outside their natural height, orientation or dimension.");
         ImGui::BeginDisabled(!(d.signals&(1u<<chunks::Placed)));
         dirty|=panel::SliderIntRow("Deepslate min",&d.deepslateMin,1,16,"%d");hint("Deepslate above Y 8.");
-        dirty|=panel::SliderIntRow("Rotated min",&d.rotatedMin,0,16,"%d");hint("Raw deepslate with horizontal X/Z axis at any height. Set 0 to disable this clue on servers that generate or report rotated deepslate naturally.");
+        dirty|=panel::SliderIntRow("Rotated min",&d.rotatedMin,0,16,"%d",true);hint("Raw deepslate with horizontal X/Z axis at any height. Set 0 to disable this clue on servers that generate or report rotated deepslate naturally.");
         dirty|=panel::SliderIntRow("Cobbled min",&d.cobbledMin,1,32,"%d");hint("Cobbled deepslate above Y 0.");
         dirty|=panel::SliderIntRow("End stone min",&d.endStoneMin,1,16,"%d");hint("End stone outside the End.");
         toggle("Ignore exposed",chunks::IgnoreExposed,"Exclude placed clues touching air, fluid or an unloaded boundary.");
-        ImGui::EndDisabled();ImGui::EndTable();
+        ImGui::EndDisabled();
+        ImGui::EndTable();
     }
-    panel::Section("Options");
-    if(panel::BeginRows("chunkfinder_options")) {
+    if(d.mode!=1&&ImGui::CollapsingHeader("Base clues")&&panel::BeginRows("chunk_Base_clues")) {
         toggle("Base signals",chunks::Base,"Combine underground evidence into a score. Natural structures are filtered using nearby block clues.");
         ImGui::BeginDisabled(!(d.signals&(1u<<chunks::Base)));
         dirty|=panel::SliderIntRow("Base min score",&d.baseScore,2,40,"%d pts");
@@ -178,6 +233,9 @@ void Overlay::DrawChunkFinderSettings() {
         toggle("Dropped items",chunks::Items,"Dropped item entities below Y 0.");
         toggle("Mob clusters",chunks::Mobs,"At least 20 mobs per chunk, or polar bears below Y 0.");
         ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+    if(d.mode!=1&&ImGui::CollapsingHeader("Farm clues")&&panel::BeginRows("chunk_Farm_clues")) {
         toggle("Farm signals",chunks::Farm,"Combine redstone, bee, floor, plant and workshop clues. Chance is a heuristic confidence value.");
         ImGui::BeginDisabled(!(d.signals&(1u<<chunks::Farm)));
         dirty|=panel::SliderIntRow("Farm min chance",&d.farmChance,25,99,"%d %%");
@@ -187,50 +245,53 @@ void Overlay::DrawChunkFinderSettings() {
         toggle("Underground plants",chunks::Plants,"Roofed flowers below Y 40 and vines below Y 50; lush caves, jungles and swamps excluded.");
         toggle("Workshops",chunks::Workshops,"Furnaces, anvils, enchanting and crafting tables; village clues excluded.");
         ImGui::EndDisabled();
-        toggle("Mined geodes",chunks::Geodes,"Connected amethyst shells with no budding amethyst. Incomplete or unloaded shells are skipped.");
-        ImGui::BeginDisabled(!(d.signals&(1u<<chunks::Geodes)));
-        dirty|=panel::SliderIntRow("Geode sensitivity",&d.geodeSensitivity,1,10,"%d");hint("Higher values accept smaller shells and increase false positives.");
-        ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+    if(d.mode!=1&&ImGui::CollapsingHeader("Amethyst crystals")&&panel::BeginRows("chunk_Geode_clues")) {
+        toggle("Fully grown clusters",chunks::Geodes,"Detects only fully grown amethyst clusters. Shell blocks, budding amethyst and all bud stages are ignored. Use Block clues or Combined. A cluster alone does not prove player activity.");
+        ImGui::EndTable();
+    }
+    if(ImGui::CollapsingHeader("Display",ImGuiTreeNodeFlags_DefaultOpen)&&panel::BeginRows("chunk_Display")) {
         const char* displays[]={"Color only","Detailed"};dirty|=panel::ComboRow("Display",&c.display,displays,2);
         dirty|=panel::SliderRow("Tint opacity",&c.opacity,5,90,"%.0f %%");
         const char* heights[]={"Feet","Fixed","Column"};dirty|=panel::ComboRow("Height",&c.height,heights,3);
-        ImGui::BeginDisabled(c.height!=1);dirty|=panel::SliderIntRow("Render Y",&c.renderY,-64,320,"%d");ImGui::EndDisabled();
-        ImGui::BeginDisabled(c.height==2);dirty|=panel::SliderRow("Thickness",&c.thickness,.02f,2,"%.2f b");ImGui::EndDisabled();
+        if(c.height==1)dirty|=panel::SliderIntRow("Render Y",&c.renderY,-64,320,"%d");
+        if(c.height!=2)dirty|=panel::SliderRow("Thickness",&c.thickness,.02f,2,"%.2f b");
         dirty|=panel::SliderIntRow("Max chunks",&c.maxChunks,8,400,"%d");hint("Draw nearest first. Other discoveries remain remembered.");
         dirty|=panel::CheckRow("Beacons",&c.beacons);
         dirty|=panel::CheckRow("Orbiting orbs",&c.orbs);hint("Target Aura glow around the nearest 24 marked chunks. Reduce motion freezes the orbit.");
         ImGui::BeginDisabled(c.display==0);
         dirty|=panel::CheckRow("Labels",&c.labels);hint("Up to 12 nearest non-overlapping labels. Full discoveries remain listed below.");dirty|=panel::CheckRow("Highlight blocks",&c.blocks);
         ImGui::BeginDisabled(!c.blocks);dirty|=panel::SliderIntRow("Max blocks",&c.maxBlocks,20,1000,"%d");ImGui::EndDisabled();ImGui::EndDisabled();
+        ImGui::EndTable();
+    }
+    if(ImGui::CollapsingHeader("Colours")&&panel::BeginRows("chunk_Colours")) {
         dirty|=panel::ColorRow("Placed colour",&c.color.x);dirty|=panel::ColorRow("Base colour",&c.baseColor.x);
-        dirty|=panel::ColorRow("Farm colour",&c.farmColor.x);dirty|=panel::ColorRow("Geode colour",&c.geodeColor.x);
-        dirty|=panel::SliderIntRow("Threads",&c.threads,1,4,"%d");hint("Applied when the module is next enabled.");
-        dirty|=panel::SliderIntRow("Chunks per tick",&c.chunksPerTick,1,12,"%d");hint("Maximum queued per client tick, subject to the snapshot time budget.");
+        dirty|=panel::ColorRow("Farm colour",&c.farmColor.x);dirty|=panel::ColorRow("Amethyst colour",&c.geodeColor.x);
+        ImGui::EndTable();
+    }
+    if(ImGui::CollapsingHeader("Alerts")&&panel::BeginRows("chunk_Alerts")) {
         dirty|=panel::CheckRow("Chat alerts",&c.chat);dirty|=panel::CheckRow("Toast alerts",&c.toasts);dirty|=panel::CheckRow("Sound",&c.sound);
         dirty|=panel::SliderIntRow("Alerts per minute",&c.alertsPerMinute,1,30,"%d");
         ImGui::EndTable();
     }
+    if(ImGui::CollapsingHeader("Performance")&&panel::BeginRows("chunk_Performance")) {
+        dirty|=panel::SliderIntRow("Threads",&c.threads,1,4,"%d");hint("Applied when the module is next enabled.");
+        dirty|=panel::SliderIntRow("Chunks per tick",&c.chunksPerTick,1,12,"%d");hint("Maximum queued per client tick, subject to the snapshot time budget.");
+        ImGui::EndTable();
+    }
     if(dirty){preferencesDirty_=true;preferenceSaveAt_=GetTickCount64()+500;PushScanRequest();}
-    const auto& r=*chunkReport_;const auto now=GetTickCount64();
-    bool fresh=agentConnected_&&r.sampledAtMs&&now>=r.sampledAtMs&&now-r.sampledAtMs<1500;
-    if(!c.enabled)ImGui::TextWrapped("Enable Chunkfinder to scan loaded chunks.");
-    else if(!(d.signals&((1u<<chunks::Placed)|(1u<<chunks::Base)|(1u<<chunks::Farm)|(1u<<chunks::Geodes))))ImGui::TextWrapped("Enable a detection group to start scanning.");
-    else if(!fresh)ImGui::TextWrapped("Waiting for the Minecraft connection.");
-    else if(r.status==chunks::Status::Unavailable)ImGui::TextWrapped("Chunk scanning is unavailable. Restart Minecraft with the updated client.");
-    else if(r.status==chunks::Status::Failed)ImGui::TextWrapped("Chunk scanning stopped after an error. Toggle the module off and on to retry.");
-    else if(r.status==chunks::Status::Waiting)ImGui::TextWrapped("Join a world to start scanning.");
-    else ImGui::TextWrapped("%d chunks scanned | %d queued | %d discoveries",r.scanned,r.pending,r.count);
-    ImGui::TextWrapped("Only loaded chunks are scanned. Structure filters and confidence scores are clues, not proof of a base. Discoveries outside loaded chunks may be outdated.");
-    if(r.limited)ImGui::TextWrapped("Discovery or entity limit reached. Save useful locations and clear discoveries to free space.");
     if(ImGui::Button("Clear discoveries")){++chunkClearId_;chunkReport_->count=chunkReport_->blockCount=0;PushScanRequest();}
     if(fresh&&c.enabled)for(int i=0;i<std::clamp(r.count,0,chunks::kMaxFinds);++i) {
         const auto& f=r.finds[i];ImGui::PushID(i);ImGui::Separator();
-        ImGui::TextWrapped("Chunk %d, %d | Base %d pts | Farm %d%%",f.x,f.z,f.score,f.chance);
+        ImGui::TextWrapped("Chunk %d, %d",f.x,f.z);
+        if(f.category&2)ImGui::TextDisabled("Base score: %d",f.score);
+        if(f.category&4)ImGui::TextDisabled("Farm confidence: %d%%",f.chance);
         ImGui::TextWrapped("Reason: %s",ChunkClues(f).c_str());
         int shown=0;
         for(int j=0;j<std::clamp(r.blockCount,0,chunks::kMaxEvidence)&&shown<3;++j){const auto& q=r.blocks[j];
             if(ChunkCoordinate(q.x)!=f.x||ChunkCoordinate(q.z)!=f.z)continue;
-            ImGui::TextDisabled("Evidence block: %d %d %d",q.x,q.y,q.z);++shown;
+            ImGui::TextDisabled("Evidence position: %d %d %d",q.x,q.y,q.z);++shown;
         }
         char coords[80];std::snprintf(coords,sizeof(coords),"%d %d %d",f.x*16+8,c.renderY,f.z*16+8);
         if(ImGui::SmallButton("Copy coordinates"))ImGui::SetClipboardText(coords);
@@ -250,7 +311,7 @@ void Overlay::UpdateChunkFinder() {
     auto latest=chunkAlert_;
     for(int i=0;i<std::clamp(r.count,0,chunks::kMaxFinds);++i) {
         const auto& f=r.finds[i];latest=std::max(latest,f.alert);if(!f.alert||f.alert<=chunkAlert_)continue;
-        char text[128];std::snprintf(text,sizeof(text),"Chunkfinder: %d, %d | base %d pts | farm %d%%",f.x*16+8,f.z*16+8,f.score,f.chance);
+        char text[128];std::snprintf(text,sizeof(text),"Chunkfinder: %d, %d | %s",f.x*16+8,f.z*16+8,ChunkClues(f).c_str());
         if(chunkFinder_.toasts){if(chunkNotices_.size()>=3)chunkNotices_.erase(chunkNotices_.begin());chunkNotices_.emplace_back(now,text);}
         if(chunkFinder_.sound)MessageBeep(MB_OK);
     }chunkAlert_=latest;
@@ -258,11 +319,73 @@ void Overlay::UpdateChunkFinder() {
 
 void Overlay::DrawChunkFinder(const WorldSnapshot& s,const CameraProjection& p) {
     const auto& c=chunkFinder_;const auto& r=*chunkReport_;const auto now=GetTickCount64();
-    if(!c.enabled||panicActive_||r.status!=chunks::Status::Scanning||!r.sampledAtMs||now<r.sampledAtMs||now-r.sampledAtMs>1500)return;
+    if((!c.enabled&&!c.lightDebug)||panicActive_||r.status!=chunks::Status::Scanning||!r.sampledAtMs||now<r.sampledAtMs||now-r.sampledAtMs>1500){lightDebugPoints_.clear();return;}
     auto& draw=*ImGui::GetBackgroundDrawList();const auto origin=ImGui::GetMainViewport()->Pos;
     auto* tags=depth::tags;depth::tags=nullptr;
     struct Restore{std::vector<float>* value;ImDrawList& draw;int first;~Restore(){if(value){value->resize(draw.VtxBuffer.Size,0.f);std::fill(value->begin()+first,value->end(),0.f);}depth::tags=value;}}restore{tags,draw,draw.VtxBuffer.Size};
-    const auto colour=[&](int category){return category&2?c.baseColor:category&4?c.farmColor:category&8?c.geodeColor:c.color;};
+    if(lightDebugWorld_!=r.world){lightDebugPoints_.clear();lightDebugWorld_=r.world;}
+    for(auto& mark:lightDebugPoints_)mark.seen=false;
+    if(c.lightDebug)for(int i=0;i<std::clamp(r.blockCount,0,chunks::kMaxEvidence);++i){
+        const auto& q=r.blocks[i];const int signal=q.signal&255;
+        if(signal!=28)continue;
+        auto found=std::find_if(lightDebugPoints_.begin(),lightDebugPoints_.end(),[&](const auto& mark){const auto& a=mark.point;return a.x==q.x&&a.y==q.y&&a.z==q.z&&a.signal==q.signal;});
+        if(found!=lightDebugPoints_.end())found->seen=true;
+        else if(lightDebugPoints_.size()<chunks::kMaxEvidence)lightDebugPoints_.push_back({q,0,true});
+    }
+    const float lightStep=1-std::exp(-std::clamp(ImGui::GetIO().DeltaTime,0.f,.1f)*7.f);
+    if(!lightDebugPoints_.empty()) {
+    // Union projected light cells before drawing. No per-block fill overlap or
+    // internal outlines: only one feathered field for each connected screen area.
+    const auto viewport=ImGui::GetIO().DisplaySize;
+    const float cell=std::max(5.f,std::max(viewport.x/240.f,viewport.y/160.f));
+    const int cols=std::max(2,int(std::ceil(viewport.x/cell))+1),rows=std::max(2,int(std::ceil(viewport.y/cell))+1);
+    std::vector<float> mask(cols*rows,0.f),blur(mask.size(),0.f);
+    for(auto& mark:lightDebugPoints_){
+        const auto& q=mark.point;
+        const double distance=std::hypot(std::hypot(q.x+.5-s.posX,q.z+.5-s.posZ),q.y+.5-s.posY);
+        const float range=std::max(8.f,c.lightDistance);
+        const float target=mark.seen?std::clamp(float((range-distance)/(range*.2)),0.f,1.f):0.f;
+        mark.alpha=menu_.reduceMotion?target:std::lerp(mark.alpha,target,lightStep);
+        if(mark.alpha<.005f)continue;
+        float left=viewport.x,right=0,top=viewport.y,bottom=0;int projected=0;
+        for(int corner=0;corner<8;++corner){
+            ScreenPoint at;
+            if(!p.Point({q.x+double(corner&1),q.y+double((corner>>1)&1),q.z+double((corner>>2)&1)},at))continue;
+            left=std::min(left,at.x);right=std::max(right,at.x);
+            top=std::min(top,at.y);bottom=std::max(bottom,at.y);++projected;
+        }
+        if(projected!=8||right<0||bottom<0||left>viewport.x||top>viewport.y)continue;
+        // A half-cell expansion avoids cracks when adjacent projections rasterize.
+        const int x0=std::clamp(int(std::floor(left/cell-.5f)),0,cols-1),x1=std::clamp(int(std::ceil(right/cell+.5f)),0,cols-1);
+        const int y0=std::clamp(int(std::floor(top/cell-.5f)),0,rows-1),y1=std::clamp(int(std::ceil(bottom/cell+.5f)),0,rows-1);
+        const float strength=mark.alpha*(.6f+.4f*std::clamp(float(q.signal>>8)/15.f,0.f,1.f));
+        for(int y=y0;y<=y1;++y)for(int x=x0;x<=x1;++x)mask[y*cols+x]=std::max(mask[y*cols+x],strength);
+    }
+    // Separable tent filter gives the union soft edges without bright seams.
+    const int feather=std::clamp(int(std::round(c.lightRadius/cell)),1,5);
+    for(int axis=0;axis<2;++axis){
+        for(int y=0;y<rows;++y)for(int x=0;x<cols;++x){
+            float value=0,weight=0;
+            for(int k=-feather;k<=feather;++k){
+                const int xx=x+(axis==0?k:0),yy=y+(axis==1?k:0);const float w=float(feather+1-std::abs(k));
+                weight+=w;if(xx>=0&&xx<cols&&yy>=0&&yy<rows)value+=mask[yy*cols+xx]*w;
+            }
+            blur[y*cols+x]=value/weight;
+        }
+        mask.swap(blur);
+    }
+    const auto lightInk=[&](float density){
+        return soft::Ink({1,.8f,.46f,1},density*c.lightOpacity*.38f);
+    };
+    for(int y=0;y<rows-1;++y)for(int x=0;x<cols-1;++x){
+        const int i=y*cols+x;
+        if(std::max({mask[i],mask[i+1],mask[i+cols],mask[i+cols+1]})<.004f)continue;
+        draw.AddRectFilledMultiColor({origin.x+x*cell,origin.y+y*cell},{origin.x+(x+1)*cell,origin.y+(y+1)*cell},
+            lightInk(mask[i]),lightInk(mask[i+1]),lightInk(mask[i+cols+1]),lightInk(mask[i+cols]));
+    }
+    }
+    std::erase_if(lightDebugPoints_,[](const auto& mark){return !mark.seen&&mark.alpha<.005f;});
+    if(!c.enabled)return; const auto colour=[&](int category){return category&16?ImVec4{1,.67f,.16f,1}:category&2?c.baseColor:category&4?c.farmColor:category&8?c.geodeColor:c.color;};
     const auto wire=[&](WorldBounds b,ImU32 ink,float width){
         const auto corner=[&](int i)->WorldPoint{return {i&1?b.max.x:b.min.x,i&2?b.max.y:b.min.y,i&4?b.max.z:b.min.z};};
         for(int i=0;i<8;++i)for(int bit:{1,2,4})if(!(i&bit)){ScreenPoint a,d;if(p.Segment(corner(i),corner(i|bit),a,d))draw.AddLine({a.x+origin.x,a.y+origin.y},{d.x+origin.x,d.y+origin.y},ink,width);}
@@ -299,11 +422,13 @@ void Overlay::DrawChunkFinder(const WorldSnapshot& s,const CameraProjection& p) 
             case 15:case 16:return {1,.22f,.20f,1};
             case 17:case 18:return {.98f,.73f,.24f,1};
             case 19:case 20:return {.35f,.82f,.43f,1};
-            case 22:case 23:return {.69f,.43f,.94f,1}; // amethyst
+            case 22:case 23:case 30:return {.69f,.43f,.94f,1}; // amethyst
             default:return (q.signal&255)==chunks::Geodes?ImVec4{.69f,.43f,.94f,1}:ImVec4{.62f,.66f,.72f,1};
         }
     };
     for(auto* f:sorted){const auto rgba=colour(f->category);const auto ink=ImGui::ColorConvertFloat4ToU32(rgba);auto tint=rgba;tint.w*=c.opacity/100;
+        // Light debug uses the actual reported points, never chunk-sized boxes.
+
         double y=c.height==1?c.renderY:s.posY;WorldBounds b{{f->x*16.,c.height==2?double(f->minY):y,f->z*16.},{f->x*16.+16,c.height==2?double(f->maxY):y+c.thickness,f->z*16.+16}};
         const auto corner=[&](int i)->WorldPoint{return {i&1?b.max.x:b.min.x,i&2?b.max.y:b.min.y,i&4?b.max.z:b.min.z};};
         if(c.height==2){for(auto face:std::array<std::array<int,4>,4>{{{{0,1,3,2}},{{4,6,7,5}},{{0,2,6,4}},{{1,5,7,3}}}})fill({corner(face[0]),corner(face[1]),corner(face[2]),corner(face[3])},ImGui::ColorConvertFloat4ToU32(tint));}
@@ -311,7 +436,7 @@ void Overlay::DrawChunkFinder(const WorldSnapshot& s,const CameraProjection& p) 
         if(c.display==1||c.height==2)wire(b,ink,1.4f);
         if(c.beacons)wire({{f->x*16.+7.7,double(f->minY),f->z*16.+7.7},{f->x*16.+8.3,double(f->maxY),f->z*16.+8.3}},ink,2);
         if(c.display==1&&c.blocks)for(int j=0;j<std::clamp(r.blockCount,0,chunks::kMaxEvidence)&&drawnBlocks<c.maxBlocks;++j){const auto& q=r.blocks[j];if(ChunkCoordinate(q.x)!=f->x||ChunkCoordinate(q.z)!=f->z)continue;// Geometry clues describe air, not a detected solid block.
-            if((q.signal>>8)==1||(q.signal>>8)==2)continue;
+            if((q.signal&255)>=25||(q.signal>>8)==1||(q.signal>>8)==2)continue;
             soft::StorageCell(draw,s,p,{{double(q.x),double(q.y),double(q.z)},{q.x+1.,q.y+1.,q.z+1.}},materialColour(q),.8f,auraBlend_.GlowTexture());++drawnBlocks;}
         if(c.orbs&&orbChunks++<24) {
             AuraConfig style;style.startColor=rgba;style.endColor=soft::Mix(rgba,{.35f,.55f,1,rgba.w},.35f);

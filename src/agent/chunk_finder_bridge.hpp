@@ -5,7 +5,7 @@
 namespace mcov::agent {
 class ChunkFinderBridge {
     SharedBlock* block_{}; jclass bridge_{}; jmethodID update_{},disable_{};
-    jfieldID view_{},status_{},world_{},revision_{},scanned_{},pending_{},limited_{},rows_{},blocks_{},alerts_{},scannedChunks_{};
+    jfieldID view_{},status_{},world_{},revision_{},scanned_{},pending_{},limited_{},rows_{},blocks_{},alerts_{},scannedChunks_{},activityStatus_{},baselines_{};
     std::uint64_t next_=0;
     std::unique_ptr<chunks::Report> report_=std::make_unique<chunks::Report>();
     static bool Error(JNIEnv* e) {if(!e->ExceptionCheck())return false;e->ExceptionClear();return true;}
@@ -21,7 +21,8 @@ public:
         scanned_=e->GetFieldID(v,"scanned","I");pending_=e->GetFieldID(v,"pending","I");limited_=e->GetFieldID(v,"limited","Z");
         rows_=e->GetFieldID(v,"rows","[I");blocks_=e->GetFieldID(v,"blocks","[I");alerts_=e->GetFieldID(v,"alerts","[J");
         scannedChunks_=e->GetFieldID(v,"scannedChunks","[J");
-        if(Error(e)||!status_||!world_||!revision_||!scanned_||!pending_||!limited_||!rows_||!blocks_||!alerts_||!scannedChunks_)return false;
+        activityStatus_=e->GetFieldID(v,"activityStatus","I");baselines_=e->GetFieldID(v,"baselines","I");
+        if(Error(e)||!activityStatus_||!baselines_||!status_||!world_||!revision_||!scanned_||!pending_||!limited_||!rows_||!blocks_||!alerts_||!scannedChunks_)return false;
         auto profile=e->NewStringUTF(b.set->id);auto ok=e->CallStaticBooleanMethod(c,configure,b.client.minecraftClass,profile);
         if(Error(e)||!ok)return false;
         bridge_=static_cast<jclass>(e->NewGlobalRef(c));return bridge_&&!Error(e);
@@ -33,14 +34,15 @@ public:
         jvm::LocalFrame scope(e,16);if(!scope.ok())return;
         chunks::Request r;bool fresh=block_->chunkRequest.Read(r)&&r.sentAtMs&&now>=r.sentAtMs&&now-r.sentAtMs<=500;
         const auto flags=block_->controlFlags.load(std::memory_order_acquire);
-        const auto& d=r.detection;jint values[]={jint(d.signals),d.deepslateMin,d.rotatedMin,d.cobbledMin,d.endStoneMin,d.baseScore,d.farmChance,d.geodeSensitivity};
-        auto settings=e->NewIntArray(8);if(!settings||Error(e))return;e->SetIntArrayRegion(settings,0,8,values);
+        const auto& d=r.detection;jint values[]={jint(d.signals),d.deepslateMin,d.rotatedMin,d.cobbledMin,d.endStoneMin,d.baseScore,d.farmChance,d.geodeSensitivity,d.mode,jint(d.skyActivity),jint(d.redstoneActivity),jint(d.lightEsp),d.lightRadius,d.lightMin,jint(d.lightDenoise)};
+        auto settings=e->NewIntArray(15);if(!settings||Error(e))return;e->SetIntArrayRegion(settings,0,15,values);
         e->CallStaticVoidMethod(bridge_,update_,jboolean(fresh&&r.enabled&&!(flags&(kCtrlPauseSampling|kCtrlRequestUnload))),settings,
             jint(r.threads),jint(r.chunksPerTick),jint(r.alertsPerMinute),jboolean(r.chat),jlong(r.clearId),jlong(fresh?500-(now-r.sentAtMs):0));
         auto v=e->GetStaticObjectField(bridge_,view_);
         if(Error(e)||!v) {out.status=chunks::Status::Failed;out.count=out.blockCount=0;block_->chunkReport.Publish(out);return;}
         int status=e->GetIntField(v,status_);out.status=status>=0&&status<=4?chunks::Status(status):chunks::Status::Failed;
         const auto revision=std::uint64_t(e->GetLongField(v,revision_)),world=std::uint64_t(e->GetLongField(v,world_));
+        out.activityStatus=e->GetIntField(v,activityStatus_);out.baselines=e->GetIntField(v,baselines_);
         out.scanned=e->GetIntField(v,scanned_);out.pending=e->GetIntField(v,pending_);out.limited=e->GetBooleanField(v,limited_);
         if(revision!=out.revision||world!=out.world||out.status!=chunks::Status::Scanning) {
             out.revision=revision;out.world=world;out.count=out.blockCount=out.scannedCount=0;

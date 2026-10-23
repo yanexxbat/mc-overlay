@@ -31,6 +31,31 @@ m('bees','net/minecraft/world/level/block/entity/BeehiveBlockEntity','getOccupan
 m('chat','net/minecraft/client/player/LocalPlayer','sendSystemMessage','(Lnet/minecraft/network/chat/Component;)V')
 m('literal','net/minecraft/network/chat/Component','literal','(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;')
 
+
+m('lightEngine','net/minecraft/client/multiplayer/ClientChunkCache','getLightEngine','()Lnet/minecraft/world/level/lighting/LevelLightEngine;')
+m('lightLayer','net/minecraft/world/level/lighting/LevelLightEngine','getLayerListener','(Lnet/minecraft/world/level/LightLayer;)Lnet/minecraft/world/level/lighting/LayerLightEventListener;')
+f('blockLayer','net/minecraft/world/level/LightLayer','BLOCK','Lnet/minecraft/world/level/LightLayer;')
+f('skyLayer','net/minecraft/world/level/LightLayer','SKY','Lnet/minecraft/world/level/LightLayer;')
+m('sectionPos','net/minecraft/core/SectionPos','of','(III)Lnet/minecraft/core/SectionPos;')
+m('lightData','net/minecraft/world/level/lighting/LayerLightEventListener','getDataLayerData','(Lnet/minecraft/core/SectionPos;)Lnet/minecraft/world/level/chunk/DataLayer;')
+m('lightBytes','net/minecraft/world/level/chunk/DataLayer','getData','()[B')
+
+# Read-only activity packet APIs; audited in every supported namespace.
+pkg='net/minecraft/network/protocol/game/'
+m('activityConnection',client,'getConnection','()Lnet/minecraft/client/multiplayer/ClientPacketListener;')
+m('activityNetwork','net/minecraft/client/multiplayer/ClientPacketListener','getConnection','()Lnet/minecraft/network/Connection;')
+for tag,cl in [('Light','ClientboundLightUpdatePacket'),('Chunk','ClientboundLevelChunkWithLightPacket')]:
+    for axis in 'XZ': m('activity'+tag+axis,pkg+cl,'get'+axis,'()I')
+    m('activity'+tag+'Data',pkg+cl,'getLightData','()L'+pkg+'ClientboundLightUpdatePacketData;')
+for layer in ['Block','Sky']:
+    for suffix,ret in [('YMask','Ljava/util/BitSet;'),('Updates','Ljava/util/List;')]:
+        m('activity'+layer+suffix,pkg+'ClientboundLightUpdatePacketData','get'+layer+suffix,'()'+ret)
+    m('activityEmpty'+layer,pkg+'ClientboundLightUpdatePacketData','getEmpty'+layer+'YMask','()Ljava/util/BitSet;')
+m('activityBlockPos',pkg+'ClientboundBlockUpdatePacket','getPos','()Lnet/minecraft/core/BlockPos;')
+m('activityBlockState',pkg+'ClientboundBlockUpdatePacket','getBlockState','()Lnet/minecraft/world/level/block/state/BlockState;')
+m('activitySectionBlocks',pkg+'ClientboundSectionBlocksUpdatePacket','runUpdates','(Ljava/util/function/BiConsumer;)V')
+m('activityBundle','net/minecraft/network/protocol/BundlePacket','subPackets','()Ljava/lang/Iterable;')
+
 def generate(cache):
     for name,entry in json.loads(Path(__file__).with_name('mapping_inputs.json').read_text()).items():
         if hashlib.sha256((cache/name).read_bytes()).hexdigest()!=entry['sha256']: raise ValueError('Mapping checksum mismatch: '+name)
@@ -70,6 +95,8 @@ def generate(cache):
                     name=next((n for n in choices if n.endswith('/'+suffix)),name)
                 if not jar.load(name): raise ValueError('Missing entity class: '+name)
                 rows.append(['class.'+key,cls(name),'',''])
+            for tag,cl in [('Light','ClientboundLightUpdatePacket'),('Chunk','ClientboundLevelChunkWithLightPacket'),('Block','ClientboundBlockUpdatePacket'),('Section','ClientboundSectionBlocksUpdatePacket'),('Respawn','ClientboundRespawnPacket'),('Bundle','ClientboundBundlePacket')]:
+                rows.append(['class.Activity'+tag,cls(pkg+cl),'',''])
             tables.append((ns+'-'+version,rows))
     out=['// Generated against official Minecraft classes; do not hand-edit.','package mcov;','final class ChunkFinderProfiles {','static String[][] get(String id) { return switch(id) {']
     for i,(name,rows) in enumerate(tables): out.append(f'case {json.dumps(name)} -> P{i};')

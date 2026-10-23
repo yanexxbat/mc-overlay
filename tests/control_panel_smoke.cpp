@@ -382,7 +382,7 @@ void HoleUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::f
     auto& c=mcov::OverlayUiCheck::Holes(overlay);
     ClickModule(overlay,Page::Blocks,10,11,0); Require(c.enabled,"Hole ESP module did not enable");
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",10,11,size);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",10,12,size);
         auto frame=[&]{ Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"hole-settings-desktop.png":"hole-settings-small.png"));
@@ -444,7 +444,7 @@ void StorageRangeUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,cons
     auto owned=std::make_unique<mcov::Overlay>(); auto& o=*owned; mcov::OverlayUiCheck::Seed(o);
     auto& range=mcov::OverlayUiCheck::Rockstar(o)[mcov::rockstar::Feature::ChestEsp].range;
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        range=24; mcov::OverlayUiCheck::Center(o); OpenModuleSettings(o,Page::Blocks,"block_sections",4,11,size);
+        range=24; mcov::OverlayUiCheck::Center(o); OpenModuleSettings(o,Page::Blocks,"block_sections",4,12,size);
         auto frame=[&]{ Draw(o,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID("storage_settings"));
@@ -470,7 +470,7 @@ void LargeScanUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const s
         int& radius=section==0?blocks.radius:chunks.radius;
         float& distance=section==0?blocks.maxDraw:chunks.maxDraw;
         radius=4; distance=8;
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",section,11,size);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",section,12,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         auto* table=ImGui::GetCurrentContext()->Tables.GetByKey(content->GetID(section==0?"block_scanning":"chunkfinder_controls"));
@@ -533,7 +533,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
         const auto suffix=size.x>500?"desktop.png":"small.png";
         for(int index:{4,7,8,9,3}) {
-            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,11,size);
+            mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",index,12,size);
             auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
             auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
             const std::string name=index==4?"smp-storage-colours-":index==7?"smp-stash-discoveries-":index==8?"smp-spawner-":index==9?"base-esp-settings-":"chunkfinder-empty-";
@@ -562,7 +562,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     chunkResult.finds[0]={0,0,2,12,65,-64,320,1u<<mcov::chunks::Pistons,0};
 
     for(auto size:{ImVec2(1280,800),ImVec2(480,360)}) {
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size);
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,12,size);
         auto frame=[&] { Draw(overlay,Page::Blocks,0,size); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,0); frame(); frame();
         SaveFrame(device,context,output/(size.x>500?"chunkfinder-settings-desktop.png":"chunkfinder-settings-small.png"));
@@ -578,7 +578,7 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     mcov::CopyField(scene->gameVersion,"1.21.11"); mcov::OverlayUiCheck::Snapshot(overlay,*scene);
     for(auto state:{mcov::base::Status::Building,mcov::base::Status::Failed}) {
         mcov::OverlayUiCheck::BaseStatus(overlay,state);
-        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,11,{480,360});
+        mcov::OverlayUiCheck::Center(overlay); OpenModuleSettings(overlay,Page::Blocks,"block_sections",9,12,{480,360});
         auto frame=[&]{ Draw(overlay,Page::Blocks,0,{480,360}); };
         auto* content=Child("/content_"); ImGui::SetScrollY(content,content->ScrollMax.y); frame(); frame();
         SaveFrame(device,context,output/(state==mcov::base::Status::Building?"base-textures-loading-small.png":"base-textures-error-small.png"));
@@ -626,22 +626,23 @@ void SmpUiChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::fi
     c.base.padding=7; c.base.fillOpacity=.21f; c.base.colour={.6f,.5f,.4f,.3f};
     c.finder.minKelpHeight=24;
     auto& advanced=mcov::OverlayUiCheck::Chunk(overlay);advanced.detection.baseScore=17;advanced.detection.rotatedMin=7;
+    advanced.detection.mode=2;advanced.detection.skyActivity=false;advanced.detection.redstoneActivity=false;
     advanced.display=1;advanced.threads=4;advanced.maxChunks=233;advanced.farmColor={.1f,.2f,.3f,1};
     mcov::OverlayUiCheck::PrefPath(overlay,output/"smp-preferences.ini"); mcov::OverlayUiCheck::Save(overlay); c={}; mcov::OverlayUiCheck::Load(overlay);
     Require(c.storage.textures&&c.storage.colours[2].w==.54f&&c.storage.mask==(1u<<mcov::kBlockEnderChest)&&c.stash.minContainers==21&&c.spawner.tracers&&
         c.storage.interval==2600&&c.storage.pulseDuration==4800&&!c.storage.pulse&&
         c.base.enabled&&c.base.padding==7&&c.base.fillOpacity==.21f&&c.base.colour.w==.3f&&c.finder.enabled&&c.finder.minKelpHeight==24,
         "Automatic preferences lost SMP colours/filters/settings");
-    Require(advanced.detection.baseScore==17&&advanced.detection.rotatedMin==7&&advanced.display==1&&advanced.threads==4&&advanced.maxChunks==233&&advanced.farmColor.z==.3f,
+    Require(advanced.detection.mode==2&&!advanced.detection.skyActivity&&!advanced.detection.redstoneActivity&&advanced.detection.baseScore==17&&advanced.detection.rotatedMin==7&&advanced.display==1&&advanced.threads==4&&advanced.maxChunks==233&&advanced.farmColor.z==.3f,
         "Automatic preferences lost Chunkfinder detector/display settings");
     auto config=mcov::OverlayUiCheck::ConfigSnapshot(overlay);std::string encoded;mcov::client_configs::Snapshot decoded;
-    Require(mcov::client_configs::Encode(config,encoded)&&mcov::client_configs::Decode(encoded,decoded)&&decoded.chunks.detection.baseScore==17&&decoded.chunks.maxChunks==233,"Chunkfinder named config round trip");
+    Require(mcov::client_configs::Encode(config,encoded)&&mcov::client_configs::Decode(encoded,decoded)&&decoded.chunks.detection.baseScore==17&&decoded.chunks.maxChunks==233&&decoded.chunks.detection.mode==2&&!decoded.chunks.detection.skyActivity&&!decoded.chunks.detection.redstoneActivity,"Chunkfinder named config round trip");
     // Simulate a profile from before the new detector schema.
     std::ostringstream advancedText;mcov::client_configs::Archive advancedArchive(advancedText);mcov::client_configs::ChunkAdvanced(advancedArchive,advanced);
     std::set<std::string> newKeys;std::istringstream fields(advancedText.str());std::string field;
     while(std::getline(fields,field))newKeys.insert(field.substr(0,field.find(' ')));
     std::istringstream source(encoded);std::ostringstream chunkLegacy;while(std::getline(source,field))if(!newKeys.contains(field.substr(0,field.find(' '))))chunkLegacy<<field<<'\n';
-    Require(mcov::client_configs::Decode(chunkLegacy.str(),decoded)&&decoded.chunks.detection.baseScore==8&&decoded.chunks.display==0,"Legacy Chunkfinder profile migration");
+    Require(mcov::client_configs::Decode(chunkLegacy.str(),decoded)&&decoded.chunks.detection.baseScore==8&&decoded.chunks.display==0&&decoded.chunks.detection.mode==1,"Legacy Chunkfinder profile migration");
     std::ifstream storagePrefs(output/"smp-preferences.ini"); std::ostringstream beforeStoragePulse; std::string storageLine;
     while(std::getline(storagePrefs,storageLine)) if(!storageLine.starts_with("smp.storage.interval ")&&
         !storageLine.starts_with("smp.storage.pulse ")&&!storageLine.starts_with("smp.storage.pulseDuration ")) beforeStoragePulse<<storageLine<<'\n';
@@ -1629,7 +1630,7 @@ int main(int argc,char** argv) {
         auto& editor=mcov::OverlayUiCheck::CombatEditor(overlay);
         editor.Select(mcov::CombatMenu::Section::AimAssist); mcov::OverlayUiCheck::AllowCombat(overlay);
         constexpr const char* sectionIds[]={"combat_sections","visual_sections","block_sections","hud_sections","stats_sections","settings_sections","misc_sections"};
-        constexpr int sectionCounts[]={10,17,11,21,3,5,10};
+        constexpr int sectionCounts[]={10,17,12,21,3,5,10};
         GlassScenePreview(overlay,device.Get(),context.Get(),output);
         ModuleTileChecks(overlay);
         SettingsWindowChecks(overlay,device.Get(),context.Get(),output);
@@ -1997,7 +1998,8 @@ int main(int argc,char** argv) {
                 auto* utilityContent=Child("/content_"); ImGui::SetScrollY(utilityContent,utilityContent->ScrollMax.y);
                 Draw(overlay,Page::Combat,0,size); Draw(overlay,Page::Combat,0,size);
             }
-            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,11,size); mcov::OverlayUiCheck::Center(overlay);
+            mcov::OverlayUiCheck::Chunk(overlay).detection.rotatedMin=0;
+            OpenModuleSettings(overlay,Page::Blocks,"block_sections",3,12,size); mcov::OverlayUiCheck::Center(overlay);
             for(int i=0;i<20;++i) Draw(overlay,Page::Blocks,0,size);
             Require(ImGui::GetCurrentContext()->Tables.GetByKey(Child("/content_")->GetID("chunkfinder_controls"))!=nullptr,"Chunkfinder tab did not render its real controls");
             SaveFrame(device.Get(),context.Get(),output/(std::string("chunkfinder-settings")+suffix));
@@ -2027,6 +2029,26 @@ int main(int argc,char** argv) {
         finder.beacons=true;Require(chunkFrame()>0,"Beacon mode failed");
         report.count=0;report.blockCount=0;Require(chunkFrame()==0,"Empty findings left geometry");report.count=2;
         mcov::OverlayUiCheck::SetModule(overlay,mcov::keys::Action::ChunkFinder,false);Require(chunkFrame()==0,"Disabled Chunkfinder rendered");
+        finder={};finder.enabled=false;finder.lightDebug=true;finder.maxDraw=160;
+        report.count=0;report.blockCount=120;
+        chunkScene.camX=0;chunkScene.camY=-18;chunkScene.camZ=-12;chunkScene.yawDeg=0;chunkScene.pitchDeg=8;
+        chunkScene.posX=0;chunkScene.posY=-18;chunkScene.posZ=-12;
+        for(int i=0;i<120;++i)report.blocks[i]={-9+(i%10)+(i/60)*14,-22+((i/10)%6),12,28|((8+i%8)<<8)};
+        mcov::OverlayUiCheck::ReduceMotion(overlay,false);
+        for(int frameIndex=0;frameIndex<60;++frameIndex){
+            report.sampledAtMs=GetTickCount64();io.DisplaySize={1280,800};ImGui_ImplDX11_NewFrame();ImGui::NewFrame();
+            auto* draw=ImGui::GetBackgroundDrawList();
+            draw->AddRectFilledMultiColor({0,0},{1280,800},IM_COL32(18,22,29,255),IM_COL32(18,22,29,255),IM_COL32(34,39,44,255),IM_COL32(34,39,44,255));
+            draw->AddText({36,30},IM_COL32(233,235,240,255),"LIGHT ESP / DEBUG");
+            draw->AddText({36,56},IM_COL32(161,171,183,255),"Real overlay renderer / synthetic light-change data / no Minecraft world");
+            draw->AddText({36,736},IM_COL32(255,196,97,255),"Block light");
+            draw->AddText({170,736},IM_COL32(122,184,255,255),"Below Y 0");
+            draw->AddText({36,762},IM_COL32(161,171,183,255),"Connected light areas | Feathered edges | Opacity: 70% | Fade-in / fade-out enabled");
+            const int vertices=mcov::OverlayUiCheck::DrawChunk(overlay,chunkScene);
+            Require(frameIndex==0||vertices>0,"Light debug preview produced no markers");
+            ImGui::Render();
+        }
+        SaveFrame(device.Get(),context.Get(),output/"light-debug-preview.png");
         finder={};mcov::OverlayUiCheck::Smp(overlay).finder.enabled=false;
         auto& aura=mcov::OverlayUiCheck::AuraSettings(overlay);
         aura.pulseAmplitude=0;

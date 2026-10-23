@@ -196,6 +196,7 @@ struct AppState {
     std::future<Result> job;
     auth::Session license;
     std::future<auth::LoginResult> authJob;
+    std::atomic<launcher::VerificationStatus> verification{launcher::VerificationStatus::Idle};
     std::vector<std::uint32_t> licensedClients;
     std::uint64_t refreshAt=0,logsAt=0;
     std::filesystem::path agentLog;
@@ -265,12 +266,20 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
 #endif
         {
             AppState state;
+            // UI preference only; never persist a license key or auth data.
+            const auto animationSettings=root/L"launcher-animations.txt";
+            { std::ifstream saved(animationSettings); int enabled=1;
+              if(saved>>enabled) state.view.animations=enabled!=0; }
             try { state.view.hardwareId=auth::HardwareId(); } catch(...) {} // Display failure must not prevent startup.
             state.Refresh(); FlatApp app; std::string failure;
             if(!app.Initialize(L"Keim - Client",640,640,&failure)) throw std::runtime_error(failure);
+            bool closeRequested=false;
+            float windowAge=0,closeAge=0,exitOpacity=1;
+            app.onCloseRequested=[&] { closeRequested=true; };
             app.Run([&] {
                 const auto now=GetTickCount64();
-                if(state.view.authBusy&&state.authJob.valid()&&state.authJob.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
+                const auto verification=state.verification.load(std::memory_order_acquire);
+                if(state.view.authBusy&&verification!=launcher::VerificationStatus::Verifying&&state.authJob.valid()&&state.authJob.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
                     auto result=state.authJob.get(); state.view.authBusy=false; state.view.licensed=result.success;
                     state.view.authError=!result.success; state.view.authMessage=result.message; state.license=std::move(result.session);
                     state.licensedClients.clear();
@@ -294,9 +303,26 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                     state.view.log=LogTail(root/L"Keim_client.log")+"\n"+LogTail(root/L"Keim_overlay.log")+"\n"+LogTail(state.agentLog); state.logsAt=now+1000;
                 }
                 state.view.phase=PhaseText(state.phase.load());
+                state.view.introReady=IsWindowVisible(static_cast<HWND>(app.hwnd()))!=FALSE;
+                const bool animationsBefore=state.view.animations;
+                // Avoid a bright first frame before ShowWindow. The visible
+                // clock starts only after FlatApp has presented its hidden frame.
+                if(state.view.introReady) windowAge+=ImGui::GetIO().DeltaTime;
                 const auto a=launcher::Render(state.view,{float(app.width()),float(app.height())});
+                if(animationsBefore!=state.view.animations) {
+                    std::ofstream saved(animationSettings); saved<<(state.view.animations?1:0);
+                }
                 app.SetNoDragRect(float(app.width()-74),22,float(app.width()-20),44);
-                if(a.close) { state.stop.request_stop(); app.RequestClose(); }
+                closeRequested|=a.close;
+                float opacity=state.view.animations?launcher::anim::easeOutCubic(windowAge/launcher::anim::Transition):1.f;
+                if(closeRequested) {
+                    if(closeAge==0) { exitOpacity=opacity; state.stop.request_stop(); }
+                    closeAge+=ImGui::GetIO().DeltaTime;
+                    opacity=state.view.animations?exitOpacity*(1-launcher::anim::easeInOutCubic(closeAge/launcher::anim::Transition)):0;
+                    if(!state.view.animations||closeAge>=launcher::anim::Transition) app.RequestClose();
+                }
+                app.SetOpacity(opacity);
+                if(closeRequested) return;
                 if(a.minimize) ShowWindow(static_cast<HWND>(app.hwnd()),SW_MINIMIZE);
                 if(a.refresh&&!state.view.busy) state.Refresh();
                 if(a.openLogs) ShellExecuteW(static_cast<HWND>(app.hwnd()),L"open",root.c_str(),nullptr,nullptr,SW_SHOWNORMAL);
@@ -304,7 +330,17 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,PWSTR,int) {
                     std::string key(state.view.licenseKey.data()); SecureZeroMemory(state.view.licenseKey.data(),state.view.licenseKey.size());
                     state.view.showLicense=false; state.view.authBusy=true; state.view.authError=false; state.stop=std::stop_source{};
                     const auto token=state.stop.get_token();
-                    state.authJob=std::async(std::launch::async,[key=std::move(key),token]() mutable { return auth::Client{}.Login(std::move(key),token); });
+                    state.verification.store(launcher::VerificationStatus::Verifying,std::memory_order_release);
+                    state.authJob=std::async(std::launch::async,[key=std::move(key),token,&status=state.verification]() mutable {
+                        try {
+                            auto result=auth::Client{}.Login(std::move(key),token);
+                            status.store(result.success?launcher::VerificationStatus::Success:launcher::VerificationStatus::Error,std::memory_order_release);
+                            return result;
+                        } catch(...) {
+                            status.store(launcher::VerificationStatus::Error,std::memory_order_release);
+                            throw;
+                        }
+                    });
                 }
                 if(a.chooseJdk&&!state.view.busy) {
                     const auto chosen=ChooseJdk(static_cast<HWND>(app.hwnd()));

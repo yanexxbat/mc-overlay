@@ -4,9 +4,15 @@
 #include <vector>
 #include <cstdint>
 #include <array>
+#include "anim.h"
 namespace mcov::launcher {
+// Worker publishes this status; View itself is accessed only by the UI thread.
+enum class VerificationStatus { Idle, Verifying, Success, Error };
 struct Instance { std::uint32_t pid{}; std::string title,java; bool connected=false,running=false; };
 struct View {
+    // Presentation only; lifetime follows this launcher, never persisted.
+    bool introReady=false,animations=true;
+    anim::State motion;
     std::vector<Instance> instances;
     int selected=-1,tab=0;
     bool busy=false,error=false,needsJdk=false;

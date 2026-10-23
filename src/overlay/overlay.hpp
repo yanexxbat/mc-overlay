@@ -75,6 +75,8 @@ struct BlockEspSettings {
 };
 
 struct ChunkFinderSettings {
+    bool lightDebug=false;
+    float lightRadius=10,lightOpacity=.7f,lightDistance=64;
     bool enabled=false,blocks=true,labels=true,chunks=true,deepslate=true;
     int radius=20,interval=900,minHints=1;
     float maxDraw=64;
@@ -175,7 +177,7 @@ private:
     client_configs::Snapshot CaptureConfig() const;
     void ApplyConfig(const client_configs::Snapshot& config);
 
-    void DrawMenu();
+    void DrawMenu(bool fadingOut=false);
     int ReadModules(control_panel::Page,std::span<control_panel::ModuleView>) const;
     void ActivateModule(control_panel::Page,int);
     void ResetMenuPage(control_panel::Page page);
@@ -199,7 +201,7 @@ private:
     void  PushCombatRequest();
     items::Request BuildItemRequest(std::uint64_t now,bool inputAllowed,bool combatActive) const;
     void  DrawItemAssistSettings(int section);
-    void  DrawChunkFinderSettings();
+    void DrawLightSettings(); void  DrawChunkFinderSettings();
     smp::BaseFinderSettings ChunkDetection() const;
     void NormalizeChunkFinder();
     void  DrawChunkFinder(const WorldSnapshot&,const CameraProjection&);
@@ -305,6 +307,9 @@ private:
     CombatReport    combatReport_{};
     BlockEspSettings blocks_{};
     ChunkFinderSettings chunkFinder_{};
+    struct LightDebugPoint { chunks::Evidence point; float alpha=0; bool seen=false; };
+    std::vector<LightDebugPoint> lightDebugPoints_;
+    std::uint64_t lightDebugWorld_=0;
     std::unique_ptr<chunks::Report> chunkReport_=std::make_unique<chunks::Report>();
     std::uint64_t chunkClearId_=0,chunkAlert_=0,chunkWorld_=0;
     std::vector<std::pair<std::uint64_t,std::string>> chunkNotices_;

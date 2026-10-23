@@ -21,6 +21,7 @@ public final class AntiVanishPackets {
     public static volatile boolean installed;
     static boolean overflowed() { boolean result=overflow;overflow=false;return result; }
     public static void observe(Object network,Object packet,boolean outbound) {
+        ChunkActivity.observe(network,packet,outbound);
         long token=generation;
         if(network!=connection||System.nanoTime()>deadline||packet==null)return;
         boolean relevant=false;for(Class<?> type:outbound?outgoing:incoming)if(type.isInstance(packet)){relevant=true;break;}

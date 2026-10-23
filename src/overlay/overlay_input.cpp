@@ -40,7 +40,7 @@ bool Overlay::ModuleEnabled(keys::Action a) const {
         case keys::Action::Freecam:return combat_.freecam.enabled;
         case keys::Action::AntiVanish:return antiVanishConfig_.enabled;
         case keys::Action::RegionMap:return hud_.regionMap.enabled;
-        case keys::Action::HoleEsp:return holeSettings_.enabled;
+        case keys::Action::LightEsp:return chunkFinder_.lightDebug; case keys::Action::HoleEsp:return holeSettings_.enabled;
         case keys::Action::Triggerbot:return combat_.triggerbot;
         case keys::Action::AutoTotem:return combat_.autoTotem.enabled;
         case keys::Action::PlayerEsp:return visuals_.enabled;
@@ -82,7 +82,7 @@ void Overlay::SetModuleEnabled(keys::Action a,bool value) {
         case keys::Action::Spinbot:combat_.spin.enabled=value;break;
         case keys::Action::Freecam:combat_.freecam.enabled=value;break;
         case keys::Action::AntiVanish:antiVanishConfig_.enabled=value;preferencesDirty_=true;break;
-        case keys::Action::HoleEsp:holeSettings_.enabled=value;preferencesDirty_=true;break;
+        case keys::Action::LightEsp:chunkFinder_.lightDebug=value;preferencesDirty_=true;break; case keys::Action::HoleEsp:holeSettings_.enabled=value;preferencesDirty_=true;break;
         case keys::Action::RegionMap:hud_.regionMap.enabled=value;preferencesDirty_=true;break;
         case keys::Action::Triggerbot:combat_.triggerbot=value;break;
         case keys::Action::AutoTotem:combat_.autoTotem.enabled=value;break;
