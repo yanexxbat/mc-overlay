@@ -4,7 +4,7 @@ A native Windows x64 overlay for Minecraft Java Edition, built with C++20,
 Dear ImGui and Direct3D 11.
 
 Keim uses the green germ mascot in the launcher, client menu, HUD watermark and
-Windows icon. Existing license keys, portable settings and named configs remain
+Windows icon. Portable settings and named configs remain
 compatible after the rebrand. The client and share package are now `Keim.exe`
 and `Keim-client.zip`.
 
@@ -26,7 +26,6 @@ and `Keim-client.zip`.
 - Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
 - Named configs saved beside the client.
 - A portable single-file client.
-- KeyAuth license-only sign-in for Keim, required before startup.
 
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**.
 See [compatibility](docs/compatibility.md) for supported profiles and verification limits.
@@ -35,14 +34,10 @@ See [compatibility](docs/compatibility.md) for supported profiles and verificati
 
 1. Start Minecraft.
 2. Open `build/client/Keim.exe`.
-3. Enter your license key and click **Verify license**.
-4. Select your Minecraft instance and click **Start client**.
-5. Switch back to the game.
+3. Select your Minecraft instance and click **Start client**.
+4. Switch back to the game.
 
-An internet connection and an active Keim license are required. Keys are held
-in memory for sign-in and are not saved in configs or logs.
-For support, the fixed launcher footer shows the same HWID used for license
-verification. **Copy HWID** copies the complete ID, even before sign-in.
+Keim starts directly without a login or an online license check.
 
 | Default key | Action |
 |---|---|

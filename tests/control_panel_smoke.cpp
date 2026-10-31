@@ -1248,70 +1248,8 @@ void TargetCubePreview(mcov::Overlay& overlay,ID3D11Device* device,ID3D11DeviceC
     mcov::OverlayUiCheck::StopCube(overlay); v=saved;
 }
 }
-void LicenseChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
-    mcov::launcher::View view; view.instances={{1234,"Minecraft fixture","Java 21",false,false}}; view.selected=0;
-    const std::string hardwareId="S-1-5-21-1234567890-1234567890-1234567890-1001";
-    view.hardwareId=hardwareId;
-    // Keep support-copy tests entirely inside the fixture, away from the OS clipboard.
-    auto& platform=ImGui::GetPlatformIO();
-    struct RestoreClipboard {
-        decltype(ImGuiPlatformIO::Platform_GetClipboardTextFn) get;
-        decltype(ImGuiPlatformIO::Platform_SetClipboardTextFn) set;
-        void* data;
-        ~RestoreClipboard() { auto& p=ImGui::GetPlatformIO(); p.Platform_GetClipboardTextFn=get; p.Platform_SetClipboardTextFn=set; p.Platform_ClipboardUserData=data; }
-    } restoreClipboard{platform.Platform_GetClipboardTextFn,platform.Platform_SetClipboardTextFn,platform.Platform_ClipboardUserData};
-    std::string clipboard;
-    platform.Platform_ClipboardUserData=&clipboard;
-    platform.Platform_GetClipboardTextFn=[](ImGuiContext*) { return static_cast<std::string*>(ImGui::GetPlatformIO().Platform_ClipboardUserData)->c_str(); };
-    platform.Platform_SetClipboardTextFn=[](ImGuiContext*,const char* text) { *static_cast<std::string*>(ImGui::GetPlatformIO().Platform_ClipboardUserData)=text; };
-    auto frame=[&](ImVec2 size) {
-        auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
-        ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
-        if(previewGlass) previewGlass->BeginFrame(nullptr,size,false,false);
-        auto& ctx=*ImGui::GetCurrentContext(); const int windows=ctx.CurrentWindowStack.Size,colors=ctx.ColorStack.Size,vars=ctx.StyleVarStack.Size;
-        auto action=mcov::launcher::Render(view,size);
-        Require(ctx.CurrentWindowStack.Size==windows&&ctx.ColorStack.Size==colors&&ctx.StyleVarStack.Size==vars,"License screen leaked ImGui state");
-        Require(!action.start,"Unverified license exposed client startup"); ImGui::Render(); return action;
-    };
-    auto click=[&](ImVec2 point,ImVec2 size) {
-        auto& io=ImGui::GetIO(); io.AddMousePosEvent(point.x,point.y); frame(size);
-        io.AddMouseButtonEvent(0,true); auto pressed=frame(size); io.AddMouseButtonEvent(0,false); auto released=frame(size);
-        released.verifyLicense|=pressed.verifyLicense; released.close|=pressed.close; return released;
-    };
-    for(auto size:{ImVec2(640,640),ImVec2(480,380)}) {
-        const std::string suffix=size.x>500?"desktop.png":"small.png";
-        view.licenseKey={}; view.authBusy=view.authError=false; view.showLicense=false; view.authMessage="Enter your license key to unlock the client.";
-        frame(size); frame(size); SaveFrame(device,context,output/("keyauth-empty-"+suffix));
-        const ImVec2 copy{size.x-68,size.y-53};
-        clipboard.clear(); click(copy,size);
-        Require(clipboard==hardwareId,"HWID copy is unreachable before login or copied a truncated value");
-        auto* content=Child("/launcher_content"); const ImVec2 action{size.x*.6f,content->Pos.y+content->Size.y+25};
-        Require(!click(action,size).verifyLicense,"Empty key enabled license verification");
-        std::snprintf(view.licenseKey.data(),view.licenseKey.size(),"TEST-KEY-NOT-LIVE"); frame(size); frame(size);
-        SaveFrame(device,context,output/("keyauth-entry-"+suffix));
-        Require(click(action,size).verifyLicense,"License verification action is unreachable");
-        view.authBusy=true; frame(size); frame(size); SaveFrame(device,context,output/("keyauth-busy-"+suffix));
-        clipboard.clear(); click(copy,size);
-        Require(clipboard==hardwareId,"HWID copy is blocked during verification");
-        Require(!click(action,size).verifyLicense,"Busy state allowed duplicate verification");
-        view.authBusy=false; view.authError=true; view.authMessage="License key rejected. Check your key and try again.";
-        frame(size); frame(size); SaveFrame(device,context,output/("keyauth-rejected-"+suffix));
-        Require(click(action,size).verifyLicense,"Rejected key cannot be retried");
-        Require(click({size.x-68,size.y-25},size).close,"License footer Close is unreachable");
-        view.tab=1; frame(size); frame(size); SaveFrame(device,context,output/("hwid-logs-"+suffix));
-        clipboard.clear(); click(copy,size);
-        Require(clipboard==hardwareId,"HWID copy is unreachable in Logs");
-        view.hardwareId.clear(); frame(size); frame(size); SaveFrame(device,context,output/("hwid-unavailable-"+suffix));
-        clipboard="unchanged"; click(copy,size);
-        Require(clipboard=="unchanged","Unavailable HWID changed the clipboard");
-        view.hardwareId=hardwareId; view.tab=0;
-    }
-    ImGui::GetIO().AddMousePosEvent(-100,-100);
-}
 void LauncherChecks(ID3D11Device* device,ID3D11DeviceContext* context,const std::filesystem::path& output) {
     mcov::launcher::View view;
-    view.licensed=true;
-    view.hardwareId="S-1-5-21-1234567890-1234567890-1234567890-1001";
     auto frame=[&](ImVec2 size) {
         auto& io=ImGui::GetIO(); io.DisplaySize=size; io.DeltaTime=1.f/60;
         ImGui_ImplDX11_NewFrame(); ImGui::NewFrame();
@@ -2074,7 +2012,6 @@ int main(int argc,char** argv) {
         aura.pulseAmplitude=.035f;
         for (int i=0;i<16;++i) auraFrame();
         SaveFrame(device.Get(),context.Get(),output/"aura.png");
-        LicenseChecks(device.Get(),context.Get(),output);
         LauncherChecks(device.Get(),context.Get(),output);
         previewGlass=nullptr; glass.Shutdown();
         ImGui_ImplDX11_Shutdown(); ImGui::DestroyContext(); CoUninitialize();

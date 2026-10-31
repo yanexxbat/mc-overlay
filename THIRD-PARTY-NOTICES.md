@@ -1,14 +1,5 @@
 # Third-party notices
 
-## Authentication dependencies
-
-The WinHTTP KeyAuth 1.3 integration statically links nlohmann/json 3.12.0 (MIT,
-Copyright (c) 2013-2025 Niels Lohmann) and Monocypher 4.0.2 (BSD-2-Clause option).
-The complete upstream notices are retained in `third_party/auth/nlohmann/LICENSE.MIT`
-and `third_party/auth/monocypher/LICENCE.md`, and embedded as executable RCDATA
-104 and 105. Source/version details are in `third_party/auth/README.md`.
-No KeyAuth SDK implementation is linked or redistributed.
-
 ## liquidDX11 material renderer
 
 Source: [poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11),

@@ -318,11 +318,8 @@ match the client navigation. At 480 × 380 the same controls remain reachable.
 The native instance list scrolls within Start and exposes full titles and details
 in a tooltip. Status, JDK recovery and diagnostics use the scrolling content
 child. A 34-pixel lime-green primary action remains outside it, followed by the fixed
-HWID and close footer. Start and Logs both show the read-only HWID field and
-**Copy HWID** before the Keim/Close row, including before sign-in. The field
-scrolls horizontally at compact widths and exposes the full ID in a tooltip;
-copying always uses the full value. Unavailable IDs disable copying. Diagnostic actions wrap to
-another row when required. Native title drag, minimize and close remain available.
+close footer. Start opens the Minecraft instance selector directly; the fixed
+footer contains the primary action and Keim/Close row.
 
 The HUD editor toolbar is at most 540 pixels wide, clamped to viewport width
 minus 24 pixels, with 14 × 10 pixels of padding. It is 90 pixels high, or 110

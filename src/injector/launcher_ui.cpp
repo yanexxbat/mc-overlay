@@ -2,6 +2,7 @@
 #include "../common/workspace_style.hpp"
 #include "../overlay/control_panel.hpp"
 #include <algorithm>
+#include <array>
 #include <utility>
 #include <cmath>
 
@@ -140,33 +141,6 @@ void InstanceList(View& v,float height) {
     }
     ImGui::EndDisabled(); ImGui::EndChild();
 }
-void HardwareId(View& v,float width) {
-    ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("HWID");
-    ImGui::SameLine();
-    const float copyWidth=80;
-    ImGui::SetNextItemWidth(std::max(1.f,width-ImGui::CalcTextSize("HWID").x-copyWidth-2*ImGui::GetStyle().ItemSpacing.x));
-    ImGui::InputTextWithHint("##hardware_id","Unavailable",v.hardwareId.data(),v.hardwareId.size()+1,
-        ImGuiInputTextFlags_ReadOnly|ImGuiInputTextFlags_AutoSelectAll);
-    if(ImGui::IsItemHovered()) {
-        if(v.hardwareId.empty()) ImGui::SetTooltip("Could not read the Windows account ID. Restart Keim to try again.");
-        else ImGui::SetTooltip("%s\nWindows account ID used for license verification.",v.hardwareId.c_str());
-    }
-    ImGui::SameLine();
-    ImGui::BeginDisabled(v.hardwareId.empty());
-    const float copied=v.animations?1-anim::easeOutCubic((v.motion.copyAge-anim::Copied)/anim::Transition):
-        (v.motion.copyAge<anim::Copied?1.f:0.f);
-    if(MotionButton(v,"##copy_hwid",{copyWidth,22})) {
-        ImGui::SetClipboardText(v.hardwareId.c_str()); v.motion.copyAge=0;
-    }
-    const auto p=ImGui::GetItemRectMin();
-    auto& draw=*ImGui::GetWindowDrawList();
-    for(int i=0;i<2;++i) {
-        const char* text=i?"Copied":"Copy HWID";
-        auto color=ImGui::GetStyleColorVec4(ImGuiCol_Text); color.w*=i?copied:1-copied;
-        draw.AddText({p.x+(copyWidth-ImGui::CalcTextSize(text).x)*.5f,p.y+4},ImGui::GetColorU32(color),text);
-    }
-    ImGui::EndDisabled();
-}
 }
 
 Actions Render(View& v,ImVec2 size) {
@@ -175,10 +149,7 @@ Actions Render(View& v,ImVec2 size) {
     palette.Color(ImGuiCol_CheckMark,style::Color(anim::Accent));
     auto& m=v.motion;
     m.dt=std::max(0.f,ImGui::GetIO().DeltaTime); m.clock+=m.dt;
-    m.successAge+=m.dt; m.errorAge+=m.dt; m.copyAge+=m.dt; m.pageAge+=m.dt;
-    if(v.licensed&&!m.wasLicensed&&m.wasBusy) m.successAge=0;
-    if(v.authError&&(!m.wasError||m.wasBusy)) m.errorAge=0;
-    m.wasLicensed=v.licensed; m.wasError=v.authError; m.wasBusy=v.authBusy;
+    m.pageAge+=m.dt;
     if(!v.animations||!anim::IntroEnabled) m.introDone=true;
     bool skip=false;
     if(IntroActive(v)) {
@@ -190,8 +161,6 @@ Actions Render(View& v,ImVec2 size) {
         if(skip||m.introAge>=anim::Intro) m.introDone=true;
     }
     const bool blocked=IntroActive(v)||skip;
-    const bool success=v.animations&&v.licensed&&m.successAge<anim::Success;
-    const bool showLicensed=v.licensed&&!success;
     UpdateLogs(v);
     const bool compact=size.x<620||size.y<560;
     const float sidebar=compact?112.f:166.f;
@@ -211,14 +180,14 @@ Actions Render(View& v,ImVec2 size) {
         draw.AddText({32,72},muted,"Minecraft client");
         draw.AddText(style::MenuFont(),11,{sidebar+32,48},muted,"GET STARTED");
     }
-    const char* title=v.tab==1?"Diagnostics":showLicensed?"Start client":"Sign in";
+    const char* title=v.tab==1?"Diagnostics":"Start client";
     draw.PushClipRect({sidebar+32,20},{size.x-(compact?80:28),120},true);
     draw.AddText(compact?style::MenuHeadingFont():style::MenuDisplayFont(),compact?22.f:28.f,
         {sidebar+32,compact?25.f:70.f},ink,title);
     draw.PopClipRect();
     if(!compact) {
         const char* description=v.tab==1?"Connection details and recent activity.":
-            showLicensed?"Choose your Minecraft session.":"Verify your license to open the client.";
+            "Choose your Minecraft session.";
         draw.AddText({sidebar+32,110},muted,description);
     }
 
@@ -275,11 +244,11 @@ Actions Render(View& v,ImVec2 size) {
     }
     ImGui::SameLine(0,20);
     ImGui::BeginGroup();
-    const int page=v.tab==1?2:(showLicensed?1:0);
+    const int page=v.tab;
     if(m.page!=page) { if(m.page!=-1) m.pageAge=0; m.page=page; }
     if(!compact) ImGui::Dummy({0,82});
     const float width=std::max(1.f,ImGui::GetContentRegionAvail().x-16);
-    const float footer=v.tab==0?104.f:64.f;
+    const float footer=v.tab==0?76.f:36.f;
     const ImVec2 contentSize{width,std::max(1.f,ImGui::GetContentRegionAvail().y-footer)};
     {
         style::StyleScope padding; padding.Var(ImGuiStyleVar_WindowPadding,ImVec2(0,14));
@@ -287,37 +256,7 @@ Actions Render(View& v,ImVec2 size) {
         padding.Var(ImGuiStyleVar_Alpha,ImGui::GetStyle().Alpha*reveal);
         ImGui::BeginChild("launcher_content",contentSize,ImGuiChildFlags_AlwaysUseWindowPadding,ImGuiWindowFlags_NoBackground);
         ImGui::SetCursorPosY(ImGui::GetCursorPosY()+anim::Slide*(1-reveal));
-        if(v.tab==0&&!showLicensed) {
-            ImGui::PushFont(style::MenuFont(true)); ImGui::TextUnformatted("License key"); ImGui::PopFont();
-            ImGui::Dummy({0,4});
-            ImGui::BeginDisabled(v.authBusy||success);
-            ImGui::SetNextItemWidth(-1);
-            const auto inputFlags=ImGuiInputTextFlags_EnterReturnsTrue|(v.showLicense?0:ImGuiInputTextFlags_Password);
-            {
-                style::StyleScope input; input.Var(ImGuiStyleVar_FramePadding,ImVec2(12,9));
-                const float error=v.animations?1-anim::unit(m.errorAge/anim::Error):0;
-                ImGui::SetCursorPosX(ImGui::GetCursorPosX()+std::sin(m.errorAge*70)*anim::Shake*error);
-                if(ImGui::InputTextWithHint("##license_key","Enter license key",v.licenseKey.data(),v.licenseKey.size(),inputFlags)&&v.licenseKey[0]) a.verifyLicense=true;
-                const auto lo=ImGui::GetItemRectMin(),hi=ImGui::GetItemRectMax();
-                const float focus=m.to(ImGui::GetID("##key_focus"),ImGui::IsItemActive()?1.f:0.f,v.animations,anim::Focus);
-                const float invalid=m.to(ImGui::GetID("##key_error"),v.authError?1.f:0.f,v.animations,anim::Focus);
-                auto color=anim::mix(style::Color(anim::Accent),style::Color(anim::Danger),invalid);
-                color.w=std::max(focus,invalid);
-                auto& field=*ImGui::GetWindowDrawList();
-                field.AddRect(lo,hi,ImGui::GetColorU32(color),5,0,1);
-                color.w*=.12f;
-                field.AddRect({lo.x-1,lo.y-1},{hi.x+1,hi.y+1},ImGui::GetColorU32(color),6,0,3);
-            }
-            MotionCheckbox(v,"Show key",&v.showLicense);
-            ImGui::EndDisabled();
-            ImGui::Spacing(); ImGui::Separator(); ImGui::Spacing();
-            {
-                style::StyleScope status;
-                if(v.authError) status.Color(ImGuiCol_Text,ImGui::ColorConvertU32ToFloat4(style::compact::ErrorText));
-                ImGui::TextWrapped("%s",v.authBusy?"Checking your license with KeyAuth...":v.authMessage.c_str());
-            }
-            ImGui::Spacing(); ImGui::TextWrapped("An internet connection is required. Your key is not saved on this device.");
-        } else if(v.tab==0) {
+        if(v.tab==0) {
             ImGui::AlignTextToFramePadding(); ImGui::TextUnformatted("Select Minecraft");
             const float refreshWidth=ImGui::CalcTextSize("Refresh").x+14;
             if(ImGui::GetItemRectMax().x+refreshWidth+12<=ImGui::GetCursorScreenPos().x+width) ImGui::SameLine(0,12);
@@ -379,7 +318,7 @@ Actions Render(View& v,ImVec2 size) {
     if(v.tab==0) {
         const bool selected=v.selected>=0&&v.selected<static_cast<int>(v.instances.size());
         const bool running=selected&&v.instances[v.selected].running;
-        const bool disabled=success|| (v.licensed?(v.busy||!selected):(v.authBusy||!v.licenseKey[0]));
+        const bool disabled=v.busy||!selected;
         ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha,1.f);
         ImGui::BeginDisabled(disabled);
         {
@@ -389,15 +328,9 @@ Actions Render(View& v,ImVec2 size) {
             primary.Color(ImGuiCol_ButtonHovered,style::Color(anim::AccentHover));
             primary.Color(ImGuiCol_ButtonActive,style::Color(anim::AccentPressed));
             primary.Color(ImGuiCol_Text,style::Color(disabled?style::workspace::TextRGB:0x182312));
-            const char* label=success?"License verified###primary":!v.licensed?(v.authBusy?"Verifying license...###primary":"Verify license###primary"):
-                v.busy?"Preparing connection...###primary":running?"Switch to Minecraft###primary":"Start client###primary";
-            if(MotionButton(v,label,{width,40})) { if(v.licensed) a.start=true; else a.verifyLicense=true; }
-            if(success) {
-                const auto p=ImGui::GetItemRectMin();
-                CheckStroke(*ImGui::GetWindowDrawList(),{p.x+14,p.y+13},12,
-                    anim::easeOutCubic(m.successAge/anim::Success),accent);
-            }
-            if(v.busy||v.authBusy) {
+            const char* label=v.busy?"Preparing connection...###primary":running?"Switch to Minecraft###primary":"Start client###primary";
+            if(MotionButton(v,label,{width,40})) a.start=true;
+            if(v.busy) {
                 const auto lo=ImGui::GetItemRectMin(),hi=ImGui::GetItemRectMax();
                 const float span=(hi.x-lo.x)*.22f;
                 const float phase=v.animations?float(std::fmod(m.clock*.8f,1.f)):.5f;
@@ -410,7 +343,6 @@ Actions Render(View& v,ImVec2 size) {
         }
         ImGui::EndDisabled(); ImGui::PopStyleVar();
     }
-    HardwareId(v,width);
     ImGui::AlignTextToFramePadding(); ImGui::TextDisabled("Keim");
     ImGui::SameLine(0,std::max(9.f,width-ImGui::CalcTextSize("Keim").x-80));
     if(MotionButton(v,"Close",{80,22})) a.close=true;

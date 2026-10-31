@@ -164,11 +164,6 @@ endif()
 # ---------------------------------------------------------------------------
 # mcov_overlay - the external process
 # ---------------------------------------------------------------------------
-add_library(mcov_auth STATIC src/common/keyauth.cpp src/common/auth_handoff.cpp
-    third_party/auth/monocypher/monocypher.c third_party/auth/monocypher/optional/monocypher-ed25519.c)
-target_include_directories(mcov_auth PUBLIC src PRIVATE third_party/auth third_party/auth/monocypher)
-target_link_libraries(mcov_auth PUBLIC mcov_settings winhttp bcrypt advapi32)
-
 add_executable(mcov_overlay
     "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
     src/main.cpp
@@ -210,7 +205,6 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_overlay PRIVATE
-    mcov_auth
     mcov_liquid
     winmm
     mcov_settings
@@ -250,7 +244,6 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_injector PRIVATE
-    mcov_auth
     mcov_liquid
     mcov_settings
     imgui
@@ -379,7 +372,7 @@ add_executable(mcov WIN32 "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
     src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
 target_include_directories(mcov PRIVATE src third_party/glass "${CMAKE_BINARY_DIR}")
 target_compile_definitions(mcov PRIVATE MCOV_BUNDLED=1 MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
-target_link_libraries(mcov PRIVATE mcov_auth mcov_liquid mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
+target_link_libraries(mcov PRIVATE mcov_liquid mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
 set_target_properties(mcov PROPERTIES OUTPUT_NAME "Keim" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
 message(STATUS "Keim: open ${CMAKE_BINARY_DIR}/client/Keim.exe (single-file client)")
 
@@ -398,10 +391,6 @@ add_custom_target(mcov_distribution ALL DEPENDS "${MCOV_CLIENT_ARCHIVE}" "${CMAK
 option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
 if(MCOV_BUILD_UI_CHECKS)
     enable_testing()
-    add_executable(mcov_auth_check tests/keyauth.cpp)
-    target_include_directories(mcov_auth_check PRIVATE third_party/auth third_party/auth/monocypher)
-    target_link_libraries(mcov_auth_check PRIVATE mcov_auth)
-    add_test(NAME keyauth COMMAND mcov_auth_check)
     add_executable(mcov_liquid_check tests/liquid_glass_rendering.cpp)
     target_include_directories(mcov_liquid_check PRIVATE src third_party/glass)
     target_link_libraries(mcov_liquid_check PRIVATE mcov_settings mcov_liquid)
@@ -423,6 +412,19 @@ if(MCOV_BUILD_UI_CHECKS)
     target_link_libraries(mcov_launcher_window_check PRIVATE mcov_settings mcov_liquid d3d11 dxgi dwmapi gdi32 ole32 windowscodecs)
     add_test(NAME launcher_window COMMAND mcov_launcher_window_check "${CMAKE_BINARY_DIR}/ui-preview")
     set_tests_properties(launcher_window PROPERTIES TIMEOUT 30)
+    add_executable(mcov_launcher_motion_check
+        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
+        tests/launcher_motion.cpp src/common/flat_app.cpp
+        src/common/flat_style.cpp src/common/log.cpp src/injector/launcher_ui.cpp
+        src/overlay/control_panel.cpp)
+    target_include_directories(mcov_launcher_motion_check PRIVATE src third_party/glass)
+    target_link_libraries(mcov_launcher_motion_check PRIVATE mcov_settings mcov_liquid d3d11 dxgi dwmapi gdi32 ole32 windowscodecs)
+    add_test(NAME launcher_motion COMMAND mcov_launcher_motion_check "${CMAKE_BINARY_DIR}/ui-preview/motion")
+    set_tests_properties(launcher_motion PROPERTIES TIMEOUT 30)
+    add_executable(mcov_menu_motion_check tests/menu_motion.cpp)
+    target_include_directories(mcov_menu_motion_check PRIVATE src)
+    target_link_libraries(mcov_menu_motion_check PRIVATE mcov_settings imgui)
+    add_test(NAME menu_motion COMMAND mcov_menu_motion_check)
     add_executable(mcov_ui_check
         "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
         tests/flat_style_smoke.cpp

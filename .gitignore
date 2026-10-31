@@ -12,16 +12,13 @@ CMakeSettings.json
 # Private GitHub backup: generated files and local credentials
 node_modules/
 target/
-build/
 build-*/
 dist/
 dist-ssr/
-out/
 .gradle/
 .cache/
 __pycache__/
 *.py[cod]
-*.log
 *.tmp
 *.temp
 *.swp
@@ -29,7 +26,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 .idea/
-.vs/
 .claude/
 .codex/
 .env
@@ -42,4 +38,6 @@ Thumbs.db
 *.key
 credentials.json
 secrets.json
-*.user
+
+# Generated local UI and animation checks
+src/.motion-check/

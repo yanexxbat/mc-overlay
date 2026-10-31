@@ -25,6 +25,9 @@ portable = alone / 'Keim.exe'
 shutil.copyfile(shared / 'Keim.exe', portable)
 assert list(alone.iterdir()) == [portable], 'portable folder has extra dependencies'
 image = portable.read_bytes()
+for binary in (image, (binaries / 'mcov_overlay.exe').read_bytes()):
+    for marker in ('keyauth.win', '--auth-pipe', 'Verify license'):
+        assert marker.encode() not in binary and marker.encode('utf-16le') not in binary, 'obsolete authentication remains in the shipped binaries'
 pe = struct.unpack_from('<I', image, 0x3c)[0]
 assert image[pe:pe+4] == b'PE\0\0'
 assert struct.unpack_from('<H', image, pe+24+68)[0] == 2, 'launcher must be a GUI executable'

@@ -11,14 +11,14 @@ atlas pixels and multi-size ICO in the single executable; no loose runtime asset
 or new render-thread/game work. Keep the existing font texture and UI spacing.
 
 Ship Keim.exe plus optional START.txt in Keim-client.zip. Update user-facing
-titles, license/error text, config guidance, package errors and current docs.
-Keep the working KeyAuth application, settings formats and IPC/JNI identities.
+titles, error text, config guidance, package errors and current docs.
+Keep the existing settings formats and IPC/JNI identities.
 Use the new Keim AppData root while importing previous JDK/preferences as needed.
 Preserve the pre-existing Region Map work in this checkout.
 
 Verify real native launcher/client/HUD captures at normal and compact sizes,
-embedded icon/logo resources, exact portable payloads, auth and existing configs.
-No live Minecraft, license-server login or domain registration is part of this
+embedded icon/logo resources, exact portable payloads and existing configs.
+No live Minecraft or domain registration is part of this
 branding change.
 
 The follow-up request selects mascot green for all interactive accents. Use
@@ -26,11 +26,3 @@ The follow-up request selects mascot green for all interactive accents. Use
 selected navigation text. Update shared menu/HUD tokens and the fallback style.
 Preserve red errors and amber warnings. Verify native normal/compact screenshots
 and text contrast; no layout changes or new animation are needed.
-
-The next follow-up adds the existing KeyAuth HWID to the fixed launcher footer.
-Show the same Windows account SID before sign-in and in both Start and Logs.
-Use a read-only field plus Copy HWID, keeping Close and the primary action
-reachable at 640x640 and 480x380. Cache the local read once at startup; display
-Unavailable and disable copying if it fails. No new fingerprint, logging,
-network request, game work or automatic clipboard write is needed. Verify full
-copy with a fixture-local clipboard and synthetic SIDs in all captured images.

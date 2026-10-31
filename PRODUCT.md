@@ -26,8 +26,8 @@ camera/entity projection stability.
   The portable deliverables are `Keim.exe` and `Keim-client.zip`. Preserve the
   approved compact anthracite/lime-green controls; the shared #8EDB1A accent matches the mascot. Bright primary actions
   use dark green-black text; errors stay red and warnings amber.
-  Legacy IPC/JNI identifiers, settings headers and the configured KeyAuth backend
-  application `mcov` remain compatible with existing installations and licenses.
+  Legacy IPC/JNI identifiers and settings headers remain compatible with existing
+  installations.
 - The latest client layout follows the user-supplied Paint sketch,
   `design/reference-module-widgets.png`: narrow left categories and searchable
   module widgets, with right-click opening settings in an independent window.
@@ -59,16 +59,8 @@ camera/entity projection stability.
   native settings, type colours, profile/preferences, unbound defaults and Panic.
 - Ship one portable `Keim.exe` containing the client payload. The optional
   `START.txt` guide is the only other file in the share ZIP.
-- Require license-only KeyAuth 1.3 sign-in for mcov / Uhn5Z5WPCa / 1.0 before
-  startup. Preserve the compact English launcher, masked input and background
-  verification. Never persist or log license keys. Validate signed responses,
-  owner, subscription expiry and session before launch and independently in
-  the overlay; periodic online checks close the overlay on invalidation.
-  Session handoff uses a restricted inherited pipe; direct unauthenticated
-  overlay startup is refused. Minecraft remains running on license failure.
-- Keep the current KeyAuth HWID visible in the launcher's fixed footer, before
-  login and on both tabs. Provide a read-only field and **Copy HWID** for support,
-  using the existing Windows account SID without logging or persisting it.
+- Startup opens the Minecraft instance selector directly. No account, license key,
+  hardware identifier or online authentication is required.
 - Module keybinds start unbound, as explicitly chosen by the user. Menu INSERT,
   HUD editor F6 and Quit END are defaults; all can be rebound.
 - Named profiles and automatic preferences live directly beside the portable

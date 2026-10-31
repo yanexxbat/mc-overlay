@@ -16,9 +16,6 @@
 #include <string>
 #include <thread>
 #include <charconv>
-#include <future>
-#include "common/keyauth.hpp"
-#include "common/auth_handoff.hpp"
 #include "common/client_paths.hpp"
 #include "common/win_handle.hpp"
 #include "common/crash_handler.hpp"
@@ -53,7 +50,7 @@ int main(int argc, char** argv) {
 
     const std::wstring executableDirectory = mcov::ExecutableDirectory();
     mcov::log::Init("overlay", (mcov::ClientDataDirectory()/L"Keim_overlay.log").wstring(), /*alsoConsole=*/true);
-    std::uint32_t requiredPid=0; std::wstring readyEvent; std::uintptr_t authPipe=0;
+    std::uint32_t requiredPid=0; std::wstring readyEvent;
     for(int i=1;i<argc;++i) {
         const std::string flag=argv[i];
         if(flag=="--pid") {
@@ -63,17 +60,7 @@ int main(int argc, char** argv) {
         } else if(flag=="--ready-event") {
             if(++i>=argc) return 64;
             const std::string value=argv[i]; readyEvent.assign(value.begin(),value.end());
-        } else if(flag=="--auth-pipe") {
-            if(++i>=argc||authPipe) return 64;
-            const std::string value=argv[i]; const auto parsed=std::from_chars(value.data(),value.data()+value.size(),authPipe);
-            if(parsed.ec!=std::errc{}||parsed.ptr!=value.data()+value.size()||!authPipe) return 64;
         }
-    }
-    auto license=mcov::auth::ReadHandoff(reinterpret_cast<HANDLE>(authPipe));
-    mcov::auth::Client licensing;
-    if(!license.Valid(mcov::auth::UnixTime())||!licensing.Check(license).success) {
-        MessageBoxW(nullptr,L"A verified license is required. Open Keim.exe and verify your key before starting the overlay.",L"Keim license",MB_OK|MB_ICONERROR);
-        mcov::log::Shutdown(); return 5;
     }
     PrintBanner();
 
@@ -142,28 +129,11 @@ int main(int argc, char** argv) {
 
     std::printf("  overlay running - press INSERT for the menu\n\n");
 
-    auto nextLicenseCheck=std::chrono::steady_clock::now()+std::chrono::seconds(60);
-    auto lastLicenseCheck=std::chrono::steady_clock::now(); std::future<mcov::auth::Status> licenseCheck;
-    bool licenseLost=false;
-    while (overlay.RunFrame()) {
-        const auto now=std::chrono::steady_clock::now();
-        if(!license.Valid(mcov::auth::UnixTime())||now-lastLicenseCheck>std::chrono::seconds(90)) { licenseLost=true; break; }
-        if(licenseCheck.valid()&&licenseCheck.wait_for(std::chrono::seconds(0))==std::future_status::ready) {
-            if(!licenseCheck.get().success) { licenseLost=true; break; }
-            lastLicenseCheck=now; nextLicenseCheck=now+std::chrono::seconds(60);
-        }
-        if(!licenseCheck.valid()&&now>=nextLicenseCheck)
-            licenseCheck=std::async(std::launch::async,[&] { return licensing.Check(license); });
-        // RunFrame blocks on vsync when enabled; this keeps a busy loop from
-        // burning a core when it is not.
-    }
+    while (overlay.RunFrame()) {}
 
     overlay.Shutdown();
-    if(licenseCheck.valid()) licenseCheck.wait();
-    if(licenseLost) MessageBoxW(nullptr,L"Your license session could not be verified. Open Keim.exe and verify your key again.",L"Keim license",MB_OK|MB_ICONWARNING);
-
     MCOV_LOG_INFO("overlay exited cleanly");
     mcov::log::Shutdown();
     std::printf("  bye\n");
-    return licenseLost?5:0;
+    return 0;
 }

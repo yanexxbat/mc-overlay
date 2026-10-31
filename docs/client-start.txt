@@ -6,13 +6,10 @@ You can move or share the client folder.
 
 1. Start Minecraft Java Edition.
 2. Double-click Keim.exe.
-3. Enter your license key and click "Verify license".
-4. Select your Minecraft instance and click "Start client".
-5. Switch to Minecraft. If fullscreen causes problems, use windowed mode.
+3. Select your Minecraft instance and click "Start client".
+4. Switch to Minecraft. If fullscreen causes problems, use windowed mode.
 
-An internet connection and an active Keim license are required.
-Your key is not saved. Verify it again after restarting the launcher.
-If verification fails, check your key, subscription and system clock, then retry.
+No login or license key is required.
 
 INSERT  Open / close the menu
 F6      Edit the HUD

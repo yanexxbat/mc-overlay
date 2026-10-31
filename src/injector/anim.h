@@ -10,12 +10,11 @@ namespace mcov::launcher::anim {
 inline constexpr float Hover=.15f, Press=.15f, Transition=.24f, Focus=.2f;
 inline constexpr bool IntroEnabled=true;
 inline constexpr float Intro=2.4f, IntroReveal=.3f, IntroExit=.3f;
-inline constexpr float Success=.3f, Error=.3f, Copied=1.4f;
-inline constexpr float Slide=7.f, Shake=4.f;
+inline constexpr float Slide=7.f;
 inline constexpr unsigned Accent=style::workspace::AccentRGB; // #B3DB8F
 inline constexpr unsigned AccentHover=style::workspace::AccentHoverRGB;
 inline constexpr unsigned AccentPressed=style::workspace::AccentPressedRGB;
-inline constexpr unsigned Danger=0xF28080, Disabled=0x3E4940;
+inline constexpr unsigned Disabled=0x3E4940;
 constexpr float unit(float t) { return t<0?0:t>1?1:t; }
 constexpr float easeOutCubic(float t) { t=1-unit(t); return 1-t*t*t; }
 constexpr float easeInOutCubic(float t) { t=unit(t); return t<.5f?4*t*t*t:1-(-2*t+2)*(-2*t+2)*(-2*t+2)/2; }
@@ -37,8 +36,8 @@ struct Tween {
 struct State {
     // IDs are scoped by ImGui's window/PushID stack; state belongs to one View.
     std::unordered_map<ImGuiID,Tween> widgets;
-    float dt=0,clock=0,introAge=0,successAge=Success,errorAge=Error,copyAge=Copied+Transition;
-    bool introDone=false,wasLicensed=false,wasError=false,wasBusy=false;
+    float dt=0,clock=0,introAge=0;
+    bool introDone=false;
     int page=-1;
     float pageAge=Transition;
     std::string logSnapshot;
