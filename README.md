@@ -1,134 +1,168 @@
-# Keim
+<p align="center">
+  <img src="src/resources/keim-logo.png" alt="Keim mascot" width="112">
+</p>
 
-A native Windows x64 overlay for Minecraft Java Edition, built with C++20,
-Dear ImGui and Direct3D 11.
+<h1 align="center">Keim</h1>
 
-Keim uses the green germ mascot in the launcher, client menu, HUD watermark and
-Windows icon. Portable settings and named configs remain
-compatible after the rebrand. The client and share package are now `Keim.exe`
-and `Keim-client.zip`.
+<p align="center">
+  A native Minecraft Java client with an external overlay, configurable visuals and a movable HUD.
+</p>
 
-## Features
+<p align="center">
+  <strong>Windows x64</strong> · C++20 · Dear ImGui · Direct3D 11<br>
+  One portable executable. No account or license key required.
+</p>
 
-- Graphite / Sage ImGui workspace with a responsive two-column module grid, All/Enabled filters, Ctrl+F search and direct settings buttons; matching Keim branding in the launcher and HUD.
-- Entity and block visuals, target effects, particles and waypoints.
-- Base ESP with Minecraft models and textures visible through walls (1.21.11).
-- 3D Storage ESP with individual block colours, adjustable scan timing and sequential pulses, plus Stash Finder and Spawner ESP.
-- Storage ESP scans loaded container positions directly with its own 4â€“512 block radius, independently of long Block ESP/Chunkfinder sweeps.
-- Chunkfinder offers Activity (received underground light/redstone changes), Block clues (background terrain analysis) and Combined modes, with grouped settings, a DonutSMP preset, material highlights and orbiting orbs. See [Chunkfinder](docs/chunk-finder.md).
-- Block ESP supports a 512-block scan radius and 1024 m draw distance. Chunkfinder independently inspects loaded chunks across their full height.
-- Hole ESP marks 1Ã—1 bedrock, obsidian and mixed holes with coloured 3D frames and a separate short-range scan. See [Hole ESP](docs/hole-esp.md).
-- Combat and item-assist controls with friend management.
-- Spinbot with silent packet rotation, independent camera/movement, direction/pitch controls and Toggle/Hold binding. See [rotation behavior and limits](docs/spinbot.md).
-- Freecam with independent flight, adjustable speed/boost and Toggle/Hold binding.
-- 20 HUD elements with individual visibility, drag-and-drop placement and scaling.
-- DonutSMP region map covering -225,000 to +225,000, with six server regions and live Overworld position.
-- Custom keyboard/mouse bindings, modifier chords and Toggle/Hold modes.
-- Named configs saved beside the client.
-- A portable single-file client.
-
-Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**.
-See [compatibility](docs/compatibility.md) for supported profiles and verification limits.
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#build-from-source">Build</a> ·
+  <a href="#documentation">Documentation</a>
+</p>
 
 ## Quick start
 
-1. Start Minecraft.
-2. Open `build/client/Keim.exe`.
+1. Start **Minecraft Java Edition**.
+2. Open **`Keim.exe`**. After building from source, it is in `build/client/`.
 3. Select your Minecraft instance and click **Start client**.
-4. Switch back to the game.
+4. Switch back to the game and press **INSERT** to open the menu.
 
-Keim starts directly without a login or an online license check.
+The launcher opens directly to the Minecraft selector. KeyAuth, license prompts,
+HWID collection and periodic online license checks have been removed.
 
-| Default key | Action |
-|---|---|
-| INSERT | Open or close the menu |
-| F6 | Open or close the HUD editor |
-| END | Quit the overlay |
+Only `Keim.exe` is needed to run the client; its native and Java helpers are embedded.
+The shareable `Keim-client.zip` contains the executable and an optional `START.txt` guide.
+Extract the ZIP before launching.
 
-Bindings can be changed under **Settings â†’ Keybinds**. Automatic preferences
-save in `client-settings.ini` beside `Keim.exe`. Under **Settings â†’ Configs**,
-enter a name and **Save config**, or choose a saved profile and **Load selected**.
-Profiles live in `configs/<name>.ini` beside the client; copy that folder and
-`client-settings.ini` when moving your setup.
+### Controls
 
-The launcher needs a **64-bit JDK matching the game's Java major version**.
-Use its JDK folder picker if no suitable installation is found. Restart Minecraft
-when replacing an already loaded agent. The current client uses IPC v39; restart an
-already running Minecraft instance before reattaching with the updated client.
+| Key | Action |
+| :--- | :--- |
+| **INSERT** | Open or close the client menu |
+| **F6** | Open or close the HUD editor |
+| **F12** | Panic: disable all modules and hide the UI |
+| **END** | Quit the overlay |
+| **Ctrl+F** | Focus module search while the menu is open |
 
-Open **Blocks** for the SMP modules. Right-click **Storage ESP**, **Stash Finder**
-or **Chunkfinder** to configure them. Storage ESP uses world-aligned 3D frames;
-known containers stay visible throughout rescans. **Scan interval** sets the pause
-between sweeps (200â€“3000 ms); **Pulse cycle** sets the visual cycle (500â€“6000 ms).
-**Chunkfinder** groups evidence into placed blocks, bases, farms and mined geodes.
-Its default display tints the nearest findings at feet height. Detailed mode adds
-outlines, evidence labels and individual clue blocks. Findings, alerts and scanning
-limits are configurable in General and Options. These are heuristic clues.
-**Base ESP â†’ Display â†’ Minecraft textures**
-renders loaded blocks around detected container clusters through walls. It also
-works with Stash Finder off. Minecraft textures are the default display at full
-opacity on 1.21.11. Texture opacity and area expansion are adjustable; detection
-uses container bounds plus padding and does not trace a whole building.
-The optional **Area marker** mode keeps the coloured frame and fill.
-Scans use loaded client blocks within a
-4â€“48 block cube radius. See [SMP features](docs/smp-features.md) for colours,
-stash counting, saved waypoints and scan limits.
+Left-click a module to toggle it; right-click to open its settings. Configure
+keyboard and mouse bindings under **Settings > Keybinds**, including modifier
+chords and Toggle/Hold modes. **F12 stays reserved for Panic.**
 
-## DonutSMP region map
+## Features
 
-Open **HUD â†’ Region map** to show the full 9 Ã— 9 server map, with colours for
-EU Central, EU West, NA East, NA West, Asia and Oceania. Right-click its widget
-for labels, grid lines, coordinates, scale, position and an optional Toggle/Hold
-keybind. **F6** opens the HUD editor for dragging the map. Settings are saved in
-automatic preferences and named configs; older configs load with the map off.
+| Area | Included |
+| :--- | :--- |
+| **Workspace** | Searchable module grid, category navigation, All/Enabled filters and independent settings windows |
+| **Visuals** | Player and block ESP, health bars, target effects, particles, trails and waypoints |
+| **Exploration** | Storage ESP, Stash Finder, Spawner ESP, Base ESP, Hole ESP and Chunkfinder |
+| **Combat & items** | Combat controls, friend management, Auto-Totem health threshold and item assists |
+| **HUD** | 21 movable and scalable elements, including Watermark, ArrayList, Target Info, radar and performance statistics |
+| **Movement** | Freecam with adjustable speed and boost; configurable Spinbot |
+| **World information** | DonutSMP region map and passive Anti Vanish hints |
+| **Personalization** | Saved HUD positions, automatic preferences and named configuration profiles |
 
-The white dot shows your live player position in the DonutSMP Overworld.
-Other servers, dimensions, an expired connection and out-of-bounds positions
-show a status instead. The full map stays visible for reference.
-The geographic reference is [Donut.Auction](https://donut.auction/regions),
-checked on 15 October 2026; server boundaries can change. Region names are
-inferred from coordinates, not verified against the server scoreboard.
-Restart Minecraft and Keim after updating so the agent publishes complete
-dimension names for the position indicator.
+**Chunkfinder** supports Activity, Block clues and Combined modes, with configurable
+findings and a DonutSMP preset. Findings are heuristic clues based on available
+client data. [Read the Chunkfinder guide](docs/chunk-finder.md).
 
-## Anti Vanish
+**Freecam** uses WASD to move, Space/Shift to rise or descend and Ctrl to boost.
+The player stays in place, and combat/item assists pause while it is active.
+Only chunks already loaded by Minecraft are visible. [Freecam details](docs/freecam.md).
 
-Open **Misc > Anti Vanish** for passive TAB-list and optional invisible-player
-hints on **1.21.11**. Uses a bounded sampler twice per second, with a confirmation
-delay, a result list and optional Notifications HUD alerts. Hints are not proof
-of vanished staff; fully hidden server data cannot be detected. Knife cosmetics
-have been removed. Restart Minecraft and Keim after updating.
-See [Anti Vanish](docs/anti-vanish.md).
+**Anti Vanish** provides passive TAB-list and optional invisible-player hints on
+1.21.11. Hints are not proof of vanished staff and cannot reveal fully hidden
+server data. [Detection behavior and limits](docs/anti-vanish.md).
 
-## Freecam
+## Compatibility
 
-Open **Misc â†’ Freecam** to toggle; right-click the widget for speed, boost and
-its initially unbound key. Close the menu to fly with **WASD**, look with the
-mouse, rise with **Space**, descend with **Shift**, and boost with **Ctrl**.
-The player stays in place; attacks, block breaking, item use and combat/item
-assists pause. Disable Freecam to return. Menus, focus loss, world changes and
-an expired client connection release the camera; resuming starts at the player.
-Flight only shows chunks already loaded by Minecraft. Settings and the binding
-persist; automatic startup keeps Freecam off. Named profiles retain its state.
-See [Freecam implementation and checks](docs/freecam.md).
+Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**. Feature support varies
+by profile; Minecraft-textured Base ESP is supported on **1.21.11**.
+See the [compatibility guide](docs/compatibility.md) for tested coverage and limits.
 
-## Build
+The launcher requires a **full 64-bit JDK matching the game's Java major version**.
+If one is missing, use **Select JDK folder** and choose the installation root.
+A JRE alone cannot attach the agent.
 
-Requires Visual Studio Build Tools with C++ x64 support, CMake 3.20+ and a full JDK 17+.
+**Updating:** quit the old client with END, replace `Keim.exe`, and restart Minecraft
+before reconnecting so the updated agent can load.
 
-```powershell
-.\scripts\build.ps1
+## Settings that travel with you
+
+```text
+client/
+├── Keim.exe
+├── client-settings.ini
+└── configs/
+    └── My profile.ini
 ```
 
-The portable client is written to `build/client/Keim.exe`; the shareable package is
-`build/Keim-client.zip`. Use `.\scripts\build.ps1 -Checks` to run regression checks.
+Automatic preferences are saved beside the executable. Under **Settings > Configs**,
+use **Save config**, **Overwrite config** or **Load selected** to manage named profiles.
+Copy `client-settings.ini` and `configs/` along with `Keim.exe` when moving your setup.
+
+Runtime helpers, logs and the saved JDK selection live in `%LOCALAPPDATA%\Keim`.
+See [launcher and troubleshooting](docs/launcher.md) for details.
+
+## Build from source
+
+### Requirements
+
+- **Windows x64** and **Git**.
+- **Visual Studio Build Tools 2022** with C++ x64 tools, a Windows SDK and CMake tools.
+- **CMake 3.20+**; the build script can use the version bundled with Visual Studio.
+- A full **JDK 17+** for compilation. Runtime attachment still needs the game's matching JDK.
+- **Python 3.10+** when running the full regression checks.
+
+From the repository root in PowerShell:
+
+```powershell
+.\scripts\build.ps1 -Config Release
+```
+
+The script locates the installed JDK and Visual Studio toolchain. The first build
+fetches the pinned Dear ImGui sources and needs network access.
+
+| Output | Purpose |
+| :--- | :--- |
+| `build/client/Keim.exe` | Portable client to run |
+| `build/Keim-client.zip` | Package to share |
+
+### Checks and build options
+
+```powershell
+# Build and run the regression suite
+.\scripts\build.ps1 -Config Release -Checks
+
+# Reuse the existing ImGui source cache without downloading
+.\scripts\build.ps1 -Config Release -Offline
+```
+
+Use `-JavaHome` or `-PythonExecutable` to specify an installation explicitly.
+If PowerShell blocks the unsigned script, run it with a process-only policy override:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Config Release
+```
+
+The suite covers native UI rendering, controls, animation, portable packaging,
+JNI compatibility and feature logic. Automated checks do not replace testing
+inside a live Minecraft session.
 
 ## Documentation
 
-- [Launcher and troubleshooting](docs/launcher.md)
-- [Menu, HUD and keybinds](docs/client-ui.md)
-- [SMP features and block colours](docs/smp-features.md)
-- [Version compatibility](docs/compatibility.md)
-- [Third-party notices](THIRD-PARTY-NOTICES.md)
+| Guide | Contents |
+| :--- | :--- |
+| [Launcher](docs/launcher.md) | Startup, JDK selection, logs and troubleshooting |
+| [Client UI](docs/client-ui.md) | Menu, HUD and keybinds |
+| [Compatibility](docs/compatibility.md) | Runtime profiles and verification limits |
+| [SMP features](docs/smp-features.md) | Storage, bases, spawners, colours and waypoints |
+| [Chunkfinder](docs/chunk-finder.md) | Activity detection, block clues and scan settings |
+| [Hole ESP](docs/hole-esp.md) | Hole types, range and appearance |
+| [Freecam](docs/freecam.md) | Flight controls and camera behavior |
+| [Spinbot](docs/spinbot.md) | Rotation settings and implementation limits |
+| [Anti Vanish](docs/anti-vanish.md) | Passive hints, notifications and limitations |
+| [Third-party notices](THIRD-PARTY-NOTICES.md) | Credits and dependency licenses |
+
+---
 
 Intended for single-player, private servers and development.
