@@ -66,6 +66,7 @@ if (-not $JavaHome -or -not (Test-Path (Join-Path $JavaHome 'include\jni.h')) -o
           "A JRE will not work: the agent needs jvmti.h and the loader needs javac."
 }
 
+$JavaHome = Split-Path -Parent (Resolve-Path -LiteralPath (Join-Path $JavaHome 'release')).Path
 Write-Host "  jdk   : $JavaHome"
 
 # --- locate the toolchain ----------------------------------------------------
@@ -178,25 +179,6 @@ if (Test-Path $agentDll) {
 }
 
 # --- configure ---------------------------------------------------------------
-if ($Clean -and (Test-Path $BuildDir)) {
-    Write-Host "  cleaning $BuildDir" -ForegroundColor Yellow
-    $verifiedBuild = (Get-Item -LiteralPath $BuildDir).FullName
-    $expectedBuild = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot 'build'))
-    if ($verifiedBuild -ne $expectedBuild -or
-        ((Get-Item -LiteralPath $BuildDir).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-        throw 'Refusing to clean an unexpected build path or a directory link.'
-    }
-    foreach ($entry in Get-ChildItem -LiteralPath $verifiedBuild -Force) {
-        if ($entry.Name -in @('_deps', 'client')) { continue }
-        $target = [System.IO.Path]::GetFullPath($entry.FullName)
-        if (-not $target.StartsWith($verifiedBuild + [System.IO.Path]::DirectorySeparatorChar,
-                                   [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Refusing to clean a path outside build: $target"
-        }
-        Remove-Item -LiteralPath $target -Recurse -Force
-    }
-}
-
 $configureArgs = @(
     '-S', $RepoRoot
     '-B', $BuildDir
@@ -227,6 +209,7 @@ if ((Invoke-CMake $configureArgs) -ne 0) { throw "cmake configure failed" }
 
 # --- build -------------------------------------------------------------------
 $buildArgs = @('--build', $BuildDir, '--target', 'mcov_distribution', '--parallel')
+if ($Clean) { $buildArgs += '--clean-first' }
 if (-not $VcVars -or $Generator) { $buildArgs += @('--config', $Config) }
 
 Write-Host "`n> cmake $($buildArgs -join ' ')" -ForegroundColor DarkGray

@@ -17,7 +17,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#features">Features</a> ·
   <a href="#build-from-source">Build</a> ·
-  <a href="#documentation">Documentation</a>
+  <a href="#project-files">Project files</a>
 </p>
 
 ## Quick start
@@ -63,21 +63,20 @@ chords and Toggle/Hold modes. **F12 stays reserved for Panic.**
 
 **Chunkfinder** supports Activity, Block clues and Combined modes, with configurable
 findings and a DonutSMP preset. Findings are heuristic clues based on available
-client data. [Read the Chunkfinder guide](docs/chunk-finder.md).
+client data.
 
 **Freecam** uses WASD to move, Space/Shift to rise or descend and Ctrl to boost.
 The player stays in place, and combat/item assists pause while it is active.
-Only chunks already loaded by Minecraft are visible. [Freecam details](docs/freecam.md).
+Only chunks already loaded by Minecraft are visible.
 
 **Anti Vanish** provides passive TAB-list and optional invisible-player hints on
 1.21.11. Hints are not proof of vanished staff and cannot reveal fully hidden
-server data. [Detection behavior and limits](docs/anti-vanish.md).
+server data.
 
 ## Compatibility
 
 Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**. Feature support varies
 by profile; Minecraft-textured Base ESP is supported on **1.21.11**.
-See the [compatibility guide](docs/compatibility.md) for tested coverage and limits.
 
 The launcher requires a **full 64-bit JDK matching the game's Java major version**.
 If one is missing, use **Select JDK folder** and choose the installation root.
@@ -101,7 +100,7 @@ use **Save config**, **Overwrite config** or **Load selected** to manage named p
 Copy `client-settings.ini` and `configs/` along with `Keim.exe` when moving your setup.
 
 Runtime helpers, logs and the saved JDK selection live in `%LOCALAPPDATA%\Keim`.
-See [launcher and troubleshooting](docs/launcher.md) for details.
+See the [portable start guide](docs/client-start.txt) for startup and troubleshooting.
 
 ## Build from source
 
@@ -111,7 +110,6 @@ See [launcher and troubleshooting](docs/launcher.md) for details.
 - **Visual Studio Build Tools 2022** with C++ x64 tools, a Windows SDK and CMake tools.
 - **CMake 3.20+**; the build script can use the version bundled with Visual Studio.
 - A full **JDK 17+** for compilation. Runtime attachment still needs the game's matching JDK.
-- **Python 3.10+** when running the full regression checks.
 
 From the repository root in PowerShell:
 
@@ -127,41 +125,28 @@ fetches the pinned Dear ImGui sources and needs network access.
 | `build/client/Keim.exe` | Portable client to run |
 | `build/Keim-client.zip` | Package to share |
 
-### Checks and build options
+### Build options
 
-```powershell
-# Build and run the regression suite
-.\scripts\build.ps1 -Config Release -Checks
+Use **-Offline** to reuse the pinned ImGui source cache after the first build.
+Use **-Clean** to recompile the build targets; client settings and profiles stay
+in place. A different JDK installation can be selected with **-JavaHome**.
 
-# Reuse the existing ImGui source cache without downloading
-.\scripts\build.ps1 -Config Release -Offline
-```
-
-Use `-JavaHome` or `-PythonExecutable` to specify an installation explicitly.
 If PowerShell blocks the unsigned script, run it with a process-only policy override:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Config Release
 ```
 
-The suite covers native UI rendering, controls, animation, portable packaging,
-JNI compatibility and feature logic. Automated checks do not replace testing
-inside a live Minecraft session.
+## Project files
 
-## Documentation
-
-| Guide | Contents |
+| Path | Purpose |
 | :--- | :--- |
-| [Launcher](docs/launcher.md) | Startup, JDK selection, logs and troubleshooting |
-| [Client UI](docs/client-ui.md) | Menu, HUD and keybinds |
-| [Compatibility](docs/compatibility.md) | Runtime profiles and verification limits |
-| [SMP features](docs/smp-features.md) | Storage, bases, spawners, colours and waypoints |
-| [Chunkfinder](docs/chunk-finder.md) | Activity detection, block clues and scan settings |
-| [Hole ESP](docs/hole-esp.md) | Hole types, range and appearance |
-| [Freecam](docs/freecam.md) | Flight controls and camera behavior |
-| [Spinbot](docs/spinbot.md) | Rotation settings and implementation limits |
-| [Anti Vanish](docs/anti-vanish.md) | Passive hints, notifications and limitations |
-| [Third-party notices](THIRD-PARTY-NOTICES.md) | Credits and dependency licenses |
+| `src/injector/` | Portable launcher, package extraction and Minecraft selection |
+| `src/overlay/` | External menu, HUD, input and rendering |
+| `src/agent/` | JNI/JVMTI agent and Minecraft runtime profiles |
+| `tools/frame-sync/` | Java helpers embedded in the portable client |
+| [Start guide](docs/client-start.txt) | Running and updating Keim |
+| [Third-party notices](THIRD-PARTY-NOTICES.md) | Dependency and font licenses |
 
 ---
 

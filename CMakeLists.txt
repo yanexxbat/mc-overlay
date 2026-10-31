@@ -3,6 +3,9 @@ project(mcov LANGUAGES CXX VERSION 0.1.0)
 enable_language(RC)
 configure_file(src/common/menu_fonts.rc.in "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" @ONLY)
 set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" APPEND PROPERTY OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/fa-solid-900.ttf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/fonts/LICENSE.liquidDX11"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/equipment_atlas.png"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/keim-logo.rgba"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/keim.ico")
 
