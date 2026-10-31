@@ -211,7 +211,6 @@ bool Overlay::CreateDeviceD3D(std::string* error) {
         CleanupDeviceD3D(); return false;
     }
     depthFrame_=std::make_unique<DepthFrame>();
-    if(!glass_.Initialize(device_,context_)) MCOV_LOG_WARN("Liquid glass unavailable; using the fallback material.");
     return true;
 }
 
@@ -228,7 +227,6 @@ void Overlay::CleanupRenderTarget() {
 }
 
 void Overlay::CleanupDeviceD3D() {
-    glass_.Shutdown();
     if(auto* depth=depthChannel_.Block()) depth->requested.store(0,std::memory_order_release);
     depthChannel_.Close(); depthRenderer_.Shutdown(); depthActive_=depthFresh_=false;
     itemIcons_.Shutdown();
@@ -246,7 +244,7 @@ void Overlay::ApplyCaptureAffinity() {
     if (!hwnd_) return;
     // Die Glasflaeche darf sich nicht selbst im Desktop-Hintergrund aufnehmen.
     ::SetWindowDisplayAffinity(static_cast<HWND>(hwnd_),
-                               (settings_.excludeFromCapture||glassWasVisible_) ? kExcludeFromCapture : kCaptureNormal);
+                               settings_.excludeFromCapture ? kExcludeFromCapture : kCaptureNormal);
 }
 
 bool Overlay::Initialize(const TargetProcess& target, std::string* error) {
@@ -499,10 +497,6 @@ bool Overlay::RunFrame() {
     ImGui::NewFrame();
     processMemory_.Update();
 
-    const bool glassVisible=false; // The translucent client menu composites directly over the game.
-    glass_.BeginFrame(hwnd_,ImGui::GetIO().DisplaySize,glassVisible);
-    if(glassVisible!=glassWasVisible_) { glassWasVisible_=glassVisible; ApplyCaptureAffinity(); }
-
     const auto depthNow=GetTickCount64();
     const auto depthRelations=combatMenu_.Relations().Read();
     const bool friendEffects=std::any_of(depthRelations.begin(),depthRelations.end(),[](const auto& r) {
@@ -587,7 +581,6 @@ bool Overlay::RunFrame() {
     if(preferencesDirty_&&::GetTickCount64()>=preferenceSaveAt_) SavePreferences();
 
     ImGui::Render();
-    glass_.RenderTexture();
     if(depthActive_&&!depthRenderer_.Finish(context_,*ImGui::GetDrawData(),depthFresh_?depthFrame_.get():nullptr)) {
         // Bei GPU-Ausfall keine versehentlich ungeprueften Welt-Effekte ausgeben.
         ImGui::GetBackgroundDrawList()->CmdBuffer.clear();

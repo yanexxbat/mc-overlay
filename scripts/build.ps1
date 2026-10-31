@@ -21,9 +21,7 @@ param(
     [string] $Generator = '',
 
     [switch] $Clean,
-    [switch] $Checks,
-    [switch] $Offline,
-    [string] $PythonExecutable = ''
+    [switch] $Offline
 )
 
 $ErrorActionPreference = 'Stop'
@@ -188,9 +186,8 @@ if ($Clean -and (Test-Path $BuildDir)) {
         ((Get-Item -LiteralPath $BuildDir).Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
         throw 'Refusing to clean an unexpected build path or a directory link.'
     }
-    # Quell- und Mapping-Caches erhalten; alte Binaries, Backups und Diagnosen entfernen.
     foreach ($entry in Get-ChildItem -LiteralPath $verifiedBuild -Force) {
-        if ($entry.Name -in @('_deps', 'compat-cache')) { continue }
+        if ($entry.Name -in @('_deps', 'client')) { continue }
         $target = [System.IO.Path]::GetFullPath($entry.FullName)
         if (-not $target.StartsWith($verifiedBuild + [System.IO.Path]::DirectorySeparatorChar,
                                    [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -212,11 +209,6 @@ if ($Offline) {
     }
     $configureArgs += '-DFETCHCONTENT_FULLY_DISCONNECTED=ON'
 }
-if ($Checks) {
-    $configureArgs += @('-DMCOV_BUILD_UI_CHECKS=ON', '-DMCOV_BUILD_COMPAT_CHECKS=ON', '-DMCOV_BUILD_ESP_CHECKS=ON')
-}
-if ($PythonExecutable) { $configureArgs += "-DPython3_EXECUTABLE=$PythonExecutable" }
-
 if ($Generator) {
     $configureArgs += @('-G', $Generator)
 }
@@ -234,24 +226,17 @@ Write-Host "`n> cmake $($configureArgs -join ' ')" -ForegroundColor DarkGray
 if ((Invoke-CMake $configureArgs) -ne 0) { throw "cmake configure failed" }
 
 # --- build -------------------------------------------------------------------
-$buildArgs = @('--build', $BuildDir, '--parallel')
+$buildArgs = @('--build', $BuildDir, '--target', 'mcov_distribution', '--parallel')
 if (-not $VcVars -or $Generator) { $buildArgs += @('--config', $Config) }
 
 Write-Host "`n> cmake $($buildArgs -join ' ')" -ForegroundColor DarkGray
 if ((Invoke-CMake $buildArgs) -ne 0) { throw "build failed" }
-if ($Checks) {
-    $CTestExe = Join-Path (Split-Path $CMakeExe) 'ctest.exe'
-    if (-not (Test-Path -LiteralPath $CTestExe)) { $CTestExe = (Get-Command ctest -ErrorAction Stop).Source }
-    & $CTestExe --test-dir $BuildDir --output-on-failure --timeout 45
-    if ($LASTEXITCODE -ne 0) { throw 'checks failed' }
-}
-
 # --- report ------------------------------------------------------------------
 $binDir = Join-Path $BuildDir 'bin'
 if (Test-Path (Join-Path $binDir $Config)) { $binDir = Join-Path $binDir $Config }
 
 Write-Host "`nArtifacts:" -ForegroundColor Green
-Get-ChildItem -Path $binDir -Include 'mcov_overlay.exe', 'mcov_injector.exe', 'mcov_agent.dll' -Recurse -ErrorAction SilentlyContinue |
+Get-ChildItem -Path $binDir -Include 'mcov_overlay.exe', 'mcov_agent.dll' -Recurse -ErrorAction SilentlyContinue |
     ForEach-Object { Write-Host ("  {0,-22} {1,10:N0} bytes" -f $_.Name, $_.Length) }
 
 foreach ($helperName in @('AgentLoader.class', 'frame-sync-agent.jar', 'frame-signal.jar')) {

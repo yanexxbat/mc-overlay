@@ -1,6 +1,6 @@
-101 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/third_party/glass/data/fa/fa-solid-900.ttf"
+101 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/third_party/fonts/fa-solid-900.ttf"
 102 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/src/resources/equipment_atlas.png"
-103 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/third_party/glass/LICENSE.liquidDX11"
+103 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/third_party/fonts/LICENSE.liquidDX11"
 106 RCDATA "@CMAKE_CURRENT_SOURCE_DIR@/src/resources/keim-logo.rgba"
 107 ICON "@CMAKE_CURRENT_SOURCE_DIR@/src/resources/keim.ico"
 

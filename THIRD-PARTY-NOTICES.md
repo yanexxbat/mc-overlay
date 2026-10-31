@@ -1,19 +1,5 @@
 # Third-party notices
 
-## liquidDX11 material renderer
-
-Source: [poncippg-spec/liquidDX11](https://github.com/poncippg-spec/liquidDX11),
-commit `00c2b2b19eb5523abde473b2c08220326d4146d4`.
-
-mcov adapts the D3D11 glass renderer, Desktop Duplication backdrop, Dual Kawase
-blur shaders, material shaders and spring support under `third_party/glass`.
-This is a selective native integration; the upstream demo application, recorder,
-custom widget suite and its ImGui upgrade are not adopted.
-
-The original-source MIT notice is retained in
-[`third_party/glass/LICENSE.liquidDX11`](third_party/glass/LICENSE.liquidDX11)
-and embedded as executable RCDATA 103. Copyright (c) 2026 poncipp.
-
 ## Dear ImGui and existing font assets
 
 Dear ImGui remains pinned to 1.91.9b under its MIT license. Copyright (c)
@@ -21,15 +7,16 @@ Dear ImGui remains pinned to 1.91.9b under its MIT license. Copyright (c)
 `build/_deps/imgui-src/LICENSE.txt`.
 
 The existing embedded Inter Medium/SemiBold font data is in
-`third_party/glass/data/fonts.h`. Copyright (c) The Inter Project Authors
+`third_party/fonts/inter.h`. Copyright (c) The Inter Project Authors
 (https://github.com/rsms/inter). Inter is distributed under SIL OFL 1.1 below.
 
-Existing Font Awesome Free font assets are in `third_party/glass/data/fa`.
+Existing Font Awesome Free font assets are in `third_party/fonts`.
 Font Awesome is by Fonticons, Inc. (https://fontawesome.com). Font software is
 licensed under SIL OFL 1.1; Font Awesome icons are under CC BY 4.0
 (https://creativecommons.org/licenses/by/4.0/), and code under MIT. The retained
-font resource predates this redesign; the glass UI does not introduce a new icon
-set, font dependency or the reference demo's FreeType/recording stack.
+font resources and embedded Inter arrays were taken from liquidDX11. Its MIT
+notice remains in `third_party/fonts/LICENSE.liquidDX11` and is embedded as RCDATA 103.
+The glass renderer, shaders and desktop capture implementation are not included.
 
 ## SIL Open Font License, Version 1.1
 

@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <cstring>
 
-#include "data/fonts.h"  // Existing embedded Inter assets; no glass runtime.
+#include "inter.h"
 #include "log.hpp"
 
 namespace mcov::style {

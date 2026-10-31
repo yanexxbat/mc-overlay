@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(mcov LANGUAGES C CXX VERSION 0.1.0)
+project(mcov LANGUAGES CXX VERSION 0.1.0)
 enable_language(RC)
 configure_file(src/common/menu_fonts.rc.in "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" @ONLY)
 set_property(SOURCE "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc" APPEND PROPERTY OBJECT_DEPENDS
@@ -26,8 +26,6 @@ if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-# Der Combat-Kern hat keine JNI-/Win32-Abhängigkeiten. Der konkrete Demo-Transport
-# simuliert Spiel-Cooldown, Raycast und Silent-Kamera; keine Live-Netzwerkbindung.
 add_library(mcov_combat INTERFACE)
 target_include_directories(mcov_combat INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_compile_features(mcov_combat INTERFACE cxx_std_20)
@@ -115,7 +113,6 @@ add_library(imgui STATIC
     ${imgui_SOURCE_DIR}/imgui_draw.cpp
     ${imgui_SOURCE_DIR}/imgui_tables.cpp
     ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-    ${imgui_SOURCE_DIR}/imgui_demo.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
     ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp)
 
@@ -125,16 +122,6 @@ target_include_directories(imgui PUBLIC
 
 target_link_libraries(imgui PUBLIC d3d11 dxgi d3dcompiler)
 target_compile_features(imgui PUBLIC cxx_std_20)
-
-# Nur der MIT-lizenzierte Material-Renderer, nicht der ImGui-Fork/demo/Recorder.
-add_library(mcov_liquid STATIC src/common/liquid_glass.cpp src/common/windows_backdrop_capture.cpp
-    third_party/glass/glass.cpp third_party/glass/backdrop.cpp)
-target_include_directories(mcov_liquid PUBLIC src/common PRIVATE third_party/glass)
-target_link_libraries(mcov_liquid PUBLIC imgui user32 winmm windowsapp)
-target_compile_definitions(mcov_liquid PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-if(MSVC)
-    target_compile_options(mcov_liquid PRIVATE /utf-8 /W3)
-endif()
 
 # ---------------------------------------------------------------------------
 # Shared compile settings
@@ -195,7 +182,7 @@ add_executable(mcov_overlay
     src/common/ipc.cpp
     src/common/log.cpp)
 
-target_include_directories(mcov_overlay PRIVATE src third_party/glass) # Embedded Inter fonts only
+target_include_directories(mcov_overlay PRIVATE src third_party/fonts) # Embedded Inter fonts only
 
 # Bake in the JDK we built against. Minecraft launchers routinely ship a JRE,
 # which has no jdk.attach module and therefore cannot load the agent; this gives
@@ -205,7 +192,6 @@ if(MCOV_JDK_ROOT)
 endif()
 
 target_link_libraries(mcov_overlay PRIVATE
-    mcov_liquid
     winmm
     mcov_settings
     imgui
@@ -218,42 +204,6 @@ target_link_libraries(mcov_overlay PRIVATE
     dwmapi ole32 windowscodecs)   # DWM composition and the embedded PNG atlas
 
 set_target_properties(mcov_overlay PROPERTIES OUTPUT_NAME "mcov_overlay")
-
-# ---------------------------------------------------------------------------
-# mcov_injector - standalone flat GUI for attaching the agent
-#
-# Independent of mcov_overlay: it reuses process.cpp for JVM discovery and the
-# attach helper, and common/flat_app.cpp for the window + ImGui frame loop.
-# ---------------------------------------------------------------------------
-add_executable(mcov_injector WIN32
-    "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-    src/injector/injector_main.cpp
-    src/injector/launcher_ui.cpp
-    src/injector/portable_package.cpp
-    src/overlay/control_panel.cpp
-    src/common/flat_style.cpp
-    src/common/flat_app.cpp
-    src/overlay/process.cpp
-    src/common/ipc.cpp
-    src/common/log.cpp)
-
-target_include_directories(mcov_injector PRIVATE src src/common third_party/glass)
-
-if(MCOV_JDK_ROOT)
-    target_compile_definitions(mcov_injector PRIVATE MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
-endif()
-
-target_link_libraries(mcov_injector PRIVATE
-    mcov_liquid
-    mcov_settings
-    imgui
-    d3d11
-    dxgi
-    d3dcompiler
-    user32
-    gdi32
-    shell32
-    dwmapi ole32 uuid bcrypt)
 
 # ---------------------------------------------------------------------------
 # mcov_agent - the in-JVM library
@@ -370,9 +320,9 @@ add_executable(mcov WIN32 "${MCOV_PORTABLE_RC}" "${MCOV_PORTABLE_HEADER}"
     src/injector/injector_main.cpp src/injector/launcher_ui.cpp src/injector/portable_package.cpp
     src/overlay/control_panel.cpp src/common/flat_app.cpp src/common/flat_style.cpp
     src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
-target_include_directories(mcov PRIVATE src third_party/glass "${CMAKE_BINARY_DIR}")
+target_include_directories(mcov PRIVATE src third_party/fonts "${CMAKE_BINARY_DIR}")
 target_compile_definitions(mcov PRIVATE MCOV_BUNDLED=1 MCOV_BUILD_JDK_HOME="${MCOV_JDK_ROOT}")
-target_link_libraries(mcov PRIVATE mcov_liquid mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
+target_link_libraries(mcov PRIVATE mcov_settings imgui user32 gdi32 shell32 dwmapi ole32 uuid bcrypt)
 set_target_properties(mcov PROPERTIES OUTPUT_NAME "Keim" RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client/$<0:>")
 message(STATUS "Keim: open ${CMAKE_BINARY_DIR}/client/Keim.exe (single-file client)")
 
@@ -387,275 +337,6 @@ add_custom_command(OUTPUT "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/S
     COMMENT "Packaging Keim.exe and the optional start guide" VERBATIM)
 add_custom_target(mcov_distribution ALL DEPENDS "${MCOV_CLIENT_ARCHIVE}" "${CMAKE_BINARY_DIR}/client/START.txt")
 
-# Optional headless checks for UI ownership, clipping and input. No JVM needed.
-option(MCOV_BUILD_UI_CHECKS "Build the headless flat UI checks" OFF)
-if(MCOV_BUILD_UI_CHECKS)
-    enable_testing()
-    add_executable(mcov_liquid_check tests/liquid_glass_rendering.cpp)
-    target_include_directories(mcov_liquid_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_liquid_check PRIVATE mcov_settings mcov_liquid)
-    add_test(NAME liquid_glass COMMAND mcov_liquid_check)
-    # Nur explizit --live starten: die regulaere Testsuite liest keinen Desktop.
-    add_executable(mcov_backdrop_capture_check tests/backdrop_capture_live.cpp)
-    target_include_directories(mcov_backdrop_capture_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_backdrop_capture_check PRIVATE mcov_settings mcov_liquid)
-    if(MSVC)
-        target_link_options(mcov_backdrop_capture_check PRIVATE /MAP)
-    endif()
-    set_tests_properties(liquid_glass PROPERTIES TIMEOUT 30)
-    add_executable(mcov_launcher_window_check
-        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-        tests/launcher_window_rendering.cpp src/common/flat_app.cpp
-        src/common/flat_style.cpp src/common/log.cpp src/injector/launcher_ui.cpp
-        src/overlay/control_panel.cpp)
-    target_include_directories(mcov_launcher_window_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_launcher_window_check PRIVATE mcov_settings mcov_liquid d3d11 dxgi dwmapi gdi32 ole32 windowscodecs)
-    add_test(NAME launcher_window COMMAND mcov_launcher_window_check "${CMAKE_BINARY_DIR}/ui-preview")
-    set_tests_properties(launcher_window PROPERTIES TIMEOUT 30)
-    add_executable(mcov_launcher_motion_check
-        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-        tests/launcher_motion.cpp src/common/flat_app.cpp
-        src/common/flat_style.cpp src/common/log.cpp src/injector/launcher_ui.cpp
-        src/overlay/control_panel.cpp)
-    target_include_directories(mcov_launcher_motion_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_launcher_motion_check PRIVATE mcov_settings mcov_liquid d3d11 dxgi dwmapi gdi32 ole32 windowscodecs)
-    add_test(NAME launcher_motion COMMAND mcov_launcher_motion_check "${CMAKE_BINARY_DIR}/ui-preview/motion")
-    set_tests_properties(launcher_motion PROPERTIES TIMEOUT 30)
-    add_executable(mcov_menu_motion_check tests/menu_motion.cpp)
-    target_include_directories(mcov_menu_motion_check PRIVATE src)
-    target_link_libraries(mcov_menu_motion_check PRIVATE mcov_settings imgui)
-    add_test(NAME menu_motion COMMAND mcov_menu_motion_check)
-    add_executable(mcov_ui_check
-        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-        tests/flat_style_smoke.cpp
-        src/common/flat_style.cpp
-        src/common/log.cpp)
-    target_include_directories(mcov_ui_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_ui_check PRIVATE mcov_settings imgui)
-    add_test(NAME flat_ui COMMAND mcov_ui_check)
-    add_executable(mcov_client_controls_check tests/client_controls.cpp)
-    target_include_directories(mcov_client_controls_check PRIVATE src)
-    target_link_libraries(mcov_client_controls_check PRIVATE mcov_settings imgui)
-    add_test(NAME client_controls COMMAND mcov_client_controls_check)
-    add_executable(mcov_block_scan_check tests/block_scan.cpp)
-    target_include_directories(mcov_block_scan_check PRIVATE src)
-    target_link_libraries(mcov_block_scan_check PRIVATE mcov_settings)
-    add_test(NAME block_scan COMMAND mcov_block_scan_check)
-    add_executable(mcov_hole_check tests/hole_esp.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
-    target_include_directories(mcov_hole_check PRIVATE src)
-    target_link_libraries(mcov_hole_check PRIVATE mcov_settings imgui)
-    add_test(NAME hole_esp COMMAND mcov_hole_check)
-    add_executable(mcov_region_map_check tests/region_map.cpp)
-    target_include_directories(mcov_region_map_check PRIVATE src)
-    target_link_libraries(mcov_region_map_check PRIVATE mcov_settings imgui)
-    add_test(NAME region_map COMMAND mcov_region_map_check)
-    add_executable(mcov_item_assist_check tests/item_assist.cpp)
-    target_include_directories(mcov_item_assist_check PRIVATE src)
-    target_link_libraries(mcov_item_assist_check PRIVATE mcov_settings)
-    add_test(NAME item_assist COMMAND mcov_item_assist_check)
-    add_executable(mcov_world_visuals_check tests/world_visuals.cpp src/overlay/world_visuals.cpp)
-    target_include_directories(mcov_world_visuals_check PRIVATE src)
-    target_link_libraries(mcov_world_visuals_check PRIVATE mcov_settings imgui)
-    add_test(NAME world_visuals COMMAND mcov_world_visuals_check)
-    add_executable(mcov_smp_check tests/smp_features.cpp src/overlay/smp_features.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
-    target_include_directories(mcov_smp_check PRIVATE src)
-    target_link_libraries(mcov_smp_check PRIVATE mcov_settings imgui)
-    add_test(NAME smp_features COMMAND mcov_smp_check)
-    add_executable(mcov_rockstar_check tests/rockstar_features.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
-    target_include_directories(mcov_rockstar_check PRIVATE src)
-    target_link_libraries(mcov_rockstar_check PRIVATE mcov_settings imgui)
-    add_test(NAME rockstar_features COMMAND mcov_rockstar_check)
-    add_executable(mcov_control_panel_check
-        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-        tests/control_panel_smoke.cpp
-        src/injector/launcher_ui.cpp
-        src/common/flat_style.cpp src/overlay/control_panel.cpp src/overlay/overlay.cpp src/overlay/esp_renderer.cpp
-        src/overlay/visual_draw.cpp
-        src/overlay/overlay_antivanish.cpp
-    src/overlay/overlay_modules.cpp
-        src/overlay/overlay_input.cpp src/overlay/overlay_hud.cpp
-        src/overlay/overlay_configs.cpp
-        src/overlay/overlay_world_visuals.cpp
-        src/overlay/overlay_rockstar.cpp src/overlay/rockstar_features.cpp
-    src/overlay/overlay_utilities.cpp
-        src/overlay/overlay_smp.cpp
-        src/overlay/smp_features.cpp
-        src/overlay/combat_menu.cpp
-        src/overlay/item_icon_atlas_dx11.cpp
-        src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp src/overlay/depth_renderer.cpp
-        src/overlay/friend_hat_renderer.cpp
-        src/overlay/target_cube_renderer.cpp
-        src/overlay/world_visuals.cpp
-        src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
-    target_include_directories(mcov_control_panel_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_control_panel_check PRIVATE mcov_settings imgui
-        mcov_liquid
-        user32 gdi32 shell32 dwmapi ole32 windowscodecs winmm)
-    add_test(NAME control_panel COMMAND mcov_control_panel_check "${CMAKE_BINARY_DIR}/ui-preview")
-    set_tests_properties(control_panel PROPERTIES TIMEOUT 30)
-    add_executable(mcov_aura_check tests/aura_smoke.cpp src/overlay/aura_renderer.cpp src/overlay/aura_blend_dx11.cpp
-        src/overlay/friend_hat_renderer.cpp src/overlay/target_cube_renderer.cpp)
-    target_include_directories(mcov_aura_check PRIVATE src)
-    target_link_libraries(mcov_aura_check PRIVATE mcov_settings imgui)
-    add_test(NAME aura_rendering COMMAND mcov_aura_check)
-    add_executable(mcov_depth_check tests/depth_rendering.cpp src/overlay/depth_renderer.cpp src/overlay/smp_features.cpp)
-    target_include_directories(mcov_depth_check PRIVATE src)
-    target_link_libraries(mcov_depth_check PRIVATE mcov_settings imgui)
-    add_test(NAME depth_rendering COMMAND mcov_depth_check)
-    add_executable(mcov_depth_gl_check tests/depth_capture_gl.cpp src/agent/jvm_interface.cpp src/common/log.cpp)
-    target_include_directories(mcov_depth_gl_check PRIVATE src ${JNI_INCLUDE_DIRS})
-    target_link_libraries(mcov_depth_gl_check PRIVATE mcov_settings opengl32 user32 gdi32)
-    add_test(NAME depth_capture_gl COMMAND mcov_depth_gl_check)
-    set_tests_properties(depth_capture_gl PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
-    add_executable(mcov_base_gl_check tests/base_texture_gl.cpp src/agent/base_texture_gl.cpp src/common/log.cpp)
-    target_include_directories(mcov_base_gl_check PRIVATE src)
-    target_link_libraries(mcov_base_gl_check PRIVATE mcov_settings opengl32 user32 gdi32)
-    add_test(NAME base_texture_gl COMMAND mcov_base_gl_check)
-    set_tests_properties(base_texture_gl PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 30)
-    set_tests_properties(aura_rendering PROPERTIES TIMEOUT 30)
-endif()
-
-option(MCOV_BUILD_COMPAT_CHECKS "Build JNI profile and attach-runtime regression checks" OFF)
-if(MCOV_BUILD_COMPAT_CHECKS)
-    enable_testing()
-    find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
-    add_test(NAME namespace_inheritance COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/namespace_inheritance.py")
-    add_executable(mcov_agent_package_match_check tests/agent_package_match.cpp src/injector/portable_package.cpp src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
-    target_include_directories(mcov_agent_package_match_check PRIVATE src)
-    target_link_libraries(mcov_agent_package_match_check PRIVATE mcov_settings bcrypt user32)
-    add_test(NAME agent_package_match COMMAND mcov_agent_package_match_check "${CMAKE_BINARY_DIR}/agent-package-match")
-    set(MCOV_BASE_TEST_DIR ${CMAKE_BINARY_DIR}/base-texture-test)
-    add_custom_command(OUTPUT ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_BASE_TEST_DIR}
-        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -d ${MCOV_BASE_TEST_DIR}
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/BaseTextureCheck.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureBridge.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/BaseTextureProfiles.java
-        DEPENDS tests/BaseTextureCheck.java tools/frame-sync/BaseTextureBridge.java tools/frame-sync/BaseTextureProfiles.java VERBATIM)
-    add_custom_target(mcov_base_texture_check ALL DEPENDS ${MCOV_BASE_TEST_DIR}/mcov/BaseTextureCheck.class)
-    add_test(NAME base_texture_models COMMAND ${Java_JAVA_EXECUTABLE} -cp ${MCOV_BASE_TEST_DIR} mcov.BaseTextureCheck)
-    set(MCOV_AV_TEST_DIR ${CMAKE_BINARY_DIR}/antivanish-test)
-    add_custom_command(OUTPUT ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class
-            ${MCOV_AV_TEST_DIR}/mcov/AntiVanishSensorCheck.class
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_AV_TEST_DIR}
-        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -cp ${MCOV_SIGNAL_CLASSES}
-            -d ${MCOV_AV_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/antivanish-fixtures/com/mojang/authlib/GameProfile.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishCheck.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishSensorCheck.java
-        DEPENDS mcov_frame_agent tests/AntiVanishCheck.java tests/AntiVanishSensorCheck.java tests/antivanish-fixtures/com/mojang/authlib/GameProfile.java tools/frame-sync/AntiVanishTracker.java VERBATIM)
-    add_custom_target(mcov_antivanish_check ALL DEPENDS ${MCOV_AV_TEST_DIR}/mcov/AntiVanishCheck.class ${MCOV_AV_TEST_DIR}/mcov/AntiVanishSensorCheck.class)
-    add_test(NAME anti_vanish COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_AV_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.AntiVanishCheck)
-    add_test(NAME anti_vanish_sensors COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_AV_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.AntiVanishSensorCheck)
-    add_executable(mcov_base_texture_probe tools/diagnostics/base_texture_probe.cpp src/common/ipc.cpp src/common/log.cpp)
-    target_include_directories(mcov_base_texture_probe PRIVATE src)
-    target_link_libraries(mcov_base_texture_probe PRIVATE mcov_settings)
-    add_custom_command(OUTPUT "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
-        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/compatibility/make_fixtures.py"
-            "${CMAKE_CURRENT_SOURCE_DIR}/src/agent/generated_profiles.hpp" "${CMAKE_BINARY_DIR}/compat-fixtures"
-        COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp"
-        DEPENDS src/agent/generated_profiles.hpp tools/compatibility/make_fixtures.py
-            tools/compatibility/storage_profiles.json src/agent/storage_profiles.hpp
-            tools/compatibility/trident_profiles.json src/agent/trident_profiles.hpp
-            tools/compatibility/generate_profiles.py
-            tools/compatibility/geometry_schema.py
-        VERBATIM)
-    add_custom_target(mcov_compat_fixtures DEPENDS "${CMAKE_BINARY_DIR}/compat-fixtures/.stamp")
-    add_executable(mcov_compat_check tests/runtime_profiles.cpp src/agent/jvm_interface.cpp src/agent/base_texture_gl.cpp
-        src/overlay/process.cpp src/common/ipc.cpp src/common/log.cpp)
-    target_include_directories(mcov_compat_check PRIVATE src ${JNI_INCLUDE_DIRS})
-    target_link_libraries(mcov_compat_check PRIVATE mcov_settings user32 opengl32)
-    add_dependencies(mcov_compat_check mcov_compat_fixtures mcov_frame_agent)
-    add_test(NAME runtime_profiles COMMAND mcov_compat_check "${MCOV_JDK_ROOT}" "${CMAKE_BINARY_DIR}/compat-fixtures")
-    add_test(NAME portable_client COMMAND ${Python3_EXECUTABLE}
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/portable_client.py" "$<TARGET_FILE:mcov>"
-        "$<TARGET_FILE_DIR:mcov_overlay>" "${CMAKE_BINARY_DIR}/portable-check" "${MCOV_CLIENT_ARCHIVE}")
-    set_tests_properties(runtime_profiles PROPERTIES TIMEOUT 120)
-    set(MCOV_CHUNK_TEST_DIR ${CMAKE_BINARY_DIR}/chunk-test)
-    add_custom_command(OUTPUT ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderCheck.class ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderBridgeCheck.class
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_CHUNK_TEST_DIR}
-        COMMAND ${Java_JAVAC_EXECUTABLE} --release 17 -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_CHUNK_TEST_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/tests/ChunkActivityCheck.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/ChunkFinderCheck.java ${CMAKE_CURRENT_SOURCE_DIR}/tests/ChunkFinderBridgeCheck.java
-        DEPENDS mcov_frame_agent tests/ChunkActivityCheck.java tests/ChunkFinderCheck.java tests/ChunkFinderBridgeCheck.java VERBATIM)
-    add_custom_target(mcov_chunk_check ALL DEPENDS ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderCheck.class ${MCOV_CHUNK_TEST_DIR}/mcov/ChunkFinderBridgeCheck.class)
-    add_test(NAME chunk_finder COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_SIGNAL_CLASSES};${MCOV_CHUNK_TEST_DIR}" mcov.ChunkFinderCheck)
-    add_test(NAME chunk_finder_bridge COMMAND ${Java_JAVA_EXECUTABLE} -cp "${MCOV_SIGNAL_CLASSES};${MCOV_CHUNK_TEST_DIR}" mcov.ChunkFinderBridgeCheck)
-    set(MCOV_FRAME_TEST_DIR ${CMAKE_BINARY_DIR}/frame-sync-test)
-    add_custom_command(OUTPUT ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/DepthHookCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/AntiVanishHookCheck.class
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${MCOV_FRAME_TEST_DIR}
-        COMMAND ${Java_JAVAC_EXECUTABLE} -source 17 -target 17
-            --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED -cp ${MCOV_SIGNAL_CLASSES} -d ${MCOV_FRAME_TEST_DIR}
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncCheck.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameSyncAttachCheck.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/DepthHookCheck.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tests/AntiVanishHookCheck.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/AntiVanishTransformer.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameSignal.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/FrameProfiles.java
-            ${CMAKE_CURRENT_SOURCE_DIR}/tools/frame-sync/DepthProfiles.java
-        DEPENDS mcov_frame_agent tests/FrameSyncCheck.java tests/FrameSyncAttachCheck.java tests/DepthHookCheck.java
-            tests/AntiVanishHookCheck.java tools/frame-sync/AntiVanishTransformer.java
-            tools/frame-sync/FrameProfiles.java tools/frame-sync/DepthProfiles.java tools/frame-sync/FrameSignal.java
-        VERBATIM)
-    add_custom_target(mcov_frame_check ALL DEPENDS ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/FrameSyncAttachCheck.class ${MCOV_FRAME_TEST_DIR}/mcov/sync/DepthHookCheck.class
-            ${MCOV_FRAME_TEST_DIR}/mcov/sync/AntiVanishHookCheck.class)
-    add_dependencies(mcov_frame_check mcov_compat_fixtures)
-    add_test(NAME frame_sync COMMAND ${Java_JAVA_EXECUTABLE} "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
-        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
-        mcov.sync.FrameSyncCheck "${CMAKE_BINARY_DIR}/compat-fixtures")
-    add_test(NAME frame_attach COMMAND ${Java_JAVA_EXECUTABLE} -Djdk.attach.allowAttachSelf=true
-        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
-        mcov.sync.FrameSyncAttachCheck "${CMAKE_BINARY_DIR}/compat-fixtures" "${MCOV_TOOLS_DIR}/frame-sync-agent.jar")
-    set_tests_properties(frame_attach PROPERTIES TIMEOUT 30)
-    add_test(NAME anti_vanish_hooks COMMAND ${Java_JAVA_EXECUTABLE}
-        --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
-        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_SIGNAL_CLASSES}" mcov.sync.AntiVanishHookCheck)
-    add_test(NAME depth_hook COMMAND ${Java_JAVA_EXECUTABLE}
-        --add-exports java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED
-        "-javaagent:${MCOV_TOOLS_DIR}/frame-sync-agent.jar"
-        -cp "${MCOV_FRAME_TEST_DIR};${MCOV_TOOLS_DIR}/frame-sync-agent.jar" mcov.sync.DepthHookCheck)
-endif()
-
-option(MCOV_BUILD_ESP_CHECKS "Build camera projection and world-space rig checks" OFF)
-if(MCOV_BUILD_ESP_CHECKS)
-    enable_testing()
-    add_executable(mcov_esp_check tests/esp_geometry.cpp)
-    target_link_libraries(mcov_esp_check PRIVATE mcov_settings)
-    add_test(NAME esp_geometry COMMAND mcov_esp_check)
-    add_executable(mcov_esp_render_check
-        "${CMAKE_CURRENT_BINARY_DIR}/menu_fonts.rc"
-        tests/esp_rendering.cpp src/overlay/esp_renderer.cpp src/overlay/visual_draw.cpp
-        src/common/flat_style.cpp src/common/log.cpp)
-    target_include_directories(mcov_esp_render_check PRIVATE src third_party/glass)
-    target_link_libraries(mcov_esp_render_check PRIVATE mcov_settings imgui)
-    add_test(NAME esp_rendering COMMAND mcov_esp_render_check "${CMAKE_BINARY_DIR}/visual-preview/esp.bmp")
-    set_tests_properties(esp_rendering PROPERTIES TIMEOUT 30)
-endif()
-
-add_executable(mcov_combat_demo tools/combat_demo.cpp)
-target_link_libraries(mcov_combat_demo PRIVATE mcov_settings mcov_combat)
 add_library(mcov_combat_hud STATIC src/combat/debug_hud.cpp)
 target_link_libraries(mcov_combat_hud PUBLIC mcov_combat imgui mcov_settings)
 target_link_libraries(mcov_overlay PRIVATE mcov_combat_hud)
-if(TARGET mcov_control_panel_check)
-    target_link_libraries(mcov_control_panel_check PRIVATE mcov_combat_hud)
-endif()
-option(MCOV_BUILD_COMBAT_CHECKS "Build deterministic Combat Assist checks" ON)
-if(MCOV_BUILD_COMBAT_CHECKS)
-    enable_testing()
-    add_executable(mcov_combat_check tests/combat_assist.cpp)
-    target_link_libraries(mcov_combat_check PRIVATE mcov_settings mcov_combat)
-    add_test(NAME combat_assist COMMAND mcov_combat_check)
-    add_executable(mcov_spinbot_check tests/spinbot.cpp)
-    target_include_directories(mcov_spinbot_check PRIVATE src)
-    add_test(NAME spinbot COMMAND mcov_spinbot_check)
-    add_executable(mcov_freecam_check tests/freecam.cpp src/overlay/rockstar_features.cpp src/overlay/friend_hat_renderer.cpp)
-    target_include_directories(mcov_freecam_check PRIVATE src)
-    target_link_libraries(mcov_freecam_check PRIVATE mcov_settings imgui)
-    add_test(NAME freecam COMMAND mcov_freecam_check)
-    add_test(NAME combat_demo COMMAND mcov_combat_demo)
-    add_executable(mcov_combat_hud_check tests/combat_hud.cpp)
-    target_link_libraries(mcov_combat_hud_check PRIVATE mcov_combat_hud)
-    add_test(NAME combat_hud COMMAND mcov_combat_hud_check)
-endif()
