@@ -1,153 +1,91 @@
 <p align="center">
-  <img src="src/resources/keim-logo.png" alt="Keim mascot" width="112">
+  <img src="src/resources/keim-logo.png" width="96" alt="Keim's green mascot">
 </p>
 
 <h1 align="center">Keim</h1>
 
 <p align="center">
-  A native Minecraft Java client with an external overlay, configurable visuals and a movable HUD.
+  An external overlay for Minecraft Java Edition on Windows x64.<br>
+  Highlight entities and blocks, arrange your HUD and switch between saved setups.
 </p>
 
 <p align="center">
-  <strong>Windows x64</strong> · C++20 · Dear ImGui · Direct3D 11<br>
-  One portable executable. No account or license key required.
+  <strong><a href="https://github.com/yanexxbat/mc-overlay/releases/latest/download/Keim.exe">Download Keim.exe</a></strong>
+  &nbsp;·&nbsp; <a href="https://github.com/yanexxbat/mc-overlay/releases/latest">Release notes &amp; checksums</a>
+  &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a>
 </p>
 
-<p align="center">
-  <a href="#quick-start">Quick start</a> ·
-  <a href="#features">Features</a> ·
-  <a href="#build-from-source">Build</a> ·
-  <a href="#project-files">Project files</a>
-</p>
+## First launch
 
-## Quick start
+1. Start **Minecraft Java Edition** and open **Keim.exe**. The launcher lists your running Minecraft instances; no Keim account or license key is required.
+2. Select the instance you want and click **Start client**. If the launcher asks for Java, choose **Select JDK folder** and point it at a full 64-bit JDK matching your game version.
+3. Switch back to Minecraft and press <kbd>Insert</kbd>. Left-click a module to toggle it, or right-click it to change its settings.
 
-1. Start **Minecraft Java Edition**.
-2. Open **`Keim.exe`**. After building from source, it is in `build/client/`.
-3. Select your Minecraft instance and click **Start client**.
-4. Switch back to the game and press **INSERT** to open the menu.
+| Minecraft version | Matching 64-bit JDK |
+| :--- | :--- |
+| 26.2 | JDK 25 |
+| 1.21.11 or 1.21.1 | JDK 21 |
+| 1.20.1 | JDK 17 |
 
-The launcher opens directly to the Minecraft selector. KeyAuth, license prompts,
-HWID collection and periodic online license checks have been removed.
+Prefer a ZIP? [Keim-client.zip](https://github.com/yanexxbat/mc-overlay/releases/latest/download/Keim-client.zip) contains the same executable and a short start guide. Extract it before launching. To update, quit Keim with <kbd>End</kbd>, replace the executable and restart Minecraft so the new agent can load.
 
-Only `Keim.exe` is needed to run the client; its native and Java helpers are embedded.
-The shareable `Keim-client.zip` contains the executable and an optional `START.txt` guide.
-Extract the ZIP before launching.
+## Inside the overlay
 
-### Controls
+| Area | What you can do |
+| :--- | :--- |
+| **HUD** | Drag and scale 21 elements, including the active module list, target info, radar and process memory readout. |
+| **Visuals** | Highlight players, health bars, storage containers and holes. Add waypoints, trails or target effects. |
+| **Exploration** | Use Chunkfinder to inspect activity and block clues in loaded chunks, or follow your position on the DonutSMP region map. Chunk findings are clues, not confirmed bases. |
+| **Combat & movement** | Set an Auto-Totem health threshold, manage friends or explore loaded terrain with Freecam while your player stays in place. |
+
+Some features depend on the Minecraft version. On **1.21.11**, Base ESP can show Minecraft textures, and Anti Vanish can flag visible player-list or entity clues. It cannot reveal information the server never sends.
+
+### Keyboard shortcuts
 
 | Key | Action |
 | :--- | :--- |
-| **INSERT** | Open or close the client menu |
-| **F6** | Open or close the HUD editor |
-| **F12** | Panic: disable all modules and hide the UI |
-| **END** | Quit the overlay |
-| **Ctrl+F** | Focus module search while the menu is open |
+| <kbd>Insert</kbd> | Open or close the module menu |
+| <kbd>Ctrl</kbd> + <kbd>F</kbd> | Search modules in the open menu |
+| <kbd>F6</kbd> | Open the HUD editor to move or resize elements |
+| <kbd>F12</kbd> | **Panic:** disable all modules and hide the UI |
+| <kbd>End</kbd> | Quit Keim |
 
-Left-click a module to toggle it; right-click to open its settings. Configure
-keyboard and mouse bindings under **Settings > Keybinds**, including modifier
-chords and Toggle/Hold modes. **F12 stays reserved for Panic.**
+Use **Settings → Keybinds** for custom keyboard and mouse bindings. <kbd>F12</kbd> stays reserved for Panic.
 
-## Features
+<details>
+<summary><strong>Move your settings to another PC</strong></summary>
 
-| Area | Included |
-| :--- | :--- |
-| **Workspace** | Searchable module grid, category navigation, All/Enabled filters and independent settings windows |
-| **Visuals** | Player and block ESP, health bars, target effects, particles, trails and waypoints |
-| **Exploration** | Storage ESP, Stash Finder, Spawner ESP, Base ESP, Hole ESP and Chunkfinder |
-| **Combat & items** | Combat controls, friend management, Auto-Totem health threshold and item assists |
-| **HUD** | 21 movable and scalable elements, including Watermark, ArrayList, Target Info, radar and performance statistics |
-| **Movement** | Freecam with adjustable speed and boost; configurable Spinbot |
-| **World information** | DonutSMP region map and passive Anti Vanish hints |
-| **Personalization** | Saved HUD positions, automatic preferences and named configuration profiles |
+Copy `client-settings.ini` and the `configs/` folder alongside `Keim.exe`. The INI holds automatic preferences; **Settings → Configs** lets you save and load named profiles. Logs, runtime helpers and the launcher's JDK selection live in `%LOCALAPPDATA%\Keim`.
 
-**Chunkfinder** supports Activity, Block clues and Combined modes, with configurable
-findings and a DonutSMP preset. Findings are heuristic clues based on available
-client data.
-
-**Freecam** uses WASD to move, Space/Shift to rise or descend and Ctrl to boost.
-The player stays in place, and combat/item assists pause while it is active.
-Only chunks already loaded by Minecraft are visible.
-
-**Anti Vanish** provides passive TAB-list and optional invisible-player hints on
-1.21.11. Hints are not proof of vanished staff and cannot reveal fully hidden
-server data.
-
-## Compatibility
-
-Runtime profiles cover **26.2, 1.21.11, 1.21.1 and 1.20.1**. Feature support varies
-by profile; Minecraft-textured Base ESP is supported on **1.21.11**.
-
-The launcher requires a **full 64-bit JDK matching the game's Java major version**.
-If one is missing, use **Select JDK folder** and choose the installation root.
-A JRE alone cannot attach the agent.
-
-**Updating:** quit the old client with END, replace `Keim.exe`, and restart Minecraft
-before reconnecting so the updated agent can load.
-
-## Settings that travel with you
-
-```text
-client/
-├── Keim.exe
-├── client-settings.ini
-└── configs/
-    └── My profile.ini
-```
-
-Automatic preferences are saved beside the executable. Under **Settings > Configs**,
-use **Save config**, **Overwrite config** or **Load selected** to manage named profiles.
-Copy `client-settings.ini` and `configs/` along with `Keim.exe` when moving your setup.
-
-Runtime helpers, logs and the saved JDK selection live in `%LOCALAPPDATA%\Keim`.
-See the [portable start guide](docs/client-start.txt) for startup and troubleshooting.
+</details>
 
 ## Build from source
 
-### Requirements
+Keim uses **C++20**, **Dear ImGui** and **Direct3D 11**. To build it on Windows x64, install Git, Visual Studio Build Tools 2022 with the x64 C++ toolchain and Windows SDK, CMake 3.20+ (the Visual Studio copy works), and a full JDK 17 or newer.
 
-- **Windows x64** and **Git**.
-- **Visual Studio Build Tools 2022** with C++ x64 tools, a Windows SDK and CMake tools.
-- **CMake 3.20+**; the build script can use the version bundled with Visual Studio.
-- A full **JDK 17+** for compilation. Runtime attachment still needs the game's matching JDK.
-
-From the repository root in PowerShell:
+Run this in PowerShell from the repository root:
 
 ```powershell
 .\scripts\build.ps1 -Config Release
 ```
 
-The script locates the installed JDK and Visual Studio toolchain. The first build
-fetches the pinned Dear ImGui sources and needs network access.
+The first build downloads the pinned ImGui sources. It produces **`build/client/Keim.exe`** to run and **`build/Keim-client.zip`** to share. The native and Java helpers are embedded in the executable.
 
-| Output | Purpose |
-| :--- | :--- |
-| `build/client/Keim.exe` | Portable client to run |
-| `build/Keim-client.zip` | Package to share |
+<details>
+<summary><strong>Offline builds, clean rebuilds and JDK selection</strong></summary>
 
-### Build options
+- `-Offline` reuses the ImGui source cache after the first build.
+- `-Clean` recompiles the build targets while preserving client settings and profiles.
+- `-JavaHome` selects a specific JDK installation.
 
-Use **-Offline** to reuse the pinned ImGui source cache after the first build.
-Use **-Clean** to recompile the build targets; client settings and profiles stay
-in place. A different JDK installation can be selected with **-JavaHome**.
-
-If PowerShell blocks the unsigned script, run it with a process-only policy override:
+If PowerShell blocks the unsigned build script, use a process-only override:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build.ps1 -Config Release
 ```
 
-## Project files
+</details>
 
-| Path | Purpose |
-| :--- | :--- |
-| `src/injector/` | Portable launcher, package extraction and Minecraft selection |
-| `src/overlay/` | External menu, HUD, input and rendering |
-| `src/agent/` | JNI/JVMTI agent and Minecraft runtime profiles |
-| `tools/frame-sync/` | Java helpers embedded in the portable client |
-| [Start guide](docs/client-start.txt) | Running and updating Keim |
-| [Third-party notices](THIRD-PARTY-NOTICES.md) | Dependency and font licenses |
-
----
+[Portable start guide](docs/client-start.txt) · [Launcher source](src/injector/) · [Overlay source](src/overlay/) · [JVM agent](src/agent/) · [Third-party notices](THIRD-PARTY-NOTICES.md)
 
 Intended for single-player, private servers and development.
